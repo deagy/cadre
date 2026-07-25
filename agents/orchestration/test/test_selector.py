@@ -218,6 +218,28 @@ class SelectorTests(unittest.TestCase):
         self.assertEqual([gate["id"] for gate in result["human_gates"]], ["production-change"])
 
     @unittest.skipUnless(AGENTIC_SDLC_AVAILABLE, "Agentic SDLC executable is required")
+    def test_gate_dispatch_uses_real_contribution_bindings_not_a_placeholder(self) -> None:
+        result = plan(
+            task="Deploy to production with Terraform",
+            changed_files=["terraform/service/main.tf"],
+        )
+        by_gate = {gate["gate_id"]: gate for gate in result["gate_dispatch"]}
+        self.assertEqual(by_gate["G1"]["agents"], ["product-intent-agent"])
+        self.assertEqual(by_gate["G1"]["tasks"], ["capture-intent"])
+        self.assertEqual(by_gate["G1"]["artifacts"], ["intent-record"])
+        self.assertEqual(by_gate["G3"]["agents"], ["cloud-architect"])
+        self.assertEqual(
+            by_gate["G4"]["agents"],
+            ["governance-planner", "data-governance-engineer", "compliance-reviewer"],
+        )
+        # G9 (deployment-authorization) is deliberately human-only in the real
+        # contract: no bound agents, not the old "code-reviewer" placeholder.
+        self.assertEqual(by_gate["G9"]["agents"], [])
+        self.assertEqual(by_gate["G9"]["tasks"], ["authorize-deployment"])
+        for gate in result["gate_dispatch"]:
+            self.assertNotIn("code-reviewer", gate["agents"], gate["gate_id"])
+
+    @unittest.skipUnless(AGENTIC_SDLC_AVAILABLE, "Agentic SDLC executable is required")
     def test_selects_product_intake_agents_and_gates_for_intent_only(self) -> None:
         result = plan(task="Capture product intent and requirements decomposition", changed_files=[])
         self.assertEqual(result["workflow"], "product-intake")

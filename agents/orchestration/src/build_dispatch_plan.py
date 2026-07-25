@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -18,10 +19,46 @@ MAXIMUM_KNOWLEDGE_TOP = 20
 KNOWLEDGE_STORE_ROOT = Path(__file__).resolve().parents[2] / "knowledge-store"
 DEFAULT_KNOWLEDGE_SOURCE = "secure-cloud-agents"
 STANDALONE_REASON = "Agentic SDLC executable not found; team dispatch is unaffected."
+# Agentic SDLC's lifecycle-gates contract only names each gate's
+# required_contributions *slots* (e.g. "intent", "architecture-design"); it
+# does not itself carry per-gate agents/tasks/artifacts. Those live in this
+# repo's own provider profile, hand-maintained (not generated), keyed by
+# gate id -> contributions -> slot. "secure-cloud" extends "generic" but
+# currently leaves gate_bindings empty, so generic's bindings are
+# authoritative; if secure-cloud ever adds its own, merge it in here too.
+# This module runs from two different locations, so the plugin root has to
+# be found relative to whichever one is currently loaded: the canonical
+# source (agents/orchestration/src/) or the packaged, self-contained mirror
+# (plugins/secure-cloud-agents/suite/agents/orchestration/src/).
+_AGENTS_ROOT = Path(__file__).resolve().parents[2]
+_PLUGIN_ROOT = (
+    _AGENTS_ROOT.parent.parent
+    if _AGENTS_ROOT.parent.name == "suite"
+    else _AGENTS_ROOT.parent / "plugins" / "secure-cloud-agents"
+)
+GATE_BINDINGS_PROFILE_PATH = _PLUGIN_ROOT / "profiles" / "generic" / "profile.json"
 
 
 def _default_knowledge_source() -> str:
     return DEFAULT_KNOWLEDGE_SOURCE
+
+
+@lru_cache(maxsize=1)
+def _gate_bindings() -> dict[str, Any]:
+    profile = json.loads(GATE_BINDINGS_PROFILE_PATH.read_text(encoding="utf-8"))
+    return profile.get("gate_bindings", {})
+
+
+def _gate_contribution_totals(
+    gate_id: str, contract: dict[str, Any], key: str
+) -> list[str]:
+    """Union of one field (agents/tasks/artifacts) across a gate's bound contribution slots."""
+    contributions = _gate_bindings().get(gate_id, {}).get("contributions", {})
+    return _unique(
+        value
+        for slot in contract.get("required_contributions", [])
+        for value in contributions.get(slot, {}).get(key, [])
+    )
 
 
 def _lifecycle_gates(require_sdlc: bool) -> list[dict[str, Any]] | None:
@@ -68,9 +105,9 @@ def _gate_dispatch(
         dispatch.append({
             "gate_id": gate_id,
             "status": "ignored" if gate_id in ignored_set else "required",
-            "agents": _unique([*contract.get("author_agents", []), *contract.get("review_agents", ["code-reviewer"])]),
-            "tasks": contract.get("tasks", []),
-            "artifacts": contract.get("artifacts", []),
+            "agents": _gate_contribution_totals(gate_id, contract, "agents"),
+            "tasks": _gate_contribution_totals(gate_id, contract, "tasks"),
+            "artifacts": _gate_contribution_totals(gate_id, contract, "artifacts"),
         })
     return [gate_id for gate_id in sequence if gate_id not in ignored_set], dispatch, sorted(ignored_set, key=gate_ids.index)
 
@@ -92,7 +129,7 @@ def _gate_agents(configured: list[str], ignored: list[str], gates: list[dict[str
         agent
         for gate_id in sequence
         if gate_id not in ignored_set
-        for agent in [*contracts[gate_id].get("author_agents", []), *contracts[gate_id].get("review_agents", ["code-reviewer"])]
+        for agent in _gate_contribution_totals(gate_id, contracts[gate_id], "agents")
     )
 
 
