@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@cline/sdk": "0.0.65",
-    "@cline/shared": "0.0.65",
+    "@cline/shared": "0.0.70",
     "zod": "4.4.3"
   },
   "devDependencies": {
