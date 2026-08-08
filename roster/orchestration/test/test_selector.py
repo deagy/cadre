@@ -57,6 +57,84 @@ def plan(**overrides: object) -> dict[str, object]:
     return build_dispatch_plan(CONFIG, CATALOG, values)
 
 
+class RouteMatchReasonTests(unittest.TestCase):
+    """`matched_route_reasons` must explain every route match in the plan itself.
+
+    Route reasons were computed and then discarded, so answering "why did this
+    route fire?" meant reading `routing.yaml` and `routing.py` instead of the
+    plan. These tests pin the reasons to the plan, and pin the ordering
+    invariant that lets `matched_routes` stay a bare id array for its existing
+    consumers (telemetry, team-recipe dry runs).
+    """
+
+    def test_reason_ids_match_matched_routes_entry_for_entry(self) -> None:
+        # The invariant that makes the two-field split safe: a consumer can
+        # zip them positionally, not just look entries up by id.
+        result = plan(
+            task="Update the deployment pipeline and the API docs",
+            changed_files=["docs/api.md", ".github/workflows/release.yml"],
+        )
+        self.assertNotEqual(result["matched_routes"], [])
+        self.assertEqual(
+            [match["id"] for match in result["matched_route_reasons"]],
+            result["matched_routes"],
+        )
+
+    def test_keyword_match_names_the_keyword_that_fired(self) -> None:
+        # The diagnostic this field exists for: `pipeline`'s "runner" keyword
+        # substring-matches "cross-runner" in a task about neither CI nor
+        # runners. The plan must now say so without a source read. This pins
+        # the *visibility* of that behaviour, not the behaviour itself --
+        # tightening the keyword boundary is a separate change.
+        result = plan(task="improve cross-runner UX documentation", changed_files=[])
+        reasons = {match["id"]: match["reasons"] for match in result["matched_route_reasons"]}
+        self.assertIn("pipeline", reasons)
+        self.assertEqual(reasons["pipeline"]["keywords"], ["runner"])
+        self.assertEqual(reasons["pipeline"]["paths"], [])
+
+    def test_path_match_names_the_pattern_and_the_file(self) -> None:
+        result = plan(task="Revise the operator guide", changed_files=["docs/runbook.md"])
+        reasons = {match["id"]: match["reasons"] for match in result["matched_route_reasons"]}
+        self.assertIn("documentation", reasons)
+        self.assertIn(
+            {"pattern": "docs/**", "file": "docs/runbook.md"},
+            reasons["documentation"]["paths"],
+        )
+
+    def test_empty_when_nothing_matches(self) -> None:
+        result = plan(task="Rotate the session token used for authorization", changed_files=[])
+        self.assertEqual(result["matched_routes"], [])
+        self.assertEqual(result["matched_route_reasons"], [])
+
+    def test_reasons_are_deterministic_across_identical_calls(self) -> None:
+        # Reasons ride inside the fingerprinted payload, so unstable ordering
+        # here would turn `dispatch_fingerprint` into a coin flip.
+        arguments = {
+            "task": "Update the deployment pipeline and the API docs",
+            "changed_files": ["docs/api.md", ".github/workflows/release.yml"],
+            "task_id": "DETERMINISM-1",
+        }
+        first, second = plan(**arguments), plan(**arguments)
+        self.assertEqual(
+            json.dumps(first["matched_route_reasons"], sort_keys=True),
+            json.dumps(second["matched_route_reasons"], sort_keys=True),
+        )
+        self.assertEqual(first["dispatch_fingerprint"], second["dispatch_fingerprint"])
+
+    def test_route_and_risk_reasons_share_one_shape(self) -> None:
+        # Both fields resolve to `$defs/idWithReasonsArray` in the schema; if
+        # one grows a key the other doesn't, that ref has been split apart.
+        result = plan(
+            task="Deploy the API to production",
+            changed_files=["services/api/main.go"],
+        )
+        self.assertNotEqual(result["matched_route_reasons"], [])
+        self.assertNotEqual(result["matched_risks"], [])
+        for match in [*result["matched_route_reasons"], *result["matched_risks"]]:
+            self.assertEqual(sorted(match), ["id", "reasons"])
+            self.assertEqual(sorted(match["reasons"]), ["keyword_groups", "keywords", "paths"])
+
+
 class SelectorTests(unittest.TestCase):
     @staticmethod
     def quality_gate_ids(result: dict[str, object]) -> list[str]:
@@ -1383,6 +1461,12 @@ class SelectorTests(unittest.TestCase):
         malformed.append(value)
         value = json.loads(json.dumps(valid))
         value["matched_risks"][0]["reasons"]["keywords"] = "deploy"
+        malformed.append(value)
+        value = json.loads(json.dumps(valid))
+        value["matched_route_reasons"][0]["reasons"]["keywords"] = "deploy"
+        malformed.append(value)
+        value = json.loads(json.dumps(valid))
+        del value["matched_route_reasons"][0]["reasons"]
         malformed.append(value)
         value = json.loads(json.dumps(valid))
         value["agents"]["unknown"] = []

@@ -72,6 +72,47 @@ comment).
     "frontend",
     "backend"
   ],
+  "matched_route_reasons": [
+    {
+      "id": "frontend",
+      "reasons": {
+        "keywords": [
+          "react"
+        ],
+        "keyword_groups": [],
+        "paths": [
+          {
+            "pattern": "frontend/**",
+            "file": "frontend/src/Upload.tsx"
+          },
+          {
+            "pattern": "**/*.tsx",
+            "file": "frontend/src/Upload.tsx"
+          }
+        ]
+      }
+    },
+    {
+      "id": "backend",
+      "reasons": {
+        "keywords": [
+          "api",
+          "postgresql"
+        ],
+        "keyword_groups": [],
+        "paths": [
+          {
+            "pattern": "services/**",
+            "file": "services/upload/main.go"
+          },
+          {
+            "pattern": "**/*.go",
+            "file": "services/upload/main.go"
+          }
+        ]
+      }
+    }
+  ],
   "matched_risks": [],
   "agents": {
     "primary": [
@@ -361,8 +402,17 @@ comment).
   whose paths or keywords matched this task's files/description. Each route
   carries its own primary/reviewer/support role list; `agents.*` below is the
   union across every matched route.
+- **`matched_route_reasons`** — *why* each of those routes matched: the
+  literal `keywords`, conjunctive `keyword_groups`, and `paths` (each a
+  `pattern`/`file` pair) that fired. One entry per `matched_routes` id, in the
+  same order, so the two arrays can be read side by side. Reach for this field
+  when a route matched that you did not expect — it names the trigger without
+  requiring a read of `routing.yaml`. Above, `frontend` matched on both the
+  keyword `react` and two path patterns, while `backend` matched on `api` and
+  `postgresql` plus its own two patterns.
 - **`matched_risks`** — routing.yaml `risk_rules` (for example `production`
-  or `destructive`) that matched. Empty here because this task is neither.
+  or `destructive`) that matched, in the same `{id, reasons}` shape as
+  `matched_route_reasons`. Empty here because this task is neither.
 - **`agents.primary` / `.reviewers` / `.support`** — the deduplicated role ids
   selected across all matched routes: who implements, who independently
   reviews, and who supports without owning the change.

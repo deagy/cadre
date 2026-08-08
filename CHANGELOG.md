@@ -23,6 +23,14 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+### Added
+
+- **`cadre select` plans now say *why* each route matched, in a new `matched_route_reasons` field.** The selector already computed a `reasons` record — the literal `keywords`, conjunctive `keyword_groups`, and `paths` (`pattern`/`file` pairs) that fired — for every matched route, exactly as it does for risk rules, and then discarded it one line after computing it. So `matched_risks` could explain itself and `matched_routes` could not: answering "why did this route fire?" meant reading `routing.yaml` and `routing.py` rather than the plan. It now ships in the plan, one entry per `matched_routes` id in the same order, in the same `{id, reasons}` shape `matched_risks` already uses (both now resolve to one `$defs/idWithReasonsArray` in `selection.schema.json`, so the two cannot drift apart).
+
+  **Additive and non-breaking**, following the `dispatch_disposition` precedent below: `matched_routes` keeps its existing bare-id-array shape, so every consumer reading it — telemetry records, team-recipe dry runs, the golden corpus's ~60 fixtures — is untouched, and `schema_version` stays at `3`. The reasons ride in a sibling field rather than replacing the ids, which is why this required no fixture rewrite. **One consequence to expect:** `matched_route_reasons` is inside the fingerprinted payload, so every plan's `dispatch_fingerprint` changes. That is what a change to the emitted field set is supposed to do — fingerprints are comparable only between plans from the same producer version, never across one — and it is not a determinism regression.
+
+  Telemetry deliberately does **not** record reasons. `reasons.paths[].file` entries are changed-file paths, and telemetry records are limited by design to structural facts about the outcome precisely so raw file paths stay out of a plaintext local log (`RUNBOOK.md`).
+
 ## [0.17.0] - 2026-08-08
 
 Shipped to users as plugin [v0.14.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.14.0) — the packaged plugin is how register-side changes reach an installed runner.

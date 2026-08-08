@@ -4,7 +4,7 @@
   "title": "Local Agent Selection Plan",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "task_id", "dispatch_fingerprint", "generated_at", "status", "workflow", "inputs", "matched_routes", "matched_risks", "agents", "dispatch_disposition", "teams", "lifecycle_tracking", "required_quality_gates", "ignored_quality_gates", "human_gates", "knowledge_context"],
+  "required": ["schema_version", "task_id", "dispatch_fingerprint", "generated_at", "status", "workflow", "inputs", "matched_routes", "matched_route_reasons", "matched_risks", "agents", "dispatch_disposition", "teams", "lifecycle_tracking", "required_quality_gates", "ignored_quality_gates", "human_gates", "knowledge_context"],
   "properties": {
     "schema_version": { "const": 3 },
     "task_id": { "$ref": "#/$defs/nonempty" },
@@ -27,41 +27,8 @@
       }
     },
     "matched_routes": { "$ref": "#/$defs/stringArray" },
-    "matched_risks": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["id", "reasons"],
-        "properties": {
-          "id": { "$ref": "#/$defs/nonempty" },
-          "reasons": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["keywords", "keyword_groups", "paths"],
-            "properties": {
-              "keywords": { "$ref": "#/$defs/stringArray" },
-              "keyword_groups": {
-                "type": "array",
-                "items": { "$ref": "#/$defs/nonemptyStringArray" }
-              },
-              "paths": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": ["pattern", "file"],
-                  "properties": {
-                    "pattern": { "$ref": "#/$defs/nonempty" },
-                    "file": { "$ref": "#/$defs/nonempty" }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
+    "matched_route_reasons": { "$ref": "#/$defs/idWithReasonsArray" },
+    "matched_risks": { "$ref": "#/$defs/idWithReasonsArray" },
     "agents": {
       "type": "object",
       "additionalProperties": false,
@@ -279,6 +246,42 @@
       "minItems": 1,
       "uniqueItems": true,
       "items": { "$ref": "#/$defs/nonempty" }
+    },
+    "matchReasons": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["keywords", "keyword_groups", "paths"],
+      "properties": {
+        "keywords": { "$ref": "#/$defs/stringArray" },
+        "keyword_groups": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonemptyStringArray" }
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["pattern", "file"],
+            "properties": {
+              "pattern": { "$ref": "#/$defs/nonempty" },
+              "file": { "$ref": "#/$defs/nonempty" }
+            }
+          }
+        }
+      }
+    },
+    "idWithReasonsArray": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "reasons"],
+        "properties": {
+          "id": { "$ref": "#/$defs/nonempty" },
+          "reasons": { "$ref": "#/$defs/matchReasons" }
+        }
+      }
     }
   }
 }
