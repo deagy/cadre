@@ -44,10 +44,11 @@ standalone Agentic SDLC executable was present on `PATH` when it ran; without
 one, `lifecycle_tracking.status` reads `"standalone"` with a `reason`, and
 every `required_quality_gates[].reason` instead reads "Required by routing
 configuration (Agentic SDLC unavailable; gate detail omitted)." (see
-`roster/orchestration/src/build_dispatch_plan.py`). `matched_routes`,
-`agents`, `teams`, the *set* of gate ids in `required_quality_gates`, and
-`human_gates` stay identical either way, and are pinned byte-for-byte by the
-golden-corpus test referenced above (that test forces standalone mode so the
+`roster/orchestration/src/build_dispatch_plan.py`). The `matched_routes` route
+ids, `agents`, `teams`, the *set* of gate ids in `required_quality_gates`, and
+`human_gates` stay identical either way, and are pinned by the golden-corpus
+test referenced above (which compares route ids, not each entry's `reasons` —
+reason content is pinned by `test_selector.py` instead) (that test forces standalone mode so the
 corpus is reproducible without the executable — see the fixture file's
 comment).
 

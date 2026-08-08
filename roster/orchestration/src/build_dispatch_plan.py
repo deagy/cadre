@@ -103,6 +103,11 @@ def _ordered(values: Iterable[str], catalog: list[str]) -> list[str]:
 
 
 def _reasons(match: dict[str, Any]) -> dict[str, Any]:
+    # The returned dict is new, but its list values are the *same* objects
+    # held in `match["reasons"]`, which `apply_cross_stack`, `_build_teams`,
+    # and `_build_quality_gates` also still hold. None of them mutates a
+    # reasons list today, and none may start: an in-place sort or append
+    # there would silently rewrite what the plan already emitted.
     return {
         "keywords": match["reasons"]["keywords"],
         "keyword_groups": match["reasons"].get("keyword_groups", []),
