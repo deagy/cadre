@@ -33,7 +33,6 @@ skill; see [Adding lifecycle
 governance](INSTALL.md#adding-lifecycle-governance).
 
 Then initialize your project through this suite's compatibility launcher,
-Then initialize your project through this suite's compatibility launcher,
 using `--profile secure-cloud` if your project actually runs on this suite's
 own target stack (Proxmox, Talos, Kubernetes, Helm, OpenTofu, GitLab CI,
 PostgreSQL, React/TypeScript, Go). Use `quick`, `generic`, or `web-service`

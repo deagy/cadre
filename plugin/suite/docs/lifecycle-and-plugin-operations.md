@@ -32,7 +32,7 @@ Install the reviewed release and make its executable available as
 for the exact `pipx install` command and current `kernel-v*` tag:
 
 ```sh
-pipx install "git+https://github.com/deagy/cadre.git@kernel-v0.13.0#subdirectory=kernel"
+pipx install "git+https://github.com/deagy/cadre.git@kernel-v<version>#subdirectory=kernel"
 cadre sdlc init --root /path/to/target --profile secure-cloud
 ```
 

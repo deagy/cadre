@@ -31,9 +31,10 @@ python3 -m unittest discover -s roster/knowledge-store/test -p "test_*.py"
 python3 -m unittest discover -s roster/orchestration/test -p "test_*.py"
 python3 -m unittest discover -s roster/shared/test -p "test_*.py"
 
-# Run a single test
-python3 -m unittest agents.orchestration.test.test_repository_health -v
-python3 -m unittest agents.orchestration.test.test_repository_health.SomeTestCase.test_method
+# Run a single test file, or a single test within it (no package __init__.py,
+# so `-m unittest <module.path>` doesn't resolve — use discover with -p/-k)
+python3 -m unittest discover -s roster/orchestration/test -p "test_repository_health.py" -v
+python3 -m unittest discover -s roster/orchestration/test -p "test_repository_health.py" -k SomeTestCase.test_method
 
 # The kernel is in-tree, so `cadre sdlc` and the lifecycle-contract tests
 # need no install and no AGENTIC_SDLC_BIN. Set it only to point at a
@@ -47,7 +48,7 @@ python3 -m unittest discover -s plugin/tools -p "test_*.py"      # packaging + d
 # and the generated half of provider/ (--check is the CI drift-guard equivalent)
 cadre generate-role-metadata
 # ...then re-run this — it fails the build on drift
-python3 -m unittest agents.orchestration.test.test_repository_health
+python3 -m unittest discover -s roster/orchestration/test -p "test_repository_health.py"
 
 # Build the packaged plugin distribution (gitignored; not committed)
 cadre generate-plugin --output ./plugin-dist
@@ -75,7 +76,7 @@ Never move lifecycle schemas, run-record validators, or gate-authority logic int
 
 **Source of truth flows one direction:** `roster/catalog.yaml` (role inventory: definition path, phase, capability, `model`/`codex_model` tier) + `roster/<phase>/<role>/AGENT.md` (role authority/policy) + `.agents/skills/` (publishable skills) → `cadre generate-plugin` (`roster/orchestration/src/generate_global_plugin.py`) → a self-contained distribution committed in this same repository, under `plugin/` (Claude Code subagent wrappers, packaged `skills/`/`suite/`, and a copy of this repository's `provider/` bundle — `plugin/` also bundles the separately-owned Agentic SDLC lifecycle-governance skills as additional, optional plugins). Codex `.toml` wrappers and `agent-catalog.json` are register-side generated content under `provider/`, produced by `cadre generate-role-metadata` so the pip/pipx distribution can ship them without a plugin checkout. Never hand-edit generated output — edit the sources and regenerate. `test_repository_health.py` (`roster/orchestration/test/`) is one drift guard (it generates a package into a temp directory rather than reading a committed one); `.github/workflows/validate.yml`'s `generated-content` job (`--check`) is the other, guarding the committed `plugin/` output directly against the same sources.
 
-**Model tier assignment is a fixed heuristic, not per-role discretion** (documented in `catalog.yaml`'s header comment): `opus` for design/architecture/governance/crypto-assurance roles making high-blast-radius, hard-to-reverse judgment calls; `sonnet` as the default for build/review/test/operations/support roles; `haiku` for narrow single-purpose roles (evidence cataloging, knowledge-store stewardship, triage/escalation routing). `codex_model` is the parallel OpenAI-identifier mapping (`opus`→`gpt-5`, `sonnet`→`gpt-5-codex`, `haiku`→`gpt-5-mini`) — re-verify these against current Codex docs before relying on them, since this repo has no live check against Codex's model list.
+**Model tier assignment is a fixed heuristic, not per-role discretion** (documented in `catalog.yaml`'s header comment): `opus` for design/architecture/governance/crypto-assurance roles making high-blast-radius, hard-to-reverse judgment calls; `sonnet` as the default for build/review/test/operations/support roles; `haiku` for narrow single-purpose roles (evidence cataloging, knowledge-store stewardship, triage/escalation routing). `codex_model` is the parallel OpenAI-identifier mapping, recorded once in `roster/runner-capabilities.json` and mirrored in `catalog.yaml`'s header comment (which also records why the previous `gpt-5`/`gpt-5-codex`/`gpt-5-mini` identifiers were rejected) — treat that file as the source of truth rather than this doc, and re-verify it against current Codex docs before relying on it, since this repo has no live check against Codex's model list.
 
 **Selection is deterministic, not agent judgment:** `roster/orchestration/routing.yaml` holds path/keyword/risk rules consumed by `roster/orchestration/src/select_agents.py` / `build_dispatch_plan.py` / `risk_classifier.py`. If no rule matches a task, the selector returns `needs-triage` rather than guessing. `routing.yaml`'s `team_recipes` drive the plan's `teams` array (never adding an agent that wasn't already independently selected) — see `.agents/skills/run-agent-orchestration/references/team-recipes.md` and `references/runner-adapters.md` for the `peer` vs `orchestrator-relayed` communication-mode contract (peer messaging needs `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` on Claude Code; Codex always falls back to orchestrator-relayed).
 

@@ -33,6 +33,52 @@ PROVIDER_ROOT = REPOSITORY_ROOT / "provider"
 _GENERATED_PACKAGE: Path | None = None
 
 
+def _tracked_files() -> list[str]:
+    """`git ls-files`, so untracked scratch files and gitignored build output
+    never trip a scan -- only what's actually committed."""
+    return subprocess.run(
+        ["git", "ls-files"],
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    ).stdout.splitlines()
+
+
+def _catalog_role_count() -> int:
+    """The live role count, parsed from catalog.yaml the same way
+    test_catalog_declares_capabilities_and_reviewers_are_read_only does --
+    deliberately not EXPECTED_ROLE_COUNT above, since that constant is itself
+    a hardcoded number these doc-drift checks exist to stop prose from
+    silently diverging from."""
+    current_agent: str | None = None
+    agents: set[str] = set()
+    for line in (ROOT / "catalog.yaml").read_text(encoding="utf-8").splitlines():
+        if line.startswith("  ") and not line.startswith("    ") and line.rstrip().endswith(":"):
+            current_agent = line.strip()[:-1]
+            agents.add(current_agent)
+    return len(agents)
+
+
+def _secure_cloud_role_count() -> int:
+    """The live `secure-cloud` profile role count, read directly from its
+    `agents` array rather than hardcoded."""
+    profile = json.loads(
+        (PROVIDER_ROOT / "profiles" / "secure-cloud" / "profile.json").read_text(encoding="utf-8")
+    )
+    return len(profile["agents"])
+
+
+def _kernel_compatibility_minimum() -> str:
+    """The live kernel compatibility floor, read from the provider bundle
+    rather than hardcoded -- prose that restates this number is checked
+    against it by
+    test_kernel_compatibility_floor_claims_match_the_provider_bundle."""
+    provider = json.loads((PROVIDER_ROOT / "provider.json").read_text(encoding="utf-8"))
+    return provider["kernel_compatibility"]["minimum"]
+
+
 def generated_package() -> Path:
     """A freshly generated plugin package, built once and reused.
 
@@ -1694,6 +1740,223 @@ class RepositoryHealthTests(unittest.TestCase):
         )
         self.assertNotEqual(0, result.returncode)
         self.assertIn("unknown subcommand", result.stderr)
+
+    # -- Stale doc facts: a recurring failure shape ------------------------
+    #
+    # Three independent review findings (total role count, secure-cloud role
+    # count, a hardcoded kernel release tag) turned out to be the same shape:
+    # prose asserting a fact that only the generator/source files actually
+    # own, with nothing to catch the two drifting apart. These three tests
+    # guard that shape going forward. They deliberately do not hardcode 74 or
+    # 19 -- see `_catalog_role_count()`/`_secure_cloud_role_count()` above --
+    # because a test that pins its own expected number is exactly the kind of
+    # second copy that caused the drift in the first place.
+    #
+    # `plugin/` is excluded from all three scans below: it is `roster/`'s own
+    # generated output (`cadre generate-plugin --output plugin`, verified
+    # byte-for-byte by `.github/workflows/validate.yml`'s `generated-content`
+    # job), so anything stale there is a faithful mirror of a source-tree
+    # finding this same scan already catches at its source location. Scanning
+    # it too would just report every source finding twice under a different
+    # path, with no independent signal -- and it would fail this task's own
+    # "do not touch plugin/" boundary the moment someone tried to fix what it
+    # reported.
+
+    # `\d+ roles` alone is too broad to use as a "this repository's total
+    # role count" signal: docs/capability-index.md's per-capability-tier
+    # breakdown ("`document_author` (23 roles)") and
+    # docs/proposals/human-authority-role-agents.md's subset counts
+    # ("**8 roles**") use the same two words for an unrelated, smaller
+    # number, and a scan that flagged those as "wrong" would be noise, not
+    # signal. What's actually mechanically checkable is the small, stable set
+    # of sentence shapes this repository's docs already use to state the
+    # *whole-suite* total -- confirmed against every current "N roles" hit in
+    # the tree before writing this list, so it is not a guess.
+    TOTAL_ROLE_COUNT_PATTERNS = (
+        r"this suite's (\d+) roles",
+        r"this repository's (\d+) roles",
+        r"\ball (\d+) roles\b",
+        r"\bits (\d+) roles\b",
+        r"(\d+) roles from\b",
+        r"(\d+) roles in\b",
+        r"(\d+) roles well\b",
+        r"\d+ → (\d+) roles\b",
+    )
+
+    # Point-in-time records legitimately freeze a role count that was true
+    # when written and is not expected to track the live catalog forever.
+    TOTAL_ROLE_COUNT_HISTORICAL_PREFIXES = (
+        # The changelog is a chronological record of past releases; earlier
+        # entries correctly cite whatever the count was at that release.
+        "CHANGELOG.md",
+        # Proposal documents are point-in-time decision records, never
+        # revised once a decision is made -- role-expansion-2026-08.md's
+        # "71 -> 74 roles" describes a specific completed migration, not a
+        # live claim about the current catalog.
+        "docs/proposals/",
+        # Archived task run records (product-intent/requirements/etc. under
+        # a dated run directory) capture the state at the time that task
+        # ran, the same way roster/orchestration/examples/SAMPLE-001 is
+        # allowed to keep stale content under
+        # test_sample_references_are_limited_to_allowed_archives above.
+        "roster/orchestration/runs/",
+        "roster/orchestration/examples/",
+    )
+
+    def test_role_count_claims_in_tracked_docs_match_the_catalog(self) -> None:
+        actual = _catalog_role_count()
+        offenders: list[str] = []
+        for relative_path in _tracked_files():
+            normalized = relative_path.replace("\\", "/")
+            if not normalized.endswith(".md") or normalized.startswith("plugin/"):
+                continue
+            if normalized.startswith(self.TOTAL_ROLE_COUNT_HISTORICAL_PREFIXES):
+                continue
+            path = REPOSITORY_ROOT / normalized
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            for pattern in self.TOTAL_ROLE_COUNT_PATTERNS:
+                for match in re.finditer(pattern, text):
+                    claimed = int(match.group(match.lastindex))
+                    if claimed != actual:
+                        offenders.append(
+                            f"{normalized}: claims '{match.group(0)}' ({claimed} roles) "
+                            f"but roster/catalog.yaml currently defines {actual} roles"
+                        )
+        self.assertEqual([], offenders)
+
+    def test_secure_cloud_role_count_claims_match_the_profile(self) -> None:
+        actual = _secure_cloud_role_count()
+        pattern = re.compile(
+            r"secure-cloud`? (?:extends `generic` with|pulls in) (\d+) roles"
+        )
+        offenders: list[str] = []
+        for relative_path in _tracked_files():
+            normalized = relative_path.replace("\\", "/")
+            if not normalized.endswith(".md") or normalized.startswith("plugin/"):
+                continue
+            path = REPOSITORY_ROOT / normalized
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            for match in pattern.finditer(text):
+                claimed = int(match.group(1))
+                if claimed != actual:
+                    offenders.append(
+                        f"{normalized}: claims '{match.group(0)}' ({claimed} roles) but "
+                        f"provider/profiles/secure-cloud/profile.json currently lists "
+                        f"{actual} agents"
+                    )
+        self.assertEqual([], offenders)
+
+    # A literal `kernel-v<major>.<minor>.<patch>` (or `plugin-v<...>`) frozen
+    # into prose goes stale the moment the next tag ships, unless the prose
+    # is itself a historical record of a specific past release/incident (a
+    # changelog entry, a postmortem naming the exact affected tag, a
+    # migration writeup, a proposal's after-the-fact release note, or the
+    # release workflow's own inline comments narrating a past incident --
+    # its actual tag creation is templated as `kernel-v${{ ... }}`, never a
+    # literal digit string). Every current allowlist entry was checked
+    # against the real tree before being added here, not assumed.
+    RELEASE_TAG_ALLOWLIST = {
+        "CHANGELOG.md": (
+            "the release changelog is a chronological record of exactly what "
+            "shipped at each tag; it must keep citing old tags verbatim"
+        ),
+        "SECURITY.md": (
+            "documents a specific past incident (keyless tag signing) tied to "
+            "the exact historical plugin tag that carries it; the postmortem "
+            "is only useful if that tag stays named"
+        ),
+        "docs/migration/monorepo-migration.md": (
+            "restates the same tag-signing incident plus a completed "
+            "migration's release history -- both are historical facts about "
+            "specific past tags, not live guidance"
+        ),
+        "docs/proposals/": (
+            "proposal documents are point-in-time decision records that cite "
+            "which tag a change actually shipped as, and are never revised "
+            "once the decision is made"
+        ),
+        ".github/workflows/release.yml": (
+            "the only literal digits here are inside comments narrating a "
+            "specific past signing incident for engineer context; the "
+            "workflow's actual tag creation is templated "
+            "(`kernel-v${{ steps.version.outputs.value }}`), never a literal "
+            "version string"
+        ),
+        "cline-plugins/cline-lifecycle/README.md": (
+            "states a compatibility *floor* ('v0.13.2 or later'), not the "
+            "current release -- a different claim, and one that only moves "
+            "when the floor deliberately moves. It is not exempt from drift, "
+            "just from this check: "
+            "test_kernel_compatibility_floor_claims_match_the_provider_bundle "
+            "asserts the version it names equals provider.json's "
+            "kernel_compatibility.minimum"
+        ),
+    }
+
+    def test_hardcoded_release_tags_are_confined_to_historical_records(self) -> None:
+        pattern = re.compile(r"(?:kernel|plugin)-v\d+\.\d+\.\d+")
+        allowed_prefixes = tuple(self.RELEASE_TAG_ALLOWLIST)
+        offenders: list[str] = []
+        for relative_path in _tracked_files():
+            normalized = relative_path.replace("\\", "/")
+            if normalized.startswith("plugin/") or normalized.startswith(allowed_prefixes):
+                continue
+            path = REPOSITORY_ROOT / normalized
+            if not path.is_file():
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            for match in pattern.finditer(text):
+                line_number = text.count("\n", 0, match.start()) + 1
+                offenders.append(f"{normalized}:{line_number}: hardcoded release tag '{match.group(0)}'")
+        self.assertEqual([], offenders)
+
+    def test_kernel_compatibility_floor_claims_match_the_provider_bundle(self) -> None:
+        # The counterpart to the allowlist entry above. A doc may state the
+        # kernel compatibility floor -- that is a real, useful fact for a
+        # reader -- but it must state the *same* floor provider.json pins,
+        # or the two silently diverge the next time the floor moves. This is
+        # the same shape as the role-count checks: prose is allowed to
+        # restate a machine-readable fact only while a test holds it to it.
+        expected = _kernel_compatibility_minimum()
+        # Bounded multi-line window: the claim and the version it names are
+        # routinely split across a wrapped line, so a `[^\n]*` window would
+        # silently match nothing.
+        pattern = re.compile(r"kernel_compatibility\.minimum[\s\S]{0,200}?(\d+\.\d+\.\d+)")
+        offenders: list[str] = []
+        checked = 0
+        for relative_path in _tracked_files():
+            normalized = relative_path.replace("\\", "/")
+            if normalized.startswith("plugin/") or not normalized.endswith(".md"):
+                continue
+            path = REPOSITORY_ROOT / normalized
+            if not path.is_file():
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            for match in pattern.finditer(text):
+                checked += 1
+                if match.group(1) != expected:
+                    line_number = text.count("\n", 0, match.start()) + 1
+                    offenders.append(
+                        f"{normalized}:{line_number}: claims kernel_compatibility.minimum "
+                        f"{match.group(1)!r} but provider/provider.json pins {expected!r}"
+                    )
+        self.assertEqual([], offenders)
+        # A scan that silently matches nothing is a test that cannot fail.
+        # If the phrasing changes, this fires and the pattern gets updated
+        # rather than quietly protecting nothing.
+        self.assertGreater(checked, 0, "no kernel_compatibility.minimum claim found to check")
 
 
 if __name__ == "__main__":

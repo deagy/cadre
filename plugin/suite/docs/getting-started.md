@@ -12,8 +12,13 @@ operations guide](lifecycle-and-plugin-operations.md).
 
 - Python 3.10 or newer.
 - A checkout of this repository.
-- The standalone Agentic SDLC executable when running lifecycle-integrated
-  orchestration tests or commands.
+
+The lifecycle kernel is in-tree, under
+[`kernel/`](https://github.com/deagy/cadre/tree/main/kernel) — `cadre sdlc`
+and the lifecycle-contract tests need no separate install and no
+`AGENTIC_SDLC_BIN`. Set that env var only to point at a *different* kernel
+deliberately; see the [lifecycle guide](lifecycle-and-plugin-operations.md)
+for that case.
 
 The `bin/cadre` launcher probes for `python3` or `python`; PowerShell users
 can use `bin/cadre.ps1`.
@@ -40,16 +45,15 @@ Run the suite-only check with:
 python3 -m unittest discover -s roster/knowledge-store/test -p "test_*.py"
 ```
 
-The orchestration tests use the standalone lifecycle contract. After installing
-the pinned Agentic SDLC executable, run them with:
+The orchestration tests exercise the lifecycle contract against the in-tree
+kernel, so no install or env var is needed:
 
 ```sh
-AGENTIC_SDLC_BIN=/path/to/agentic-sdlc/bin/agentic-sdlc \
-  python3 -m unittest discover -s roster/orchestration/test -p "test_*.py"
+python3 -m unittest discover -s roster/orchestration/test -p "test_*.py"
 ```
 
-See the [lifecycle guide](lifecycle-and-plugin-operations.md) for installation
-and version-lock guidance.
+See the [lifecycle guide](lifecycle-and-plugin-operations.md) if you need to
+point the tests at a separately installed kernel instead.
 
 ## Choosing the next guide
 

@@ -164,7 +164,7 @@ If the target project actually uses this repository's own cloud stack (Proxmox, 
 cadre sdlc init --root /path/to/target --profile secure-cloud
 ```
 
-A project with a different stack should stay on `quick`/`generic`/`web-service` — `secure-cloud` extends `generic` with 16 roles opinionated toward this repository's own infrastructure, and installing it onto an unrelated stack forces subagents shaped around infrastructure that project doesn't have.
+A project with a different stack should stay on `quick`/`generic`/`web-service` — `secure-cloud` extends `generic` with 19 roles opinionated toward this repository's own infrastructure, and installing it onto an unrelated stack forces subagents shaped around infrastructure that project doesn't have.
 
 Initialization detects candidate technologies and validation commands, but deliberately leaves human authorities, compliance applicability, persistent/production environment classification, and other consequential decisions unresolved. The target project owns those decisions and its lifecycle records under `.agentic-sdlc/`.
 
