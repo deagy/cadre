@@ -79,22 +79,24 @@ Every role definition and orchestration tool is runner-neutral text and data. Li
 <details>
 <summary>Known Cline plugin limitations</summary>
 
-**Bare git-URL install can fail with a missing `vitest` module.** Installing
-via a bare repository URL, rather than the local-install form, previously
-failed with `Cannot find module 'vitest'` while Cline's "sync plugin MCP
-servers" step scanned the plugin's test file: a git-plugin-source with no
-root `package.json` `cline.plugins` manifest and no root
-`index.ts`/`index.js` falls back to an unbounded recursive `.ts`/`.js` scan
-of the whole cloned repository, which can import files whose own
-dependencies (here, the `vitest` devDependency) were never installed. No
-`cline.plugins` manifest key is present — a prior version of this paragraph
-wrongly claimed one was declared in the workspace root manifest; that
-described the archived `deagy/cadre-lifecycle` repository, not this one.
-Use the local-install form ([`cline-plugins/`](cline-plugins/)) documented in
-[docs/INSTALL.md](docs/INSTALL.md), which does not trigger the scan. The
-underlying scanner behavior is still worth reporting upstream, since
-Cline's git plugin-source format has no way to select a subdirectory
-otherwise.
+**Tool invocation fails with a cyclic-structure error.** As of `cline` CLI
+`3.0.46` (the latest published version at the time this was built), invoking
+any locally-installed plugin's tool fails with `JSON.stringify cannot
+serialize cyclic structures` — confirmed as an upstream Cline bug, not
+specific to this plugin, by reproducing the identical failure with
+`cline/cline`'s own unmodified example plugin. The plugin installs and
+uninstalls cleanly; tool invocation should start working once Cline ships a
+fix.
+
+**Git-URL install loads all three Cline plugins.** Cline's Git source format
+cannot select a subdirectory, so this repository's root `package.json`
+explicitly declares the `cline`, `cline-agents`, and `cline-lifecycle`
+entrypoints. It also carries their two plugin-owned runtime dependencies
+(`zod` and `yaml`) without moving the full Cline npm workspace beneath
+[`plugin/`](plugin/), which would make Claude Code/Codex marketplace
+installs download dependencies they never use. The entrypoints' test files
+use `.mts`, so Cline's TypeScript scanner does not load the `vitest`
+development dependency during installation.
 
 </details>
 

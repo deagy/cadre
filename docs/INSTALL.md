@@ -96,9 +96,21 @@ the MCP extra: `pip install -r roster/orchestration/mcp/requirements-mcp.txt`.
 ## Cline
 
 ```sh
-git clone https://github.com/deagy/cadre.git
-cline plugin install ./cadre/cline-plugins/cline --force
+cline plugin install https://github.com/deagy/cadre --force
 ```
+
+This installs the `cline` role-selection tool, `cline-agents` subagent
+presets, and `cline-lifecycle` governance tools together. The Git-source
+manifest pins the plugin-owned runtime dependencies required while Cline
+syncs all three entrypoints. For local development, the equivalent command is
+`cline plugin install ./cadre --force` from a checkout; run `npm ci` in
+`cline-plugins/` before running that workspace's tests or typechecks.
+
+**Known upstream defect:** as of cline CLI 3.0.46, invoking *any*
+locally-installed plugin's tool fails with `JSON.stringify cannot serialize
+cyclic structures`. This affects Cline's own example plugin too. Install and
+uninstall work; tool invocation is expected to start working when Cline ships
+a fix.
 
 ## From a checkout
 

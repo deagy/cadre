@@ -223,7 +223,30 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: cline-plugins/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            cline-plugins/package-lock.json
+      # A Git-source install starts at this repository root. Cline loads the
+      # three entrypoints declared by root package.json and resolves their
+      # plugin-owned runtime imports from this production-only dependency
+      # closure; @cline/* is supplied by Cline's host sandbox.
+      - run: npm ci --ignore-scripts --omit=dev
+      - name: Verify Cline Git-source runtime imports resolve from each entrypoint
+        run: |
+          node --input-type=module -e '
+            import { createRequire } from "node:module";
+            import path from "node:path";
+            const root = process.cwd();
+            for (const entrypoint of [
+              "cline-plugins/cline/index.ts",
+              "cline-plugins/cline-agents/index.ts",
+              "cline-plugins/cline-lifecycle/index.ts",
+            ]) {
+              const require = createRequire(path.join(root, entrypoint));
+              require.resolve("zod");
+            }
+            createRequire(path.join(root, "cline-plugins/cline-agents/index.ts")).resolve("yaml");
+          '
       # cline-plugins/package.json declares npm workspaces (cline,
       # cline-agents, cline-lifecycle) backed by a single lockfile, so `npm ci`
       # runs from cline-plugins/ rather than each package directory.

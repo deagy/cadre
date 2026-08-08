@@ -1,7 +1,7 @@
 
 # Dependabot configuration for deagy/cadre
 #
-# Automated dependency updates for Python (pip) dependencies.
+# Automated dependency updates for Python and npm dependencies.
 # See: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
@@ -22,6 +22,43 @@ updates:
       - "python"
     # Only update pinned dependencies listed in pyproject.toml extras
     # (yaml, mcp). Core cadre has no runtime dependencies.
+    allow:
+      - dependency-type: "direct"
+
+  # The root manifest is the small production dependency closure Cline uses
+  # when it installs this repository directly from Git. It is distinct from
+  # the development workspace below, so each lockfile needs its own update
+  # entry.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
+      - "npm"
+    allow:
+      - dependency-type: "direct"
+
+  # Development/test dependencies for the three Cline plugin workspaces.
+  - package-ecosystem: "npm"
+    directory: "/cline-plugins"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
+      - "npm"
     allow:
       - dependency-type: "direct"
 

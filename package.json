@@ -1,0 +1,21 @@
+{
+  "name": "cadre-cline-git-plugin-source",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runtime dependency closure for Cline Git-source plugin discovery. The Claude Code and Codex marketplace package remains plugin/.",
+  "cline": {
+    "plugins": [
+      {
+        "paths": [
+          "./cline-plugins/cline-agents/index.ts",
+          "./cline-plugins/cline-lifecycle/index.ts",
+          "./cline-plugins/cline/index.ts"
+        ]
+      }
+    ]
+  },
+  "dependencies": {
+    "yaml": "2.9.0",
+    "zod": "4.4.3"
+  }
+}
