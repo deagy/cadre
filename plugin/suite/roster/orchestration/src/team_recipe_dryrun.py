@@ -320,7 +320,7 @@ def _resolve_task_mode_signals(
             "top": "5",
         },
     )
-    matched_route_ids = set(plan["matched_routes"])
+    matched_route_ids = {route["id"] for route in plan["matched_routes"]}
     selected_agents = {*plan["agents"]["primary"], *plan["agents"]["reviewers"], *plan["agents"]["support"]}
     return matched_route_ids, selected_agents, task
 

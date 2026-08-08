@@ -542,12 +542,7 @@ def build_dispatch_plan(
             "classification": input_data.get("classification"),
             "source_filter": input_data["source"],
         },
-        "matched_routes": [match["id"] for match in matched_routes],
-        # "matched_routes" stays a bare id array for its existing consumers
-        # (telemetry records, team-recipe dry runs); the reasons ride alongside
-        # in a sibling field with the same shape "matched_risks" already uses,
-        # entry-for-entry in the same order.
-        "matched_route_reasons": [{"id": match["id"], "reasons": _reasons(match)} for match in matched_routes],
+        "matched_routes": [{"id": match["id"], "reasons": _reasons(match)} for match in matched_routes],
         "matched_risks": [{"id": match["id"], "reasons": _reasons(match)} for match in matched_risks],
         "agents": groups,
         "dispatch_disposition": _build_dispatch_disposition(groups),

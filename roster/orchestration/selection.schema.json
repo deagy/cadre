@@ -4,7 +4,7 @@
   "title": "Local Agent Selection Plan",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "task_id", "dispatch_fingerprint", "generated_at", "status", "workflow", "inputs", "matched_routes", "matched_route_reasons", "matched_risks", "agents", "dispatch_disposition", "teams", "lifecycle_tracking", "required_quality_gates", "ignored_quality_gates", "human_gates", "knowledge_context"],
+  "required": ["schema_version", "task_id", "dispatch_fingerprint", "generated_at", "status", "workflow", "inputs", "matched_routes", "matched_risks", "agents", "dispatch_disposition", "teams", "lifecycle_tracking", "required_quality_gates", "ignored_quality_gates", "human_gates", "knowledge_context"],
   "properties": {
     "schema_version": { "const": 4 },
     "task_id": { "$ref": "#/$defs/nonempty" },
@@ -27,14 +27,13 @@
       }
     },
     "matched_routes": {
-      "description": "Matched route ids. An id projection of matched_route_reasons: same ids, same order, same length. Kept as a bare string array for consumers that only need ids; JSON Schema cannot express the positional correspondence, so it is pinned by test_selector.py::RouteMatchReasonTests.",
-      "$ref": "#/$defs/stringArray"
-    },
-    "matched_route_reasons": {
-      "description": "Canonical route-match record: why each route matched, as the keywords, keyword_groups, and path pattern/file pairs that fired. Shares one definition with matched_risks so the two shapes cannot drift.",
+      "description": "Routes that matched, each with why it matched: the keywords, keyword_groups, and path pattern/file pairs that fired. Same shape as matched_risks -- both resolve to one definition so the two cannot drift apart.",
       "$ref": "#/$defs/idWithReasonsArray"
     },
-    "matched_risks": { "$ref": "#/$defs/idWithReasonsArray" },
+    "matched_risks": {
+      "description": "Risk rules that matched, in the same shape as matched_routes.",
+      "$ref": "#/$defs/idWithReasonsArray"
+    },
     "agents": {
       "type": "object",
       "additionalProperties": false,

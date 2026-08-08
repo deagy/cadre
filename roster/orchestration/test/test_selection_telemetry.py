@@ -111,7 +111,13 @@ class TelemetryOnTests(unittest.TestCase):
             self.assertEqual(1, record["schema_version"])
             self.assertEqual(plan["status"], record["status"])
             self.assertEqual(plan["workflow"], record["workflow"])
-            self.assertEqual(plan["matched_routes"], record["matched_routes"])
+            # The record keeps bare ids; the plan's entries carry a full
+            # `reasons` record whose `paths[].file` values are changed-file
+            # paths, which a telemetry record deliberately never stores.
+            self.assertEqual(
+                [route["id"] for route in plan["matched_routes"]],
+                record["matched_routes"],
+            )
             self.assertEqual(plan["task_id"], record["task_id"])
             self.assertIn("agent_counts", record)
             self.assertIn("primary", record["agent_counts"])

@@ -116,8 +116,12 @@ def _mismatches(case: dict[str, Any], actual: dict[str, Any]) -> list[str]:
         if actual_value != expected_value:
             mismatches.append(f"{field}: expected={expected_value!r}, got={actual_value!r}")
 
+    # Fixtures pin *which* routes matched, not why: a plan's route entries
+    # carry a full `reasons` record, and hand-maintaining every pattern/file
+    # pair across ~60 cases would bury the routing assertion these fixtures
+    # exist to make. Reason content is asserted in test_selector.py instead.
     expected_routes = expected["matched_routes"]
-    actual_routes = actual["matched_routes"]
+    actual_routes = [route["id"] for route in actual["matched_routes"]]
     if actual_routes != expected_routes:
         mismatches.append(f"matched_routes: expected={expected_routes!r}, got={actual_routes!r}")
 

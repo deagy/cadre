@@ -71,10 +71,6 @@ comment).
     "source_filter": "deagy/cadre"
   },
   "matched_routes": [
-    "frontend",
-    "backend"
-  ],
-  "matched_route_reasons": [
     {
       "id": "frontend",
       "reasons": {
@@ -400,21 +396,19 @@ comment).
   should not be treated as reviewable guidance. `workflow` is the single
   matched high-level shape (here `new-service`, since this task combines the
   `frontend` and `backend` routes).
-- **`matched_routes`** — the `roster/orchestration/routing.yaml` route ids
-  whose paths or keywords matched this task's files/description. Each route
-  carries its own primary/reviewer/support role list; `agents.*` below is the
-  union across every matched route.
-- **`matched_route_reasons`** — *why* each of those routes matched: the
-  literal `keywords`, conjunctive `keyword_groups`, and `paths` (each a
-  `pattern`/`file` pair) that fired. One entry per `matched_routes` id, in the
-  same order, so the two arrays can be read side by side. Reach for this field
-  when a route matched that you did not expect — it names the trigger without
-  requiring a read of `routing.yaml`. Above, `frontend` matched on both the
-  keyword `react` and two path patterns, while `backend` matched on `api` and
+- **`matched_routes`** — the `roster/orchestration/routing.yaml` routes whose
+  paths or keywords matched this task's files/description, each as an `id`
+  plus the `reasons` it matched: the literal `keywords`, conjunctive
+  `keyword_groups`, and `paths` (each a `pattern`/`file` pair) that fired.
+  Each route carries its own primary/reviewer/support role list; `agents.*`
+  below is the union across every matched route. Read `reasons` when a route
+  matched that you did not expect — it names the trigger without requiring a
+  read of `routing.yaml`. Above, `frontend` matched on both the keyword
+  `react` and two path patterns, while `backend` matched on `api` and
   `postgresql` plus its own two patterns.
 - **`matched_risks`** — routing.yaml `risk_rules` (for example `production`
   or `destructive`) that matched, in the same `{id, reasons}` shape as
-  `matched_route_reasons`. Empty here because this task is neither.
+  `matched_routes`. Empty here because this task is neither.
 - **`agents.primary` / `.reviewers` / `.support`** — the deduplicated role ids
   selected across all matched routes: who implements, who independently
   reviews, and who supports without owning the change.

@@ -17,12 +17,12 @@ Every claim below was verified by reading the tree at the time of writing, not
 inferred from the proposal text. Two corrections to the proposal's own framing
 are load-bearing and recorded here rather than silently applied:
 
-1. **The proposal's "roughly ten lines" estimate holds only for the additive
-   shape.** Its headline wording ("mirror the `matched_risks` shape at
+1. **The proposal's "roughly ten lines" estimate covers the emission only.**
+   Its headline wording ("mirror the `matched_risks` shape at
    `build_dispatch_plan.py:545`") describes changing `matched_routes`'
-   element type in place, which is a breaking change with a wide blast radius
-   (§3). The emission itself is one line either way; the difference is
-   everything downstream of it.
+   element type in place. That is what shipped, and the emission is indeed one
+   line — but the retype has a real blast radius across consumers, tests, and
+   the published contract (§3). The line count was never the cost.
 2. **There is no purely additive field on this schema, and `schema_version`
    must be bumped.** An early analysis pass said as much; a later pass
    overrode it, arguing `additionalProperties: false` merely means the schema
@@ -33,9 +33,11 @@ are load-bearing and recorded here rather than silently applied:
    installed. A pinned older copy rejects a document carrying an unknown
    property, and without a version bump the plan reports the exact
    `schema_version` that copy claims to handle: a silent failure naming the
-   wrong cause. Verified: a plan from this branch fails the previous v3 schema
-   with *"Additional properties are not allowed ('matched_route_reasons' was
-   unexpected)"* while self-reporting `schema_version: 3`.
+   wrong cause. This was verified while an intermediate revision added a
+   sibling field: a plan from that revision failed the previous v3 schema with
+   *"Additional properties are not allowed"* while self-reporting
+   `schema_version: 3`. The final retype breaks a pinned v3 copy just as
+   surely, which is why the bump is not optional.
 
    This also means `dispatch_disposition`'s precedent — added to `required`
    with no bump, recorded in `CHANGELOG.md` as "Additive and non-breaking" —
@@ -50,69 +52,74 @@ are load-bearing and recorded here rather than silently applied:
 |---|---|
 | §2 problem, §4 outcome | R1, R2 |
 | §5 success criteria | R2, R3, R7, R8, R9 |
-| §6 decisions | R3, R4, R5 |
+| §6 decisions | R3, R4, R5, R5b |
 | §6 telemetry, §7 non-goals | R5, R10 |
 | §8 out of scope | R6 |
 
 ## 2. Functional requirements
 
 **R1 — Emit route match reasons.**
-The plan gains a top-level `matched_route_reasons`: one object per matched
-route, `{"id": <route id>, "reasons": {"keywords": [...], "keyword_groups":
-[...], "paths": [{"pattern": ..., "file": ...}, ...]}}`, built with the
-existing `_reasons()` helper (`build_dispatch_plan.py:105-110`) reused
-unchanged.
+`matched_routes` becomes one object per matched route, `{"id": <route id>,
+"reasons": {"keywords": [...], "keyword_groups": [...], "paths": [{"pattern":
+..., "file": ...}, ...]}}`, built with the existing `_reasons()` helper
+(`build_dispatch_plan.py:105-110`) reused unchanged — byte-for-byte the same
+construction `matched_risks` already uses.
 *Acceptance:* for a task matching ≥1 route, each entry's `reasons` equals what
 `match_rule()` produced for that route. Pinned by
 `RouteMatchReasonTests::test_keyword_match_names_the_keyword_that_fired` and
 `::test_path_match_names_the_pattern_and_the_file` in `test_selector.py`.
 
-**R2 — Positional correspondence with `matched_routes`.**
-`[m["id"] for m in matched_route_reasons] == matched_routes`, same order, same
-length. This is the invariant that makes carrying ids in one field and reasons
-in another safe to read side by side.
-*Acceptance:* `::test_reason_ids_match_matched_routes_entry_for_entry`; and
-`::test_empty_when_nothing_matches` covers the empty case for both fields.
+**R2 — Every entry carries exactly `id` and `reasons`.**
+No entry is a bare string, and none carries a third key — routes and risks
+must stay one shape (R4).
+*Acceptance:* `::test_every_entry_carries_an_id_and_reasons`;
+`::test_empty_when_nothing_matches` covers the empty case.
 
-**R3 — `matched_routes` is shape-stable; `schema_version` goes 3 → 4.**
-Two separate compatibility questions, which the first revision of this
-baseline conflated:
+**R3 — Breaking retype of `matched_routes`; `schema_version` goes 3 → 4.**
+Both compatibility directions break, and the version bump is what makes that
+legible instead of silent:
 
-- *Readers of the producer's output* are unaffected. `matched_routes` keeps
-  its `$defs/stringArray` type, so telemetry, team-recipe dry runs, and the
-  golden corpus need no change.
-- *Validators holding a pinned schema copy* are affected, because the schema
-  is closed and vendored (§0.2). `matched_route_reasons` is added to
-  `required` — it is deterministically derivable and always present — and the
-  version is bumped so the change is legible in-band rather than silent.
+- *Readers of the producer's output* must project ids: `set(plan[...])`
+  becomes `{r["id"] for r in plan[...]}`. Every in-repo consumer is updated
+  under R5/R5b.
+- *Validators holding a pinned schema copy* break because the schema is closed
+  and vendored (§0.2) — true for any change to the emitted field set, retype
+  or addition alike.
 
-*Acceptance:* the full orchestration suite passes with **no** edit to
-`fixtures/selection_golden_corpus.json`, `test_selection_telemetry.py`,
-`test_team_recipe_dryrun.py`, or `test_selection_golden_corpus.py`; the
-emitted `schema_version` and the schema's `const` both read `4`; and a plan
-from this branch is confirmed to *fail* the previous v3 schema, proving the
-bump is meaningful rather than cosmetic.
+*Acceptance:* the emitted `schema_version` and the schema's `const` both read
+`4`; a plan from this branch is confirmed to *fail* the previous v3 schema,
+proving the bump is meaningful rather than cosmetic; and no
+`fixtures/selection_golden_corpus.json` block is edited — the corpus keeps
+pinning route *ids*, with the comparison projecting them from the richer
+entries (§5).
 
 **R4 — One schema definition backs both fields.**
 The `reasons` shape was inlined inside `matched_risks`. It is lifted into
 `$defs/matchReasons`, wrapped by `$defs/idWithReasonsArray`, and `$ref`d from
-both `matched_risks` and `matched_route_reasons` — rather than duplicating ~30
+both `matched_routes` and `matched_risks` — rather than duplicating ~30
 lines, which would let the two shapes drift.
 *Acceptance:* both fields `$ref` the same definition;
 `::test_route_and_risk_reasons_share_one_shape` asserts the emitted key sets
 are identical across both fields at runtime, so a split `$ref` fails a test and
 not just review.
 
-**R5 — Telemetry is unchanged, deliberately.**
-`selection_telemetry.py` names the fields it copies, so an unknown plan key is
-ignored and `matched_routes` remains a string array; its `Counter` aggregation
-needs no change. Reasons must **not** be propagated into telemetry records:
-`reasons.paths[].file` entries are changed-file paths, and `RUNBOOK.md` limits
-records to structural facts precisely so raw paths stay out of a plaintext
-local log. This rationale is now stated in `RUNBOOK.md` itself, so the omission
-reads as a decision rather than an oversight.
-*Acceptance:* `test_selection_telemetry.py` passes unmodified; telemetry
-records still contain `matched_routes: [<string>, ...]` and no `reasons`.
+**R5 — Telemetry records keep their existing shape.**
+`selection_telemetry.py` now projects route ids the same way it already
+projected risk ids, so a record's `matched_routes` stays a bare string array
+and its `Counter` aggregation needs no change. Reasons must **not** reach a
+record: `reasons.paths[].file` entries are changed-file paths, and `RUNBOOK.md`
+limits records to structural facts precisely so raw paths stay out of a
+plaintext local log. That rationale is now stated in `RUNBOOK.md` itself, so
+the omission reads as a decision rather than an oversight.
+*Acceptance:* a record still contains `matched_routes: [<string>, ...]` and no
+`reasons`; `test_selection_telemetry.py` asserts the record's ids equal the
+ids projected from the plan.
+
+**R5b — Every other in-repo reader projects ids.**
+`team_recipe_dryrun.py`'s `set(plan["matched_routes"])` and its test
+counterpart become `{route["id"] for route in ...}`; the golden corpus
+comparison projects ids from the richer entries rather than comparing raw.
+*Acceptance:* the full orchestration suite passes; no fixture block is edited.
 
 **R6 — Kernel contracts are a different artifact, not a stale copy.**
 `kernel/contracts/selection.schema.json` describes the *kernel's own* portable
@@ -129,10 +136,12 @@ a working contract — hence intent §8.
 *Acceptance:* this change touches no path under `kernel/` except the
 regression tests added for G-3.
 
-## 3. What the rejected in-place change would have cost
+## 3. What the retype cost
 
-Recorded so the decision is auditable rather than re-litigated. Changing
-`matched_routes` elements from strings to objects would have required:
+Every consumer that treated `matched_routes` as a list of strings. Recorded so
+the migration is auditable, and because an intermediate revision avoided this
+list entirely with a sibling field before the retype was taken deliberately
+(intent §6). Each row below was observed as a real failure, then fixed:
 
 | Consumer | Failure |
 |---|---|
@@ -146,7 +155,7 @@ Recorded so the decision is auditable rather than re-litigated. Changing
 ## 4. Non-functional requirements
 
 **R7 — Determinism.**
-`matched_route_reasons` sits inside the fingerprinted payload, so unstable
+The reasons sit inside the fingerprinted payload, so unstable
 ordering would make `dispatch_fingerprint` non-reproducible. No new ordering
 logic is needed: `match_rule()` builds `keywords`/`keyword_groups` in
 `routing.yaml` declaration order and `paths` in pattern-then-`changed_files`
@@ -170,7 +179,7 @@ of which must fail validation.
 
 **R10 — Documentation updated in lockstep.**
 - `docs/sample-selection-output.md` — the worked example carries the real
-  regenerated `matched_route_reasons` block, plus a glossary entry explaining
+  regenerated `matched_routes` block, plus a glossary entry explaining
   when to reach for it. Note this page is **not** asserted by any test
   (`grep` for it across `roster/orchestration/test/` and `plugin/tools/`
   returns nothing) despite describing itself as pinned byte-for-byte; it is

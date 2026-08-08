@@ -413,7 +413,7 @@ class RealRoutingConfigurationTests(unittest.TestCase):
                 "top": 20,
             },
         )
-        matched_route_ids = set(plan.get("matched_routes", []))
+        matched_route_ids = {route["id"] for route in plan.get("matched_routes", [])}
         selected_agents = {
             *plan["agents"].get("primary", []),
             *plan["agents"].get("reviewers", []),

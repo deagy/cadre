@@ -79,11 +79,11 @@ See §5.
 
 ## 4. Intended outcome and observable change
 
-A `cadre select` plan gains a `matched_route_reasons` array: one entry per
-`matched_routes` id, in the same order, each `{"id", "reasons"}` with the same
-`reasons` shape `matched_risks` already emits. A reader can see which keyword,
-keyword group, or path pattern caused each route match without opening
-`routing.yaml` or any source file.
+Each entry in a `cadre select` plan's `matched_routes` gains its own
+`reasons`: the array changes from route-id strings to `{"id", "reasons"}`
+objects, the same shape `matched_risks` already emits. A reader can see which
+keyword, keyword group, or path pattern caused each route match without
+opening `routing.yaml` or any source file.
 
 Concretely, the case that motivated this now reads directly off the plan:
 
@@ -91,43 +91,39 @@ Concretely, the case that motivated this now reads directly off the plan:
 {"id": "pipeline", "reasons": {"keywords": ["runner"], "keyword_groups": [], "paths": []}}
 ```
 
-`matched_routes` itself is unchanged.
-
 ## 5. Success criteria (observable)
 
 1. For a task matching a route on a keyword quirk, the plan names the keyword.
    Verified on the original `cross-runner` case and pinned by a test.
-2. `matched_route_reasons` ids equal `matched_routes` element-for-element and
-   in order, so the two arrays can be read side by side.
-3. Route and risk reasons are provably one shape — a single schema definition
-   backs both, so they cannot drift.
-4. No existing consumer of `matched_routes` changes behaviour. Measured as:
-   the full orchestration suite passes with **zero** golden-corpus fixture
-   edits.
+2. Routes and risks are read the same way: one field each, one shape, so a
+   consumer that can interpret either can interpret both.
+3. That shape is provably one thing — a single schema definition backs both,
+   so they cannot drift.
+4. Every consumer that needs bare ids is updated to project them, and the
+   golden corpus keeps asserting *which* routes matched without hand-encoding
+   every pattern/file pair across ~60 fixtures.
 5. Telemetry records are byte-shape-unchanged.
 6. Proposals 06 and 07 can be built by *reading* this field rather than
    re-deriving it.
 
 ## 6. Decisions a reviewer should push back on
 
-- **Additive sibling field over mirroring `matched_risks` in place.** The
-  proposal's own wording says "mirror the `matched_risks` shape," which reads
-  as changing `matched_routes`' element type from string to object. That is a
-  type-incompatible change to a required field: it crashes
-  `team_recipe_dryrun.py`'s `set(plan["matched_routes"])`, silently corrupts
-  telemetry records, forces a rewrite of ~60 hand-maintained corpus fixtures
-  with no generator to do it. The sibling field avoids all of that.
-  **The cost accepted is asymmetry**: routes now carry ids and reasons in two
-  fields where risks carry both in one, and `matched_routes` is strictly
-  derivable from `matched_route_reasons`. This is a deferral, not a
-  resolution — whoever later wants true symmetry faces the same three options
-  (retype, keep both, or deprecate `matched_routes`). A reviewer who values
-  the symmetry more than the migration cost should say so now, because the
-  version bump below would have absorbed it.
-- **`schema_version` goes 3 → 4, and the sibling field does not avoid that.**
-  An earlier revision claimed it did, on the `dispatch_disposition` precedent.
-  Wrong: the schema is closed *and* vendored to consumers, so any new property
-  breaks a pinned copy regardless of `required` membership. See
+- **`matched_routes` was retyped rather than given a sibling field.** The
+  first implementation added `matched_route_reasons` alongside an unchanged
+  `matched_routes`, to avoid a breaking change. That bought compatibility at
+  the cost of asymmetry — two fields for routes, one for risks, with the
+  first strictly derivable from the second — and it was a deferral, not a
+  resolution: whoever later wanted symmetry faced the same retype plus a
+  second version bump. Since the version bump below was already required
+  (see the next item), the retype rides along for free and was taken now.
+  **The cost is real and paid here:** `team_recipe_dryrun.py` and
+  `selection_telemetry.py` now project ids explicitly, and the golden corpus
+  compares projected ids rather than raw entries. A reviewer who would rather
+  have kept `matched_routes` as strings for consumer stability should say so.
+- **`schema_version` goes 3 → 4.** An earlier revision claimed a sibling
+  field avoided this, on the `dispatch_disposition` precedent. Wrong: the
+  schema is closed *and* vendored to consumers, so any change to the emitted
+  field set breaks a pinned copy regardless of `required` membership. See
   `requirements.md` §0.2 — the bump costs one integer and a regenerate, and
   buys an in-band signal instead of a silent rejection.
 - **Every `dispatch_fingerprint` changes.** Unavoidable for any change to the
