@@ -528,7 +528,7 @@ def build_dispatch_plan(
     )
 
     dispatch = {
-        "schema_version": 3,
+        "schema_version": 4,
         "task_id": task_id,
         "generated_at": generated_at,
         "status": "ready" if selected_agents else "needs-triage",

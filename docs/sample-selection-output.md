@@ -3,7 +3,7 @@
 This walks through one real, committed `cadre select` plan so a reader can see
 what the selector actually produces before running it themselves. The
 authoritative shape is [`roster/orchestration/selection.schema.json`](../roster/orchestration/selection.schema.json)
-(`schema_version: 3`); if this page and the schema ever disagree, the schema
+(`schema_version: 4`); if this page and the schema ever disagree, the schema
 wins.
 
 See the [glossary](terminology.md) for definitions of the terms used below
@@ -51,7 +51,7 @@ comment).
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "task_id": "GOLDEN-CROSS-STACK-1",
   "generated_at": "2026-07-29T19:29:03.748Z",
   "status": "ready",

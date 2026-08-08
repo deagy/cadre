@@ -23,14 +23,26 @@ are load-bearing and recorded here rather than silently applied:
    element type in place, which is a breaking change with a wide blast radius
    (§3). The emission itself is one line either way; the difference is
    everything downstream of it.
-2. **`additionalProperties: false` does not forbid an additive field.** An
-   early analysis pass concluded there was "no escape hatch that avoids a
-   version bump." That is wrong: the constraint means the schema must *learn*
-   the new property, not that adding one breaks readers. `dispatch_disposition`
-   was added to this same schema as a new **required** field with no
-   `schema_version` bump, recorded in `CHANGELOG.md` as "Additive and
-   non-breaking … the field is deterministically derivable and always present."
-   The identical reasoning applies here.
+2. **There is no purely additive field on this schema, and `schema_version`
+   must be bumped.** An early analysis pass said as much; a later pass
+   overrode it, arguing `additionalProperties: false` merely means the schema
+   must *learn* the new property. **The first pass was right.** The schema is
+   vendored away from the producer — into the pip wheel (`pyproject.toml`'s
+   `cadre_cli/_vendor/...` force-include) and the plugin distribution — so a
+   consumer validates a freshly generated plan against whatever copy they
+   installed. A pinned older copy rejects a document carrying an unknown
+   property, and without a version bump the plan reports the exact
+   `schema_version` that copy claims to handle: a silent failure naming the
+   wrong cause. Verified: a plan from this branch fails the previous v3 schema
+   with *"Additional properties are not allowed ('matched_route_reasons' was
+   unexpected)"* while self-reporting `schema_version: 3`.
+
+   This also means `dispatch_disposition`'s precedent — added to `required`
+   with no bump, recorded in `CHANGELOG.md` as "Additive and non-breaking" —
+   was itself incorrect, for the same reason. It held for readers of the
+   producer's output, not for a pinned schema copy. `RUNBOOK.md` now states
+   when `schema_version` increments so the argument is not re-litigated per
+   field.
 
 ## 1. Traceability
 
@@ -62,15 +74,24 @@ in another safe to read side by side.
 *Acceptance:* `::test_reason_ids_match_matched_routes_entry_for_entry`; and
 `::test_empty_when_nothing_matches` covers the empty case for both fields.
 
-**R3 — Additive, not breaking. `schema_version` stays `3`.**
-`matched_routes` keeps its `$defs/stringArray` type. `schema_version` is not
-bumped. `matched_route_reasons` is added to the schema's top-level `required`
-array, since it is deterministically derivable and always present — matching
-how `dispatch_disposition` was introduced.
+**R3 — `matched_routes` is shape-stable; `schema_version` goes 3 → 4.**
+Two separate compatibility questions, which the first revision of this
+baseline conflated:
+
+- *Readers of the producer's output* are unaffected. `matched_routes` keeps
+  its `$defs/stringArray` type, so telemetry, team-recipe dry runs, and the
+  golden corpus need no change.
+- *Validators holding a pinned schema copy* are affected, because the schema
+  is closed and vendored (§0.2). `matched_route_reasons` is added to
+  `required` — it is deterministically derivable and always present — and the
+  version is bumped so the change is legible in-band rather than silent.
+
 *Acceptance:* the full orchestration suite passes with **no** edit to
 `fixtures/selection_golden_corpus.json`, `test_selection_telemetry.py`,
-`test_team_recipe_dryrun.py`, or `test_selection_golden_corpus.py`. Verified:
-768 tests, 2 skips (PowerShell-interpreter-absent only, pre-existing).
+`test_team_recipe_dryrun.py`, or `test_selection_golden_corpus.py`; the
+emitted `schema_version` and the schema's `const` both read `4`; and a plan
+from this branch is confirmed to *fail* the previous v3 schema, proving the
+bump is meaningful rather than cosmetic.
 
 **R4 — One schema definition backs both fields.**
 The `reasons` shape was inlined inside `matched_risks`. It is lifted into
@@ -97,18 +118,16 @@ records still contain `matched_routes: [<string>, ...]` and no `reasons`.
 `kernel/contracts/selection.schema.json` describes the *kernel's own* portable
 dispatch plan (`kernel/agentic_sdlc/__init__.py:1777-1793`), not `cadre
 select`'s. Same filename, different producer: `schema_version: 2` with a
-required `gate_dispatch`, versus roster's `3` with `teams`,
+required `gate_dispatch`, versus roster's `4` with `teams`,
 `lifecycle_tracking`, and `dispatch_disposition`. `select_agents.py` never
 writes into `.agentic-sdlc/runs/`, so a roster plan never reaches the kernel
-validator at `__init__.py:2318`.
-
-An earlier revision of this baseline called that schema stale and
-non-functional. **Retracted** — see intent §8. Verified empirically: the
-kernel's emitted key set equals its schema's `required` list exactly, and
-`agentic-sdlc validate` on a freshly planned project returns `"valid": true,
-"errors": []`.
+validator at `__init__.py:2318`. Verified: the kernel's emitted key set equals
+its schema's `required` list exactly, and `agentic-sdlc validate` on a freshly
+planned project returns `"valid": true, "errors": []`. The filename collision
+reads as version skew and has already invited one "fix" that would have broken
+a working contract — hence intent §8.
 *Acceptance:* this change touches no path under `kernel/` except the
-regression test added for G-3.
+regression tests added for G-3.
 
 ## 3. What the rejected in-place change would have cost
 

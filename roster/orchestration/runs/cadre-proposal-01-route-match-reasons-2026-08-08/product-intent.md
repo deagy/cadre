@@ -116,12 +116,20 @@ Concretely, the case that motivated this now reads directly off the plan:
   type-incompatible change to a required field: it crashes
   `team_recipe_dryrun.py`'s `set(plan["matched_routes"])`, silently corrupts
   telemetry records, forces a rewrite of ~60 hand-maintained corpus fixtures
-  with no generator to do it, and needs a `schema_version` bump. The additive
-  field buys all the diagnostic value for none of that, following the
-  `dispatch_disposition` precedent (CHANGELOG.md: "Additive and non-breaking").
+  with no generator to do it. The sibling field avoids all of that.
   **The cost accepted is asymmetry**: routes now carry ids and reasons in two
-  fields where risks carry both in one. A reviewer who values the symmetry more
-  than the migration cost should say so.
+  fields where risks carry both in one, and `matched_routes` is strictly
+  derivable from `matched_route_reasons`. This is a deferral, not a
+  resolution — whoever later wants true symmetry faces the same three options
+  (retype, keep both, or deprecate `matched_routes`). A reviewer who values
+  the symmetry more than the migration cost should say so now, because the
+  version bump below would have absorbed it.
+- **`schema_version` goes 3 → 4, and the sibling field does not avoid that.**
+  An earlier revision claimed it did, on the `dispatch_disposition` precedent.
+  Wrong: the schema is closed *and* vendored to consumers, so any new property
+  breaks a pinned copy regardless of `required` membership. See
+  `requirements.md` §0.2 — the bump costs one integer and a regenerate, and
+  buys an in-band signal instead of a silent rejection.
 - **Every `dispatch_fingerprint` changes.** Unavoidable for any change to the
   emitted field set, and correct behaviour, but it is a visible consequence.
 - **Reasons are withheld from telemetry deliberately.** `reasons.paths[].file`
@@ -145,28 +153,24 @@ Concretely, the case that motivated this now reads directly off the plan:
   template, not the subject.
 - **No `cadre doctor` or `--explain` CLI surface** — Proposals 06 and 07.
 
-## 8. Two same-named schemas — not a defect
+## 8. Two same-named schemas
 
-An earlier revision of this record claimed `kernel/contracts/selection.schema.json`
-was "stale to the point of being non-functional" and would reject every plan
-Cadre emits. **That was wrong, and is retracted here** rather than quietly
-deleted, because acting on it would have broken a working contract.
-
-The two files share a filename and describe different artifacts:
+`kernel/contracts/selection.schema.json` and
+`roster/orchestration/selection.schema.json` share a filename and describe
+different artifacts from different producers. Recorded because the collision
+reads as version skew and invites a "fix" that would break a working contract:
 
 | | `kernel/contracts/selection.schema.json` | `roster/orchestration/selection.schema.json` |
 |---|---|---|
 | Producer | the kernel's own `plan` command (`kernel/agentic_sdlc/__init__.py:1777-1793`) | `cadre select` |
-| `schema_version` | `2` | `3` |
+| `schema_version` | `2` | `4` |
 | Distinctive fields | requires `gate_dispatch` | `teams`, `lifecycle_tracking`, `dispatch_disposition` |
 | Validated at | `.agentic-sdlc/runs/<id>/dispatch-plan.json` (`__init__.py:2318`) | plan output |
 
 The kernel's emitted key set is *exactly* its schema's `required` list — 15
 keys, no more, no less — and `agentic-sdlc validate` on a freshly planned
 project returns `"valid": true, "errors": []`. `select_agents.py` contains no
-reference to the overlay, so a roster v3 plan never reaches the kernel
-validator. The apparent mismatch was a filename collision read as a version
-skew.
+reference to the overlay, so a roster plan never reaches the kernel validator.
 
 The one real gap found while checking this is recorded as G-3 in
 `requirements.md`: no kernel test asserts that `validate` *succeeds*, so real
