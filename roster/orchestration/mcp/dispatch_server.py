@@ -270,11 +270,14 @@ def build_server():
 
         recipe_id: a `team_recipes[].id` value, e.g. "parallel-review" or
             "competing-hypotheses-debugging".
-        matched_route_ids / selected_agent_ids: exactly the `matched_routes`
-            and the union of `agents.primary`/`agents.reviewers`/`agents.support`
-            from a real `cadre select` plan -- this tool does not re-run
-            route/agent matching itself, only checks whether this recipe
-            would fire given those already-computed signals.
+        matched_route_ids / selected_agent_ids: bare id strings from a real
+            `cadre select` plan -- the `id` of each `matched_routes` entry
+            (the entries themselves are `{id, reasons}` objects, so pass
+            `[r["id"] for r in plan["matched_routes"]]`, not the array), and
+            the union of `agents.primary`/`agents.reviewers`/`agents.support`.
+            This tool does not re-run route/agent matching itself, only
+            checks whether this recipe would fire given those
+            already-computed signals.
         task_text: only needed for a "dynamic" recipe's keyword condition;
             ignored for "fixed" recipes.
         shared_brief / member_briefs: for a "fixed" recipe -- shared_brief

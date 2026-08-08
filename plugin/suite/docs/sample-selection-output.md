@@ -5,7 +5,7 @@
 This walks through one real, committed `cadre select` plan so a reader can see
 what the selector actually produces before running it themselves. The
 authoritative shape is [`roster/orchestration/selection.schema.json`](../roster/orchestration/selection.schema.json)
-(`schema_version: 3`); if this page and the schema ever disagree, the schema
+(`schema_version: 4`); if this page and the schema ever disagree, the schema
 wins.
 
 See the [glossary](terminology.md) for definitions of the terms used below
@@ -44,16 +44,17 @@ standalone Agentic SDLC executable was present on `PATH` when it ran; without
 one, `lifecycle_tracking.status` reads `"standalone"` with a `reason`, and
 every `required_quality_gates[].reason` instead reads "Required by routing
 configuration (Agentic SDLC unavailable; gate detail omitted)." (see
-`roster/orchestration/src/build_dispatch_plan.py`). `matched_routes`,
-`agents`, `teams`, the *set* of gate ids in `required_quality_gates`, and
-`human_gates` stay identical either way, and are pinned byte-for-byte by the
-golden-corpus test referenced above (that test forces standalone mode so the
+`roster/orchestration/src/build_dispatch_plan.py`). The `matched_routes` route
+ids, `agents`, `teams`, the *set* of gate ids in `required_quality_gates`, and
+`human_gates` stay identical either way, and are pinned by the golden-corpus
+test referenced above (which compares route ids, not each entry's `reasons` —
+reason content is pinned by `test_selector.py` instead) (that test forces standalone mode so the
 corpus is reproducible without the executable — see the fixture file's
 comment).
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "task_id": "GOLDEN-CROSS-STACK-1",
   "generated_at": "2026-07-29T19:29:03.748Z",
   "status": "ready",
@@ -71,8 +72,45 @@ comment).
     "source_filter": "deagy/cadre"
   },
   "matched_routes": [
-    "frontend",
-    "backend"
+    {
+      "id": "frontend",
+      "reasons": {
+        "keywords": [
+          "react"
+        ],
+        "keyword_groups": [],
+        "paths": [
+          {
+            "pattern": "frontend/**",
+            "file": "frontend/src/Upload.tsx"
+          },
+          {
+            "pattern": "**/*.tsx",
+            "file": "frontend/src/Upload.tsx"
+          }
+        ]
+      }
+    },
+    {
+      "id": "backend",
+      "reasons": {
+        "keywords": [
+          "api",
+          "postgresql"
+        ],
+        "keyword_groups": [],
+        "paths": [
+          {
+            "pattern": "services/**",
+            "file": "services/upload/main.go"
+          },
+          {
+            "pattern": "**/*.go",
+            "file": "services/upload/main.go"
+          }
+        ]
+      }
+    }
   ],
   "matched_risks": [],
   "agents": {
@@ -359,12 +397,19 @@ comment).
   should not be treated as reviewable guidance. `workflow` is the single
   matched high-level shape (here `new-service`, since this task combines the
   `frontend` and `backend` routes).
-- **`matched_routes`** — the `roster/orchestration/routing.yaml` route ids
-  whose paths or keywords matched this task's files/description. Each route
-  carries its own primary/reviewer/support role list; `agents.*` below is the
-  union across every matched route.
+- **`matched_routes`** — the `roster/orchestration/routing.yaml` routes whose
+  paths or keywords matched this task's files/description, each as an `id`
+  plus the `reasons` it matched: the literal `keywords`, conjunctive
+  `keyword_groups`, and `paths` (each a `pattern`/`file` pair) that fired.
+  Each route carries its own primary/reviewer/support role list; `agents.*`
+  below is the union across every matched route. Read `reasons` when a route
+  matched that you did not expect — it names the trigger without requiring a
+  read of `routing.yaml`. Above, `frontend` matched on both the keyword
+  `react` and two path patterns, while `backend` matched on `api` and
+  `postgresql` plus its own two patterns.
 - **`matched_risks`** — routing.yaml `risk_rules` (for example `production`
-  or `destructive`) that matched. Empty here because this task is neither.
+  or `destructive`) that matched, in the same `{id, reasons}` shape as
+  `matched_routes`. Empty here because this task is neither.
 - **`agents.primary` / `.reviewers` / `.support`** — the deduplicated role ids
   selected across all matched routes: who implements, who independently
   reviews, and who supports without owning the change.

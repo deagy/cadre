@@ -103,6 +103,11 @@ def _ordered(values: Iterable[str], catalog: list[str]) -> list[str]:
 
 
 def _reasons(match: dict[str, Any]) -> dict[str, Any]:
+    # The returned dict is new, but its list values are the *same* objects
+    # held in `match["reasons"]`, which `apply_cross_stack`, `_build_teams`,
+    # and `_build_quality_gates` also still hold. None of them mutates a
+    # reasons list today, and none may start: an in-place sort or append
+    # there would silently rewrite what the plan already emitted.
     return {
         "keywords": match["reasons"]["keywords"],
         "keyword_groups": match["reasons"].get("keyword_groups", []),
@@ -528,7 +533,7 @@ def build_dispatch_plan(
     )
 
     dispatch = {
-        "schema_version": 3,
+        "schema_version": 4,
         "task_id": task_id,
         "generated_at": generated_at,
         "status": "ready" if selected_agents else "needs-triage",
@@ -542,7 +547,7 @@ def build_dispatch_plan(
             "classification": input_data.get("classification"),
             "source_filter": input_data["source"],
         },
-        "matched_routes": [match["id"] for match in matched_routes],
+        "matched_routes": [{"id": match["id"], "reasons": _reasons(match)} for match in matched_routes],
         "matched_risks": [{"id": match["id"], "reasons": _reasons(match)} for match in matched_risks],
         "agents": groups,
         "dispatch_disposition": _build_dispatch_disposition(groups),

@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["schema_version", "task_id", "dispatch_fingerprint", "generated_at", "status", "workflow", "inputs", "matched_routes", "matched_risks", "agents", "dispatch_disposition", "teams", "lifecycle_tracking", "required_quality_gates", "ignored_quality_gates", "human_gates", "knowledge_context"],
   "properties": {
-    "schema_version": { "const": 3 },
+    "schema_version": { "const": 4 },
     "task_id": { "$ref": "#/$defs/nonempty" },
     "dispatch_fingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "generated_at": { "type": "string", "format": "date-time" },
@@ -26,41 +26,13 @@
         "source_filter": { "$ref": "#/$defs/nonempty" }
       }
     },
-    "matched_routes": { "$ref": "#/$defs/stringArray" },
+    "matched_routes": {
+      "description": "Routes that matched, each with why it matched: the keywords, keyword_groups, and path pattern/file pairs that fired. Same shape as matched_risks -- both resolve to one definition so the two cannot drift apart.",
+      "$ref": "#/$defs/idWithReasonsArray"
+    },
     "matched_risks": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["id", "reasons"],
-        "properties": {
-          "id": { "$ref": "#/$defs/nonempty" },
-          "reasons": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["keywords", "keyword_groups", "paths"],
-            "properties": {
-              "keywords": { "$ref": "#/$defs/stringArray" },
-              "keyword_groups": {
-                "type": "array",
-                "items": { "$ref": "#/$defs/nonemptyStringArray" }
-              },
-              "paths": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": ["pattern", "file"],
-                  "properties": {
-                    "pattern": { "$ref": "#/$defs/nonempty" },
-                    "file": { "$ref": "#/$defs/nonempty" }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+      "description": "Risk rules that matched, in the same shape as matched_routes.",
+      "$ref": "#/$defs/idWithReasonsArray"
     },
     "agents": {
       "type": "object",
@@ -279,6 +251,42 @@
       "minItems": 1,
       "uniqueItems": true,
       "items": { "$ref": "#/$defs/nonempty" }
+    },
+    "matchReasons": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["keywords", "keyword_groups", "paths"],
+      "properties": {
+        "keywords": { "$ref": "#/$defs/stringArray" },
+        "keyword_groups": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonemptyStringArray" }
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["pattern", "file"],
+            "properties": {
+              "pattern": { "$ref": "#/$defs/nonempty" },
+              "file": { "$ref": "#/$defs/nonempty" }
+            }
+          }
+        }
+      }
+    },
+    "idWithReasonsArray": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "reasons"],
+        "properties": {
+          "id": { "$ref": "#/$defs/nonempty" },
+          "reasons": { "$ref": "#/$defs/matchReasons" }
+        }
+      }
     }
   }
 }

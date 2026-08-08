@@ -134,7 +134,10 @@ def build_record(
         "task_id": plan.get("task_id"),
         "status": plan.get("status"),
         "workflow": plan.get("workflow"),
-        "matched_routes": list(plan.get("matched_routes", [])),
+        # Both are reduced to bare ids: a plan's `reasons.paths[].file` entries
+        # are changed-file paths, and a record deliberately carries structural
+        # facts about the outcome, never raw task text or file paths.
+        "matched_routes": [route.get("id") for route in plan.get("matched_routes", []) if isinstance(route, dict)],
         "matched_risks": [risk.get("id") for risk in plan.get("matched_risks", []) if isinstance(risk, dict)],
         "classification": plan.get("inputs", {}).get("classification"),
         "source_filter": plan.get("inputs", {}).get("source_filter"),

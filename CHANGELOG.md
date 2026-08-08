@@ -23,6 +23,18 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+### Changed
+
+- **`cadre select` plans now say *why* each route matched.** `matched_routes` changes from an array of route-id strings to an array of `{id, reasons}` objects — the same shape `matched_risks` already used — where `reasons` names the literal `keywords`, conjunctive `keyword_groups`, and `paths` (`pattern`/`file` pairs) that fired. The selector already computed this for every matched route and discarded it one line after computing it, so `matched_risks` could explain itself and `matched_routes` could not: answering "why did this route fire?" meant reading `routing.yaml` and `routing.py` rather than the plan. Both fields now resolve to one `$defs/idWithReasonsArray` in `selection.schema.json`, so the two shapes cannot drift apart.
+
+  **`schema_version` goes 3 → 4. This is a breaking change to `matched_routes`.** Code that treated it as a list of strings must now read `route["id"]` — for example `set(plan["matched_routes"])` becomes `{r["id"] for r in plan["matched_routes"]}`. Beyond the retype, `selection.schema.json` is closed (`additionalProperties: false`) and vendored into both the pip wheel and the plugin distribution, so a consumer validating against the copy they installed must update it alongside the CLI. Plans archived under `schema_version: 3` stay readable as v3 documents and should be validated against a v3 schema.
+
+  This also corrects the reasoning used for `dispatch_disposition` below, which was added to `required` without a version bump and described as "additive and non-breaking." That held for readers of the producer's output but not for a pinned schema copy — on a closed, separately-shipped schema there is no purely additive field. `RUNBOOK.md` now records when `schema_version` increments so this does not recur.
+
+  **One further consequence:** the reasons ride inside the fingerprinted payload, so every plan's `dispatch_fingerprint` changes. That is what a change to the emitted field set is supposed to do — fingerprints are comparable only between plans from the same producer version — and it is not a determinism regression.
+
+  Telemetry records are unaffected in shape: they continue to store bare route/risk ids. `reasons.paths[].file` entries are changed-file paths, and records are limited by design to structural facts about the outcome so raw file paths stay out of a plaintext local log (`RUNBOOK.md`).
+
 ## [0.17.0] - 2026-08-08
 
 Shipped to users as plugin [v0.14.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.14.0) — the packaged plugin is how register-side changes reach an installed runner.

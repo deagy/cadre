@@ -100,6 +100,40 @@ class V03MigrationTests(unittest.TestCase):
         self.assertTrue(record["dispatch_binding_digest"].startswith("sha256:"))
         self.assertEqual("agentic-sdlc-defaults", record["provider_bindings"][0]["id"])
 
+    def test_planned_project_validates_clean_against_selection_schema(self):
+        # Every other `validate` call in this suite injects a defect and
+        # asserts it is caught (expected=1); none exercised the clean path.
+        # That left the kernel's own plan producer and
+        # contracts/selection.schema.json free to disagree silently -- doubly
+        # so because schema validation is skipped outright when jsonschema is
+        # absent. A freshly planned project must validate with no errors.
+        self.run_cli("init", "--profile", "generic", provider=True)
+        self.run_cli("plan", "--task-id", "VALID-1", "--task", "Create the service architecture", provider=True)
+        # `validate` exits non-zero on readiness blockers (unresolved
+        # authorities on a bare fixture project), which are not schema errors
+        # -- assert on `errors`/`valid`, which is what the schema feeds.
+        result = self.run_cli("validate", provider=True, expected=2)
+        self.assertEqual([], result["errors"])
+        self.assertTrue(result["valid"])
+
+    def test_kernel_dispatch_plan_emits_exactly_its_schema_required_keys(self):
+        # Pins the producer/contract agreement directly, so a field added to
+        # one side without the other fails here with a readable diff rather
+        # than through a schema message -- and still fails when jsonschema is
+        # not installed, unlike the validation path above.
+        self.run_cli("init", "--profile", "generic", provider=True)
+        self.run_cli("plan", "--task-id", "KEYS-1", "--task", "Create the service architecture", provider=True)
+        emitted = self.load(".agentic-sdlc/runs/KEYS-1/dispatch-plan.json")
+        schema = json.loads(
+            (PLUGIN_ROOT / "contracts" / "selection.schema.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(sorted(schema["required"]), sorted(emitted))
+        # additionalProperties is false, so `properties` must also cover the
+        # emitted set exactly -- a required-list-only check would miss a key
+        # the schema declares optional but the producer never sends.
+        self.assertEqual(sorted(schema["properties"]), sorted(emitted))
+        self.assertEqual(schema["properties"]["schema_version"]["const"], emitted["schema_version"])
+
     def test_profile_requires_explicit_provider(self):
         result = self.run_cli("init", "--profile", "generic", expected=1)
         self.assertIn("unknown profile", result["error"])
