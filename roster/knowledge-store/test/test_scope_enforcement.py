@@ -400,7 +400,17 @@ class ScopeEnforcementTests(unittest.TestCase):
             action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
         )
         commands = set(subparsers_action.choices.keys())
-        self.assertEqual({"init", "ingest", "search", "context", "stats"}, commands)
+        # The exact set is pinned deliberately, so a lifecycle command cannot
+        # be added without this assertion forcing the author to confront AC-15.
+        # `propose`/`list-staged`/`show-staged` were added with the staged-record
+        # backend; none of them deletes anything, and staging is not ingestion.
+        # When deletion is implemented (step 7 of the staged-records proposal),
+        # AC-15 itself has to be re-decided here rather than quietly widened --
+        # the point of this test is that the decision is made, not avoided.
+        self.assertEqual(
+            {"init", "ingest", "search", "context", "stats", "propose", "list-staged", "show-staged"},
+            commands,
+        )
         for forbidden in ("delete", "retention", "purge", "expire"):
             self.assertNotIn(forbidden, commands)
 
