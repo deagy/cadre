@@ -444,7 +444,8 @@
     },
     {
       "id": "architecture-design",
-      "paths": ["architecture/**", "docs/architecture/**"],
+      "paths": ["**/architecture/**"],
+      "exclude_paths": ["roster/**"],
       "keywords": ["design the architecture", "system design", "architecture proposal", "platform topology design", "failure domain design", "new service design", "component design", "service boundary design", "new system design", "greenfield architecture", "service topology design"],
       "primary": ["cloud-architect"],
       "reviewers": ["threat-modeler"],
@@ -488,7 +489,8 @@
     {
       "id": "architecture-change",
       "keywords": ["architecture", "trust boundary", "new service", "new component", "platform topology", "greenfield", "threat model", "threat modeling", "attack surface", "greenfield build", "brand new service", "from scratch", "abuse case", "adversarial scenario", "attack vector"],
-      "paths": ["architecture/**", "docs/architecture/**", "**/adr/**"],
+      "paths": ["**/architecture/**", "**/adr/**"],
+      "exclude_paths": ["roster/**"],
       "support": ["cloud-architect", "threat-modeler"],
       "quality_gates": ["G3"]
     },

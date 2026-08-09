@@ -126,8 +126,11 @@ carries gating semantics an ordinary policy overlay doesn't:
 - `routes[]` / `risk_rules[]`: add a new non-colliding `id`, or *widen* an
   existing entry's `keywords`/`keyword_groups`/`paths` (every base value must
   still be present — narrowing fails closed). Every other field on that same
-  entry (`primary`, `reviewers`, `support`, `quality_gates`, `human_gate`)
-  must match the base value exactly.
+  entry (`primary`, `reviewers`, `support`, `quality_gates`, `human_gate`,
+  `exclude_paths`) must match the base value exactly. A *new* overlay entry
+  may declare its own `exclude_paths`; it just can't be changed on an
+  existing one, because a longer exclusion list narrows the match rather
+  than widening it.
 - `team_recipes[]`: additive only — a new `id`; existing entries are
   immutable.
 - `change_intake`: `keywords`/`agents`/`quality_gates` are additive only.

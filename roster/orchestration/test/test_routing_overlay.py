@@ -27,7 +27,7 @@ REPOSITORY_ROOT = ROOT.parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(REPOSITORY_ROOT / "roster" / "shared" / "src"))
 
-from routing import load_routing  # noqa: E402
+from routing import load_routing, match_rule  # noqa: E402
 from routing_overlay import (  # noqa: E402
     OVERLAY_RELATIVE_PATH,
     RoutingOverlayError,
@@ -656,6 +656,123 @@ class RegressionAgainstRealRoutingYamlTests(unittest.TestCase):
         base = copy.deepcopy(load_routing(ROUTING_PATH))
         effective = merge_routing(base, {})
         self.assertEqual(base, effective)
+
+
+class ExcludePathsOverlayTests(ProjectOverlayFixture):
+    """`exclude_paths` is not a widen field, deliberately.
+
+    Its polarity is inverted relative to `keywords`/`keyword_groups`/`paths`:
+    a *superset* of `exclude_paths` narrows a rule's effective match rather
+    than widening it. Routing it through `_widen_field_superset` would
+    therefore enforce the wrong direction and let an overlay shed a base
+    entry's `reviewers`/`human_gate` coverage without ever naming those
+    fields -- the exact bypass AC-7 exists to reject. These tests pin the
+    current behavior so that reconciliation can't be undone by "fixing"
+    the omission from `_ROUTE_RISK_WIDEN_FIELDS`.
+    """
+
+    def _base_with_exclusion(self) -> dict:
+        base = _minimal_base()
+        base["routes"][0]["paths"] = ["**/backend/**"]
+        base["routes"][0]["exclude_paths"] = ["roster/**"]
+        return base
+
+    def test_new_overlay_route_may_declare_its_own_exclude_paths(self) -> None:
+        base = _minimal_base()
+        overlay = {
+            "version": 1,
+            "routes": [
+                {
+                    "id": "vendored-architecture",
+                    "paths": ["**/architecture/**"],
+                    "exclude_paths": ["vendor/**"],
+                    "keywords": [],
+                    "primary": ["cloud-architect"],
+                    "reviewers": [],
+                }
+            ],
+        }
+        effective = merge_routing(base, overlay)
+        added = next(r for r in effective["routes"] if r["id"] == "vendored-architecture")
+        self.assertEqual(added["exclude_paths"], ["vendor/**"])
+
+    def test_a_new_overlay_entrys_exclusion_takes_effect_in_matching(self) -> None:
+        """Not just carried through the merge -- actually honored downstream."""
+        base = _minimal_base()
+        overlay = {
+            "version": 1,
+            "routes": [
+                {
+                    "id": "vendored-architecture",
+                    "paths": ["**/architecture/**"],
+                    "exclude_paths": ["vendor/**"],
+                    "keywords": [],
+                    "primary": ["cloud-architect"],
+                    "reviewers": [],
+                }
+            ],
+        }
+        effective = merge_routing(base, overlay)
+        added = next(r for r in effective["routes"] if r["id"] == "vendored-architecture")
+        self.assertTrue(match_rule(added, "", ["svc/architecture/a.md"])["matched"])
+        self.assertFalse(match_rule(added, "", ["vendor/architecture/a.md"])["matched"])
+
+    def test_adding_exclude_paths_to_a_base_entry_is_rejected(self) -> None:
+        """The narrowing bypass: an exclusion added to a base route would
+        suppress matches -- and the reviewers attached to them -- on files
+        the base route covers today.
+        """
+        base = _minimal_base()
+        overlay = {"version": 1, "routes": [{"id": "backend", "exclude_paths": ["backend/vendor/**"]}]}
+        with self.assertRaises(RoutingOverlayError) as ctx:
+            merge_routing(base, overlay)
+        self.assertIn("backend", str(ctx.exception))
+        self.assertIn("exclude_paths", str(ctx.exception))
+
+    def test_extending_a_base_entrys_exclude_paths_is_rejected(self) -> None:
+        """A superset would pass a naive widen check while narrowing the match."""
+        base = self._base_with_exclusion()
+        overlay = {
+            "version": 1,
+            "routes": [{"id": "backend", "exclude_paths": ["roster/**", "docs/**"]}],
+        }
+        with self.assertRaises(RoutingOverlayError) as ctx:
+            merge_routing(base, overlay)
+        self.assertIn("exclude_paths", str(ctx.exception))
+
+    def test_clearing_a_base_entrys_exclude_paths_is_rejected(self) -> None:
+        base = self._base_with_exclusion()
+        overlay = {"version": 1, "routes": [{"id": "backend", "exclude_paths": []}]}
+        with self.assertRaises(RoutingOverlayError):
+            merge_routing(base, overlay)
+
+    def test_widening_paths_preserves_an_untouched_base_exclusion(self) -> None:
+        base = self._base_with_exclusion()
+        overlay = {
+            "version": 1,
+            "routes": [{"id": "backend", "paths": ["**/backend/**", "**/api/**"]}],
+        }
+        effective = merge_routing(base, overlay)
+        route = next(r for r in effective["routes"] if r["id"] == "backend")
+        self.assertEqual(route["exclude_paths"], ["roster/**"])
+        self.assertEqual(route["paths"], ["**/backend/**", "**/api/**"])
+
+    def test_restating_an_identical_exclude_paths_is_an_allowed_noop(self) -> None:
+        base = self._base_with_exclusion()
+        overlay = {"version": 1, "routes": [{"id": "backend", "exclude_paths": ["roster/**"]}]}
+        effective = merge_routing(base, overlay)
+        route = next(r for r in effective["routes"] if r["id"] == "backend")
+        self.assertEqual(route["exclude_paths"], ["roster/**"])
+
+    def test_exclude_paths_is_rejected_on_a_risk_rule_too(self) -> None:
+        """`architecture-change` is a risk rule, not a route -- the rule must
+        hold on both sections, which share `_apply_widen_patch`.
+        """
+        base = _minimal_base()
+        overlay = {"version": 1, "risk_rules": [{"id": "destructive", "exclude_paths": ["vendor/**"]}]}
+        with self.assertRaises(RoutingOverlayError) as ctx:
+            merge_routing(base, overlay)
+        self.assertIn("destructive", str(ctx.exception))
 
 
 if __name__ == "__main__":

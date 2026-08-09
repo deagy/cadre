@@ -54,11 +54,20 @@ def match_rule(rule: dict[str, Any], task_text: str, changed_files: list[str]) -
         for group in rule.get("keyword_groups", [])
     ]
     conjunctive_match = bool(matched_keyword_groups) and all(matched_keyword_groups)
+    # `exclude_paths` subtracts at the *file* level, not the rule level: a
+    # route whose include glob is deliberately broad can carve out the paths
+    # that glob was never meant to reach, while still matching on any other
+    # changed file. Without it the only fix for a false positive is to narrow
+    # the include, which trades it for false negatives -- see the architecture
+    # and `**/*.py` cases this mechanism exists to undo.
+    excluders = [glob_to_regex(pattern) for pattern in rule.get("exclude_paths", [])]
     matched_paths: list[dict[str, str]] = []
     for pattern in rule.get("paths", []):
         matcher = glob_to_regex(pattern)
         for file_name in changed_files:
             normalized_file = file_name.replace("\\", "/")
+            if any(excluder.search(normalized_file) for excluder in excluders):
+                continue
             if matcher.search(normalized_file):
                 matched_paths.append({"pattern": pattern, "file": file_name})
     return {
