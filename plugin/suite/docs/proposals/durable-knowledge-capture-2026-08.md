@@ -188,18 +188,61 @@ recording nothing: it creates a retention obligation with no discharge.
   that judgment *auditable*, not automatic. Recommend the steward treat
   `injection_risk=true` on a handoff-originated candidate as an automatic
   `defer`.
-- **No new ingest input format.** `normalize_file` (`normalize.py:125`) expects
-  chat-export conversation shapes; a finding record is not one. Whether the
-  steward converts records at ingestion or the store grows a second input shape
-  is a design question this proposal leaves open, and it is the largest piece of
-  unscoped work here.
 - **No scoring, ranking, or confidence on a record.** Consistent with the
   standing rejection of numeric confidence in routing (`CLAUDE.md`: selection is
   deterministic, not agent judgment), a record is durable or it is not; the
   steward decides.
-- **No retroactive capture.** The findings in the opening section are the
-  motivating evidence, not a backlog to be ingested. Whether to write them up is
-  a separate decision.
+
+## Decisions taken
+
+Both were open questions in the first draft of this proposal and were settled by
+the Product Owner on 2026-08-09. They are recorded here so a later reader does
+not reopen them as oversights.
+
+### The store grows a second ingest shape
+
+`normalize_file` (`normalize.py:125`) expects chat-export conversation shapes: it
+derives canonical messages via `_messages_of`/`_canonical_message`, keyed on
+`role`, `content`, and per-message identifiers. A knowledge record is not a
+conversation and forcing one into that mould would mean inventing a synthetic
+`conversation_id` and a single pseudo-message, which corrupts the citation
+semantics that `knowledge-use-policy.md` depends on — `message_id` and
+`chunk_id` would point at a fiction.
+
+**Decision:** the store gains a second, first-class input shape for structured
+knowledge records, rather than the steward converting records into chat-export
+form at ingestion time. Conversion-at-ingestion was the alternative considered
+and rejected: it would place a lossy, hand-performed transformation between the
+validated record and what is actually stored, so the artifact CI checks (§1)
+would not be the artifact retrieved.
+
+Consequences to work through when §1 is scoped:
+
+- `normalize_file` needs a shape discriminator, and the record shape needs its
+  own canonicalization producing stable `content_hash` values.
+- `--source` semantics: records originate in this repository's own review work,
+  not an external export. `_enforce_ingest_scope` (KS-FR-10..12) requires an
+  explicit `--source` at the shared global-fallback tier; records need a
+  documented source identifier rather than inheriting the `chat-export` default.
+- Retrieval must keep records and chat passages distinguishable, since the
+  untrusted-content rules differ in emphasis: a curated record has passed steward
+  review, a chat passage has not. Neither becomes trusted instruction.
+
+This is the largest piece of work in the proposal and the step most likely to
+need its own design pass.
+
+### Motivating findings are written up retroactively
+
+**Decision:** the findings in the opening section are captured as records under
+`roster/knowledge-store/proposed-knowledge/`, at `Status: proposed`, awaiting
+steward disposition like any other candidate. They are not ingested by this
+work and no approval is implied by their existence.
+
+Writing them first is deliberate sequencing rather than a shortcut: they are the
+only real corpus available, so the schema in §1 should be derived from records
+that already exist rather than designed against hypothetical ones. If the schema
+cannot express these findings cleanly, that is a defect in the schema, and it is
+cheaper to discover before the schema is enforced in CI than after.
 
 ## Verification
 
