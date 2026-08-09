@@ -383,29 +383,62 @@ interface ProviderResolution {
 }
 
 /**
+ * The capability tiers a preset may declare. Kept in lockstep with
+ * port_cline_agents.py's MODEL_TIERS: the generator validates bundled
+ * presets at build time, and this validates overlay presets at read time,
+ * so a typo'd tier cannot quietly derive an env-var name nobody meant to
+ * set (`modelTier: garbage` -> CLINE_AGENTS_MODEL_GARBAGE).
+ */
+const MODEL_TIERS = ["opus", "sonnet", "haiku"] as const;
+type ModelTier = (typeof MODEL_TIERS)[number];
+
+const asModelTier = (value: string | undefined): ModelTier | undefined => {
+  const normalized = value?.trim().toLowerCase();
+  return (MODEL_TIERS as readonly string[]).includes(normalized ?? "")
+    ? (normalized as ModelTier)
+    : undefined;
+};
+
+/**
  * Resolve the provider/model for one dispatch. Order, most specific first:
  * per-call override, the preset's own explicit value, then operator
  * configuration -- per-tier first so a plan's mixed tiers keep their
  * distinction, falling back to a single model for every tier when only that
- * is configured. Returns null when nothing resolves, so callers fail closed
- * rather than guessing.
+ * is configured. Returns `{missing}` when nothing resolves, so callers fail
+ * closed rather than guessing.
+ *
+ * A **project**-tier preset's own `providerId`/`modelId` is deliberately
+ * ignored. Project presets come from `<cwd>/.cline/agents`, i.e. they arrive
+ * with a checked-out repository, which this suite treats as untrusted input
+ * (AGENTS.md; RUNBOOK.md rule 4). Honouring them would let a repository
+ * silently redirect a dispatch -- and the operator's credentials -- to a
+ * vendor of its choosing: the same defect as the shipped Anthropic default
+ * this resolver exists to remove, merely relocated. `global` presets (the
+ * operator's own agents dir) and per-call overrides are trusted, because
+ * both are the operator speaking.
  */
 function resolveProviderAndModel(
   overrides: { providerId?: string; modelId?: string },
-  def: { providerId?: string; modelId?: string; modelTier?: string },
+  def: {
+    providerId?: string;
+    modelId?: string;
+    modelTier?: string;
+    source?: AgentDefinition["source"];
+  },
 ): ProviderResolution | { missing: string[] } {
-  const tier = def.modelTier?.toLowerCase();
-  const tierModel = tier ? env(`CLINE_AGENTS_MODEL_${tier.toUpperCase()}`) : undefined;
-  const providerId = overrides.providerId ?? def.providerId ?? env("CLINE_AGENTS_PROVIDER_ID");
+  const operatorAuthored = def.source !== "project";
+  const presetProvider = operatorAuthored ? def.providerId : undefined;
+  const presetModel = operatorAuthored ? def.modelId : undefined;
+  const tier = asModelTier(def.modelTier);
+  const tierVar = tier ? `CLINE_AGENTS_MODEL_${tier.toUpperCase()}` : undefined;
+  const providerId = overrides.providerId ?? presetProvider ?? env("CLINE_AGENTS_PROVIDER_ID");
   const modelId =
-    overrides.modelId ?? def.modelId ?? tierModel ?? env("CLINE_AGENTS_MODEL_ID");
+    overrides.modelId ?? presetModel ?? (tierVar ? env(tierVar) : undefined) ?? env("CLINE_AGENTS_MODEL_DEFAULT");
 
   const missing: string[] = [];
   if (!providerId) missing.push("CLINE_AGENTS_PROVIDER_ID");
   if (!modelId) {
-    missing.push(
-      tier ? `CLINE_AGENTS_MODEL_${tier.toUpperCase()} (or CLINE_AGENTS_MODEL_ID)` : "CLINE_AGENTS_MODEL_ID",
-    );
+    missing.push(tierVar ? `${tierVar} (or CLINE_AGENTS_MODEL_DEFAULT)` : "CLINE_AGENTS_MODEL_DEFAULT");
   }
   if (missing.length > 0) return { missing };
   return { providerId: providerId as string, modelId: modelId as string };
@@ -953,9 +986,13 @@ const StartSubagentInput = z
         "substitute for a missing/unknown preset.",
     ),
     providerId: NonEmptyText.optional().describe(
-      "Optional provider override. Defaults to the preset's providerId.",
+      "Optional provider override. Bundled presets carry no provider; the default comes from " +
+        "CLINE_AGENTS_PROVIDER_ID. There is no built-in provider, so dispatch fails closed if neither is set.",
     ),
-    modelId: NonEmptyText.optional().describe("Optional model override. Defaults to the preset's modelId."),
+    modelId: NonEmptyText.optional().describe(
+      "Optional model override. Defaults to the preset's tier model (CLINE_AGENTS_MODEL_<TIER>), " +
+        "then CLINE_AGENTS_MODEL_DEFAULT.",
+    ),
     workingDirectory: NonEmptyText.optional().describe(
       "Optional working directory. Must resolve within the workspace root -- a path that would escape " +
         "it (e.g. '../../etc') is rejected, not clamped.",
@@ -1383,25 +1420,39 @@ const setup = (api: SetupApi, ctx: SetupContext) => {
       inputSchema: z.toJSONSchema(z.object({}).strict()),
       execute: async (_input: unknown, _toolCtx: AgentToolContext) => {
         const baseCwd = requireWorkspaceRoot();
-        const agents = readAgentDefinitions(baseCwd).map((a) => ({
-          name: a.name,
-          description: a.description,
-          providerId: a.providerId ?? env("CLINE_AGENTS_PROVIDER_ID") ?? "(none configured)",
-          modelId:
-            a.modelId ??
-            (a.modelTier ? env(`CLINE_AGENTS_MODEL_${a.modelTier.toUpperCase()}`) : undefined) ??
-            env("CLINE_AGENTS_MODEL_ID") ??
-            (a.modelTier ? `(tier ${a.modelTier}, none configured)` : "(none configured)"),
-          source: a.source,
-          allowedTools: a.allowedTools,
-        }));
+        // Resolved through the same function dispatch uses, deliberately not
+        // a second copy of the precedence chain: a listing that disagrees
+        // with what would actually run is the inspect-vs-use mismatch this
+        // whole change exists to remove.
+        const agents = readAgentDefinitions(baseCwd).map((a) => {
+          const resolved = resolveProviderAndModel({}, a);
+          const unresolved = "missing" in resolved;
+          return {
+            name: a.name,
+            description: a.description,
+            // Left undefined rather than filled with prose: a caller could
+            // otherwise pass "(none configured)" straight back in as a
+            // providerId. The human-readable form belongs in `text` below.
+            providerId: unresolved ? undefined : resolved.providerId,
+            modelId: unresolved ? undefined : resolved.modelId,
+            // The one model fact a bundled preset actually carries -- without
+            // it, the field that replaced modelId is invisible to callers.
+            modelTier: a.modelTier,
+            source: a.source,
+            allowedTools: a.allowedTools,
+          };
+        });
         return sanitizeToolResult({
           agents,
           text: agents.length
             ? agents
                 .map(
                   (a) =>
-                    `- ${a.name} [${a.source}] (${a.providerId}/${a.modelId})${a.description ? `: ${a.description}` : ""}`,
+                    `- ${a.name} [${a.source}] (${
+                      a.providerId && a.modelId
+                        ? `${a.providerId}/${a.modelId}`
+                        : `tier ${a.modelTier ?? "unset"}, none configured`
+                    })${a.description ? `: ${a.description}` : ""}`,
                 )
                 .join("\n")
             : "No agent definitions found.",

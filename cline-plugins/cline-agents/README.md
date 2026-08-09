@@ -161,13 +161,25 @@ export CLINE_AGENTS_MODEL_SONNET=your/sonnet-class-model
 export CLINE_AGENTS_MODEL_HAIKU=your/haiku-class-model
 ```
 
-`CLINE_AGENTS_MODEL_ID` sets one model for every tier if you would rather not
+`CLINE_AGENTS_MODEL_DEFAULT` sets one model for every tier if you would rather not
 map them individually; the per-tier variables take precedence where set.
 
 Resolution order, most specific first: a per-call `providerId`/`modelId` on
 `start_subagent` or `dispatch_selected_roles` → an explicit `providerId`/
-`modelId` in the preset's own frontmatter (project-local presets may set one;
-bundled ones do not) → the per-tier variable → `CLINE_AGENTS_MODEL_ID`.
+`modelId` in a **global** preset's frontmatter (your own agents directory;
+bundled presets set neither) → the per-tier variable → `CLINE_AGENTS_MODEL_DEFAULT`.
+
+A **project** preset's own `providerId`/`modelId` is ignored. Project presets
+live in `<cwd>/.cline/agents`, so they arrive with a checked-out repository —
+honouring them would let a repository redirect a dispatch, and your
+credentials, to a vendor of its choosing. That is the same defect as a
+shipped default, merely relocated. Your own global presets and per-call
+overrides are honoured, because both are you speaking. `list_agent_presets`
+reports what a dispatch would actually use, so a project preset naming a
+vendor will not show it.
+
+`modelTier` must be `opus`, `sonnet`, or `haiku`. Any other value is treated
+as no tier at all rather than deriving an environment variable name from it.
 
 If nothing resolves, dispatch **fails before any session starts**, naming the
 missing variable. It does not fall back to a vendor.
@@ -185,6 +197,26 @@ export CLINE_AGENTS_MODEL_HAIKU=anthropic/claude-haiku-4.6
 
 There is no transition period during which the old default still applies —
 that would reinstate the surprise this change removes.
+
+**Two cases that need attention beyond setting the variables:**
+
+- **A custom preset that sets `modelId` but not `providerId`** worked before,
+  because the runtime supplied Anthropic. It now resolves the provider from
+  your configuration, and fails closed if you have not set one. Add
+  `providerId` to the preset, or set `CLINE_AGENTS_PROVIDER_ID`.
+- **A copy of a bundled preset made before this change** still carries
+  `providerId: anthropic` and a pinned `modelId`, and — if it lives in your
+  own global agents directory — those beat `CLINE_AGENTS_PROVIDER_ID`. It will
+  keep calling Anthropic while you believe you have switched providers. Delete
+  both fields from the copy, or re-copy the current bundled preset. The same
+  fields in a *project* preset are ignored, so no action is needed there.
+
+### Where credentials go
+
+Nowhere near this plugin. It selects a provider and model; it never reads,
+stores, or forwards an API key, endpoint, or provider setting. Configure the
+credential for your chosen provider in Cline's own provider configuration, the
+same way you would for any other Cline session.
 
 **Caveat carried forward:** those model ids were never independently verified
 against Cline's supported model catalog, `haiku` least of all. Confirm the ids
@@ -215,7 +247,7 @@ minus the ability to shadow a reserved bundled agent name:
 |---|---|
 | `name` | `name` (verbatim) |
 | `description` | `description` (verbatim) |
-| `model` tier | `modelId` (see table above) |
+| `model` tier | `modelTier` (see above) |
 | `tools` | Not carried into output frontmatter verbatim (Cline doesn't recognize that field name). Mapped to `allowedTools` (Cline canonical tool names) and consumed for `toolPolicies`/`mode` at dispatch time -- see "Hardening" above. |
 | `effort`, `generated` | Dropped -- no target equivalent, and `generated: true` would be actively misleading (this is a hand-authored port, not live-generated). |
 | `canonical_source` | Kept, renamed `canonicalSource` (inert to Cline's loader; preserved for traceability back to the source register). |
@@ -254,7 +286,7 @@ copy. See `package.json` for the exact pinned version.
 | `CLINE_AGENTS_BACKEND_MODE` | `auto` (`auto` \| `hub` \| `local`) |
 | `CLINE_AGENTS_PROVIDER_ID` | *(none — required, see above)* |
 | `CLINE_AGENTS_MODEL_OPUS` / `_SONNET` / `_HAIKU` | *(none — per-tier model id)* |
-| `CLINE_AGENTS_MODEL_ID` | *(none — one model for every tier)* |
+| `CLINE_AGENTS_MODEL_DEFAULT` | *(none — one model for every tier)* |
 | `CLINE_DATA_DIR` | `~/.cline/data` |
 | `CLINE_DIR` | `~/.cline` |
 

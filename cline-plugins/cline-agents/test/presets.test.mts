@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -163,6 +163,32 @@ describe("preset discovery", () => {
       expect(["opus", "sonnet", "haiku"], `${d.name} modelTier`).toContain(d.modelTier);
       expect(d.providerId, `${d.name} must not carry a provider`).toBeUndefined();
       expect(d.modelId, `${d.name} must not carry a vendor model id`).toBeUndefined();
+    }
+  });
+
+  it("carries the same tier the role catalog assigns, so the port cannot drift from it", () => {
+    // modelTier is a pass-through of roster/catalog.yaml's `model:`. Nothing
+    // in CI re-runs port_cline_agents.py against the committed presets (see
+    // issue #144), so this is currently the only thing tying the two
+    // together -- and a stale tier now silently reroutes a role to the
+    // wrong model rather than merely naming a stale model.
+    const catalogPath = join(REPO_ROOT, "..", "..", "roster", "catalog.yaml");
+    const catalog = readFileSync(catalogPath, "utf8");
+    const tierByRole = new Map<string, string>();
+    let currentRole: string | undefined;
+    for (const line of catalog.split("\n")) {
+      const roleMatch = /^ {2}([a-z0-9-]+):\s*$/.exec(line);
+      if (roleMatch) {
+        currentRole = roleMatch[1];
+        continue;
+      }
+      const modelMatch = /^ {4}model:\s*([a-z]+)\s*$/.exec(line);
+      if (modelMatch && currentRole) tierByRole.set(currentRole, modelMatch[1]);
+    }
+    expect(tierByRole.size).toBe(SOURCE_ROLE_COUNT);
+
+    for (const def of readAgentDefinitions(REPO_ROOT).filter((d) => d.source === "bundled")) {
+      expect(def.modelTier, `${def.name} tier vs catalog.yaml`).toBe(tierByRole.get(def.name));
     }
   });
 
@@ -689,6 +715,104 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
       expect(startConfigs.length).toBe(before);
     } finally {
       process.env.CLINE_AGENTS_PROVIDER_ID = saved;
+    }
+  });
+
+  it("fails closed naming the tier variable and the fallback when no model is configured", async () => {
+    // The provider-missing branch was covered; this is the branch this change
+    // actually invents -- per-tier model configuration -- and its message has
+    // to name both the tier-specific variable and the fallback, or the
+    // operator cannot tell which one to set.
+    const saved = {
+      sonnet: process.env.CLINE_AGENTS_MODEL_SONNET,
+      fallback: process.env.CLINE_AGENTS_MODEL_DEFAULT,
+    };
+    delete process.env.CLINE_AGENTS_MODEL_SONNET;
+    delete process.env.CLINE_AGENTS_MODEL_DEFAULT;
+    try {
+      const tools = await registerTools(REPO_ROOT);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      // security-reviewer is a sonnet-tier role.
+      await expect(
+        tool.execute({ label: "no-model", task: "t", preset: "security-reviewer" }, FAKE_TOOL_CTX),
+      ).rejects.toThrow(/CLINE_AGENTS_MODEL_SONNET.*CLINE_AGENTS_MODEL_DEFAULT/s);
+      expect(startConfigs.length).toBe(before);
+    } finally {
+      if (saved.sonnet !== undefined) process.env.CLINE_AGENTS_MODEL_SONNET = saved.sonnet;
+      if (saved.fallback !== undefined) process.env.CLINE_AGENTS_MODEL_DEFAULT = saved.fallback;
+    }
+  });
+
+  it("ignores a provider named by a project-tier preset, using the operator's configuration instead", async () => {
+    // A project preset arrives with a checked-out repository. Honouring its
+    // provider would let that repository redirect the dispatch, and the
+    // operator's credentials, to a vendor of its choosing -- the same defect
+    // as a shipped default, relocated.
+    const projectDir = mkdtempSync(join(tmpdir(), "cline-project-provider-"));
+    mkdirSync(join(projectDir, ".cline", "agents"), { recursive: true });
+    writeFileSync(
+      join(projectDir, ".cline", "agents", "repo-supplied.md"),
+      [
+        "---",
+        "name: repo-supplied",
+        "description: ships its own vendor",
+        "providerId: repo-chosen-provider",
+        "modelId: repo-chosen/model",
+        "modelTier: sonnet",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const tools = await registerTools(projectDir);
+    const tool = findTool(tools, "start_subagent");
+    const before = startConfigs.length;
+    await tool.execute({ label: "repo", task: "t", preset: "repo-supplied" }, FAKE_TOOL_CTX);
+    // The operator's configuration wins on both axes; the repository's
+    // choices are ignored rather than merged.
+    expect(startConfigs[before].providerId).toBe("test-provider");
+    expect(startConfigs[before].modelId).toBe("test/sonnet-model");
+  });
+
+  it("treats an unrecognised modelTier as no tier rather than deriving an env var name from it", async () => {
+    // `modelTier: garbage` must not reach for CLINE_AGENTS_MODEL_GARBAGE and
+    // silently consume an unrelated variable that happens to share the name.
+    process.env.CLINE_AGENTS_MODEL_GARBAGE = "unintended/model";
+    process.env.CLINE_AGENTS_MODEL_DEFAULT = "generic/model";
+    const globalDir = mkdtempSync(join(tmpdir(), "cline-bad-tier-"));
+    mkdirSync(join(globalDir, ".cline", "agents"), { recursive: true });
+    writeFileSync(
+      join(globalDir, ".cline", "agents", "bad-tier.md"),
+      [
+        "---",
+        "name: bad-tier",
+        "description: typo'd tier",
+        "modelTier: garbage",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    try {
+      const tools = await registerTools(globalDir);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      await tool.execute({ label: "bad", task: "t", preset: "bad-tier" }, FAKE_TOOL_CTX);
+      // Falls through to CLINE_AGENTS_MODEL_DEFAULT / the generic path, never the
+      // variable derived from the bogus tier.
+      expect(startConfigs[before].modelId).toBe("generic/model");
+      expect(startConfigs[before].modelId).not.toBe("unintended/model");
+    } finally {
+      delete process.env.CLINE_AGENTS_MODEL_GARBAGE;
+      delete process.env.CLINE_AGENTS_MODEL_DEFAULT;
     }
   });
 
