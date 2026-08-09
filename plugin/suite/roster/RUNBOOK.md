@@ -121,6 +121,28 @@ Every plan carries a `dispatch_fingerprint` (`sha256:<hex>` over the plan's own 
 
 Fingerprints are only comparable between plans emitted by the *same* producer version: any change to the set of fields the plan emits (for example giving `matched_routes` its match reasons) changes the hashed payload, so every fingerprint changes with it. That is expected on a selector change and is not a determinism regression — the determinism claim is that identical inputs reproduce an identical plan on one version, never that a fingerprint is stable across versions. `cadre select` additionally attaches an optional, additive `provenance` object (`selection.schema.json`'s `provenance` property; not in the schema's top-level `required` array, so plans generated before this field existed remain valid, and any direct `build_dispatch_plan()` caller that doesn't supply `catalog_path`/`routing_path` — e.g. an in-process fixture or test — simply omits it) that answers the different question "which exact suite-input content produced this plan": `catalog_content_hash`/`routing_content_hash` (`sha256:<hex>` over the exact `catalog.yaml`/`orchestration/routing.yaml` bytes loaded), and, best-effort, `git_commit_sha` plus `git_dirty_paths` (uncommitted-relative-to-`HEAD` status scoped to exactly those two files, not the whole working tree). Git identity is supplementary and degrades cleanly to fully absent — never a placeholder — when the suite isn't inside a resolvable git working tree or the `git` binary is unavailable; the content hashes are always present whenever `provenance` is present at all, since reading those two files is already mandatory for plan generation to succeed. When `lifecycle_tracking.status` is `"integrated"`, `provenance.agentic_sdlc_contract_version` records the lifecycle-gates contract's own already-consumed `version` integer — this states which contract shape Cadre's own code used, never an assertion about the external `agentic-sdlc` kernel's own repository identity, gate-approval state, or run-record validity (see the two-repo boundary above). `provenance.overlay_applied`/`overlay_content_hash`/`overlay_path` (project-local routing overlay) and `provenance.runner_capabilities_content_hash` (the runner-capability manifest) are reserved in the schema for future extensibility but are never populated today: `select_agents.py`'s dispatch-plan call path does not resolve a routing overlay, and the runner-capability manifest is build/generator-time only (already transitively covered by `catalog_content_hash`) — populating either without an actual causal read path behind it would misrepresent what produced the plan. A reviewer with independent repository access can recompute `sha256sum roster/catalog.yaml roster/orchestration/routing.yaml` and `git rev-parse HEAD` against a historical checkout and compare directly against an archived plan's `provenance` object, without needing to trust the process that generated it. Recording provenance is never itself an approval: it proves what produced a plan, not that the plan or the suite state that produced it was reviewed or accepted.
 
+#### Diagnose an unmatched route with `--explain`
+
+`matched_routes[].reasons` answers "why did this route match?"; it has
+nothing to say about a route you expected but didn't get. Pass `--explain`
+to additionally print, to **stderr** (never stdout, never the JSON plan),
+near-miss reasoning for every route in `routing.yaml` that did NOT match —
+specifically, any `keyword_groups` entry that was partially but not fully
+satisfied (some, but not all, of a conjunctive AND-group's keywords present
+in the task text), the one graded near-miss signal that exists: plain
+`keywords`/`paths` are disjunctive OR triggers, so an unmatched route's
+overlap on those is always exactly zero, and a route with zero partial
+`keyword_groups` overlap is omitted rather than listed as noise. See
+`roster/orchestration/src/route_near_miss.py`'s module docstring and
+[`docs/sample-selection-output.md`](../docs/sample-selection-output.md) (see
+its "Diagnosing near-misses with `--explain`" section) for a worked example. Off by default; adds no field to the plan, the schema,
+or `schema_version`, and never a numeric score/confidence/ranking — purely
+descriptive, matching this repository's deterministic-selection invariant.
+
+```sh
+cadre select --task "improve cross-runner UX documentation" --explain
+```
+
 #### Debug a team recipe with the dry-run visualizer
 
 `teams` only ever shows the recipes that *fired* — a recipe author editing `team_recipes[]` in `routing.yaml`, or debugging why a real task's `teams` came back empty, has no direct way to see a near-miss without reading `_build_teams()` in `build_dispatch_plan.py` directly. `roster/orchestration/src/team_recipe_dryrun.py` answers that: for every (or one, via `--recipe <id>`) `team_recipes[]` entry, it reports whether it would fire and exactly why/why not — for a fixed recipe, matched vs. unmatched `route_ids` against `minimum_matches`, and selected vs. unselected `members` against `minimum_members_selected`; for a dynamic recipe, whether `role` is a selected agent, whether `requires_route` matched, and which specific `keywords` did/didn't hit. It mirrors `_build_teams()`'s exact condition order so its answer can never disagree with a real dispatch, and it never mutates `routing.yaml`, retrieves knowledge, or dispatches anything.
