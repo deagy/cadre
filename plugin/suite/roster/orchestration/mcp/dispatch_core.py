@@ -1055,6 +1055,14 @@ class TeamDispatchJobStore:
     ) -> None:
         with self._lock:
             self._purge_expired_locked()
+            if team_id in self._teams:
+                # Unreachable today (team_id is always secrets.token_hex(8)
+                # from a single call site) -- guarded anyway because
+                # overwriting a live entry would strand any caller already
+                # waiting on the old record's `settled` Event, which nothing
+                # would ever set again. Fail loudly rather than silently
+                # dropping the existing record.
+                raise RuntimeError(f"refusing to overwrite an already-registered team_id: {team_id!r}")
             record = _TeamDispatchJobRecord(
                 total_members=len(results), results=results, created_monotonic=time.monotonic()
             )
@@ -2324,7 +2332,19 @@ def dispatch_team(
             status_counts: dict[str, int] = {}
             for entry in results:
                 status_counts[entry["status"]] = status_counts.get(entry["status"], 0) + 1
-            write_audit_record(
+            # Best-effort audit write (matches every other call site in this
+            # function, e.g. team-dispatched-async immediately below): by
+            # this point every member thread has already been joined and
+            # every real side effect (child processes spawned, member audit
+            # records already attempted) has already happened. On the
+            # wait=False path this runs on a daemon "reaper" thread with no
+            # caller waiting synchronously on its return value -- an
+            # unhandled exception here would propagate out of the thread
+            # target, which can abort the interpreter if it races shutdown
+            # (see PR description). The `finally: team_settled.set()` below
+            # must still run regardless, which best-effort already preserves
+            # by never raising.
+            _write_audit_record_best_effort(
                 build_audit_record(
                     **team_audit_base,
                     decision="team-completed",
