@@ -168,15 +168,19 @@ jobs:
     if: needs.changed.outputs.plugin == 'true'
     runs-on: ubuntu-latest
     # Signing and publishing run under the `release` environment, which
-    # carries a wait timer and a deployment-branch policy limiting it to
-    # `main` and the `plugin-v*`/`kernel-v*` tags. Reaching `main` is not by
-    # itself authorization to mint a signed, published release: the timer is
-    # the cancellation window for a publish nobody meant to trigger, and with
-    # a single maintainer it is the solo-workable stand-in for a required
-    # reviewer, which GitHub cannot ask of the same person who authored the
-    # change. Scoping TAG_SIGNING_KEY to this environment (rather than the
-    # repository) is what makes the gate load-bearing rather than advisory --
-    # see .github/TAG-SIGNING-SETUP.md.
+    # requires an explicit approval and limits the allowed refs to `main` and
+    # the `plugin-v*`/`kernel-v*` tags. Reaching `main` is not by itself
+    # authorization to mint a signed, published release: the run waits for a
+    # human to approve it, indefinitely, rather than proceeding unattended.
+    #
+    # Environment approval permits self-approval, unlike pull-request review
+    # -- which is why a solo maintainer can use it as a real gate rather than
+    # a wait timer that elapses whether or not anyone is watching.
+    #
+    # Note this gates *these jobs*, not the secret: while TAG_SIGNING_KEY is a
+    # repository secret, any job that omits `environment:` still reads it
+    # directly. Scoping the secret to this environment is what makes the gate
+    # protect the key -- see .github/TAG-SIGNING-SETUP.md step 2.
     environment: release
     # Per-job, matching the kernel job: the SBOM below is attested, so this
     # needs the same Sigstore permissions.
@@ -345,15 +349,19 @@ jobs:
     if: needs.changed.outputs.kernel == 'true'
     runs-on: ubuntu-latest
     # Signing and publishing run under the `release` environment, which
-    # carries a wait timer and a deployment-branch policy limiting it to
-    # `main` and the `plugin-v*`/`kernel-v*` tags. Reaching `main` is not by
-    # itself authorization to mint a signed, published release: the timer is
-    # the cancellation window for a publish nobody meant to trigger, and with
-    # a single maintainer it is the solo-workable stand-in for a required
-    # reviewer, which GitHub cannot ask of the same person who authored the
-    # change. Scoping TAG_SIGNING_KEY to this environment (rather than the
-    # repository) is what makes the gate load-bearing rather than advisory --
-    # see .github/TAG-SIGNING-SETUP.md.
+    # requires an explicit approval and limits the allowed refs to `main` and
+    # the `plugin-v*`/`kernel-v*` tags. Reaching `main` is not by itself
+    # authorization to mint a signed, published release: the run waits for a
+    # human to approve it, indefinitely, rather than proceeding unattended.
+    #
+    # Environment approval permits self-approval, unlike pull-request review
+    # -- which is why a solo maintainer can use it as a real gate rather than
+    # a wait timer that elapses whether or not anyone is watching.
+    #
+    # Note this gates *these jobs*, not the secret: while TAG_SIGNING_KEY is a
+    # repository secret, any job that omits `environment:` still reads it
+    # directly. Scoping the secret to this environment is what makes the gate
+    # protect the key -- see .github/TAG-SIGNING-SETUP.md step 2.
     environment: release
     # Declared per-job rather than at the workflow level so the plugin job
     # above does not also gain the ability to mint attestations it never
