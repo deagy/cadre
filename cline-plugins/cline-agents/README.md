@@ -255,6 +255,52 @@ minus the ability to shadow a reserved bundled agent name:
 | Body | Used as `systemPrompt`, near-verbatim, minus a leading `# Role: <name>` catalog-artifact heading, and with cadre-source-repo-relative path references rewritten (see below). |
 | *(new)* | `maxIterations` left unset for every role -- there is no source-catalog equivalent field, so none was fabricated. |
 
+## What the frontmatter promises
+
+Preset frontmatter is a published format: the bundled presets ship in an
+installable plugin, and you can put your own alongside them. What follows is
+what you may rely on. There is no version field, deliberately — the parser is
+open, so the failure it would guard against cannot occur (see below).
+
+**Keys the loader acts on.** `name`, `description`, `modelTier`, `providerId`,
+`modelId`, `allowedTools`, `cwd`, `maxIterations`. Everything else is carried
+for humans, not behaviour: `canonicalSource` and `convertedFrom` are inert to
+Cline's loader.
+
+**Unknown keys are ignored, not rejected.** A preset written for a newer
+version still loads on an older one, and vice versa. Malformed YAML degrades
+to "no metadata" rather than erroring. This is why a format version would buy
+nothing: the skew a version protects against — a pinned validator rejecting a
+document it does not recognise — cannot happen here, and a version field the
+loader ignored would be a false compatibility signal. (Contrast
+`selection.schema.json`, which *is* closed and vendored, and does carry one.)
+
+**Stability of the keys above.**
+
+- `providerId` and `modelId` in **your own** presets stay honoured
+  indefinitely. Bundled presets set neither, and will not start.
+- In a **project** preset (`<workspaceRoot>/.cline/agents`) they are ignored —
+  see the provider section above for why. That is a deliberate trust rule, not
+  a bug, and it will not quietly change back.
+- The `modelTier` vocabulary may **grow**. Adding a tier is non-breaking:
+  existing `CLINE_AGENTS_MODEL_<TIER>` variables keep working, and a preset on
+  a new tier falls back to `CLINE_AGENTS_MODEL_DEFAULT`, or fails closed naming
+  the new variable.
+- **Renaming or removing a tier is breaking, and would otherwise be silent** —
+  your `CLINE_AGENTS_MODEL_<OLD>` simply stops being read. It will not happen
+  without a CHANGELOG entry naming the old and new variables.
+- An unrecognised `modelTier` is treated as no tier at all, rather than
+  deriving an environment variable name from it.
+
+**Known limitation.** There is no per-role model override. Configuration is
+per-tier, and `dispatch_selected_roles`' `modelId` applies to every role in the
+call — so "run one role on a bigger model than the rest of this fan-out" is
+only expressible by dispatching that role separately via `start_subagent`. If
+that changes, the intended shape is a role-scoped variable checked ahead of the
+tier variable, which needs no change to this format. Richer per-provider
+settings (region, endpoint, API version) are Cline's own provider
+configuration, not this plugin's — see "Where credentials go" above.
+
 ## Path-reference rewrites
 
 Each source role body ends with an identical appended shared-policy block containing source-repo-relative path references (e.g. `` `../../shared/team-profile.yaml` ``, `roster/shared/README.md`) that resolve inside the *source* Cadre register/catalog layout but would 404 in an arbitrary consumer project. `tools/port_cline_agents.py`'s `PATH_SUBSTITUTIONS` table is the authoritative, current list of every such rewrite -- read that, not this paragraph, for the exact current mapping; duplicating it here would just go stale.

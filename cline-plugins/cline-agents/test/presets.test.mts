@@ -779,6 +779,95 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
     expect(startConfigs[before].modelId).toBe("test/sonnet-model");
   });
 
+  it("warns when a global preset pins a provider that differs from the operator's configuration", async () => {
+    // The silent case this catches: a copy of a bundled preset made before
+    // provider selection moved to configuration keeps calling the old vendor
+    // while the operator believes they have switched.
+    // A *global* preset -- the operator's own agents directory, resolved from
+    // CLINE_DATA_DIR -- not a project preset, whose pinned vendor is ignored
+    // by design.
+    const dataDir = mkdtempSync(join(tmpdir(), "cline-pinned-provider-"));
+    const globalAgents = join(dataDir, "settings", "agents");
+    mkdirSync(globalAgents, { recursive: true });
+    process.env.CLINE_DATA_DIR = dataDir;
+    writeFileSync(
+      join(globalAgents, "pinned.md"),
+      [
+        "---",
+        "name: pinned",
+        "description: deliberately pinned",
+        "providerId: pinned-provider",
+        "modelId: pinned/model",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      errors.push(args.map(String).join(" "));
+    });
+    try {
+      const tools = await registerTools(REPO_ROOT);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      await tool.execute({ label: "pinned", task: "t", preset: "pinned" }, FAKE_TOOL_CTX);
+      // The pin still wins -- it is the operator's own file.
+      expect(startConfigs[before].providerId).toBe("pinned-provider");
+      expect(errors.join("\n")).toMatch(/pins providerId "pinned-provider".*CLINE_AGENTS_PROVIDER_ID/s);
+    } finally {
+      spy.mockRestore();
+      delete process.env.CLINE_DATA_DIR;
+    }
+  });
+
+  it("does not warn when a per-call override supplies the provider", async () => {
+    // An explicit override is the operator speaking on this call; the
+    // preset's own value never competes, so there is nothing to report.
+    // A *global* preset -- the operator's own agents directory, resolved from
+    // CLINE_DATA_DIR -- not a project preset, whose pinned vendor is ignored
+    // by design.
+    const dataDir = mkdtempSync(join(tmpdir(), "cline-pinned-quiet-"));
+    const globalAgents = join(dataDir, "settings", "agents");
+    mkdirSync(globalAgents, { recursive: true });
+    process.env.CLINE_DATA_DIR = dataDir;
+    writeFileSync(
+      join(globalAgents, "quiet.md"),
+      [
+        "---",
+        "name: quiet",
+        "description: pinned but overridden",
+        "providerId: pinned-provider",
+        "modelId: pinned/model",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      errors.push(args.map(String).join(" "));
+    });
+    try {
+      const tools = await registerTools(REPO_ROOT);
+      const tool = findTool(tools, "start_subagent");
+      await tool.execute(
+        { label: "quiet", task: "t", preset: "quiet", providerId: "call-provider", modelId: "call/model" },
+        FAKE_TOOL_CTX,
+      );
+      expect(errors.join("\n")).not.toMatch(/pins providerId/);
+    } finally {
+      spy.mockRestore();
+      delete process.env.CLINE_DATA_DIR;
+    }
+  });
+
   it("treats an unrecognised modelTier as no tier rather than deriving an env var name from it", async () => {
     // `modelTier: garbage` must not reach for CLINE_AGENTS_MODEL_GARBAGE and
     // silently consume an unrelated variable that happens to share the name.

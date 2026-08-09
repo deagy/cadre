@@ -420,6 +420,7 @@ const asModelTier = (value: string | undefined): ModelTier | undefined => {
 function resolveProviderAndModel(
   overrides: { providerId?: string; modelId?: string },
   def: {
+    name?: string;
     providerId?: string;
     modelId?: string;
     modelTier?: string;
@@ -429,6 +430,22 @@ function resolveProviderAndModel(
   const operatorAuthored = def.source !== "project";
   const presetProvider = operatorAuthored ? def.providerId : undefined;
   const presetModel = operatorAuthored ? def.modelId : undefined;
+
+  // A preset carried over from before this plugin stopped shipping a vendor
+  // still names one, and being operator-authored it wins over the operator's
+  // own configuration. That is legitimate for a deliberately pinned preset,
+  // and silent for a stale copy of a bundled one -- the operator switches
+  // provider and this preset keeps calling the old vendor. Say so, using the
+  // same channel as the reserved-name warning above.
+  const configuredProvider = env("CLINE_AGENTS_PROVIDER_ID");
+  if (!overrides.providerId && presetProvider && configuredProvider && presetProvider !== configuredProvider) {
+    console.error(
+      `[cline-agents] Preset "${def.name ?? "(unnamed)"}" pins providerId "${presetProvider}", ` +
+        `overriding CLINE_AGENTS_PROVIDER_ID "${configuredProvider}". Intentional for a deliberately ` +
+        "pinned preset; if this is a copy of a bundled preset made before provider selection moved to " +
+        "configuration, drop its providerId/modelId so it follows your setting.",
+    );
+  }
   const tier = asModelTier(def.modelTier);
   const tierVar = tier ? `CLINE_AGENTS_MODEL_${tier.toUpperCase()}` : undefined;
   const providerId = overrides.providerId ?? presetProvider ?? env("CLINE_AGENTS_PROVIDER_ID");
