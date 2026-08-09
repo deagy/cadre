@@ -5,13 +5,27 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Pattern
+from typing import Any, Iterator, Pattern
 
 
-def glob_to_regex(pattern: str) -> Pattern[str]:
-    """Translate the selector's small glob dialect to a compiled regex."""
+# Token kinds for the selector's glob dialect. `iter_glob_tokens` is the one
+# traversal of that dialect; every consumer maps these tokens to its own
+# representation rather than re-walking the pattern, so a new dialect case is
+# a single edit that forces every consumer to handle it.
+GLOB_DOUBLESTAR_SLASH = "doublestar_slash"  # `**/` -- any number of leading segments
+GLOB_DOUBLESTAR = "doublestar"  # `**`  -- anything, `/` included
+GLOB_STAR = "star"  # `*`   -- anything within one segment
+GLOB_QUESTION = "question"  # `?`   -- one character, not `/`
+GLOB_LITERAL = "literal"  # any other character, matched exactly
+
+
+def iter_glob_tokens(pattern: str) -> Iterator[tuple[str, str]]:
+    """Yield `(kind, text)` for each construct in `pattern`.
+
+    Backslashes are normalized to `/` first, so a Windows-style path pattern
+    tokenizes identically to its POSIX spelling.
+    """
     normalized = pattern.replace("\\", "/")
-    expression = "^"
     index = 0
     while index < len(normalized):
         character = normalized[index]
@@ -19,16 +33,31 @@ def glob_to_regex(pattern: str) -> Pattern[str]:
             index += 1
             if index + 1 < len(normalized) and normalized[index + 1] == "/":
                 index += 1
-                expression += "(?:.*/)?"
+                yield GLOB_DOUBLESTAR_SLASH, "**/"
             else:
-                expression += ".*"
+                yield GLOB_DOUBLESTAR, "**"
         elif character == "*":
-            expression += "[^/]*"
+            yield GLOB_STAR, "*"
         elif character == "?":
-            expression += "[^/]"
+            yield GLOB_QUESTION, "?"
         else:
-            expression += re.escape(character)
+            yield GLOB_LITERAL, character
         index += 1
+
+
+_GLOB_TOKEN_REGEX = {
+    GLOB_DOUBLESTAR_SLASH: "(?:.*/)?",
+    GLOB_DOUBLESTAR: ".*",
+    GLOB_STAR: "[^/]*",
+    GLOB_QUESTION: "[^/]",
+}
+
+
+def glob_to_regex(pattern: str) -> Pattern[str]:
+    """Translate the selector's small glob dialect to a compiled regex."""
+    expression = "^"
+    for kind, text in iter_glob_tokens(pattern):
+        expression += _GLOB_TOKEN_REGEX[kind] if kind in _GLOB_TOKEN_REGEX else re.escape(text)
     return re.compile(f"{expression}$", re.IGNORECASE)
 
 
