@@ -1154,6 +1154,11 @@ def generate_suite_copy(
         elif relative.startswith("roster/knowledge-store/src/") or relative in {
             "roster/knowledge-store/README.md",
             "roster/knowledge-store/SECURITY.md",
+            # staged_records.py's findings cite this schema by path as the
+            # contract a malformed record violated. Packaging the module
+            # without it would ship error messages pointing at a file the
+            # reader cannot open.
+            "roster/knowledge-store/proposed-knowledge.schema.json",
         }:
             selected.append(relative)
     selected.extend(

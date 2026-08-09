@@ -462,6 +462,81 @@ class SelectorTests(unittest.TestCase):
         )
         self.assertEqual(result["agents"]["primary"], ['vendor-register-steward'])
 
+    def test_selects_knowledge_store_steward_for_recorded_findings_and_learnings(self) -> None:
+        result = plan(
+            task=(
+                "Record findings, learnings, decisions, lessons learned, and "
+                "operational knowledge from the latest review into the agent knowledge base"
+            ),
+            changed_files=[],
+            classification="internal",
+        )
+        self.assertEqual(result["agents"]["primary"], ["knowledge-store-steward"])
+        self.assertIn("security-reviewer", result["agents"]["reviewers"])
+        self.assertIn("compliance-reviewer", result["agents"]["reviewers"])
+        reasons = {match["id"]: match["reasons"] for match in result["matched_routes"]}
+        self.assertEqual(
+            reasons["knowledge-store"]["keyword_groups"],
+            [
+                ["record"],
+                [
+                    "lessons learned",
+                    "operational knowledge",
+                    "agent knowledge",
+                    "knowledge base",
+                ],
+            ],
+        )
+
+    def test_selects_knowledge_store_steward_for_curated_lessons_learned(self) -> None:
+        result = plan(
+            task=(
+                "Curate the lessons learned from this quarter's incidents into "
+                "the agent knowledge base for reuse by future agents"
+            ),
+            changed_files=[],
+            classification="internal",
+        )
+        self.assertEqual(result["agents"]["primary"], ["knowledge-store-steward"])
+        self.assertEqual([match["id"] for match in result["matched_routes"]], ["knowledge-store"])
+
+    def test_record_this_decision_stays_on_decision_record_route(self) -> None:
+        result = plan(
+            task="Record this decision",
+            changed_files=[],
+            classification="internal",
+        )
+        self.assertEqual(result["agents"]["primary"], ["decision-record"])
+        self.assertEqual([match["id"] for match in result["matched_routes"]], ["decision-record-capture"])
+
+    def test_adding_findings_to_a_report_does_not_select_knowledge_store(self) -> None:
+        result = plan(
+            task="Add findings from the incident review to the report",
+            changed_files=[],
+            classification="internal",
+        )
+        route_ids = [match["id"] for match in result["matched_routes"]]
+        self.assertNotIn("knowledge-store", route_ids)
+        self.assertNotIn("knowledge-store-steward", result["agents"]["primary"])
+
+    def test_archiving_a_learnings_folder_does_not_select_knowledge_store(self) -> None:
+        result = plan(
+            task="Archive the old learnings folder",
+            changed_files=[],
+            classification="internal",
+        )
+        self.assertEqual(result["matched_routes"], [])
+        self.assertEqual(result["agents"]["primary"], [])
+
+    def test_preserving_an_approved_patterns_document_does_not_select_knowledge_store(self) -> None:
+        result = plan(
+            task="Preserve the approved patterns document for the release",
+            changed_files=[],
+            classification="internal",
+        )
+        self.assertEqual(result["matched_routes"], [])
+        self.assertEqual(result["agents"]["primary"], [])
+
     def test_selects_retention_and_deletion_executor_for_obligation(self) -> None:
         result = plan(
             task="Execute the retention and deletion obligation for this data",

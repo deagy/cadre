@@ -48,6 +48,8 @@
 - Known stale or conflicting sources:
 - Required citation fields: `source`, `conversation_id`, `message_id`, `chunk_id`, `content_hash`, `created_at`, and `classification`
 - Supplementary source URI handling (may expose local paths):
+- Required `knowledge_steward_handoffs`: always present; list durable candidates found, or `[]` if none
+- Knowledge-steward handoff field list and redaction rule: per `roster/shared/knowledge-use-policy.md`
 
 ## Escalation
 

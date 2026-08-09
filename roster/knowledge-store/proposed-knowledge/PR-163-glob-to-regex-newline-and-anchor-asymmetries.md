@@ -1,16 +1,24 @@
-# Proposed Knowledge: `glob_to_regex` newline and anchor asymmetries
-
-Status: proposed for knowledge-store-steward review
-Classification: internal
-Source task: review of PR #163 (`roster/orchestration/src/routing.py`,
-`glob_containment.py`), 2026-08-08
-Origin revision: `44e3f4e` on branch `agent/routing-health-exclude-shadow`,
-merged as `9cffcfa`
-Recommended steward action: ingest
-Sensitivity: none
-Conflicts or staleness: this record describes current behaviour of a specific
-function; it goes stale if `glob_to_regex` changes and should be re-verified
-before reliance
+---
+id: KS-20260808-glob-regex-asymmetries
+title: "`glob_to_regex` newline and anchor asymmetries"
+status: proposed
+evidence:
+  - "roster/orchestration/src/routing.py"
+  - "roster/orchestration/src/glob_containment.py"
+  - "PR #163"
+origin:
+  task: review of PR #163
+  artifact: "roster/orchestration/src/routing.py, roster/orchestration/src/glob_containment.py"
+  revision: "9cffcfa (merged from 44e3f4e)"
+proposed_classification: internal
+source_scope: routing, build, code-review
+sensitivity_notes: ""
+conflicts_or_staleness: "describes current behaviour of `glob_to_regex`; goes stale if the function changes and should be re-verified before reliance"
+recommended_action: ingest
+untrusted_instruction_risk: false
+staged_by: knowledge-store-steward
+content_digest: 96a3ce4953066f4575a764bb1ff38068d3820acbcdb0bdcded153f6e32e974c1
+---
 
 ## Summary
 
