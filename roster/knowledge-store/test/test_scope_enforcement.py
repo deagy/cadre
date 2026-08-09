@@ -419,6 +419,7 @@ class ScopeEnforcementTests(unittest.TestCase):
                 "show-staged",
                 "import-staged",
                 "export-staged",
+                "disposition-staged",
             },
             commands,
         )

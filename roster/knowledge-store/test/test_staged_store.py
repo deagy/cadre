@@ -27,6 +27,12 @@ import staged_store  # noqa: E402
 def _open_memory_store() -> sqlite3.Connection:
     db = sqlite3.connect(":memory:")
     db.row_factory = sqlite3.Row
+    # Mirror open_store's pragmas. Without foreign_keys = ON these tests ran
+    # under conditions the real CLI never sees, and that difference hid a
+    # destructive bug: INSERT OR REPLACE in put_record deleted the row and
+    # cascaded away the whole disposition history, invisibly here and for
+    # real in production.
+    db.execute("PRAGMA foreign_keys = ON")
     staged_store.install_schema(db)
     return db
 
