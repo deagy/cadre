@@ -1765,6 +1765,13 @@ class RepositoryHealthTests(unittest.TestCase):
     # allowlist would permit this number in *any* document, so a genuinely
     # wrong claim elsewhere would pass for the wrong reason.
     ALLOWED_LOCAL_ROLE_COUNTS = {
+        (".agents/skills/lifecycle-onboarding/SKILL.md", 5): (
+            "the conditional authority roles -- kernel-owned, and exactly "
+            "the 5 keys in agentic_sdlc.CONDITIONAL_AUTHORITY_ROLES "
+            "(data_control_owner, human_key_owner, uat_product_owner, "
+            "implicated_security_lead, implicated_governance_lead), not a "
+            "claim about the role catalog"
+        ),
         ("cline-plugins/cline-agents/README.md", 4): (
             "roles needing bespoke path-rewrite handling beyond the generic "
             "lookup table -- a property of that script, not a claim about "
@@ -1787,24 +1794,37 @@ class RepositoryHealthTests(unittest.TestCase):
         "roster/orchestration/examples/",
     )
 
-    # docs/capability-index.md states a dozen per-tier subset counts, every
-    # one of them on a `### \`tier\` (N roles)` heading. Skipping those lines
-    # -- rather than the whole file, which would drop its "all 74 roles"
-    # header sentence, a real whole-suite claim -- keeps the prose covered
-    # while letting the breakdown be a breakdown.
-    ROLE_COUNT_SKIPPED_LINE_PREFIX = "### "
+    # docs/capability-index.md states a dozen per-tier subset counts, each on
+    # its own heading. Those are skipped -- but by *shape*, not by heading
+    # level: a bare "### " prefix check would let any heading anywhere hide a
+    # real total ("### This suite ships 999 roles"), which is an escape hatch,
+    # not an exemption. This matches only the breakdown form actually used: a
+    # heading whose body is a single backtick-quoted lowercase tier/phase
+    # token followed by a parenthesised count.
+    ROLE_COUNT_BREAKDOWN_HEADING = re.compile(r"^#+\s+`[a-z][a-z_]*`\s+\(\d+ roles?\)\s*$")
 
     def test_role_count_claims_in_tracked_docs_are_justified(self) -> None:
         catalog_total = _catalog_role_count()
         secure_cloud_total = _secure_cloud_role_count()
         derived = {catalog_total, secure_cloud_total}
-        # Up to two intervening words, so "74 specialist roles" is caught and
-        # not just adjacent digits. Singular "role" counts only in "role
+        # `[\d,]` so a thousands separator is read as one number: matching
+        # bare `\d+` re-anchors after the comma, so "2,074 roles" would be
+        # read as a correct claim of 74. Up to four intervening words, so
+        # "74 highly specialised expert roles" is caught, not just
+        # "74 specialist roles". Singular "role" counts only in "role
         # definition(s)" -- otherwise "Step 4 role table" reads as a count of
-        # four roles, which it is not.
+        # four roles, which it is not. "of" is excluded from the intervening
+        # words so partitives ("2 of the four roles") are not read as a claim
+        # that there are two roles.
         pattern = re.compile(
-            r"\b(\d+)(?:\s+[A-Za-z][\w-]*){0,2}\s+(?:roles\b|role definitions?\b)"
+            r"\b(\d[\d,]*)(?:\s+(?!of\b)[A-Za-z][\w-]*){0,4}\s+(?:roles\b|role definitions?\b)"
         )
+        # Markdown emphasis and code spans sit between the number and the
+        # noun ("**74** roles", "`74` roles") and would otherwise break the
+        # match entirely -- the claim goes unseen rather than misread.
+        # Replaced with spaces, not stripped, so offsets and therefore line
+        # numbers stay accurate.
+        markup = str.maketrans({"*": " ", "`": " ", "_": " "})
         offenders: list[str] = []
         scanned_claims = 0
         for relative_path in _tracked_files():
@@ -1819,14 +1839,15 @@ class RepositoryHealthTests(unittest.TestCase):
             except UnicodeDecodeError:
                 continue
             lines = text.splitlines()
+            scannable = text.translate(markup)
             # Scanned over the whole text, not line by line: this repository
             # wraps prose, so a claim routinely straddles a newline ("...71\n
             # specialist roles..."). A per-line scan silently misses those.
-            for match in pattern.finditer(text):
+            for match in pattern.finditer(scannable):
                 line_number = text.count("\n", 0, match.start()) + 1
-                if lines[line_number - 1].startswith(self.ROLE_COUNT_SKIPPED_LINE_PREFIX):
+                if self.ROLE_COUNT_BREAKDOWN_HEADING.match(lines[line_number - 1]):
                     continue
-                claimed = int(match.group(1))
+                claimed = int(match.group(1).replace(",", ""))
                 scanned_claims += 1
                 if claimed in derived:
                     continue
