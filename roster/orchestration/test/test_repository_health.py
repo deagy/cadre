@@ -1818,23 +1818,27 @@ class RepositoryHealthTests(unittest.TestCase):
                 text = path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
                 continue
-            for line_number, line in enumerate(text.splitlines(), start=1):
-                if line.startswith(self.ROLE_COUNT_SKIPPED_LINE_PREFIX):
+            lines = text.splitlines()
+            # Scanned over the whole text, not line by line: this repository
+            # wraps prose, so a claim routinely straddles a newline ("...71\n
+            # specialist roles..."). A per-line scan silently misses those.
+            for match in pattern.finditer(text):
+                line_number = text.count("\n", 0, match.start()) + 1
+                if lines[line_number - 1].startswith(self.ROLE_COUNT_SKIPPED_LINE_PREFIX):
                     continue
-                for match in pattern.finditer(line):
-                    claimed = int(match.group(1))
-                    scanned_claims += 1
-                    if claimed in derived:
-                        continue
-                    if (normalized, claimed) in self.ALLOWED_LOCAL_ROLE_COUNTS:
-                        continue
-                    offenders.append(
-                        f"{normalized}:{line_number}: claims {match.group(0)!r}, which is "
-                        f"neither the catalog total ({catalog_total}, roster/catalog.yaml), "
-                        f"the secure-cloud profile count ({secure_cloud_total}, "
-                        f"provider/profiles/secure-cloud/profile.json), nor an "
-                        f"ALLOWED_LOCAL_ROLE_COUNTS entry for this file"
-                    )
+                claimed = int(match.group(1))
+                scanned_claims += 1
+                if claimed in derived:
+                    continue
+                if (normalized, claimed) in self.ALLOWED_LOCAL_ROLE_COUNTS:
+                    continue
+                offenders.append(
+                    f"{normalized}:{line_number}: claims {match.group(0)!r}, which is "
+                    f"neither the catalog total ({catalog_total}, roster/catalog.yaml), "
+                    f"the secure-cloud profile count ({secure_cloud_total}, "
+                    f"provider/profiles/secure-cloud/profile.json), nor an "
+                    f"ALLOWED_LOCAL_ROLE_COUNTS entry for this file"
+                )
         self.assertEqual([], offenders)
         # A scan matching nothing cannot fail. The live docs do state role
         # counts; if this ever finds none, the pattern has rotted. Counted
