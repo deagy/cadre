@@ -463,6 +463,213 @@ class RepositoryHealthTests(unittest.TestCase):
                 )["agents"][agent_id]["definition"]
                 self.assertTrue((generated_package() / packaged).is_file(), packaged)
 
+    def test_role_authority_is_equivalent_across_every_generating_runner(self) -> None:
+        """Proposal 10's invariant, stated as one test: every role this
+        repository's catalog defines is emitted, with runner-equivalent
+        authority, by all three role-wrapper generators -- Claude Code
+        (generate_global_plugin.py), Codex (generate_role_metadata.py's
+        codex_wrapper_contents), and Cline (plugin/tools/port_cline_agents.py).
+
+        Before this test, parity across the three outputs was only an
+        emergent property of several separate generator tests, each checking
+        its own output in isolation -- nothing stated "role X has
+        runner-equivalent representation everywhere" as a single, named
+        check. This test states it directly and fails with the specific
+        role id, runner(s), and field(s) that diverged, rather than a bare
+        assertion failure.
+
+        Everything here is regenerated fresh into temporary output (this
+        test never reads the committed plugin/, provider/, or
+        cline-plugins/ trees, which can lag the source of truth between
+        regenerations):
+
+        - the role set and each role's capability/model tier come from
+          `generate_role_metadata.build_role_model()`, parsed directly from
+          every roster/<phase>/<role>/AGENT.md's frontmatter -- the same
+          source catalog.yaml itself is generated from, not catalog.yaml on
+          disk;
+        - the Claude Code wrapper set is `generated_package()` above (a
+          fresh `generate_global_plugin.py --output` build, cached and
+          reused by every other test in this module);
+        - the Codex wrapper set is computed in-memory by calling
+          `codex_wrapper_contents()` on that same fresh role model -- not by
+          reading the committed roster/provider/codex-agents/*.toml, which
+          `cadre generate-role-metadata --check` guards separately but which
+          could still be stale in a working tree mid-edit;
+        - the Cline preset set is a fresh `port_cline_agents.port_agents()`
+          run, sourced from the fresh Claude Code build above.
+
+        "Authority-equivalent" means, per runner pairing:
+
+        - Claude Code <-> Codex: the role's `capability` tier must resolve to
+          the *same* `roster/runner-capabilities.json` profile on both sides
+          -- Claude's `tools:` frontmatter line must equal that profile's
+          tool list verbatim, and Codex's `sandbox_mode` TOML value must
+          equal that profile's `sandbox_mode` verbatim. This is the only
+          pairing checked on the full tool-list/sandbox_mode axis, since it
+          is the only pairing where both sides carry a directly comparable
+          field.
+        - All three (Claude Code, Codex, Cline): whether the role is
+          write-capable at all. Claude Code is write-capable when its tools
+          line contains Bash/Edit/Write; Codex when its `sandbox_mode` is
+          not "read-only"; Cline when its `allowedTools` contains
+          `run_commands` or `editor` (the tools `port_cline_agents.TOOL_MAP`
+          maps Bash/Edit/Write onto). All three must agree.
+        - All three: model tier. Claude Code's `model:` frontmatter value,
+          Cline's `modelTier:` frontmatter value, and Codex's `model` TOML
+          value resolved back to a tier through `MODEL_TIERS` must all be
+          the same tier string.
+
+        Explicit limitation, stated rather than silently skipped: Cline
+        presets carry no `sandbox_mode`-equivalent field and no verbatim
+        tool-list -- only a coarser `allowedTools` action-name list with no
+        read/write-per-tool distinction preserved (`Edit` and `Write` both
+        collapse to `editor`; `Grep`/`Glob` both collapse to
+        `search_codebase`). Cline therefore does not participate in the
+        exact-tool-list comparison above; it participates only in the
+        coarser write-capable-or-not comparison, which is the one property
+        `allowedTools` can actually express. Forcing a false byte-level
+        equivalence there would fail this test on Cline's tool-name
+        *vocabulary* rather than on any real authority drift, which is
+        exactly the kind of noisy assertion Proposal 10 was written against.
+        """
+        sys.path.insert(0, str(ROOT / "orchestration" / "src"))
+        try:
+            import generate_global_plugin as ggp
+            import generate_role_metadata as grm
+        finally:
+            sys.path.pop(0)
+
+        sys.path.insert(0, str(REPOSITORY_ROOT / "plugin" / "tools"))
+        try:
+            import port_cline_agents as pca
+        finally:
+            sys.path.pop(0)
+
+        # 1. The full role set and each role's capability/model metadata,
+        # derived fresh from AGENT.md frontmatter -- never from catalog.yaml
+        # on disk, so a mid-edit catalog.yaml cannot make this test look
+        # more current than the actual role definitions.
+        order_ids, roles = grm.build_role_model(ROOT, ROOT / "catalog-order.txt")
+        self.assertTrue(order_ids, "no roles discovered from AGENT.md frontmatter")
+
+        header_template = (ROOT / "_catalog_header.yaml.tmpl").read_text(encoding="utf-8")
+        fresh_catalog_content = grm.render_catalog(order_ids, roles, header_template)
+        catalog_entries = grm.load_catalog_content(fresh_catalog_content)
+
+        # 2. Claude Code: the shared, cached fresh plugin build.
+        plugin_root = generated_package()
+
+        # 3. Codex: computed purely in-memory from the fresh role model
+        # above -- never written to (or read from) the real provider/ tree.
+        codex_contents = ggp.codex_wrapper_contents(catalog_entries)
+
+        # 4. Cline: a fresh port, sourced from the fresh Claude Code build.
+        cline_root = Path(tempfile.mkdtemp(prefix="cadre-cline-conformance-"))
+        self.addCleanup(shutil.rmtree, cline_root, ignore_errors=True)
+        ported_cline_roles = set(pca.port_agents(cline_root, source_root=plugin_root))
+
+        codex_model_to_tier = {
+            data["codex_model"]: tier for tier, data in ggp.MODEL_TIERS.items()
+        }
+
+        def _frontmatter_field(text: str, prefix: str) -> str | None:
+            for line in text.splitlines():
+                if line.startswith(prefix):
+                    return line[len(prefix) :].strip()
+            return None
+
+        def _toml_field(text: str, key: str) -> str | None:
+            raw = _frontmatter_field(text, f"{key} = ")
+            return json.loads(raw) if raw is not None else None
+
+        WRITE_TOOLS = {"Bash", "Edit", "Write"}
+        WRITE_CLINE_TOOLS = {"run_commands", "editor"}
+
+        divergences: list[str] = []
+
+        for role_id in order_ids:
+            metadata = catalog_entries[role_id]
+            capability = metadata["capability"]
+            profile = ggp.CAPABILITY_PROFILES[capability]
+            expected_model_tier = metadata["model"]
+
+            # -- Claude Code --------------------------------------------------
+            claude_path = plugin_root / "agents" / f"{role_id}.md"
+            if not claude_path.is_file():
+                divergences.append(f"{role_id}: missing from Claude Code output ({claude_path})")
+                continue
+            claude_text = claude_path.read_text(encoding="utf-8")
+            claude_tools_line = _frontmatter_field(claude_text, "tools:")
+            expected_tools_line = ", ".join(profile["tools"])
+            if claude_tools_line != expected_tools_line:
+                divergences.append(
+                    f"{role_id}: Claude Code tools {claude_tools_line!r} != expected "
+                    f"{expected_tools_line!r} for capability {capability!r}"
+                )
+            claude_model = _frontmatter_field(claude_text, "model:")
+            if claude_model != expected_model_tier:
+                divergences.append(
+                    f"{role_id}: Claude Code model {claude_model!r} != catalog model "
+                    f"{expected_model_tier!r}"
+                )
+            claude_write_capable = bool(WRITE_TOOLS & set((claude_tools_line or "").split(", ")))
+
+            # -- Codex ----------------------------------------------------------
+            codex_filename = f"agents-{role_id}.toml"
+            codex_text = codex_contents.get(codex_filename)
+            if codex_text is None:
+                divergences.append(f"{role_id}: missing from Codex output ({codex_filename})")
+                continue
+            codex_sandbox_mode = _toml_field(codex_text, "sandbox_mode")
+            if codex_sandbox_mode != profile["sandbox_mode"]:
+                divergences.append(
+                    f"{role_id}: Codex sandbox_mode {codex_sandbox_mode!r} != expected "
+                    f"{profile['sandbox_mode']!r} for capability {capability!r}"
+                )
+            codex_model_value = _toml_field(codex_text, "model")
+            codex_model_tier = codex_model_to_tier.get(codex_model_value)
+            if codex_model_tier != expected_model_tier:
+                divergences.append(
+                    f"{role_id}: Codex model {codex_model_value!r} resolves to tier "
+                    f"{codex_model_tier!r}, != catalog model {expected_model_tier!r}"
+                )
+            codex_write_capable = codex_sandbox_mode != "read-only"
+
+            # -- Cline ------------------------------------------------------
+            if role_id not in ported_cline_roles:
+                divergences.append(f"{role_id}: missing from Cline output (port_agents did not emit it)")
+                continue
+            cline_path = cline_root / "cline-agents" / "agents" / f"{role_id}.md"
+            cline_text = cline_path.read_text(encoding="utf-8")
+            cline_model_tier = _frontmatter_field(cline_text, "modelTier:")
+            if cline_model_tier != expected_model_tier:
+                divergences.append(
+                    f"{role_id}: Cline modelTier {cline_model_tier!r} != catalog model "
+                    f"{expected_model_tier!r}"
+                )
+            allowed_tools_raw = _frontmatter_field(cline_text, "allowedTools:")
+            allowed_tools = {
+                tool.strip() for tool in (allowed_tools_raw or "").strip("[]").split(",") if tool.strip()
+            }
+            cline_write_capable = bool(WRITE_CLINE_TOOLS & allowed_tools)
+
+            # -- Cross-runner write-capability agreement (all three) --------
+            if not (claude_write_capable == codex_write_capable == cline_write_capable):
+                divergences.append(
+                    f"{role_id}: write-capability disagreement -- Claude Code="
+                    f"{claude_write_capable}, Codex={codex_write_capable}, Cline="
+                    f"{cline_write_capable} (capability tier {capability!r})"
+                )
+
+        self.assertEqual(
+            [],
+            divergences,
+            "One or more roles have non-equivalent authority across generating runners "
+            "(role: what diverged, listed above). Each entry names the specific role id "
+            "and runner(s) that disagree.",
+        )
+
     def test_generated_wrappers_enforce_catalog_capabilities_and_provenance(self) -> None:
         generator = REPOSITORY_ROOT / "roster" / "orchestration" / "src" / "generate_global_plugin.py"
         with tempfile.TemporaryDirectory(prefix="agents-capabilities-") as temporary_directory:
