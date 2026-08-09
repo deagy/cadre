@@ -11,8 +11,11 @@ Every handoff includes:
 - `knowledge_steward_handoffs`: a list of durable decisions, findings, lessons,
   root causes, reusable patterns, stale guidance, or other store-worthy
   candidates discovered during the task, field list and redaction rule per
-  `roster/shared/knowledge-use-policy.md`; an empty list means none. This is a
-  proposal only, not approval to ingest or mutate the knowledge store.
+  `roster/shared/knowledge-use-policy.md`, including the required
+  `untrusted_instruction_risk` (`true | false | unknown`) signal preserved
+  from the cited retrieval, never cleared by the proposing agent; an empty
+  list means none. This is a proposal only, not approval to ingest or mutate
+  the knowledge store.
 - Required approvals and their status.
 - Recommended next agent and explicit acceptance criteria.
 - Intent record and requirements-baseline identifiers when supplied by the

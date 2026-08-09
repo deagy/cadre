@@ -9,8 +9,12 @@ repos:
     rev: v4.6.0
     hooks:
       - id: check-yaml
-        files: "\.ya?ml$"
-        exclude: "^roster/catalog\.yaml$|^roster/orchestration/routing\.yaml$"  # validated by schema_validate.py
+        # Single-quoted: a backslash inside a double-quoted YAML scalar is an
+        # escape, and `\.` is not a valid one -- PyYAML rejects the whole
+        # document, and pre-commit parses this config with PyYAML, so every
+        # hook below silently never ran.
+        files: '\.ya?ml$'
+        exclude: '^roster/catalog\.yaml$|^roster/orchestration/routing\.yaml$'  # validated by schema_validate.py
       - id: end-of-file-fixer
         files: "\\.md$"
       - id: trailing-whitespace
@@ -27,11 +31,18 @@ repos:
         files: "roster/catalog\\.yaml$|roster/orchestration/routing\\.yaml$"
 
       - id: catalog-health
-        name: Check catalog health (orphan/dangling references)
+        name: Check catalog health (orphan/dangling refs, shadowed globs)
         entry: python3 roster/orchestration/src/routing_health.py --check
         language: python
         pass_filenames: false
-        files: "roster/catalog\\.yaml$"
+        files: "roster/catalog\\.yaml$|roster/orchestration/routing\\.yaml$"
+
+      - id: staged-knowledge-records
+        name: Check staged knowledge records are well-formed
+        entry: python3 roster/knowledge-store/src/staged_records.py
+        language: python
+        pass_filenames: false
+        files: "roster/knowledge-store/proposed-knowledge/.*\\.md$|roster/knowledge-store/proposed-knowledge\\.schema\\.json$"
 
       - id: generate-role-metadata-check
         name: Verify generated role metadata is in sync

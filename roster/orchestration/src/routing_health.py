@@ -9,6 +9,11 @@ Verifies two directions of consistency between this repository's own
 - Every agent ID referenced from those routing.yaml structures actually
   exists as a catalog.yaml key (a "dangling" reference otherwise).
 
+It also checks one property internal to routing.yaml: that no rule's
+`exclude_paths` fully shadows one of its own `paths` globs (issue #162).
+A shadowed glob is dead weight -- the rule keeps its `reviewers` and any
+`human_gate` but matches on keywords alone, losing path coverage silently.
+
 This module is pure static analysis: it never mutates routing.yaml or
 catalog.yaml, and it reuses routing.py's existing `load_routing`/
 `load_catalog`/`parse_catalog_entries` loaders rather than re-parsing either
@@ -22,6 +27,7 @@ import sys
 from pathlib import Path
 from typing import Any, Iterator
 
+from glob_containment import CONTAINED, contains
 from routing import load_catalog, load_routing
 
 DEFAULT_CATALOG = Path(__file__).resolve().parents[2] / "catalog.yaml"
@@ -65,6 +71,48 @@ def _iter_references(config: dict[str, Any]) -> Iterator[tuple[str, str]]:
         yield f"cross_stack.support[{position}]", agent_id
 
 
+def _iter_path_rules(config: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
+    for section in ("routes", "risk_rules"):
+        for index, rule in enumerate(config.get(section, []) or []):
+            rule_id = rule.get("id", f"index {index}")
+            yield f'{section}[{index}] (id="{rule_id}")', rule
+
+
+def check_exclude_path_reachability(config: dict[str, Any]) -> list[str]:
+    """Flag an include glob whose rule's `exclude_paths` swallow it whole.
+
+    Such a glob is dead: the rule keeps its entry, its `reviewers` and any
+    `human_gate`, but contributes nothing on paths -- it survives on keywords
+    alone, or not at all if it has none (issue #162).
+
+    The verdict is exact, not sampled. `glob_containment.contains` decides
+    `L(paths[i]) subset-of union(L(exclude_paths))` for the whole dialect, so
+    a finding means every path the glob could ever match is excluded -- not
+    that some synthesized guesses were. A pattern the decision procedure
+    cannot settle within its state budget returns UNDETERMINED and is skipped
+    rather than reported, so the only imprecision is a missed finding.
+    """
+    findings: list[str] = []
+    for location, rule in _iter_path_rules(config):
+        excludes = rule.get("exclude_paths") or []
+        if not excludes:
+            continue
+        has_keywords = bool(rule.get("keywords") or rule.get("keyword_groups"))
+        remainder = (
+            "so it contributes nothing and the rule matches on keywords alone"
+            if has_keywords
+            else "so it contributes nothing and the rule, having no keywords, can never match"
+        )
+        for position, include in enumerate(rule.get("paths", []) or []):
+            if contains(include, excludes) != CONTAINED:
+                continue
+            findings.append(
+                f"{location}.paths[{position}] {include!r} is fully shadowed by "
+                f"exclude_paths {excludes!r}: every path it matches is excluded, {remainder}"
+            )
+    return findings
+
+
 def check_routing_coverage(config: dict[str, Any], catalog_agent_ids: list[str]) -> list[str]:
     """Return a deterministic, sorted-where-applicable list of finding strings.
 
@@ -95,13 +143,22 @@ def check_routing_coverage(config: dict[str, Any], catalog_agent_ids: list[str])
 def run(catalog_path: Path = DEFAULT_CATALOG, routing_path: Path = DEFAULT_ROUTING) -> list[str]:
     catalog_agent_ids = load_catalog(catalog_path)
     routing_config = load_routing(routing_path)
-    return check_routing_coverage(routing_config, catalog_agent_ids)
+    return check_routing_coverage(routing_config, catalog_agent_ids) + check_exclude_path_reachability(
+        routing_config
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG)
     parser.add_argument("--routing", type=Path, default=DEFAULT_ROUTING)
+    # Accepted as a no-op for symmetry with this repo's other drift guards
+    # (`generate-role-metadata --check`, `generate-plugin --check`), which do
+    # distinguish check from write. This tool only ever reports, so it is
+    # already in "check" mode. `.pre-commit-config.yaml`'s `catalog-health`
+    # hook passes it, and argparse rejecting it made that hook exit 2 without
+    # ever running the check.
+    parser.add_argument("--check", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
 
     findings = run(args.catalog, args.routing)
@@ -109,7 +166,10 @@ def main(argv: list[str] | None = None) -> int:
         for finding in findings:
             print(finding, file=sys.stderr)
         return 1
-    print("routing coverage check passed: no orphan or dangling agent references")
+    print(
+        "routing coverage check passed: no orphan or dangling agent references, "
+        "no exclude_paths-shadowed include glob"
+    )
     return 0
 
 
