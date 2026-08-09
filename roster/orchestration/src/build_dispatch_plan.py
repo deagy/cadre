@@ -115,7 +115,10 @@ def _reasons(match: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _select_workflow(route_ids: list[str], risk_ids: list[str], has_agents: bool) -> str:
+def _select_workflow(
+    matched_routes: list[dict[str, Any]], risk_ids: list[str], has_agents: bool
+) -> str:
+    route_ids = [route["id"] for route in matched_routes]
     if not has_agents:
         return "needs-triage"
     if "production" in risk_ids:
@@ -128,8 +131,27 @@ def _select_workflow(route_ids: list[str], risk_ids: list[str], has_agents: bool
         route_id in {"knowledge-store", "documentation", "testing"} for route_id in route_ids
     ):
         return "knowledge-ingestion"
-    if "agent-suite-governance" in route_ids:
+    # "debugging" and "agent-suite-governance"/"orchestration" share paths
+    # by design (roster/catalog.yaml, roster/**/AGENT.md, routing.yaml,
+    # etc. -- editing a role or routing rule is simultaneously "roster
+    # self-maintenance" and something the debugging route's broad
+    # agent-tune-up paths also cover), so path overlap alone cannot decide
+    # which workflow applies. What can: whether "debugging" actually fired
+    # on a debugging-shaped *keyword* ("debug", "tune agent", "routing
+    # issue", "misroute", ...), not merely a shared path. A genuine bug
+    # report/tune-up keeps its keyword hit and must stay "debugging" even
+    # though it touches roster files; a routine catalog/role/routing edit
+    # with no debugging keyword is "agent-suite-maintenance" instead of
+    # falling through to the generic "debugging" label the shared paths
+    # would otherwise produce. This check must run before the plain
+    # "debugging" in route_ids check below, and before agent-suite-* is
+    # asserted, so a keyword-driven debugging match always wins the tie.
+    debugging_route = next((route for route in matched_routes if route["id"] == "debugging"), None)
+    debugging_by_keyword = bool(debugging_route and debugging_route["reasons"]["keywords"])
+    if debugging_by_keyword:
         return "debugging"
+    if "agent-suite-governance" in route_ids or "orchestration" in route_ids:
+        return "agent-suite-maintenance"
     if "debugging" in route_ids:
         return "debugging"
     product_intake_routes = {
@@ -537,7 +559,7 @@ def build_dispatch_plan(
         "task_id": task_id,
         "generated_at": generated_at,
         "status": "ready" if selected_agents else "needs-triage",
-        "workflow": _select_workflow(route_ids, risk_ids, bool(selected_agents)),
+        "workflow": _select_workflow(matched_routes, risk_ids, bool(selected_agents)),
         "inputs": {
             "task": input_data["task"],
             "repository_root": input_data["repository_root"],
