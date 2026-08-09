@@ -1701,7 +1701,7 @@
     },
     {
       "id": "ARCHITECTURE-GLOB-NARROWED-1",
-      "description": "Proposal 08 Bug 2 regression: this repository's own roster/architecture/ phase directory (role definitions, not system architecture) must not match the architecture-design route or architecture-change risk_rule now that their paths are narrowed to architecture/** and docs/architecture/** instead of the self-matching **/architecture/**; task/files reused verbatim from test_selector.py::test_own_roster_architecture_directory_does_not_trigger_architecture_review. Absence of cloud-architect/threat-modeler here is the point of the fixture.",
+      "description": "Proposal 08 Bug 2 regression: this repository's own roster/architecture/ phase directory (role definitions, not system architecture) must not match the architecture-design route or architecture-change risk_rule. #154 first achieved this by narrowing their paths to architecture/** and docs/architecture/**; #156 restored the broad **/architecture/** and carved this repository out via exclude_paths: [\"roster/**\"] instead, so the assertion is unchanged but the mechanism behind it is now exclusion, not narrowing. task/files reused verbatim from test_selector.py::test_own_roster_architecture_directory_does_not_trigger_architecture_review. Absence of cloud-architect/threat-modeler here is the point of the fixture.",
       "task": "Tweak the interaction-designer role's escalation wording",
       "changed_files": [
         "roster/architecture/interaction-designer/AGENT.md"
@@ -1730,7 +1730,7 @@
     },
     {
       "id": "ARCHITECTURE-DOCS-TRUE-POSITIVE-1",
-      "description": "Proposal 08 Bug 2 true-positive proof: a genuine consuming-project system-architecture path under docs/architecture/** must still summon cloud-architect/threat-modeler after the glob narrowing (companion to ARCHITECTURE-GLOB-NARROWED-1, which proves the false positive is gone); task/files reused verbatim from test_selector.py::test_consuming_project_docs_architecture_path_still_matches",
+      "description": "Proposal 08 Bug 2 true-positive proof: a genuine consuming-project system-architecture path under docs/architecture/** must still summon cloud-architect/threat-modeler under whichever mechanism keeps this repository's own roster/architecture/ out -- #154's glob narrowing then, #156's exclude_paths now (companion to ARCHITECTURE-GLOB-NARROWED-1, which proves the false positive is gone); task/files reused verbatim from test_selector.py::test_consuming_project_docs_architecture_path_still_matches",
       "task": "Record the new ADR for the ingestion service",
       "changed_files": [
         "docs/architecture/adr-001.md"

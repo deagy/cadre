@@ -194,6 +194,35 @@ class ExcludePathsTests(unittest.TestCase):
         self.assertTrue(result["matched"])
         self.assertEqual([entry["file"] for entry in result["paths"]], ["docs/architecture/adr.md"])
 
+    def test_every_pattern_in_a_multi_entry_exclude_list_is_applied(self) -> None:
+        # The single-pattern cases above pass even if `any()` only ever
+        # consulted the first excluder; this pins that each entry is live.
+        rule = {
+            "id": "t",
+            "paths": ["**/architecture/**"],
+            "exclude_paths": ["roster/**", "vendor/**", "third_party/**"],
+        }
+        for path in (
+            "roster/architecture/x.md",
+            "vendor/architecture/x.md",
+            "third_party/architecture/x.md",
+        ):
+            with self.subTest(excluded=path):
+                self.assertFalse(match_rule(rule, "", [path])["matched"])
+        self.assertTrue(match_rule(rule, "", ["services/pay/architecture/x.md"])["matched"])
+
+    def test_an_exclude_pattern_matching_nothing_is_a_no_op(self) -> None:
+        rule = {"id": "t", "paths": ["**/architecture/**"], "exclude_paths": ["never/matches/**"]}
+        self.assertTrue(match_rule(rule, "", ["roster/architecture/x.md"])["matched"])
+
+    def test_an_exclude_that_shadows_its_whole_include_matches_nothing(self) -> None:
+        # Documents current behavior rather than endorsing it: a rule whose
+        # exclusions swallow its own include set silently falls back to
+        # keyword-only matching, with no health-check or schema complaint.
+        # Tracked separately as #162.
+        rule = {"id": "t", "paths": ["foo/**"], "exclude_paths": ["foo/**"], "keywords": []}
+        self.assertFalse(match_rule(rule, "", ["foo/bar.py"])["matched"])
+
     def test_absent_exclude_paths_changes_nothing(self) -> None:
         rule = {"id": "t", "paths": ["**/architecture/**"]}
         self.assertTrue(match_rule(rule, "", ["roster/architecture/x.md"])["matched"])
