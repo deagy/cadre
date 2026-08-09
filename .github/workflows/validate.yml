@@ -34,14 +34,39 @@ jobs:
     name: roster/ (selection, knowledge store, shared policy)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # pyproject.toml's requires-python floor is 3.10, but until now
+        # nothing in CI ran below 3.14 -- a 3.10-only incompatibility could
+        # reach a `pip install cadre` user without ever failing a build. 3.10
+        # is the declared floor; 3.14 stays as the primary/latest leg.
+        python-version: ["3.10", "3.14"]
     env:
       AGENTIC_SDLC_BIN: ${{ github.workspace }}/bin/agentic-sdlc
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.14"
-      - run: pip install --no-cache-dir --require-hashes -r .github/requirements-validation.lock
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: .github/requirements-validation*.lock
+      # requirements-validation.lock is compiled under Python 3.14 and pins
+      # rpds-py==2026.6.3, which declares Python>=3.11 -- uninstallable on
+      # the 3.10 leg. requirements-validation-py310.lock is the same input
+      # (.github/requirements-validation.in) recompiled under Python 3.10,
+      # which resolves an older rpds-py that supports both; see that file's
+      # header for the full explanation.
+      - name: Select the hash-locked requirements file for this Python version
+        id: lockfile
+        run: |
+          set -eu
+          if [ "${{ matrix.python-version }}" = "3.10" ]; then
+            echo "path=.github/requirements-validation-py310.lock" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=.github/requirements-validation.lock" >> "$GITHUB_OUTPUT"
+          fi
+      - run: pip install --no-cache-dir --require-hashes -r ${{ steps.lockfile.outputs.path }}
       - run: python -B -m unittest discover -s roster/orchestration/test -p "test_*.py"
       - run: python -B -m unittest discover -s roster/knowledge-store/test -p "test_*.py"
       - run: python -B -m unittest discover -s roster/shared/test -p "test_*.py"
@@ -71,6 +96,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
+          cache: pip
+          cache-dependency-path: kernel/requirements-validation.txt
       - run: pip install --no-cache-dir -r kernel/requirements-validation.txt
       - run: python -B -m unittest discover -s kernel/test -p "test_*.py"
       - run: ./bin/agentic-sdlc --version
@@ -110,6 +137,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
+          cache: pip
+          cache-dependency-path: .github/requirements-validation.lock
       # test_manifest_health.py parses skill frontmatter as real YAML rather
       # than pattern-matching it -- a `description` containing ": " ends a
       # plain scalar, and that shipped four skills whose frontmatter silently
@@ -197,6 +226,105 @@ jobs:
             echo "$output" >&2
             exit 1
           fi
+
+  install-sh:
+    # install.sh's own unit tests (plugin/tools/test_install_script.py) only
+    # pattern-match its source text -- nothing ever invoked the script, so a
+    # `set -eu` violation or a non-POSIX construct could ship uncaught. This
+    # job actually runs it, on both platforms it claims to support.
+    #
+    # install.sh shells out to the caller's own `claude`/`codex`/`cline` CLI,
+    # none of which belong on a CI runner. A stub `claude` stands in so this
+    # exercises the script's real control flow -- preflight, a real shallow
+    # clone of this repository's public default branch, the launcher
+    # symlink, and the runner dispatch -- without depending on a real Claude
+    # Code install or touching anything this runner doesn't own.
+    name: install.sh (executed against a stub runner CLI)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Scope the install to this runner's temp dir
+        # Set here rather than in a job-level `env:` block: the `runner`
+        # context is not available at job level, and referencing it there is
+        # what GitHub rejects as a workflow file issue.
+        run: |
+          set -eu
+          echo "CADRE_HOME=$RUNNER_TEMP/cadre-home" >> "$GITHUB_ENV"
+          echo "CADRE_BIN_DIR=$RUNNER_TEMP/cadre-bin" >> "$GITHUB_ENV"
+      - name: Install a stub `claude` CLI on PATH
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/stub-bin"
+          cat > "$RUNNER_TEMP/stub-bin/claude" <<'SCRIPT'
+          #!/bin/sh
+          echo "stub-claude: $*"
+          SCRIPT
+          chmod +x "$RUNNER_TEMP/stub-bin/claude"
+          echo "$RUNNER_TEMP/stub-bin" >> "$GITHUB_PATH"
+      - name: Run install.sh end to end
+        run: ./install.sh --runner=claude
+      - name: Confirm the installed launcher actually works
+        run: "${CADRE_BIN_DIR}/cadre help | grep -q 'Usage: cadre'"
+      - name: Exercise --dry-run across every runner branch (no side effects)
+        run: ./install.sh --dry-run --runner=claude,codex,cline --with-lifecycle
+      - name: Run install.sh --uninstall end to end
+        run: ./install.sh --uninstall --runner=claude
+
+  install-ps1:
+    # The PowerShell counterpart of install-sh above, run on its native
+    # platform. Same stub-CLI approach: a real clone, a real cadre.cmd shim,
+    # and a real `cadre help` invocation, without a real Claude Code install.
+    name: install.ps1 (executed against a stub runner CLI)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Scope the install to this runner's temp dir
+        # Set here rather than in a job-level `env:` block: the `runner`
+        # context is not available at job level, and referencing it there is
+        # what GitHub rejects as a workflow file issue.
+        shell: pwsh
+        run: |
+          "CADRE_HOME=$(Join-Path $env:RUNNER_TEMP 'cadre-home')" | Add-Content -Path $env:GITHUB_ENV
+          "CADRE_BIN_DIR=$(Join-Path $env:RUNNER_TEMP 'cadre-bin')" | Add-Content -Path $env:GITHUB_ENV
+      - name: Install a stub `claude` CLI on PATH
+        shell: pwsh
+        run: |
+          $stubDir = Join-Path $env:RUNNER_TEMP 'stub-bin'
+          New-Item -ItemType Directory -Force -Path $stubDir | Out-Null
+          Set-Content -Path (Join-Path $stubDir 'claude.cmd') -Value "@echo off`r`necho stub-claude: %*`r`n"
+          Add-Content -Path $env:GITHUB_PATH -Value $stubDir
+      - name: Run install.ps1 end to end
+        shell: pwsh
+        run: .\install.ps1 -Runner claude
+      - name: Confirm the installed launcher actually works
+        shell: pwsh
+        run: |
+          $output = & (Join-Path $env:CADRE_BIN_DIR 'cadre.cmd') help
+          if (-not ($output -match 'Usage: cadre')) {
+            throw "cadre.cmd help did not produce the expected usage text"
+          }
+      - name: Exercise -DryRun across every runner branch (no side effects)
+        shell: pwsh
+        run: .\install.ps1 -DryRun -Runner claude,codex,cline -WithLifecycle
+      - name: Run install.ps1 -Uninstall end to end
+        shell: pwsh
+        run: .\install.ps1 -Runner claude -Uninstall
 
   cline-git-source:
     # A Git-source install starts at this repository root. Cline loads the
