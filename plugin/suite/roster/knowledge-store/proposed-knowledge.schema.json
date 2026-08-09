@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/proposed-knowledge.schema.json",
+  "title": "Staged Proposed-Knowledge Record (frontmatter)",
+  "description": "The YAML frontmatter block of a staged record under roster/knowledge-store/proposed-knowledge/. A staged record is the durable, auditable destination for one item an agent listed under `knowledge_steward_handoffs`, and the place knowledge-store-steward records the disposition of that item. This document constrains the frontmatter mapping only. It cannot express the cross-field and cross-file rules that make a record trustworthy -- those are implemented in roster/knowledge-store/src/staged_records.py and are enforced in addition to, never instead of, this schema. This schema also cannot verify that an agent emitted a handoff at all: a handoff is free-form agent output with no machine-checkable emission event. What is checkable is that the staged records which exist are well-formed and internally coherent.",
+  "$comment": "Rules deliberately NOT expressed here, because JSON Schema cannot express them over a frontmatter-only instance: (1) content_digest must equal sha256(normalised body) -- the body is not part of this instance; (2) status/disposition coherence (status 'proposed' forbids disposition; any other status requires disposition.action == status); (3) the automatic-defer rule (untrusted_instruction_risk true forbids status 'accepted' and forces disposition.action 'deferred'); (4) the source_uri redaction rule over evidence[] and origin values (no absolute local path); (5) id uniqueness across the directory, which is a directory-level property. See staged_records.py. This mirrors schema_validate.py's precedent of supplementary Python checks alongside a JSON Schema document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "status",
+    "evidence",
+    "origin",
+    "proposed_classification",
+    "source_scope",
+    "sensitivity_notes",
+    "conflicts_or_staleness",
+    "recommended_action",
+    "untrusted_instruction_risk",
+    "staged_by",
+    "content_digest"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^KS-\\d{8}-[a-z0-9-]+$",
+      "description": "Stable record identifier, KS-YYYYMMDD-slug. Immutable once assigned: a disposition, an audit trail, and any downstream ingestion reference it. Unique across the directory (enforced by staged_records.validate_directory, not by this schema)."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One-line human-readable summary of the proposed knowledge."
+    },
+    "status": {
+      "enum": ["proposed", "accepted", "rejected", "deferred"],
+      "description": "Lifecycle state. 'proposed' means awaiting steward triage and requires `disposition` to be absent; any other value requires `disposition` to be present with a matching `action`."
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Citations or file:line references supporting the claim. Must not contain an absolute local path: the same source_uri redaction rule that applies to knowledge citations applies here (roster/shared/knowledge-use-policy.md)."
+    },
+    "origin": {
+      "type": "object",
+      "required": ["task", "artifact", "revision"],
+      "properties": {
+        "task": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The task, issue, or pull request the observation came from."
+        },
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The artifact the observation is about, as a repository-relative path or equivalent non-local reference."
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The exact revision observed, so the claim stays point-in-time attributable."
+        }
+      },
+      "$comment": "additionalProperties is deliberately left open here while the top level is closed, matching the canonical spec, which closes the top-level key set only. Tighten in a follow-up if origin extensions prove undesirable.",
+      "description": "Provenance of the observation. All three values are subject to the same no-absolute-local-path redaction rule as evidence[]."
+    },
+    "proposed_classification": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The classification the proposing agent believes applies. A proposal, not an authorization: the steward records the classification actually used in disposition.classification_used."
+    },
+    "source_scope": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The project/tenant scope the knowledge belongs to, so an ingestion carries a project-identifying --source rather than defaulting into the shared global store unscoped."
+    },
+    "sensitivity_notes": {
+      "type": "string",
+      "description": "Sensitivity, residency, secret-adjacency, or redaction concerns. May be empty, but the key must be present so 'nobody considered it' is distinguishable from 'considered, nothing found'."
+    },
+    "conflicts_or_staleness": {
+      "type": "string",
+      "description": "Known conflicts with current approved policy, or reasons this may already be stale. May be empty, for the same reason as sensitivity_notes."
+    },
+    "recommended_action": {
+      "enum": ["ingest", "update", "reclassify", "defer"],
+      "description": "The action the proposing agent recommends. 'delete' is deliberately absent and is rejected with its own dedicated error: the knowledge store implements no deletion capability, and a required deletion escalates to knowledge-store-steward and an authorized human rather than being recorded as a staged-record action."
+    },
+    "untrusted_instruction_risk": {
+      "anyOf": [
+        {"type": "boolean"},
+        {"const": "unknown"}
+      ],
+      "description": "Whether the source material contains anything that could act as an instruction if retrieved. Boolean true/false, or the string 'unknown' when it was not assessed. true triggers the automatic-defer rule (enforced in staged_records.py): status must not be 'accepted' and any disposition.action must be 'deferred'."
+    },
+    "staged_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The actor that converted the free-form knowledge_steward_handoffs item into this record. Names who did the conversion; it does not and cannot attest that a handoff was emitted."
+    },
+    "content_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Lowercase sha256 hex of the normalised record body. Compute it only with staged_records.compute_digest(body) so the digest can never be computed two ways."
+    },
+    "disposition": {
+      "type": "object",
+      "required": ["action", "reason", "classification_used", "diverged_from_proposal", "decided_by"],
+      "properties": {
+        "action": {
+          "enum": ["accepted", "rejected", "deferred"],
+          "description": "The steward's decision. Must equal the record's `status`."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why the steward decided this. Non-empty: an unexplained disposition is not an audit trail."
+        },
+        "classification_used": {
+          "type": "string",
+          "description": "The classification actually applied, which may differ from proposed_classification."
+        },
+        "diverged_from_proposal": {
+          "type": "boolean",
+          "description": "Whether the disposition departed from what the proposing agent recommended."
+        },
+        "decided_by": {
+          "type": "string",
+          "description": "The deciding actor. Authorship/approval separation still applies: the actor in staged_by is not thereby authorized to approve its own record."
+        }
+      },
+      "$comment": "additionalProperties left open for the same spec-literal reason as origin.",
+      "description": "Present only once dispositioned. Absent while status is 'proposed'."
+    }
+  }
+}

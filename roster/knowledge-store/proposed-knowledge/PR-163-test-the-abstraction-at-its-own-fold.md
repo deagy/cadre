@@ -1,14 +1,23 @@
-# Proposed Knowledge: test an abstraction at the boundary it folds
-
-Status: proposed for knowledge-store-steward review
-Classification: internal
-Source task: review of PR #163
-(`roster/orchestration/src/glob_containment.py`), 2026-08-08
-Origin revision: `e036c3b`..`05a9b97` on branch
-`agent/routing-health-exclude-shadow`, merged as `9cffcfa`
-Recommended steward action: ingest
-Sensitivity: none
-Conflicts or staleness: none known
+---
+id: KS-20260808-abstraction-fold
+title: test an abstraction at the boundary it folds
+status: proposed
+evidence:
+  - "roster/orchestration/src/glob_containment.py"
+  - "PR #163"
+origin:
+  task: review of PR #163
+  artifact: roster/orchestration/src/glob_containment.py
+  revision: "9cffcfa (merged from e036c3b..05a9b97)"
+proposed_classification: internal
+source_scope: testing, code-review
+sensitivity_notes: ""
+conflicts_or_staleness: ""
+recommended_action: ingest
+untrusted_instruction_risk: false
+staged_by: knowledge-store-steward
+content_digest: 0d43776baaa96640a330e6d3c504cfd515aad5b54e7d270d06bd1f2ec8a1d59d
+---
 
 ## Summary
 

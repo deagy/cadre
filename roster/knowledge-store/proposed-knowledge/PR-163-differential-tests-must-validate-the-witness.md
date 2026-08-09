@@ -1,14 +1,23 @@
-# Proposed Knowledge: a differential test can pass with its subject disabled
-
-Status: proposed for knowledge-store-steward review
-Classification: internal
-Source task: review of PR #163
-(`roster/orchestration/test/test_glob_containment.py`), 2026-08-08
-Origin revision: `05a9b97` on branch `agent/routing-health-exclude-shadow`,
-merged as `9cffcfa`
-Recommended steward action: ingest
-Sensitivity: none
-Conflicts or staleness: none known
+---
+id: KS-20260808-differential-test-witness
+title: a differential test can pass with its subject disabled
+status: proposed
+evidence:
+  - "roster/orchestration/test/test_glob_containment.py"
+  - "PR #163"
+origin:
+  task: review of PR #163
+  artifact: roster/orchestration/test/test_glob_containment.py
+  revision: "9cffcfa (merged from 05a9b97)"
+proposed_classification: internal
+source_scope: testing, code-review, build
+sensitivity_notes: ""
+conflicts_or_staleness: ""
+recommended_action: ingest
+untrusted_instruction_risk: false
+staged_by: knowledge-store-steward
+content_digest: fa099dd5615ea638b13b1fd57eb0d5f95cff392c66ff11ef3af326c34f8d941e
+---
 
 ## Summary
 

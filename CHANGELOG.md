@@ -31,6 +31,12 @@ check and reporting "nothing to do". See
 
   **Consumer impact:** shared policy is embedded verbatim into every generated wrapper, so all 74 wrappers change even though 73 roles' own definitions did not.
 
+  **Each item carries `untrusted_instruction_risk` (`true | false | unknown`), preserved from the cited retrieval result rather than re-derived by the proposing agent.** The steward defers automatically on `true`. Without this field the rule was unreachable: `service.py` surfaces the flag on retrieved passages, but an agent repackaging that passage as a proposal dropped it, so the control could never fail closed. The field is non-authoritative — an agent cannot clear its own flag — and `unknown` is the honest answer when provenance cannot be established, not a way to avoid the question.
+
+  **Handoff items become staged records under `roster/knowledge-store/proposed-knowledge/`, validated in CI.** `roster/knowledge-store/proposed-knowledge.schema.json` defines the frontmatter contract and `roster/knowledge-store/src/staged_records.py` enforces it: required fields, closed key set, `recommended_action` never `delete`, `content_digest` matching the body, disposition present exactly when `status` is not `proposed`, `disposition.action` agreeing with `status`, the automatic-defer rule, no absolute local paths in `evidence`/`origin`, and `id` uniqueness across the directory. A record's `id` and `content_digest` are the durable identity linking a proposal to its disposition; `staged_by` names the actor that converted the item into a record.
+
+  **What this does not do:** it cannot verify that an agent *emitted* a handoff. A handoff is free-form agent output with no observable emission event, so an agent that silently dropped one is indistinguishable from one with nothing to propose. What is checked is that staged records which exist are well-formed. The module docstring, the schema description, and the CLI success line all say so.
+
   `recommended_action` deliberately has no `delete` value — no deletion capability exists (`roster/knowledge-store/SECURITY.md`), so a required deletion escalates to the steward and an authorized human rather than being recorded as a promise against a capability that isn't there. `evidence` and `origin` inherit the existing citation `source_uri` rule: omit or redact local paths by default. The steward's disposition is recorded by amending the staged record under `roster/knowledge-store/proposed-knowledge/` in place, and must state the classification actually used and whether it diverged from the agent's proposal, so accepting verbatim is distinguishable from independent judgment. `injection_risk=true` on a handoff-originated candidate is an automatic defer.
 
 - **Routing rules can now exclude paths, not just include them.** `routes[]` and `risk_rules[]` in `roster/orchestration/routing.yaml` accept an `exclude_paths` array alongside `paths`. It subtracts at the *file* level: a broad include glob can carve out the paths it was never meant to reach, while still matching on any other changed file in the same change set. ([#156](https://github.com/deagy/cadre/issues/156))
@@ -41,6 +47,10 @@ check and reporting "nothing to do". See
 
   **The `backend` route's `**/*.py` asymmetry is deliberately not restored.** It could be, mechanically — but only by excluding `roster/**`, `plugin/**`, `engine/**`, `kernel/**`, `cadre_cli/**` and `bin/**`, and `engine/`, `plugin/` and `bin/` are perfectly ordinary directory names in a consuming project, whose Python would then drop out of routing with no signal. That trades a documented asymmetry for a hidden one. `roster/**` is a single, distinctly-Cadre name, which is why the architecture case is safe and this one is not.
 
+
+### Fixed
+
+- **No pre-commit hook in this repository has ever run.** `.pre-commit-config.yaml` was not valid YAML: `files: "\.ya?ml$"` uses `\.`, which is not a valid escape inside a double-quoted YAML scalar, so PyYAML rejected the whole document — and pre-commit parses its config with PyYAML. Every hook below that line was silently inert, including the catalog-schema, catalog-health, and generated-role-metadata drift guards. The two patterns are now single-quoted, where a backslash is literal. All 48 tracked YAML files parse, so enabling the config newly breaks nothing, and every hook entry passes on the current tree.
 
 ### Changed
 

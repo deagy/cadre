@@ -1,14 +1,25 @@
-# Proposed Knowledge: prove a guard is non-vacuous by injecting a fault
-
-Status: proposed for knowledge-store-steward review
-Classification: internal
-Source task: accumulated across reviews of PRs #161, #163, #164 and their
-predecessors, 2026-07 to 2026-08-09
-Origin revision: practice, not code — no single revision
-Recommended steward action: ingest
-Sensitivity: none
-Conflicts or staleness: none known; complements but does not duplicate the two
-PR #163 records
+---
+id: KS-20260809-non-vacuity-fault-injection
+title: prove a guard is non-vacuous by injecting a fault
+status: proposed
+evidence:
+  - "PR #161"
+  - "PR #163"
+  - "PR #164"
+  - "accumulated code-review findings across multiple pull requests"
+origin:
+  task: accumulated across reviews of PRs #161, #163, #164 and predecessors
+  artifact: code-review and testing practices
+  revision: "practice, not code — no single revision"
+proposed_classification: internal
+source_scope: testing, code-review, build, verification
+sensitivity_notes: ""
+conflicts_or_staleness: "complements but does not duplicate the two PR #163 records"
+recommended_action: ingest
+untrusted_instruction_risk: false
+staged_by: knowledge-store-steward
+content_digest: 125e30446f0791476f8b0560e8e3fa58ad33ef9fada0ce070c11b8cc4b65ce76
+---
 
 ## Summary
 

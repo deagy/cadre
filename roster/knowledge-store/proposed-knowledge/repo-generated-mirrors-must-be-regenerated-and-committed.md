@@ -1,14 +1,25 @@
-# Proposed Knowledge: any tracked source change may require regenerating `plugin/`
-
-Status: proposed for knowledge-store-steward review
-Classification: internal
-Source task: PR #163 (`7aef327`) and PR #166, 2026-08-08 to 2026-08-09
-Origin revision: `7aef327` (fix), and the first commit of branch
-`agent/durable-knowledge-capture-proposal`
-Recommended steward action: ingest
-Sensitivity: none
-Conflicts or staleness: repository-specific; goes stale if the generated half of
-`plugin/` stops being committed
+---
+id: KS-20260809-plugin-regeneration
+title: any tracked source change may require regenerating `plugin/`
+status: proposed
+evidence:
+  - "PR #163 (7aef327)"
+  - "PR #166"
+  - ".github/workflows/validate.yml generated-content job"
+  - "cadre generate-plugin"
+origin:
+  task: PR #163 and PR #166
+  artifact: cadre generate-plugin workflow and plugin distribution
+  revision: "7aef327 and agent/durable-knowledge-capture-proposal"
+proposed_classification: internal
+source_scope: build, documentation, release
+sensitivity_notes: ""
+conflicts_or_staleness: "repository-specific; goes stale if the generated half of plugin/ stops being committed"
+recommended_action: ingest
+untrusted_instruction_risk: false
+staged_by: knowledge-store-steward
+content_digest: 51eb18c2a34e21104d2fee3b5585169f8ced3cf2cd5c00ec62579e7f6e35bd14
+---
 
 ## Summary
 
