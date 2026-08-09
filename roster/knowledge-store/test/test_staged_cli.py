@@ -136,5 +136,101 @@ class StagingScopeTests(unittest.TestCase):
                 self.assertIn(".agents/knowledge-store/config.json", message)
 
 
+class MigrationTests(unittest.TestCase):
+    """Step 3's safety check, committed rather than performed once by hand.
+
+    The proposal is explicit that the ten committed records are migrated and
+    verified by export-and-diff *before* the originals are deleted. That order
+    only protects anything if the check keeps running, so it lives here.
+
+    The comparison is by record id and content, never by filename: `export`
+    writes `<id>.md`, and the ids deliberately differ from the filenames the
+    records were first written under.
+    """
+
+    def setUp(self) -> None:
+        self.workspace = tempfile.TemporaryDirectory()
+        self.addCleanup(self.workspace.cleanup)
+        root = Path(self.workspace.name)
+        self.config_path = root / "config.json"
+        self.config_path.write_text(
+            json.dumps({"database": str(root / "knowledge.db")}), encoding="utf-8"
+        )
+        self.exported = root / "exported"
+
+    def _run(self, *arguments: str) -> dict:
+        return cli.run([*arguments, "--config", str(self.config_path)])
+
+    def test_the_committed_corpus_survives_import_then_export(self) -> None:
+        originals = {}
+        for path in sorted(RECORDS.glob("*.md")):
+            frontmatter, body = staged_records.parse_record(path.read_text(encoding="utf-8"))
+            originals[frontmatter["id"]] = (frontmatter, body)
+
+        imported = self._run("import-staged", "--directory", str(RECORDS))
+        self.assertEqual(imported["count"], len(originals))
+        self.assertEqual(set(imported["ids"]), set(originals))
+
+        exported = self._run("export-staged", "--output", str(self.exported))
+        self.assertEqual(set(exported["ids"]), set(originals))
+
+        for record_id, (frontmatter, body) in originals.items():
+            with self.subTest(record=record_id):
+                written = self.exported / f"{record_id}.md"
+                self.assertTrue(written.is_file(), "export did not write this record")
+                round_tripped, round_tripped_body = staged_records.parse_record(
+                    written.read_text(encoding="utf-8")
+                )
+                self.assertEqual(round_tripped, frontmatter, "frontmatter changed in migration")
+                self.assertEqual(
+                    staged_records.compute_digest(round_tripped_body),
+                    staged_records.compute_digest(body),
+                    "body changed in migration",
+                )
+                self.assertEqual(staged_records.validate_record(written.read_text(encoding="utf-8")), [])
+
+    def test_import_is_atomic_across_the_batch(self) -> None:
+        # A half-imported migration is the worst outcome: the operator cannot
+        # tell what made it without the diff they were about to rely on.
+        staging = Path(self.workspace.name) / "batch"
+        staging.mkdir()
+        good = sorted(RECORDS.glob("*.md"))[0]
+        # Names chosen so the VALID record sorts first: with the invalid one
+        # first, a non-atomic import would fail before writing anything and
+        # this assertion would pass without proving atomicity at all.
+        (staging / "a-good.md").write_text(good.read_text(encoding="utf-8"), encoding="utf-8")
+        (staging / "b-bad.md").write_text(
+            good.read_text(encoding="utf-8").replace("recommended_action: ingest", "recommended_action: delete"),
+            encoding="utf-8",
+        )
+        with self.assertRaises(ValueError) as caught:
+            self._run("import-staged", "--directory", str(staging))
+        self.assertIn("b-bad.md", str(caught.exception))
+        self.assertEqual(self._run("list-staged")["records"], [], "a rejected batch left rows behind")
+
+    def test_export_filters_by_status(self) -> None:
+        self._run("import-staged", "--directory", str(RECORDS))
+        accepted = self._run("export-staged", "--output", str(self.exported / "accepted"), "--status", "accepted")
+        self.assertTrue(accepted["ids"])
+        for record_id in accepted["ids"]:
+            frontmatter, _ = staged_records.parse_record(
+                (self.exported / "accepted" / f"{record_id}.md").read_text(encoding="utf-8")
+            )
+            self.assertEqual(frontmatter["status"], "accepted")
+            self.assertIn("disposition", frontmatter)
+
+    def test_export_reports_an_empty_store_honestly(self) -> None:
+        result = self._run("export-staged", "--output", str(self.exported))
+        self.assertEqual(result["count"], 0)
+        self.assertEqual(result["ids"], [])
+
+    def test_import_rejects_a_directory_with_no_records(self) -> None:
+        empty = Path(self.workspace.name) / "empty"
+        empty.mkdir()
+        with self.assertRaises(ValueError) as caught:
+            self._run("import-staged", "--directory", str(empty))
+        self.assertIn("No .md staged-record files", str(caught.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

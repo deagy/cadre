@@ -408,7 +408,18 @@ class ScopeEnforcementTests(unittest.TestCase):
         # AC-15 itself has to be re-decided here rather than quietly widened --
         # the point of this test is that the decision is made, not avoided.
         self.assertEqual(
-            {"init", "ingest", "search", "context", "stats", "propose", "list-staged", "show-staged"},
+            {
+                "init",
+                "ingest",
+                "search",
+                "context",
+                "stats",
+                "propose",
+                "list-staged",
+                "show-staged",
+                "import-staged",
+                "export-staged",
+            },
             commands,
         )
         for forbidden in ("delete", "retention", "purge", "expire"):

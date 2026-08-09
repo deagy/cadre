@@ -14,10 +14,13 @@ from database import open_store, store_stats
 from service import build_agent_context, ingest_file, search_store, stable_query_id
 from settings import SettingsError
 from staged_records import STATUS_VALUES as STAGED_STATUSES
+from staged_records import parse_record, validate_parsed
 from staged_store import (
+    export_records,
     get_record,
     install_schema,
     list_records,
+    put_record,
     put_record_text,
     serialize_record,
 )
@@ -73,6 +76,13 @@ def _parser() -> argparse.ArgumentParser:
     show_staged = subparsers.add_parser("show-staged")
     show_staged.add_argument("--id", required=True, dest="record_id")
     add_config(show_staged)
+    import_staged = subparsers.add_parser("import-staged")
+    import_staged.add_argument("--directory", required=True)
+    add_config(import_staged)
+    export_staged = subparsers.add_parser("export-staged")
+    export_staged.add_argument("--output", required=True)
+    export_staged.add_argument("--status", choices=STAGED_STATUSES)
+    add_config(export_staged)
     return parser
 
 
@@ -138,6 +148,52 @@ def _show_staged(db: Any, record_id: str) -> dict[str, Any]:
     return {"id": record_id, "frontmatter": frontmatter, "body": body, "text": serialize_record(frontmatter, body)}
 
 
+def _import_staged(db: Any, directory: str) -> dict[str, Any]:
+    """Stage every record file in a directory, atomically across the batch.
+
+    Migration is the intended use, so a partial import is the wrong outcome:
+    a batch that half-succeeds leaves the operator unable to tell which
+    records made it without diffing. Every file is validated first, and the
+    batch is written only if all of them pass.
+    """
+    root = Path(directory)
+    if not root.is_dir():
+        raise ValueError(f"Not a directory: {directory}")
+    sources = sorted(root.glob("*.md"))
+    if not sources:
+        raise ValueError(f"No .md staged-record files found in {directory}")
+    parsed = []
+    for path in sources:
+        frontmatter, body = parse_record(path.read_text(encoding="utf-8"))
+        findings = validate_parsed(frontmatter, body)
+        if findings:
+            raise ValueError(f"{path.name}: " + "; ".join(findings))
+        parsed.append((path, frontmatter, body))
+    imported = [put_record(db, frontmatter, body) for _, frontmatter, body in parsed]
+    return {"status": "imported", "count": len(imported), "ids": sorted(imported)}
+
+
+def _export_staged(db: Any, output: str, status: str | None) -> dict[str, Any]:
+    """Write every stored record out as `<id>.md`.
+
+    Filenames are the record id, not whatever the file was called before it
+    was staged: the id is the durable identity, and two records could
+    otherwise collide on a filename that means nothing to the contract. The
+    verification diff is therefore by id and content, never by filename.
+    """
+    destination = Path(output)
+    destination.mkdir(parents=True, exist_ok=True)
+    exported = export_records(db, status)
+    for record_id, text in exported.items():
+        (destination / f"{record_id}.md").write_text(text, encoding="utf-8")
+    return {
+        "status": "exported",
+        "count": len(exported),
+        "directory": str(destination),
+        "ids": sorted(exported),
+    }
+
+
 def _enforce_staging_scope(tier: str) -> None:
     """Refuse to stage records into the shared global-fallback store.
 
@@ -197,7 +253,7 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
             return build_agent_context(db, config, options.pop("query"), options)
         if command == "stats":
             return store_stats(db)
-        if command in ("propose", "list-staged", "show-staged"):
+        if command in ("propose", "list-staged", "show-staged", "import-staged", "export-staged"):
             _enforce_staging_scope(tier)
             # Installed here rather than inside open_store: the staging table
             # is a staged-record concern, and database.py should not depend on
@@ -209,6 +265,10 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
                 return _propose(db, options.pop("input"))
             if command == "list-staged":
                 return {"records": list_records(db, options.pop("status", None))}
+            if command == "import-staged":
+                return _import_staged(db, options.pop("directory"))
+            if command == "export-staged":
+                return _export_staged(db, options.pop("output"), options.pop("status", None))
             return _show_staged(db, options.pop("record_id"))
         raise ValueError(f"Unknown command: {command}")
     finally:
