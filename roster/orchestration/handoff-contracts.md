@@ -8,6 +8,13 @@ Every handoff includes:
 - Assumptions, exclusions, and unresolved questions.
 - Structured findings with evidence and severity.
 - Knowledge retrieval status, query identifiers, citations used, and stale/conflicting material.
+- Knowledge-steward handoff: durable decisions, findings, lessons, root causes,
+  reusable patterns, stale guidance, or other store-worthy candidates discovered
+  during the task. Include evidence, originating task/artifact/revision,
+  proposed classification and source scope, sensitivity/redaction notes,
+  conflicts or staleness, and the recommended `knowledge-store-steward` action;
+  state `none` when no durable candidate was identified. This is a proposal
+  only, not approval to ingest or mutate the knowledge store.
 - Required approvals and their status.
 - Recommended next agent and explicit acceptance criteria.
 - Intent record and requirements-baseline identifiers when supplied by the

@@ -19,11 +19,13 @@ Operate the agent-facing vectorized knowledge store: authorize and normalize imp
 - Authorized source export and documented ownership
 - Access classification, retention requirement, source format, intended audiences, and embedding configuration
 - Retrieval evaluation questions and expected source evidence
+- Agent-proposed knowledge handoffs containing title, summary, evidence or citations, originating task/artifact/revision, proposed classification and source scope, sensitivity/redaction notes, conflicts or staleness, and requested action
 
 ## Outputs
 
 - Demo ingestion result with run ID and message/chunk counts; supplemental steward record for source identity, redaction/embedding summaries, failures, and approvals
 - Search results with point-in-time source/message/chunk references, content hashes, and untrusted-content warnings
+- Accepted, rejected, or deferred disposition for each proposed knowledge handoff, including the reason and any missing evidence or authorization
 - Preserved retrieved bundle and integrity hash for review/compliance evidence
 - Quality evaluation and access/retention gaps; supplemental deletion evidence until lifecycle commands are implemented
 
@@ -31,6 +33,7 @@ Operate the agent-facing vectorized knowledge store: authorize and normalize imp
 
 - Follow `SECURITY.md`, `../shared/operating-principles.md`, `../shared/team-profile.yaml`, `../shared/technology-standards.md`, and `../shared/agent-autonomy.yaml`.
 - Verify authorization, residency, retention, classification, and source integrity before import
+- Triage agent-proposed knowledge handoffs for durable value, duplicate/conflicting records, source authority, sensitivity, scope, classification, and redaction needs before approving any curated write
 - Stage and sample normalized/redacted content before broad access
 - Keep classifications and tenant boundaries enforceable before similarity ranking. A project without its own `.agents/knowledge-store/config.json` resolves to the shared global store by default (`SECURITY.md`), so also verify every ingestion against the shared store carries a project-identifying `--source` and that retrieval filters by it when project isolation matters; a project whose classification or tenancy cannot share infrastructure with others should have its own `.agents/knowledge-store/config.json` (a real partition) rather than rely on `--source` filtering alone.
 - Test representative queries for relevance, conflict with current policy, prompt injection, and stale content

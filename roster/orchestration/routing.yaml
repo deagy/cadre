@@ -439,6 +439,10 @@
       "id": "knowledge-store",
       "paths": ["roster/knowledge-store/**", "roster/shared/knowledge-use-policy.md", "roster/orchestration/knowledge-retrieval-policy.yaml"],
       "keywords": ["knowledge store", "chat history", "embedding", "vector search", "retrieval", "rag"],
+      "keyword_groups": [
+        ["record", "capture", "import", "ingest", "curate", "archive", "preserve", "add"],
+        ["findings", "learnings", "lessons learned", "decisions", "operational knowledge", "approved patterns", "agent knowledge", "knowledge base"]
+      ],
       "primary": ["knowledge-store-steward"],
       "reviewers": ["security-reviewer", "compliance-reviewer"]
     },

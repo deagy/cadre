@@ -50,6 +50,8 @@
 - Known stale or conflicting sources:
 - Required citation fields: `source`, `conversation_id`, `message_id`, `chunk_id`, `content_hash`, `created_at`, and `classification`
 - Supplementary source URI handling (may expose local paths):
+- Required knowledge-steward handoff: `yes | no | if durable candidates are found`
+- Knowledge-steward handoff format: title, summary, evidence/citations, originating task/artifact/revision, proposed classification and source scope, sensitivity/redaction notes, conflicts/staleness, and recommended steward action
 
 ## Escalation
 

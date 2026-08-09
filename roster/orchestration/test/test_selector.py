@@ -462,6 +462,44 @@ class SelectorTests(unittest.TestCase):
         )
         self.assertEqual(result["agents"]["primary"], ['vendor-register-steward'])
 
+    def test_selects_knowledge_store_steward_for_recorded_findings_and_learnings(self) -> None:
+        result = plan(
+            task=(
+                "Record findings, learnings, decisions, lessons learned, and "
+                "operational knowledge from the latest review into the agent knowledge base"
+            ),
+            changed_files=[],
+            classification="internal",
+        )
+        self.assertEqual(result["agents"]["primary"], ["knowledge-store-steward"])
+        self.assertIn("security-reviewer", result["agents"]["reviewers"])
+        self.assertIn("compliance-reviewer", result["agents"]["reviewers"])
+        reasons = {match["id"]: match["reasons"] for match in result["matched_routes"]}
+        self.assertEqual(
+            reasons["knowledge-store"]["keyword_groups"],
+            [
+                ["record"],
+                [
+                    "findings",
+                    "learnings",
+                    "lessons learned",
+                    "decisions",
+                    "operational knowledge",
+                    "agent knowledge",
+                    "knowledge base",
+                ],
+            ],
+        )
+
+    def test_record_this_decision_stays_on_decision_record_route(self) -> None:
+        result = plan(
+            task="Record this decision",
+            changed_files=[],
+            classification="internal",
+        )
+        self.assertEqual(result["agents"]["primary"], ["decision-record"])
+        self.assertEqual([match["id"] for match in result["matched_routes"]], ["decision-record-capture"])
+
     def test_selects_retention_and_deletion_executor_for_obligation(self) -> None:
         result = plan(
             task="Execute the retention and deletion obligation for this data",
