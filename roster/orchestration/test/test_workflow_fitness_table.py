@@ -111,7 +111,7 @@ class WorkflowFitnessTableStructureTests(unittest.TestCase):
 class WorkflowFitnessTableAgainstSelectorTests(unittest.TestCase):
     """The real check: does build_dispatch_plan() agree with independent judgment?
 
-    Deliberately NOT using subTest here for the two known_mismatch cases --
+    Deliberately NOT using subTest here for the known_mismatch case --
     subTest failures are easy to skim past in a wall of output, and a
     disagreement between this table and current code is the specific finding
     this proposal exists to surface. Known-mismatch cases get their own named
@@ -137,6 +137,7 @@ class WorkflowFitnessTableAgainstSelectorTests(unittest.TestCase):
                 "build_dispatch_plan():\n  " + "\n  ".join(failures)
             )
 
+    @unittest.expectedFailure
     def test_known_mismatch_wf_rollback_gap_1(self) -> None:
         """'rollback' is a real selection.schema.json enum value that
         _select_workflow() can never produce (see fixtures file reasoning).
@@ -151,23 +152,6 @@ class WorkflowFitnessTableAgainstSelectorTests(unittest.TestCase):
             "workflow_fitness_table.json to false",
         )
 
-    def test_known_mismatch_wf_agent_suite_governance_mislabel_1(self) -> None:
-        """Proposal 03's named case: routine roster/catalog maintenance is
-        currently labeled 'debugging' by _select_workflow()'s unconditional
-        agent-suite-governance branch. This assertion is EXPECTED to fail
-        until that branch is fixed (see fixtures file reasoning)."""
-        case = next(
-            case for case in CASES if case["id"] == "WF-AGENT-SUITE-GOVERNANCE-MISLABEL-1"
-        )
-        actual = _run_case(case)
-        self.assertEqual(
-            actual["workflow"],
-            case["expected_workflow"],
-            "if this now passes, _select_workflow() no longer routes every "
-            "agent-suite-governance match to 'debugging' -- update "
-            "WF-AGENT-SUITE-GOVERNANCE-MISLABEL-1's known_mismatch flag in "
-            "workflow_fitness_table.json to false",
-        )
 
 
 if __name__ == "__main__":

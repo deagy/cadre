@@ -41,7 +41,9 @@
       "id": "WF-NEW-SERVICE-1",
       "description": "backend-only build route -> new-service",
       "task": "Implement a backend API for user upload",
-      "changed_files": ["services/upload/main.go"],
+      "changed_files": [
+        "services/upload/main.go"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-NEW-SERVICE-1",
       "expected_workflow": "new-service",
@@ -51,7 +53,9 @@
       "id": "WF-NEW-SERVICE-ARCHITECTURE-RISK-1",
       "description": "architecture-change risk with no build-shaped route -> new-service",
       "task": "Design the architecture and system design proposal",
-      "changed_files": ["architecture/design.yaml"],
+      "changed_files": [
+        "architecture/design.yaml"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-NEW-SERVICE-2",
       "expected_workflow": "new-service",
@@ -61,7 +65,9 @@
       "id": "WF-PRODUCT-INTAKE-1",
       "description": "product-intent route only -> product-intake",
       "task": "Capture the product intent for the new mission objective",
-      "changed_files": ["product/intent/scope.yaml"],
+      "changed_files": [
+        "product/intent/scope.yaml"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-PRODUCT-INTAKE-1",
       "expected_workflow": "product-intake",
@@ -71,7 +77,9 @@
       "id": "WF-PRODUCT-INTAKE-2",
       "description": "requirements-baseline route only -> product-intake",
       "task": "Perform requirements decomposition and requirements traceability",
-      "changed_files": ["product/requirements/baseline.yaml"],
+      "changed_files": [
+        "product/requirements/baseline.yaml"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-PRODUCT-INTAKE-2",
       "expected_workflow": "product-intake",
@@ -81,7 +89,9 @@
       "id": "WF-RUNTIME-ASSURANCE-1",
       "description": "runtime-assurance route only -> runtime-assurance",
       "task": "Observe production runtime conformance for deployed behavior",
-      "changed_files": ["runtime-assurance/notes.yaml"],
+      "changed_files": [
+        "runtime-assurance/notes.yaml"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-RUNTIME-ASSURANCE-1",
       "expected_workflow": "runtime-assurance",
@@ -91,7 +101,9 @@
       "id": "WF-DEBUGGING-1",
       "description": "backend+testing+debugging routes, explicit defect investigation -> debugging",
       "task": "Debug a panic and identify the root cause from the stack trace",
-      "changed_files": ["services/internal/repository/regression/panic_test.go"],
+      "changed_files": [
+        "services/internal/repository/regression/panic_test.go"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-DEBUGGING-1",
       "expected_workflow": "debugging",
@@ -101,7 +113,9 @@
       "id": "WF-INFRASTRUCTURE-CHANGE-1",
       "description": "infrastructure route only -> infrastructure-change",
       "task": "Update Terraform for a Proxmox worker VM",
-      "changed_files": ["terraform/modules/worker/main.tf"],
+      "changed_files": [
+        "terraform/modules/worker/main.tf"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-INFRASTRUCTURE-CHANGE-1",
       "expected_workflow": "infrastructure-change",
@@ -112,7 +126,9 @@
       "id": "WF-PIPELINE-CHANGE-1",
       "description": "pipeline route only -> pipeline-change",
       "task": "Change the GitLab pipeline runner configuration",
-      "changed_files": [".gitlab-ci.yml"],
+      "changed_files": [
+        ".gitlab-ci.yml"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-PIPELINE-CHANGE-1",
       "expected_workflow": "pipeline-change",
@@ -122,7 +138,9 @@
       "id": "WF-KNOWLEDGE-INGESTION-1",
       "description": "knowledge-store route only -> knowledge-ingestion",
       "task": "Tune the knowledge store retrieval and embedding vector search",
-      "changed_files": ["roster/knowledge-store/notes.yaml"],
+      "changed_files": [
+        "roster/knowledge-store/notes.yaml"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-KNOWLEDGE-INGESTION-1",
       "expected_workflow": "knowledge-ingestion",
@@ -132,7 +150,9 @@
       "id": "WF-SUPPORT-ESCALATION-1",
       "description": "support route only -> support-escalation",
       "task": "Provide user report triage and a workaround for a customer issue",
-      "changed_files": ["support/ticket-123.yaml"],
+      "changed_files": [
+        "support/ticket-123.yaml"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-SUPPORT-ESCALATION-1",
       "expected_workflow": "support-escalation",
@@ -142,7 +162,9 @@
       "id": "WF-SUPPORT-ESCALATION-INCIDENT-1",
       "description": "incident-response route, task mentions 'rollback' but the action described is coordination/escalation, not execution -> support-escalation, NOT rollback",
       "task": "Coordinate rollback during a sev1 major incident postmortem",
-      "changed_files": ["postmortems/2026-07-28.yaml"],
+      "changed_files": [
+        "postmortems/2026-07-28.yaml"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-SUPPORT-ESCALATION-2",
       "expected_workflow": "support-escalation",
@@ -152,7 +174,9 @@
       "id": "WF-PRODUCTION-RELEASE-1",
       "description": "infrastructure route + production risk -> production-release",
       "task": "Deploy to production with Terraform",
-      "changed_files": ["terraform/service/main.tf"],
+      "changed_files": [
+        "terraform/service/main.tf"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-PRODUCTION-RELEASE-1",
       "expected_workflow": "production-release",
@@ -162,7 +186,9 @@
       "id": "WF-ROLLBACK-GAP-1",
       "description": "KNOWN MISMATCH: an explicit rollback-execution task; 'rollback' is a real enum value in selection.schema.json but _select_workflow() has no branch that can ever return it",
       "task": "Roll back the production release to the last known-good artifact after failed verification",
-      "changed_files": ["terraform/service/main.tf"],
+      "changed_files": [
+        "terraform/service/main.tf"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-ROLLBACK-GAP-1",
       "expected_workflow": "rollback",
@@ -173,7 +199,9 @@
       "id": "WF-UNCLASSIFIED-1",
       "description": "governance-planning route only, no recognized shape -> unclassified",
       "task": "Assess governance impact and data jurisdiction",
-      "changed_files": ["governance/impact/notes.yaml"],
+      "changed_files": [
+        "governance/impact/notes.yaml"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-UNCLASSIFIED-1",
       "expected_workflow": "unclassified",
@@ -183,28 +211,35 @@
       "id": "WF-NEEDS-TRIAGE-1",
       "description": "no route/risk match -> needs-triage",
       "task": "Investigate an unexplained issue",
-      "changed_files": ["unknown/file.xyz"],
+      "changed_files": [
+        "unknown/file.xyz"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-NEEDS-TRIAGE-1",
       "expected_workflow": "needs-triage",
       "reasoning": "AGENTS.md/RUNBOOK.md: 'If no rule matches a task, the selector returns needs-triage rather than guessing.' Trivial by construction: no selected agents means _select_workflow()'s first check (`if not has_agents: return \"needs-triage\"`) is the only defensible answer. Task/files reused verbatim from selection_golden_corpus.json's NEEDS-TRIAGE-1."
     },
     {
-      "id": "WF-AGENT-SUITE-GOVERNANCE-MISLABEL-1",
-      "description": "KNOWN MISMATCH: the review's named case -- routine roster/catalog maintenance, no defect present, currently labeled 'debugging'",
+      "id": "WF-AGENT-SUITE-MAINTENANCE-1",
+      "description": "routine roster/catalog maintenance with no defect present -- the review's named case, fixed by PR #154's agent-suite-maintenance workflow",
       "task": "add a new specialist role to the roster",
-      "changed_files": ["roster/catalog.yaml", "roster/planning/new-role/AGENT.md"],
+      "changed_files": [
+        "roster/catalog.yaml",
+        "roster/planning/new-role/AGENT.md"
+      ],
       "classification": "internal",
-      "task_id": "FITNESS-AGENT-SUITE-GOV-1",
-      "expected_workflow": "unclassified",
-      "known_mismatch": true,
-      "reasoning": "routing.yaml's agent-suite-governance route spans several intrinsically different kinds of work under one route id: adding a role (build/maintenance), packaging the provider (build/maintenance, see selection_golden_corpus.json's AGENT-SUITE-GOVERNANCE-1), fixing a routing bug (an actual defect), or auditing repo structure (governance review). Adding a new role has no defect to reproduce, so debugging.md's reproduce/root-cause/fix shape does not describe it. None of the other recognized shapes fit routine roster maintenance either (it is not a service being designed/delivered end-to-end per new-service.md's G1-G10 chain, not pre-architecture intent capture, not an infra/pipeline/production/rollback/support/knowledge-ingestion/runtime-assurance task). Per unclassified.md's own definition this is the correct current-enum label. But build_dispatch_plan.py's _select_workflow() (roster/orchestration/src/build_dispatch_plan.py, lines ~131-132) returns 'debugging' unconditionally for every agent-suite-governance route match, with no check for whether the task is actually a defect fix -- so this fixture, and the existing golden-corpus fixture AGENT-SUITE-GOVERNANCE-1, are both mislabeled today. A dedicated 'agent-suite-maintenance' workflow value would describe roster/catalog upkeep more precisely than 'unclassified', but adding that value is Proposal 08's scope, not this proposal's -- this row intentionally stays inside the existing closed enum and lets 'unclassified' stand as the best available answer until that follow-up lands."
+      "task_id": "FITNESS-AGENT-SUITE-MAINTENANCE-1",
+      "expected_workflow": "agent-suite-maintenance",
+      "reasoning": "agent-suite-maintenance.md covers maintenance of this repository's own role catalog, routing rules, and orchestration tooling -- work where the roster machinery is the subject, not the tool. Adding a role is exactly that. Before #154 this returned 'debugging', because _select_workflow() mapped every agent-suite-governance match there unconditionally; that branch now distinguishes a keyword-driven debugging hit from a path-only roster edit, so a routine catalog change no longer reads as defect investigation."
     },
     {
       "id": "WF-NEW-SERVICE-CROSS-STACK-1",
       "description": "two build-shaped routes (frontend+backend) -> new-service",
       "task": "Add a React upload form backed by a PostgreSQL API",
-      "changed_files": ["frontend/src/Upload.tsx", "services/upload/main.go"],
+      "changed_files": [
+        "frontend/src/Upload.tsx",
+        "services/upload/main.go"
+      ],
       "classification": "internal",
       "task_id": "FITNESS-NEW-SERVICE-3",
       "expected_workflow": "new-service",

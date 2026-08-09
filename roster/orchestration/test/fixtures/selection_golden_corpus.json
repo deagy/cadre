@@ -237,7 +237,7 @@
         "matched_routes": [
           "agent-suite-governance"
         ],
-        "workflow": "unclassified"
+        "workflow": "agent-suite-maintenance"
       }
     },
     {
@@ -602,7 +602,7 @@
         "matched_routes": [
           "orchestration"
         ],
-        "workflow": "unclassified"
+        "workflow": "agent-suite-maintenance"
       }
     },
     {
@@ -1675,7 +1675,8 @@
           "agent-suite-governance",
           "debugging",
           "documentation"
-        ]
+        ],
+        "workflow": "agent-suite-maintenance"
       }
     },
     {
@@ -1703,7 +1704,8 @@
           "agent-suite-governance",
           "debugging",
           "documentation"
-        ]
+        ],
+        "workflow": "agent-suite-maintenance"
       }
     },
     {
@@ -1728,7 +1730,8 @@
         "matched_routes": [
           "documentation",
           "architecture-design"
-        ]
+        ],
+        "workflow": "new-service"
       }
     }
   ]
