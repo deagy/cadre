@@ -26,12 +26,26 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from glob_containment import CONTAINED, NOT_CONTAINED, UNDETERMINED, contains  # noqa: E402
-from routing import glob_to_regex  # noqa: E402
+from routing import (  # noqa: E402
+    GLOB_DOUBLESTAR,
+    GLOB_DOUBLESTAR_SLASH,
+    GLOB_LITERAL,
+    GLOB_QUESTION,
+    GLOB_STAR,
+    glob_to_regex,
+    iter_glob_tokens,
+)
 
-# Deliberately tiny: `/` for structure, `.` because extensions are where the
-# dialect's `*` behaviour is most easily got wrong, and two ordinary letters.
-_ORACLE_ALPHABET = "ab/."
-_ORACLE_MAX_LENGTH = 6
+# `/` for structure; `.` because extensions are where `*` behaviour is most
+# easily got wrong; `a`/`b` as ordinary literals; `z` appears in no pattern,
+# so it exercises the abstract alphabet's "every other character" sentinel
+# deliberately rather than by luck; and `\n`, because the matcher treats it
+# inconsistently -- `**` compiles to `.` which excludes it, while `*`/`?`
+# compile to `[^/]` which includes it. Omitting `\n` here is what let that
+# divergence ship: the engine modelled `**` as consuming it and reported
+# `contains("foo/*", ["foo/**"])` as CONTAINED.
+_ORACLE_ALPHABET = "ab/.z\n"
+_ORACLE_MAX_LENGTH = 5
 
 _PATTERNS = [
     "*", "**", "?", "a", "b", "a/b", "**/a", "a/**", "*.a", "**/*.a", "a/*/b",
@@ -91,6 +105,64 @@ class DifferentialAgainstBruteForceTests(unittest.TestCase):
         """
         self.assertFalse(glob_to_regex("**/a").search(".a"))
         self.assertEqual(NOT_CONTAINED, contains("**/*.a", ["**/a"]))
+
+
+    def test_the_newline_asymmetry_between_doublestar_and_star(self) -> None:
+        """`**` compiles to `.`, which excludes `\\n`; `*` compiles to `[^/]`,
+        which includes it. Modelling `**` as consuming everything made
+        `contains("foo/*", ["foo/**"])` wrongly CONTAINED -- a false
+        accusation, since `foo/a\\nb` matches the include and not the exclude.
+        """
+        self.assertTrue(glob_to_regex("foo/*").search("foo/a\nb"))
+        self.assertFalse(glob_to_regex("foo/**").search("foo/a\nb"))
+        self.assertEqual(NOT_CONTAINED, contains("foo/*", ["foo/**"]))
+        self.assertEqual(NOT_CONTAINED, contains("??", ["**"]))
+
+    def test_the_trailing_newline_anchor_quirk(self) -> None:
+        """`glob_to_regex` anchors with `$`, which also matches before a
+        single trailing newline, so `a` really does match `"a\\n"`. Modelling
+        acceptance as the final state alone would make the include's language
+        smaller than the matcher's -- again the false-accusation direction.
+        """
+        self.assertTrue(glob_to_regex("a").search("a\n"))
+        self.assertFalse(glob_to_regex("a").search("a\n\n"))
+        self.assertEqual(NOT_CONTAINED, contains("a", ["a\n"]))
+
+
+class GlobTokenizerTests(unittest.TestCase):
+    """`iter_glob_tokens` is the single traversal of the dialect, shared by
+    `glob_to_regex` (every route and risk rule matches through it) and the
+    containment NFA. A tokenizer regression moves both together, so the
+    differential oracle cannot see it -- these are its direct pin.
+    """
+
+    def test_token_sequences(self) -> None:
+        cases = {
+            "*": [(GLOB_STAR, "*")],
+            "**": [(GLOB_DOUBLESTAR, "**")],
+            "***": [(GLOB_DOUBLESTAR, "**"), (GLOB_STAR, "*")],
+            "**/": [(GLOB_DOUBLESTAR_SLASH, "**/")],
+            "?": [(GLOB_QUESTION, "?")],
+            "a**b": [(GLOB_LITERAL, "a"), (GLOB_DOUBLESTAR, "**"), (GLOB_LITERAL, "b")],
+            "**/a": [(GLOB_DOUBLESTAR_SLASH, "**/"), (GLOB_LITERAL, "a")],
+            "a/*": [(GLOB_LITERAL, "a"), (GLOB_LITERAL, "/"), (GLOB_STAR, "*")],
+            "a\\b": [(GLOB_LITERAL, "a"), (GLOB_LITERAL, "/"), (GLOB_LITERAL, "b")],
+            "": [],
+        }
+        for pattern, expected in cases.items():
+            with self.subTest(pattern=pattern):
+                self.assertEqual(expected, list(iter_glob_tokens(pattern)))
+
+    def test_compiled_expressions_are_unchanged(self) -> None:
+        expected = {
+            "**/architecture/**": r"^(?:.*/)?architecture/.*$",
+            "docs/**": r"^docs/.*$",
+            "*": r"^[^/]*$",
+            "a?b": r"^a[^/]b$",
+        }
+        for pattern, regex in expected.items():
+            with self.subTest(pattern=pattern):
+                self.assertEqual(regex, glob_to_regex(pattern).pattern)
 
 
 class ContainmentVerdictTests(unittest.TestCase):

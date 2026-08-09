@@ -21,10 +21,20 @@ This module replaces that guess with a decision procedure.
 
 **Method.** Each glob becomes an NFA over a finite *abstract* alphabet: the
 distinct literal characters appearing in the globs under comparison, plus
-`/`, plus one sentinel standing for every other character. That abstraction
-is exact rather than approximate, because the dialect only ever tests a
-character for being a specific literal, for being `/`, or for being anything
--- it can never distinguish two characters that appear in no pattern. The
+`/`, plus one sentinel standing for every other character, plus `\n`. That
+abstraction is exact rather than approximate, because the dialect only ever
+tests a character for being a specific literal, for being `/`, or for being
+anything -- it can never distinguish two characters that appear in no
+pattern. `\n` earns its own symbol because the matcher is inconsistent about
+it: `**` compiles to `.`, which excludes `\n` without `re.DOTALL`, while
+`*`/`?` compile to `[^/]`, which includes it.
+
+The one caveat is case folding: literals are folded with `str.lower()`, which
+agrees with `re.IGNORECASE` across ASCII but not across all of Unicode (`ſ`
+matches `s` under `IGNORECASE` while `"ſ".lower()` is unchanged; `K` matches
+`k` but is not a pattern literal). Every such divergence keeps characters
+*apart* that the matcher would merge, which can only cost a missed finding --
+never a false one -- and no routing pattern is non-ASCII. The
 answer is then computed by searching the product of the include NFA with the
 determinized union of the exclude NFAs for a reachable state that accepts the
 include and no exclude. Such a state is a witness path: proof the glob is
@@ -55,9 +65,18 @@ UNDETERMINED = "undetermined"
 
 # The sentinel standing for "any character that appears in no pattern under
 # comparison". One is sufficient: the dialect cannot tell two such characters
-# apart, so a language that contains one contains them all.
-_OTHER = "\0"
+# apart, so a language that contains one contains them all. Abstract symbols
+# are opaque tokens rather than characters, so this is deliberately a string
+# no single-character pattern literal can ever equal.
+_OTHER = "\0other"
 _SEPARATOR = "/"
+# `\n` needs its own symbol because the matcher treats it inconsistently:
+# `glob_to_regex` compiles `**` to `.` (which excludes `\n` without
+# re.DOTALL) but `*`/`?` to `[^/]` (which includes it). Folding `\n` into
+# _OTHER would model `**` as consuming it, making `contains("foo/*",
+# ["foo/**"])` wrongly CONTAINED -- a false accusation, since `foo/a\nb`
+# really does match the include and not the exclude.
+_NEWLINE = "\n"
 
 # Bound on explored product states. Reaching it yields UNDETERMINED rather
 # than a verdict. routing.yaml's real patterns explore a few dozen.
@@ -72,7 +91,7 @@ class _Nfa:
     the single accepting state.
     """
 
-    __slots__ = ("accept", "epsilon", "loops", "moves", "_next")
+    __slots__ = ("accept", "accepting", "epsilon", "loops", "moves", "_next")
 
     def __init__(self, pattern: str) -> None:
         # moves[state] -> list of (predicate_kind, literal_or_None, target)
@@ -111,6 +130,14 @@ class _Nfa:
                 self.moves.setdefault(consumed, []).append((GLOB_LITERAL, _SEPARATOR, target))
             state = target
         self.accept = state
+        # `glob_to_regex` anchors with `$`, not `\Z`, and `$` also matches
+        # immediately before a single trailing newline -- so `glob_to_regex("a")`
+        # really does match `"a\n"`. Modelling acceptance as the final state
+        # alone would make the include's language smaller than the matcher's,
+        # which is again the false-accusation direction.
+        trailing_newline = self._allocate()
+        self.moves.setdefault(state, []).append((GLOB_LITERAL, _NEWLINE, trailing_newline))
+        self.accepting = frozenset({state, trailing_newline})
 
     def _allocate(self) -> int:
         state = self._next
@@ -132,7 +159,12 @@ class _Nfa:
         nxt: set[int] = set()
         for state in states:
             loop = self.loops.get(state)
-            if loop == GLOB_DOUBLESTAR or (loop == GLOB_STAR and symbol != _SEPARATOR):
+            # `**` compiles to `.`, which excludes `\n`; `*` compiles to
+            # `[^/]`, which includes it. The asymmetry is the matcher's, and
+            # modelling it is what makes this decision exact.
+            if loop == GLOB_DOUBLESTAR and symbol != _NEWLINE:
+                nxt.add(state)
+            elif loop == GLOB_STAR and symbol != _SEPARATOR:
                 nxt.add(state)
             for kind, literal, target in self.moves.get(state, ()):
                 if kind == GLOB_LITERAL and symbol == literal:
@@ -144,7 +176,7 @@ class _Nfa:
 
 def _alphabet(patterns: Iterable[str]) -> list[str]:
     """The finite abstract alphabet sufficient to decide these patterns."""
-    symbols = {_SEPARATOR, _OTHER}
+    symbols = {_SEPARATOR, _OTHER, _NEWLINE}
     for pattern in patterns:
         for kind, text in iter_glob_tokens(pattern):
             if kind == GLOB_LITERAL:
@@ -174,8 +206,8 @@ def contains(include: str, excludes: Iterable[str]) -> str:
         if len(seen) > _MAX_PRODUCT_STATES:
             return UNDETERMINED
         include_states, exclude_states = pending.popleft()
-        if include_nfa.accept in include_states and not any(
-            nfa.accept in states for nfa, states in zip(exclude_nfas, exclude_states)
+        if (include_nfa.accepting & include_states) and not any(
+            nfa.accepting & states for nfa, states in zip(exclude_nfas, exclude_states)
         ):
             # A path matched by the include and by no exclude: proof of life.
             return NOT_CONTAINED
