@@ -27,11 +27,11 @@ repos:
         files: "roster/catalog\\.yaml$|roster/orchestration/routing\\.yaml$"
 
       - id: catalog-health
-        name: Check catalog health (orphan/dangling references)
+        name: Check catalog health (orphan/dangling refs, shadowed globs)
         entry: python3 roster/orchestration/src/routing_health.py --check
         language: python
         pass_filenames: false
-        files: "roster/catalog\\.yaml$"
+        files: "roster/catalog\\.yaml$|roster/orchestration/routing\\.yaml$"
 
       - id: generate-role-metadata-check
         name: Verify generated role metadata is in sync
