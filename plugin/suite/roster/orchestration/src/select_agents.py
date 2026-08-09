@@ -26,6 +26,7 @@ if str(_SHARED_SRC_DIR) not in sys.path:
     sys.path.append(str(_SHARED_SRC_DIR))
 
 from build_dispatch_plan import build_dispatch_plan  # noqa: E402
+from route_near_miss import find_near_misses, format_near_misses_text  # noqa: E402
 from routing import load_catalog, load_routing  # noqa: E402
 from selection_telemetry import (  # noqa: E402
     include_task_enabled,
@@ -79,6 +80,16 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--telemetry-path",
         help="Override the telemetry JSON-lines file path (default: CADRE_SELECTION_TELEMETRY_PATH or <root>/.agents/orchestration/selection-telemetry.jsonl)",
+    )
+    parser.add_argument(
+        "--explain",
+        action="store_true",
+        help=(
+            "Additionally print, to stderr, near-miss reasoning for routes that did NOT "
+            "match this task (see route_near_miss.py). Diagnostic only: never alters the "
+            "JSON plan on stdout/--output, and never adds a numeric score or ranking -- "
+            "off by default"
+        ),
     )
     return parser
 
@@ -224,6 +235,15 @@ def main(argv: list[str] | None = None) -> int:
         output_path.write_bytes(serialized.encode("utf-8"))
     else:
         sys.stdout.buffer.write(serialized.encode("utf-8"))
+    if options.explain:
+        # Printed to stderr, after the machine-readable plan, and derived
+        # only from data the plan already exposes (matched_routes' ids) plus
+        # a fresh read of routing.yaml -- this never touches `plan` or
+        # `serialized`, so the JSON plan is byte-identical with and without
+        # --explain.
+        matched_route_ids = {match["id"] for match in plan["matched_routes"]}
+        near_misses = find_near_misses(config, options.task, matched_route_ids)
+        sys.stderr.write(format_near_misses_text(near_misses))
     return 0
 
 

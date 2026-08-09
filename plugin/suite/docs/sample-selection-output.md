@@ -451,3 +451,62 @@ The selector only produces this plan. It does not execute agents, retrieve
 knowledge, approve gates, deploy, mutate infrastructure, merge, or push
 changes — see the [orchestration guide](orchestration.md) for what happens
 next with a plan like this.
+
+## Diagnosing near-misses with `--explain`
+
+`matched_routes[].reasons` (above) answers "why did this route match?" It
+cannot answer the opposite question — "why did *this* route not match, and
+how close did it come?" — which matters most at task-authoring time, when a
+route you expected didn't fire. `cadre select --explain` answers that,
+printed to **stderr**, separate from the JSON plan on stdout:
+
+```sh
+cadre select --task "improve cross-runner UX documentation" --explain
+```
+
+```
+--explain: no near-miss routes for this task -- no unmatched route had a
+partially satisfied keyword_groups entry (see route_near_miss.py's relevance
+threshold; most routes in the current routing.yaml use plain keywords/paths,
+which have no partial-match state to report).
+```
+
+That "no near misses" answer is correct and expected here: `pipeline` did
+match this task (on the `runner` keyword — see `matched_routes` above), and
+as of this writing no route in `routing.yaml` declares a `keyword_groups`
+entry (only `risk_rules` do), so there is currently nothing conjunctive for
+any route to be *partially* close on. When a route does define
+`keyword_groups`, an unmatched near-miss looks like this (shown here against
+a synthetic route, since none of today's routes have one to demonstrate
+against):
+
+```
+--explain: near-miss routes (did not match, but came close)
+
+production-runbook-change:
+  keyword_groups[1]: matched 1 of 3 required keywords (production); missing: prod, live environment
+  keyword_groups[2]: matched 1 of 3 required keywords (runbook); missing: deployment, rollout
+```
+
+**Relevance threshold.** A route is only surfaced when at least one of its
+`keyword_groups` entries is *partially* satisfied — some but not all of a
+conjunctive (AND) group's keywords present in the task text. Plain
+`keywords` and `paths` are disjunctive (OR) triggers: `match_rule()`
+(`roster/orchestration/src/routing.py`) already matches a route the moment
+any one of them fires, so an *unmatched* route's plain-keyword/path overlap
+is always exactly zero — there is no partial state to report, and printing
+"0 of N keywords matched" for every one of the dozens of unmatched routes on
+every call would be noise, not signal. Routes below this threshold are
+omitted from the output entirely, not listed with an empty reasoning block.
+
+**Diagnostic only, and purely descriptive.** `--explain` never changes the
+JSON plan on stdout or `--output` — run the same command with and without
+the flag and the plan (aside from `generated_at`) is identical; the schema
+(`selection.schema.json`) and `schema_version` are untouched by this
+feature. The output also never carries a numeric score, percentage,
+confidence value, or cross-route ranking, under any field name: it states
+which literal keywords are present or absent per group and nothing more,
+preserving this repository's deterministic-selection invariant (selection is
+a fixed rule match, never agent judgment) end to end. See
+[`roster/orchestration/src/route_near_miss.py`](../roster/orchestration/src/route_near_miss.py)
+for the full mechanism and its tests.
