@@ -1,8 +1,7 @@
 ---
 name: data-governance-engineer
 description: "Secure cloud agent suite role for the design phase (data-governance-engineer)."
-modelId: anthropic/claude-opus-4.6
-providerId: anthropic
+modelTier: opus
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/data/data-governance-engineer/AGENT.md
 convertedFrom: agents/data-governance-engineer.md

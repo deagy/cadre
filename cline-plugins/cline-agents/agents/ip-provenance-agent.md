@@ -1,8 +1,7 @@
 ---
 name: ip-provenance-agent
 description: "Secure cloud agent suite role for the evidence phase (ip-provenance-agent)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/documentation/ip-provenance-agent/AGENT.md
 convertedFrom: agents/ip-provenance-agent.md

@@ -1,8 +1,7 @@
 ---
 name: accessibility-reviewer
 description: "Secure cloud agent suite role for the review phase (accessibility-reviewer)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/accessibility-reviewer/AGENT.md
 convertedFrom: agents/accessibility-reviewer.md

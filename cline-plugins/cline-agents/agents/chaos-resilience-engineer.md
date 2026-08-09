@@ -1,8 +1,7 @@
 ---
 name: chaos-resilience-engineer
 description: "Secure cloud agent suite role for the verify phase (chaos-resilience-engineer)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/chaos-resilience-engineer/AGENT.md
 convertedFrom: agents/chaos-resilience-engineer.md

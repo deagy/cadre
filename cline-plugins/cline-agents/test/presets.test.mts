@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -101,6 +101,31 @@ function findTool(tools: AgentTool[], name: string): AgentTool {
 
 const FAKE_TOOL_CTX = {} as AgentToolContext;
 
+// Every config ClineCore.start was called with, module-scoped because the
+// mocked core is cached for the whole file (see the seeding comment below) and
+// the dispatch_selected_roles block needs to assert on it too.
+const startConfigs: Array<Record<string, unknown>> = [];
+
+// Presets ship no provider (issue #142); these stand in for the operator
+// configuration the dispatch path resolves against. File-scoped rather than
+// inside one describe: the start_subagent and dispatch_selected_roles blocks
+// both need them, and a describe-scoped afterAll would tear them down before
+// the later block ran. Cleared at file end because they are process-wide --
+// a leaked provider would mask a fail-closed regression elsewhere.
+beforeAll(() => {
+  process.env.CLINE_AGENTS_PROVIDER_ID = "test-provider";
+  process.env.CLINE_AGENTS_MODEL_OPUS = "test/opus-model";
+  process.env.CLINE_AGENTS_MODEL_SONNET = "test/sonnet-model";
+  process.env.CLINE_AGENTS_MODEL_HAIKU = "test/haiku-model";
+});
+
+afterAll(() => {
+  delete process.env.CLINE_AGENTS_PROVIDER_ID;
+  delete process.env.CLINE_AGENTS_MODEL_OPUS;
+  delete process.env.CLINE_AGENTS_MODEL_SONNET;
+  delete process.env.CLINE_AGENTS_MODEL_HAIKU;
+});
+
 describe("cline-agents plugin manifest", () => {
   it("declares the tools and rules capabilities and registers the expected tool surface", async () => {
     expect(plugin.manifest.capabilities).toEqual(["tools", "rules"]);
@@ -145,13 +170,45 @@ describe("preset discovery", () => {
     expect(names.size).toBe(SOURCE_ROLE_COUNT);
   });
 
-  it("gives every bundled preset a non-empty name/description/modelId/providerId", () => {
+  it("gives every bundled preset a name, description, and capability tier -- and no vendor identity", () => {
+    // This previously asserted every preset was Anthropic, which pinned the
+    // defect in issue #142 rather than testing anything. A preset carries the
+    // capability tier (this suite's own domain knowledge); which provider and
+    // concrete model serve that tier is operator configuration, resolved at
+    // dispatch time.
     const defs = readAgentDefinitions(REPO_ROOT).filter((d) => d.source === "bundled");
     for (const d of defs) {
       expect(d.name, `${d.name} name`).toBeTruthy();
       expect(d.description, `${d.name} description`).toBeTruthy();
-      expect(d.modelId, `${d.name} modelId`).toBeTruthy();
-      expect(d.providerId, `${d.name} providerId`).toBe("anthropic");
+      expect(["opus", "sonnet", "haiku"], `${d.name} modelTier`).toContain(d.modelTier);
+      expect(d.providerId, `${d.name} must not carry a provider`).toBeUndefined();
+      expect(d.modelId, `${d.name} must not carry a vendor model id`).toBeUndefined();
+    }
+  });
+
+  it("carries the same tier the role catalog assigns, so the port cannot drift from it", () => {
+    // modelTier is a pass-through of roster/catalog.yaml's `model:`. Nothing
+    // in CI re-runs port_cline_agents.py against the committed presets (see
+    // issue #144), so this is currently the only thing tying the two
+    // together -- and a stale tier now silently reroutes a role to the
+    // wrong model rather than merely naming a stale model.
+    const catalogPath = join(REPO_ROOT, "..", "..", "roster", "catalog.yaml");
+    const catalog = readFileSync(catalogPath, "utf8");
+    const tierByRole = new Map<string, string>();
+    let currentRole: string | undefined;
+    for (const line of catalog.split("\n")) {
+      const roleMatch = /^ {2}([a-z0-9-]+):\s*$/.exec(line);
+      if (roleMatch) {
+        currentRole = roleMatch[1];
+        continue;
+      }
+      const modelMatch = /^ {4}model:\s*([a-z]+)\s*$/.exec(line);
+      if (modelMatch && currentRole) tierByRole.set(currentRole, modelMatch[1]);
+    }
+    expect(tierByRole.size).toBe(SOURCE_ROLE_COUNT);
+
+    for (const def of readAgentDefinitions(REPO_ROOT).filter((d) => d.source === "bundled")) {
+      expect(def.modelTier, `${def.name} tier vs catalog.yaml`).toBe(tierByRole.get(def.name));
     }
   });
 
@@ -577,12 +634,12 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
   // provider this suite must not depend on.
   let startedSessionIds: string[];
   let createSpy: ReturnType<typeof vi.spyOn>;
-
   beforeAll(() => {
     startedSessionIds = [];
     let counter = 0;
     const fakeCore = {
-      start: vi.fn().mockImplementation(async () => {
+      start: vi.fn().mockImplementation(async (args: { config?: Record<string, unknown> }) => {
+        if (args?.config) startConfigs.push(args.config);
         counter += 1;
         const sessionId = `fake-session-${counter}`;
         startedSessionIds.push(sessionId);
@@ -621,6 +678,259 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
     expect(result.label).toBe("test run");
     expect(result.preset).toBe("security-reviewer");
     expect(result.task).toBe("do the thing");
+  });
+
+  // ---- provider/model selection (issue #142) ----------------------------
+  // These assert on the config that would reach a provider, not on preset
+  // frontmatter -- the previous tests asserted every preset was Anthropic,
+  // which pinned the defect instead of testing behaviour.
+
+  it("resolves the configured provider and the preset's own tier, never a built-in vendor", async () => {
+    const tools = await registerTools(REPO_ROOT);
+    const tool = findTool(tools, "start_subagent");
+    const before = startConfigs.length;
+    await tool.execute({ label: "tiered", task: "t", preset: "security-reviewer" }, FAKE_TOOL_CTX);
+    const config = startConfigs[before];
+    expect(config.providerId).toBe("test-provider");
+    // security-reviewer is a sonnet-tier role, so it must resolve the sonnet
+    // model rather than whatever a single shared setting would give.
+    expect(config.modelId).toBe("test/sonnet-model");
+  });
+
+  it("lets an explicit per-call override beat the configured default", async () => {
+    const tools = await registerTools(REPO_ROOT);
+    const tool = findTool(tools, "start_subagent");
+    const before = startConfigs.length;
+    await tool.execute(
+      {
+        label: "override",
+        task: "t",
+        preset: "security-reviewer",
+        providerId: "other-provider",
+        modelId: "other/model",
+      },
+      FAKE_TOOL_CTX,
+    );
+    expect(startConfigs[before].providerId).toBe("other-provider");
+    expect(startConfigs[before].modelId).toBe("other/model");
+  });
+
+  it("fails closed with an actionable error when no provider is configured, starting no session", async () => {
+    const saved = process.env.CLINE_AGENTS_PROVIDER_ID;
+    delete process.env.CLINE_AGENTS_PROVIDER_ID;
+    try {
+      const tools = await registerTools(REPO_ROOT);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      await expect(
+        tool.execute({ label: "unconfigured", task: "t", preset: "security-reviewer" }, FAKE_TOOL_CTX),
+      ).rejects.toThrow(/no model provider is configured/i);
+      // The point of failing closed: nothing reached a provider.
+      expect(startConfigs.length).toBe(before);
+    } finally {
+      process.env.CLINE_AGENTS_PROVIDER_ID = saved;
+    }
+  });
+
+  it("fails closed naming the tier variable and the fallback when no model is configured", async () => {
+    // The provider-missing branch was covered; this is the branch this change
+    // actually invents -- per-tier model configuration -- and its message has
+    // to name both the tier-specific variable and the fallback, or the
+    // operator cannot tell which one to set.
+    const saved = {
+      sonnet: process.env.CLINE_AGENTS_MODEL_SONNET,
+      fallback: process.env.CLINE_AGENTS_MODEL_DEFAULT,
+    };
+    delete process.env.CLINE_AGENTS_MODEL_SONNET;
+    delete process.env.CLINE_AGENTS_MODEL_DEFAULT;
+    try {
+      const tools = await registerTools(REPO_ROOT);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      // security-reviewer is a sonnet-tier role.
+      await expect(
+        tool.execute({ label: "no-model", task: "t", preset: "security-reviewer" }, FAKE_TOOL_CTX),
+      ).rejects.toThrow(/CLINE_AGENTS_MODEL_SONNET.*CLINE_AGENTS_MODEL_DEFAULT/s);
+      expect(startConfigs.length).toBe(before);
+    } finally {
+      if (saved.sonnet !== undefined) process.env.CLINE_AGENTS_MODEL_SONNET = saved.sonnet;
+      if (saved.fallback !== undefined) process.env.CLINE_AGENTS_MODEL_DEFAULT = saved.fallback;
+    }
+  });
+
+  it("ignores a provider named by a project-tier preset, using the operator's configuration instead", async () => {
+    // A project preset arrives with a checked-out repository. Honouring its
+    // provider would let that repository redirect the dispatch, and the
+    // operator's credentials, to a vendor of its choosing -- the same defect
+    // as a shipped default, relocated.
+    const projectDir = mkdtempSync(join(tmpdir(), "cline-project-provider-"));
+    mkdirSync(join(projectDir, ".cline", "agents"), { recursive: true });
+    writeFileSync(
+      join(projectDir, ".cline", "agents", "repo-supplied.md"),
+      [
+        "---",
+        "name: repo-supplied",
+        "description: ships its own vendor",
+        "providerId: repo-chosen-provider",
+        "modelId: repo-chosen/model",
+        "modelTier: sonnet",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const tools = await registerTools(projectDir);
+    const tool = findTool(tools, "start_subagent");
+    const before = startConfigs.length;
+    await tool.execute({ label: "repo", task: "t", preset: "repo-supplied" }, FAKE_TOOL_CTX);
+    // The operator's configuration wins on both axes; the repository's
+    // choices are ignored rather than merged.
+    expect(startConfigs[before].providerId).toBe("test-provider");
+    expect(startConfigs[before].modelId).toBe("test/sonnet-model");
+  });
+
+  it("warns when a global preset pins a provider that differs from the operator's configuration", async () => {
+    // The silent case this catches: a copy of a bundled preset made before
+    // provider selection moved to configuration keeps calling the old vendor
+    // while the operator believes they have switched.
+    // A *global* preset -- the operator's own agents directory, resolved from
+    // CLINE_DATA_DIR -- not a project preset, whose pinned vendor is ignored
+    // by design.
+    const dataDir = mkdtempSync(join(tmpdir(), "cline-pinned-provider-"));
+    const globalAgents = join(dataDir, "settings", "agents");
+    mkdirSync(globalAgents, { recursive: true });
+    process.env.CLINE_DATA_DIR = dataDir;
+    writeFileSync(
+      join(globalAgents, "pinned.md"),
+      [
+        "---",
+        "name: pinned",
+        "description: deliberately pinned",
+        "providerId: pinned-provider",
+        "modelId: pinned/model",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      errors.push(args.map(String).join(" "));
+    });
+    try {
+      const tools = await registerTools(REPO_ROOT);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      await tool.execute({ label: "pinned", task: "t", preset: "pinned" }, FAKE_TOOL_CTX);
+      // The pin still wins -- it is the operator's own file.
+      expect(startConfigs[before].providerId).toBe("pinned-provider");
+      expect(errors.join("\n")).toMatch(/pins providerId "pinned-provider".*CLINE_AGENTS_PROVIDER_ID/s);
+    } finally {
+      spy.mockRestore();
+      delete process.env.CLINE_DATA_DIR;
+    }
+  });
+
+  it("does not warn when a per-call override supplies the provider", async () => {
+    // An explicit override is the operator speaking on this call; the
+    // preset's own value never competes, so there is nothing to report.
+    // A *global* preset -- the operator's own agents directory, resolved from
+    // CLINE_DATA_DIR -- not a project preset, whose pinned vendor is ignored
+    // by design.
+    const dataDir = mkdtempSync(join(tmpdir(), "cline-pinned-quiet-"));
+    const globalAgents = join(dataDir, "settings", "agents");
+    mkdirSync(globalAgents, { recursive: true });
+    process.env.CLINE_DATA_DIR = dataDir;
+    writeFileSync(
+      join(globalAgents, "quiet.md"),
+      [
+        "---",
+        "name: quiet",
+        "description: pinned but overridden",
+        "providerId: pinned-provider",
+        "modelId: pinned/model",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      errors.push(args.map(String).join(" "));
+    });
+    try {
+      const tools = await registerTools(REPO_ROOT);
+      const tool = findTool(tools, "start_subagent");
+      await tool.execute(
+        { label: "quiet", task: "t", preset: "quiet", providerId: "call-provider", modelId: "call/model" },
+        FAKE_TOOL_CTX,
+      );
+      expect(errors.join("\n")).not.toMatch(/pins providerId/);
+    } finally {
+      spy.mockRestore();
+      delete process.env.CLINE_DATA_DIR;
+    }
+  });
+
+  it("treats an unrecognised modelTier as no tier rather than deriving an env var name from it", async () => {
+    // `modelTier: garbage` must not reach for CLINE_AGENTS_MODEL_GARBAGE and
+    // silently consume an unrelated variable that happens to share the name.
+    process.env.CLINE_AGENTS_MODEL_GARBAGE = "unintended/model";
+    process.env.CLINE_AGENTS_MODEL_DEFAULT = "generic/model";
+    const globalDir = mkdtempSync(join(tmpdir(), "cline-bad-tier-"));
+    mkdirSync(join(globalDir, ".cline", "agents"), { recursive: true });
+    writeFileSync(
+      join(globalDir, ".cline", "agents", "bad-tier.md"),
+      [
+        "---",
+        "name: bad-tier",
+        "description: typo'd tier",
+        "modelTier: garbage",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    try {
+      const tools = await registerTools(globalDir);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      await tool.execute({ label: "bad", task: "t", preset: "bad-tier" }, FAKE_TOOL_CTX);
+      // Falls through to CLINE_AGENTS_MODEL_DEFAULT / the generic path, never the
+      // variable derived from the bogus tier.
+      expect(startConfigs[before].modelId).toBe("generic/model");
+      expect(startConfigs[before].modelId).not.toBe("unintended/model");
+    } finally {
+      delete process.env.CLINE_AGENTS_MODEL_GARBAGE;
+      delete process.env.CLINE_AGENTS_MODEL_DEFAULT;
+    }
+  });
+
+  it("names the missing setting so the error is actionable, not just a refusal", async () => {
+    const saved = process.env.CLINE_AGENTS_PROVIDER_ID;
+    delete process.env.CLINE_AGENTS_PROVIDER_ID;
+    try {
+      const tools = await registerTools(REPO_ROOT);
+      const tool = findTool(tools, "start_subagent");
+      await expect(
+        tool.execute({ label: "unconfigured", task: "t", preset: "security-reviewer" }, FAKE_TOOL_CTX),
+      ).rejects.toThrow(/CLINE_AGENTS_PROVIDER_ID/);
+    } finally {
+      process.env.CLINE_AGENTS_PROVIDER_ID = saved;
+    }
   });
 
   it("get_subagent returns the tracked shape (status: running) for a session start_subagent just started", async () => {
@@ -702,6 +1012,63 @@ describe("dispatch_selected_roles", () => {
     expect(result.dispatched).toEqual([]);
     expect(result.note).toBeDefined();
     expect(result.plan.dispatch_disposition?.status).not.toBe("staffed");
+  });
+
+  it("actually starts subagents for a staffed plan, with the configured provider threaded through", async () => {
+    // The unstaffed case above deliberately never reaches
+    // startPresetSubagent, so it exercises none of the dispatch path. This
+    // one uses a task/files pair routing.yaml genuinely staffs, so the
+    // per-role dispatch loop runs against the mocked core seeded earlier in
+    // this file. It fails if that loop is short-circuited -- the assertion is
+    // on configs that reached ClineCore.start, not on the plan's shape.
+    const tools = await registerTools(REPO_ROOT);
+    const tool = findTool(tools, "dispatch_selected_roles");
+    const before = startConfigs.length;
+    const result = (await tool.execute(
+      {
+        task: "Update the backend upload service",
+        files: "services/upload/main.go",
+        taskId: "dispatch-selected-roles-test-staffed",
+        classification: "internal",
+      },
+      FAKE_TOOL_CTX,
+    )) as {
+      plan: { dispatch_disposition?: { status?: string } };
+      dispatched: Array<{ role: string; status: string }>;
+    };
+
+    expect(result.plan.dispatch_disposition?.status).toBe("staffed");
+    expect(result.dispatched.length).toBeGreaterThan(0);
+    expect(startConfigs.length).toBeGreaterThan(before);
+    for (const config of startConfigs.slice(before)) {
+      expect(config.providerId).toBe("test-provider");
+      // Resolved from each role's own tier, never a shipped vendor default.
+      expect(String(config.modelId)).toMatch(/^test\/(opus|sonnet|haiku)-model$/);
+    }
+  });
+
+  it("applies a per-call provider override to every role in a staffed fan-out", async () => {
+    const tools = await registerTools(REPO_ROOT);
+    const tool = findTool(tools, "dispatch_selected_roles");
+    const before = startConfigs.length;
+    await tool.execute(
+      {
+        task: "Update the backend upload service",
+        files: "services/upload/main.go",
+        taskId: "dispatch-selected-roles-test-override",
+        classification: "internal",
+        providerId: "fan-out-provider",
+        modelId: "fan-out/model",
+      },
+      FAKE_TOOL_CTX,
+    );
+
+    const configs = startConfigs.slice(before);
+    expect(configs.length).toBeGreaterThan(0);
+    for (const config of configs) {
+      expect(config.providerId).toBe("fan-out-provider");
+      expect(config.modelId).toBe("fan-out/model");
+    }
   });
 
   it("propagates a cadre select failure as a thrown error", async () => {

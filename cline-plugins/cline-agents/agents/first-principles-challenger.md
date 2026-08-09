@@ -1,8 +1,7 @@
 ---
 name: first-principles-challenger
 description: "Secure cloud agent suite role for the design phase (first-principles-challenger)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/architecture/first-principles-challenger/AGENT.md
 convertedFrom: agents/first-principles-challenger.md

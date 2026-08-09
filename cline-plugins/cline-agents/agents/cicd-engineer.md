@@ -1,8 +1,7 @@
 ---
 name: cicd-engineer
 description: "Secure cloud agent suite role for the build phase (cicd-engineer)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/cicd-engineer/AGENT.md
 convertedFrom: agents/cicd-engineer.md

@@ -31,6 +31,7 @@ source, so --root and --source are always both required in practice:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import sys
@@ -71,11 +72,36 @@ TOOL_MAP = {
     "Edit": "editor",
     "Write": "editor",
 }
-MODEL_TIER_MAP = {
-    "opus": "anthropic/claude-opus-4.6",
-    "sonnet": "anthropic/claude-sonnet-4.6",
-    "haiku": "anthropic/claude-haiku-4.6",
-}
+# Presets carry the capability *tier*, never a vendor-qualified model id and
+# never a provider. The tier is this repository's own domain knowledge --
+# catalog.yaml's header documents the heuristic that assigns it -- whereas
+# which provider and which concrete model serve that tier is an operator
+# decision. team-profile.yaml records `ai.model_provider: not_yet_selected`,
+# so shipping one baked into 74 generated artifacts contradicted this
+# repository's own stated position. The runtime resolves tier -> model id
+# from operator configuration at dispatch time (see cline-agents/README.md).
+#
+# Derived from `roster/runner-capabilities.json` at import time rather than
+# hand-listed, matching generate_global_plugin.py: that manifest is the single
+# source of the tier vocabulary, and with no second copy here the two cannot
+# fall out of sync. This became load-bearing when the tier stopped being an
+# implementation detail of a model-id mapping table and became the published
+# contract a preset carries.
+RUNNER_CAPABILITIES_PATH = Path(__file__).resolve().parents[2] / "roster" / "runner-capabilities.json"
+
+
+def _model_tiers_from_manifest(path: Path) -> tuple[str, ...]:
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"{path}: cannot read the runner-capability manifest: {error}") from error
+    tiers = manifest.get("model_tiers")
+    if not isinstance(tiers, dict) or not tiers:
+        raise SystemExit(f"{path}: 'model_tiers' must be a non-empty object")
+    return tuple(tiers)
+
+
+MODEL_TIERS = _model_tiers_from_manifest(RUNNER_CAPABILITIES_PATH)
 
 # Applied in order, each a plain (non-regex) substring replacement, except
 # ROUTING_YAML_RE below which is applied first since the source text spans
@@ -246,8 +272,7 @@ def _convert_agent_file(source_path: Path, role: str) -> str:
     tools = [t.strip() for t in fields.get("tools", "").split(",") if t.strip()]
     allowed_tools = list(dict.fromkeys(TOOL_MAP[t] for t in tools))
     model = fields.get("model")
-    model_id = MODEL_TIER_MAP.get(model)
-    if model_id is None:
+    if model not in MODEL_TIERS:
         raise SystemExit(f"{role}: unknown model tier {model!r}")
 
     body = _convert_agent_body(role, body)
@@ -257,8 +282,7 @@ def _convert_agent_file(source_path: Path, role: str) -> str:
         "---",
         f"name: {fields['name']}",
         f'description: "{fields["description"]}"',
-        f"modelId: {model_id}",
-        "providerId: anthropic",
+        f"modelTier: {model}",
         f"allowedTools: [{', '.join(allowed_tools)}]",
         f"canonicalSource: {fields['canonical_source']}",
         f"convertedFrom: agents/{role}.md",

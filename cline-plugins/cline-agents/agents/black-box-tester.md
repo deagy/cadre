@@ -1,8 +1,7 @@
 ---
 name: black-box-tester
 description: "Secure cloud agent suite role for the verify phase (black-box-tester)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/black-box-tester/AGENT.md
 convertedFrom: agents/black-box-tester.md

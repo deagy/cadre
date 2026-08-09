@@ -1,8 +1,7 @@
 ---
 name: knowledge-store-steward
 description: "Secure cloud agent suite role for the knowledge phase (knowledge-store-steward)."
-modelId: anthropic/claude-haiku-4.6
-providerId: anthropic
+modelTier: haiku
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/knowledge-store/AGENT.md
 convertedFrom: agents/knowledge-store-steward.md

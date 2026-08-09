@@ -1,8 +1,7 @@
 ---
 name: claim-conformance
 description: "Secure cloud agent suite role for the release phase (claim-conformance)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/claim-conformance/AGENT.md
 convertedFrom: agents/claim-conformance.md

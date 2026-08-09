@@ -1,8 +1,7 @@
 ---
 name: database-reliability-engineer
 description: "Secure cloud agent suite role for the operations phase (database-reliability-engineer)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/data/database-reliability-engineer/AGENT.md
 convertedFrom: agents/database-reliability-engineer.md

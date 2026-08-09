@@ -1,8 +1,7 @@
 ---
 name: scope-boundary
 description: "Secure cloud agent suite role for the planning phase (scope-boundary)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/planning/scope-boundary/AGENT.md
 convertedFrom: agents/scope-boundary.md

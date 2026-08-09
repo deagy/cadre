@@ -1,8 +1,7 @@
 ---
 name: technical-writer
 description: "Secure cloud agent suite role for the document phase (technical-writer)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/documentation/technical-writer/AGENT.md
 convertedFrom: agents/technical-writer.md

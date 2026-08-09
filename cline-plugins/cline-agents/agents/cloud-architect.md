@@ -1,8 +1,7 @@
 ---
 name: cloud-architect
 description: "Secure cloud agent suite role for the design phase (cloud-architect)."
-modelId: anthropic/claude-opus-4.6
-providerId: anthropic
+modelTier: opus
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/architecture/cloud-architect/AGENT.md
 convertedFrom: agents/cloud-architect.md

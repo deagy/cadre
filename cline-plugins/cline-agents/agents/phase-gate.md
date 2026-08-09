@@ -1,8 +1,7 @@
 ---
 name: phase-gate
 description: "Secure cloud agent suite role for the release phase (phase-gate)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/phase-gate/AGENT.md
 convertedFrom: agents/phase-gate.md

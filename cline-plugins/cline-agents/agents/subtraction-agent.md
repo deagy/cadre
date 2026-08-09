@@ -1,8 +1,7 @@
 ---
 name: subtraction-agent
 description: "Secure cloud agent suite role for the review phase (subtraction-agent)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/subtraction-agent/AGENT.md
 convertedFrom: agents/subtraction-agent.md

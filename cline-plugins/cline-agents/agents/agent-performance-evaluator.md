@@ -1,8 +1,7 @@
 ---
 name: agent-performance-evaluator
 description: "Secure cloud agent suite role for the operations phase (agent-performance-evaluator)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/operations/agent-performance-evaluator/AGENT.md
 convertedFrom: agents/agent-performance-evaluator.md

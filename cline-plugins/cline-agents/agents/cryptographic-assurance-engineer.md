@@ -1,8 +1,7 @@
 ---
 name: cryptographic-assurance-engineer
 description: "Secure cloud agent suite role for the security phase (cryptographic-assurance-engineer)."
-modelId: anthropic/claude-opus-4.6
-providerId: anthropic
+modelTier: opus
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/security/cryptographic-assurance-engineer/AGENT.md
 convertedFrom: agents/cryptographic-assurance-engineer.md

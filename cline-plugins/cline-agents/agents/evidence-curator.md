@@ -1,8 +1,7 @@
 ---
 name: evidence-curator
 description: "Secure cloud agent suite role for the evidence phase (evidence-curator)."
-modelId: anthropic/claude-haiku-4.6
-providerId: anthropic
+modelTier: haiku
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/documentation/evidence-curator/AGENT.md
 convertedFrom: agents/evidence-curator.md

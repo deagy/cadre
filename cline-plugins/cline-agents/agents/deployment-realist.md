@@ -1,8 +1,7 @@
 ---
 name: deployment-realist
 description: "Secure cloud agent suite role for the operations phase (deployment-realist)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/operations/deployment-realist/AGENT.md
 convertedFrom: agents/deployment-realist.md

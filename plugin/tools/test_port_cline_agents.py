@@ -72,8 +72,14 @@ class ToolAndModelMappingTests(unittest.TestCase):
             content = (root / "cline-agents" / "agents" / "sample-role.md").read_text(encoding="utf-8")
 
         self.assertIn("allowedTools: [read_files, search_codebase, run_commands, editor]", content)
-        self.assertIn("modelId: anthropic/claude-sonnet-4.6", content)
-        self.assertIn("providerId: anthropic", content)
+        # Presets carry the capability tier only. A provider or a
+        # vendor-qualified model id here would reintroduce issue #142: it
+        # selects a vendor on the operator's behalf, and where that vendor's
+        # credentials happen to exist, silently routes task and
+        # knowledge-store content to it.
+        self.assertIn("modelTier: sonnet", content)
+        self.assertNotIn("providerId", content)
+        self.assertNotIn("anthropic", content)
         self.assertIn("convertedFrom: agents/sample-role.md", content)
         self.assertNotIn("effort:", content)
         self.assertNotIn("generated:", content)
@@ -84,9 +90,23 @@ class ToolAndModelMappingTests(unittest.TestCase):
         deduped = list(dict.fromkeys(result))
         self.assertEqual(deduped, ["read_files", "search_codebase"])
 
-    def test_haiku_and_opus_tiers_map_correctly(self) -> None:
-        self.assertEqual(p.MODEL_TIER_MAP["haiku"], "anthropic/claude-haiku-4.6")
-        self.assertEqual(p.MODEL_TIER_MAP["opus"], "anthropic/claude-opus-4.6")
+    def test_tiers_are_capability_labels_not_vendor_model_ids(self) -> None:
+        self.assertEqual(("opus", "sonnet", "haiku"), p.MODEL_TIERS)
+        for tier in p.MODEL_TIERS:
+            self.assertNotIn("/", tier, "a tier is a capability label, not a vendor-qualified id")
+
+    def test_unknown_tier_is_rejected_rather_than_defaulted(self) -> None:
+        source = (
+            "---\nname: bad-role\ndescription: d\nmodel: gpt-9\n"
+            "tools: Read\ncanonical_source: roster/x/bad-role/AGENT.md\n---\n\nBody.\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "agents").mkdir(parents=True)
+            (root / "cline-agents" / "agents").mkdir(parents=True)
+            (root / "agents" / "bad-role.md").write_text(source, encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                p.port_agents(root)
 
 
 class PathSubstitutionTests(unittest.TestCase):

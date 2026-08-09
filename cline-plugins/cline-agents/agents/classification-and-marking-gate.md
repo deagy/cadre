@@ -1,8 +1,7 @@
 ---
 name: classification-and-marking-gate
 description: "Secure cloud agent suite role for the release phase (classification-and-marking-gate)."
-modelId: anthropic/claude-opus-4.6
-providerId: anthropic
+modelTier: opus
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/classification-and-marking-gate/AGENT.md
 convertedFrom: agents/classification-and-marking-gate.md

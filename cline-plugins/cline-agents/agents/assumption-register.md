@@ -1,8 +1,7 @@
 ---
 name: assumption-register
 description: "Secure cloud agent suite role for the planning phase (assumption-register)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/planning/assumption-register/AGENT.md
 convertedFrom: agents/assumption-register.md
