@@ -34,11 +34,14 @@ agrees with `re.IGNORECASE` across ASCII but not across all of Unicode (`ſ`
 matches `s` under `IGNORECASE` while `"ſ".lower()` is unchanged; `K` matches
 `k` but is not a pattern literal). Every such divergence keeps characters
 *apart* that the matcher would merge, which can only cost a missed finding --
-never a false one -- and no routing pattern is non-ASCII. The
-answer is then computed by searching the product of the include NFA with the
-determinized union of the exclude NFAs for a reachable state that accepts the
-include and no exclude. Such a state is a witness path: proof the glob is
-alive. No witness anywhere in the (finite) product means containment holds.
+never a false one -- and no routing pattern is non-ASCII.
+
+The answer is then computed by searching the product of the include NFA with
+the determinized union of the exclude NFAs for a reachable state that accepts
+the include and no exclude. Such a state yields a witness path: a concrete
+counterexample, returned by `contains_with_witness` so that a NOT_CONTAINED
+verdict can be *checked* against `glob_to_regex` rather than trusted. No
+witness anywhere in the (finite) product means containment holds.
 
 The search is bounded by `_MAX_PRODUCT_STATES`. Exhausting it returns
 `UNDETERMINED` -- never a verdict -- so a caller that reports only on
@@ -184,33 +187,72 @@ def _alphabet(patterns: Iterable[str]) -> list[str]:
     return sorted(symbols)
 
 
+def _sample_path(pattern: str) -> str | None:
+    """A concrete path matching `pattern`, used when there are no excludes."""
+    verdict, witness = contains_with_witness(pattern, ["\0impossible-exclude"])
+    return witness if verdict == NOT_CONTAINED else None
+
+
+def _concrete(symbol: str, literals: set[str]) -> str:
+    """Render an abstract symbol as a real character, for witness paths."""
+    if symbol != _OTHER:
+        return symbol
+    for candidate in "zqxjkvwy0123456789":
+        if candidate not in literals:
+            return candidate
+    return "￿"
+
+
 def contains(include: str, excludes: Iterable[str]) -> str:
-    """Return CONTAINED, NOT_CONTAINED, or UNDETERMINED for `L(include) ⊆ ⋃L(excludes)`.
+    """Return CONTAINED, NOT_CONTAINED, or UNDETERMINED for `L(include) ⊆ ⋃L(excludes)`."""
+    return contains_with_witness(include, excludes)[0]
+
+
+def contains_with_witness(include: str, excludes: Iterable[str]) -> tuple[str, str | None]:
+    """As `contains`, but also return a concrete counterexample path.
+
+    On NOT_CONTAINED the second element is a path that `include` matches and
+    no exclude does -- independently checkable against `glob_to_regex`, which
+    is what lets a test verify this verdict rather than take it on trust. It
+    is `None` for CONTAINED and UNDETERMINED, where no such path exists or
+    none was found.
 
     Matching is case-insensitive, mirroring `glob_to_regex`'s `re.IGNORECASE`.
     """
     exclude_patterns = list(excludes)
     if not exclude_patterns:
-        return NOT_CONTAINED
+        return NOT_CONTAINED, _sample_path(include)
     include_nfa = _Nfa(include)
     exclude_nfas = [_Nfa(pattern) for pattern in exclude_patterns]
     alphabet = _alphabet([include, *exclude_patterns])
+
+    literals = {
+        symbol for symbol in _alphabet([include, *exclude_patterns]) if symbol not in (_OTHER,)
+    }
 
     start = (
         include_nfa.closure([0]),
         tuple(nfa.closure([0]) for nfa in exclude_nfas),
     )
     seen = {start}
+    parents: dict[tuple, tuple[tuple, str] | None] = {start: None}
     pending = deque([start])
     while pending:
         if len(seen) > _MAX_PRODUCT_STATES:
-            return UNDETERMINED
-        include_states, exclude_states = pending.popleft()
+            return UNDETERMINED, None
+        current = pending.popleft()
+        include_states, exclude_states = current
         if (include_nfa.accepting & include_states) and not any(
             nfa.accepting & states for nfa, states in zip(exclude_nfas, exclude_states)
         ):
             # A path matched by the include and by no exclude: proof of life.
-            return NOT_CONTAINED
+            symbols: list[str] = []
+            walk = current
+            while parents[walk] is not None:
+                walk, symbol = parents[walk]  # type: ignore[misc]
+                symbols.append(symbol)
+            witness = "".join(_concrete(symbol, literals) for symbol in reversed(symbols))
+            return NOT_CONTAINED, witness
         for symbol in alphabet:
             successor = (
                 include_nfa.step(include_states, symbol),
@@ -221,5 +263,6 @@ def contains(include: str, excludes: Iterable[str]) -> str:
                 continue
             if successor not in seen:
                 seen.add(successor)
+                parents[successor] = (current, symbol)
                 pending.append(successor)
-    return CONTAINED
+    return CONTAINED, None

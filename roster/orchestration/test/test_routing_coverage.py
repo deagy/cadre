@@ -541,6 +541,27 @@ class ExcludePathReachabilityTests(unittest.TestCase):
             len(self._findings("routes", {"id": "l", "paths": ["a/b.md"], "exclude_paths": ["a/b.md"]})),
         )
 
+    def test_an_undetermined_verdict_is_skipped_rather_than_reported(self) -> None:
+        """The entire fail-safe argument: when the decision procedure cannot
+        settle a pattern within its state budget, the rule must be skipped.
+        A regression that treated anything-but-NOT_CONTAINED as a finding
+        would turn every budget-exhausting pattern into a false accusation.
+        """
+        import glob_containment
+
+        rule = {"id": "big", "paths": ["**/a/**/b/**/c.md"], "exclude_paths": ["x/**", "y/**"]}
+        original = glob_containment._MAX_PRODUCT_STATES
+        try:
+            glob_containment._MAX_PRODUCT_STATES = 1
+            self.assertEqual(
+                glob_containment.UNDETERMINED,
+                glob_containment.contains(rule["paths"][0], rule["exclude_paths"]),
+                "fixture assumption broken: this pattern no longer exhausts the budget",
+            )
+            self.assertEqual([], check_exclude_path_reachability({"routes": [rule]}))
+        finally:
+            glob_containment._MAX_PRODUCT_STATES = original
+
     # -- wiring ------------------------------------------------------------
 
     def test_findings_are_reported_through_the_top_level_run(self) -> None:

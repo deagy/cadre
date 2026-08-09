@@ -25,7 +25,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from glob_containment import CONTAINED, NOT_CONTAINED, UNDETERMINED, contains  # noqa: E402
+from glob_containment import (  # noqa: E402
+    CONTAINED,
+    NOT_CONTAINED,
+    UNDETERMINED,
+    contains,
+    contains_with_witness,
+)
 from routing import (  # noqa: E402
     GLOB_DOUBLESTAR,
     GLOB_DOUBLESTAR_SLASH,
@@ -37,20 +43,26 @@ from routing import (  # noqa: E402
 )
 
 # `/` for structure; `.` because extensions are where `*` behaviour is most
-# easily got wrong; `a`/`b` as ordinary literals; `z` appears in no pattern,
+# easily got wrong; `a`/`b` as ordinary literals; `A` because case folding is
+# where a one-line regression is otherwise invisible (dropping `.lower()`
+# from `_alphabet` made `contains("Foo/**", ["bar/**"])` CONTAINED -- an
+# unrelated exclude condemning a live glob -- with every test still green);
+# `z` appears in no pattern,
 # so it exercises the abstract alphabet's "every other character" sentinel
 # deliberately rather than by luck; and `\n`, because the matcher treats it
 # inconsistently -- `**` compiles to `.` which excludes it, while `*`/`?`
 # compile to `[^/]` which includes it. Omitting `\n` here is what let that
 # divergence ship: the engine modelled `**` as consuming it and reported
 # `contains("foo/*", ["foo/**"])` as CONTAINED.
-_ORACLE_ALPHABET = "ab/.z\n"
+_ORACLE_ALPHABET = "aAb/.z\n"
 _ORACLE_MAX_LENGTH = 5
 
 _PATTERNS = [
     "*", "**", "?", "a", "b", "a/b", "**/a", "a/**", "*.a", "**/*.a", "a/*/b",
     "**/a/**", "a?b", "*/*", "a/**/b", "**/*", "./a", "a.b", "*a*", "**/",
     "/a", "a/", "**/a/b", "?/?", "a/*", "a/*/**",
+    # Mixed case, so the oracle exercises the literal case-folding path.
+    "A", "A/**", "**/A.a", "*.A", "Ab/*",
 ]
 
 
@@ -75,27 +87,60 @@ def _oracle(include: str, excludes: list[str]) -> tuple[str, str | None]:
 
 class DifferentialAgainstBruteForceTests(unittest.TestCase):
     def test_engine_agrees_with_exhaustive_enumeration(self) -> None:
+        """Both directions, and neither on trust.
+
+        A NOT_CONTAINED verdict is checked twice: against the oracle, and by
+        validating the engine's own witness with the real matchers. Without
+        that second check the whole direction was unverifiable -- the oracle
+        is length-bounded, so an engine that simply returned NOT_CONTAINED
+        for everything passed this test with the engine fully disabled.
+        """
         generator = random.Random(20260809)
         checked = 0
+        contained_checked = 0
         for _ in range(300):
             include = generator.choice(_PATTERNS)
             excludes = generator.sample(_PATTERNS, generator.randint(1, 3))
-            verdict = contains(include, excludes)
+            verdict, witness = contains_with_witness(include, excludes)
             if verdict == UNDETERMINED:
                 continue
-            expected, witness = _oracle(include, excludes)
+
+            if verdict == NOT_CONTAINED:
+                # Independently checkable, regardless of the oracle's bound.
+                self.assertIsNotNone(
+                    witness, f"include={include!r} excludes={excludes!r}: NOT_CONTAINED without a witness"
+                )
+                self.assertTrue(
+                    glob_to_regex(include).search(witness),
+                    f"witness {witness!r} does not match its own include {include!r}",
+                )
+                for exclude in excludes:
+                    self.assertFalse(
+                        glob_to_regex(exclude).search(witness),
+                        f"witness {witness!r} is excluded by {exclude!r}, so it proves nothing",
+                    )
+
+            expected, oracle_witness = _oracle(include, excludes)
             if expected == CONTAINED and verdict == NOT_CONTAINED:
                 # The oracle is length-bounded; a witness longer than its
-                # bound is a legitimate disagreement in this direction only.
+                # bound is a legitimate disagreement in this direction only,
+                # and the engine's witness was validated above regardless.
                 continue
             checked += 1
+            contained_checked += expected == CONTAINED
             self.assertEqual(
                 expected,
                 verdict,
                 f"include={include!r} excludes={excludes!r}: engine said {verdict}, "
-                f"exhaustive enumeration says {expected} (witness {witness!r})",
+                f"exhaustive enumeration says {expected} (witness {oracle_witness!r})",
             )
         self.assertGreater(checked, 100, "differential test degenerated to almost no comparisons")
+        self.assertGreater(
+            contained_checked,
+            25,
+            "no meaningful number of CONTAINED verdicts was compared; the direction that "
+            "actually produces findings is going unverified",
+        )
 
     def test_the_doublestar_slash_commitment_case(self) -> None:
         """`**/a` must not match `.a`: `(?:.*/)?` is a choice between nothing
@@ -190,6 +235,15 @@ class ContainmentVerdictTests(unittest.TestCase):
     def test_matching_is_case_insensitive_like_the_matcher(self) -> None:
         self.assertEqual(CONTAINED, contains("Foo/**", ["foo/**"]))
         self.assertTrue(glob_to_regex("foo/**").search("Foo/bar"))
+
+    def test_case_folding_does_not_collapse_unrelated_literals(self) -> None:
+        """The positive case above is satisfied vacuously by an engine whose
+        alphabet has desynced from its literals -- everything becomes
+        CONTAINED. This negative case is what actually pins the folding:
+        dropping `.lower()` from `_alphabet` makes it fail.
+        """
+        self.assertEqual(NOT_CONTAINED, contains("Foo/**", ["bar/**"]))
+        self.assertEqual(NOT_CONTAINED, contains("A/**", ["b/**"]))
 
     def test_backslashes_normalize_like_the_matcher(self) -> None:
         self.assertEqual(CONTAINED, contains("foo\\bar/**", ["foo/bar/**"]))
