@@ -43,15 +43,27 @@ Run the suite-only check with:
 python3 -m unittest discover -s roster/knowledge-store/test -p "test_*.py"
 ```
 
-The orchestration tests exercise the lifecycle contract against the in-tree
-kernel, so no install or env var is needed:
+The orchestration tests need no install and run as-is:
 
 ```sh
 python3 -m unittest discover -s roster/orchestration/test -p "test_*.py"
 ```
 
-See the [lifecycle guide](lifecycle-and-plugin-operations.md) if you need to
-point the tests at a separately installed kernel instead.
+Run that way they exercise the selector in **standalone** mode, because the
+lifecycle contract is resolved by looking for an `agentic-sdlc` executable on
+`PATH` — being in-tree is not enough on its own. To exercise the
+lifecycle-*integrated* assertions as CI does, point `AGENTIC_SDLC_BIN` at the
+launcher this repository already ships; there is still nothing to install:
+
+```sh
+AGENTIC_SDLC_BIN="$PWD/bin/agentic-sdlc" \
+  python3 -m unittest discover -s roster/orchestration/test -p "test_*.py"
+```
+
+The kernel's own tests (`kernel/test`) are different again: they import the
+package in-process and need neither the variable nor anything on `PATH`. See
+the [lifecycle guide](lifecycle-and-plugin-operations.md) to point at a
+separately installed kernel instead.
 
 ## Choosing the next guide
 

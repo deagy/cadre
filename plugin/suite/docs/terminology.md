@@ -31,11 +31,10 @@ it names a concrete field or file, the link goes to that source instead.
 
 ## Relationship between the kernel, provider, and plugin
 
-This repository merged four formerly separate repositories into one
-(`deagy/cadre`, `deagy/agentic-sdlc`, `deagy/cadre-lifecycle`,
-`deagy/cadre-profile-secure-cloud` — see `CLAUDE.md`'s "Archived upstreams");
-the boundaries below are now directories within this single monorepo, not
-separate checkouts, but the ownership separation between them is unchanged.
+These are directories within one repository, not separate checkouts — the
+ownership separation between them is unchanged, but the repository boundary
+that used to enforce it is gone. `CLAUDE.md`'s "Archived upstreams" records
+which repositories merged and when.
 
 ```mermaid
 graph TD
