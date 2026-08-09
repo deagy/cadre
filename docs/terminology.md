@@ -6,7 +6,7 @@ it names a concrete field or file, the link goes to that source instead.
 
 | Term | Meaning |
 | --- | --- |
-| Agent definition | The canonical `AGENT.md` describing one role's purpose, inputs, authority, escalation conditions, and completion criteria. See the [role index](role-index.md) for all 71. |
+| Agent definition | The canonical `AGENT.md` describing one role's purpose, inputs, authority, escalation conditions, and completion criteria. See the [role index](role-index.md) for the full, current-count list. |
 | Catalog | [`roster/catalog.yaml`](../roster/catalog.yaml), the machine-readable inventory of role IDs, definition paths, phases, capability tiers, model tiers, and reasoning effort. See the [capability index](capability-index.md) for a browsable view. |
 | Capability tier | The class of change authority a role has, recorded as `catalog.yaml`'s `capability` field: `read_only`, `document_author`, `code_author`, `test_author`, or `environment_operator`. See the [capability index](capability-index.md) for every role grouped by tier, and each role's own `AGENT.md` "Authority" section for its exact scope. |
 | Reasoning effort | A shared per-role value in `catalog.yaml` (`low`/`medium`/`high`) propagated into both generated wrappers — Claude Code's `effort:` frontmatter and Codex's `model_reasoning_effort` — so one field drives both runners. Tied to the same fixed heuristic as the role's model tier (`catalog.yaml`'s header comment): `opus`→`high`, `sonnet`→`medium`, `haiku`→`low`. |
@@ -27,13 +27,18 @@ it names a concrete field or file, the link goes to that source instead.
 | Generated artifact | A runner or package file produced from canonical source; it is regenerated rather than edited by hand. |
 | Platform | An external organization/platform whose impact-category and BOM (SBOM/CBOM/QBOM/AI-BOM/Trust-BOM/Time-BOM) semantics this repository deliberately does not define — see `roster/shared/platform-impact-profile.yaml`. A consuming project must supply its own authorized definitions and owners before treating any category as applicable; `unknown` blocks the relevant gates by design, not by omission. |
 
-## Relationship between the three repositories
+## Relationship between the kernel, provider, and plugin
+
+These are directories within one repository, not separate checkouts — the
+ownership separation between them is unchanged, but the repository boundary
+that used to enforce it is gone. `CLAUDE.md`'s "Archived upstreams" records
+which repositories merged and when.
 
 ```mermaid
 graph TD
-    K["portable Agentic SDLC kernel"] --> O["target-project overlay and run records"]
+    K["portable Agentic SDLC kernel (kernel/)"] --> O["target-project overlay and run records"]
 
-    subgraph P["Secure Cloud provider (deagy/cadre — the register)"]
+    subgraph P["Secure Cloud provider (roster/ — the register)"]
         P1["role catalog and AGENT.md definitions"]
         P2["shared policies and workflows"]
         P3["knowledge-store procedures"]

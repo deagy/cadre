@@ -33,6 +33,43 @@ PROVIDER_ROOT = REPOSITORY_ROOT / "provider"
 _GENERATED_PACKAGE: Path | None = None
 
 
+def _tracked_files() -> list[str]:
+    """`git ls-files`, so untracked scratch files and gitignored build output
+    never trip a scan -- only what's actually committed."""
+    return subprocess.run(
+        ["git", "ls-files"],
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    ).stdout.splitlines()
+
+
+def _catalog_role_count() -> int:
+    """The live role count, parsed from catalog.yaml the same way
+    test_catalog_declares_capabilities_and_reviewers_are_read_only does --
+    deliberately not EXPECTED_ROLE_COUNT above, since that constant is itself
+    a hardcoded number these doc-drift checks exist to stop prose from
+    silently diverging from."""
+    current_agent: str | None = None
+    agents: set[str] = set()
+    for line in (ROOT / "catalog.yaml").read_text(encoding="utf-8").splitlines():
+        if line.startswith("  ") and not line.startswith("    ") and line.rstrip().endswith(":"):
+            current_agent = line.strip()[:-1]
+            agents.add(current_agent)
+    return len(agents)
+
+
+def _secure_cloud_role_count() -> int:
+    """The live `secure-cloud` profile role count, read directly from its
+    `agents` array rather than hardcoded."""
+    profile = json.loads(
+        (PROVIDER_ROOT / "profiles" / "secure-cloud" / "profile.json").read_text(encoding="utf-8")
+    )
+    return len(profile["agents"])
+
+
 def generated_package() -> Path:
     """A freshly generated plugin package, built once and reused.
 
@@ -1694,6 +1731,202 @@ class RepositoryHealthTests(unittest.TestCase):
         )
         self.assertNotEqual(0, result.returncode)
         self.assertIn("unknown subcommand", result.stderr)
+
+    # -- Stale doc facts: a recurring failure shape ------------------------
+    #
+    # Three independent review findings (total role count, secure-cloud role
+    # count, a hardcoded kernel release tag) turned out to be the same shape:
+    # prose asserting a fact that only the generator/source files actually
+    # own, with nothing to catch the two drifting apart. These three tests
+    # guard that shape going forward. They deliberately do not hardcode 74 or
+    # 19 -- see `_catalog_role_count()`/`_secure_cloud_role_count()` above --
+    # because a test that pins its own expected number is exactly the kind of
+    # second copy that caused the drift in the first place.
+    #
+    # `plugin/` is excluded from all three scans below: it is `roster/`'s own
+    # generated output (`cadre generate-plugin --output plugin`, verified
+    # byte-for-byte by `.github/workflows/validate.yml`'s `generated-content`
+    # job), so anything stale there is a faithful mirror of a source-tree
+    # finding this same scan already catches at its source location. Scanning
+    # it too would just report every source finding twice under a different
+    # path, with no independent signal -- and it would fail this task's own
+    # "do not touch plugin/" boundary the moment someone tried to fix what it
+    # reported.
+
+    # Rather than enumerate the sentence shapes docs currently use to state
+    # a role count -- which only catches phrasings someone already thought
+    # of, and lets "Cadre ships 71 roles" walk straight past -- invert it:
+    # find *every* "N roles" in live prose and require N to be a number this
+    # repository can actually justify. That is the live catalog total, the
+    # live secure-cloud profile count, or an explicitly allowed local count
+    # below. A new phrasing is caught automatically; a new *number* has to be
+    # justified here, which is the review this check exists to force.
+    # Keyed by (path prefix, count), not by count alone: a bare-value
+    # allowlist would permit this number in *any* document, so a genuinely
+    # wrong claim elsewhere would pass for the wrong reason.
+    ALLOWED_LOCAL_ROLE_COUNTS = {
+        (".agents/skills/lifecycle-onboarding/SKILL.md", 5): (
+            "the conditional authority roles -- kernel-owned, and exactly "
+            "the 5 keys in agentic_sdlc.CONDITIONAL_AUTHORITY_ROLES "
+            "(data_control_owner, human_key_owner, uat_product_owner, "
+            "implicated_security_lead, implicated_governance_lead), not a "
+            "claim about the role catalog"
+        ),
+        ("cline-plugins/cline-agents/README.md", 4): (
+            "roles needing bespoke path-rewrite handling beyond the generic "
+            "lookup table -- a property of that script, not a claim about "
+            "the catalog"
+        ),
+    }
+
+    # Point-in-time records legitimately freeze a count that was true when
+    # written and is not expected to track the live catalog forever.
+    ROLE_COUNT_HISTORICAL_PREFIXES = (
+        # Chronological record; earlier entries correctly cite the count at
+        # that release.
+        "CHANGELOG.md",
+        # Point-in-time decision records, never revised once decided --
+        # role-expansion-2026-08.md describes a completed 71 -> 74 migration.
+        "docs/proposals/",
+        # Archived task records, same rationale as the sample-archive
+        # allowance in test_sample_references_are_limited_to_allowed_archives.
+        "roster/orchestration/runs/",
+        "roster/orchestration/examples/",
+    )
+
+    # docs/capability-index.md states a dozen per-tier subset counts, each on
+    # its own heading. Those are skipped -- but by *shape*, not by heading
+    # level: a bare "### " prefix check would let any heading anywhere hide a
+    # real total ("### This suite ships 999 roles"), which is an escape hatch,
+    # not an exemption. This matches only the breakdown form actually used: a
+    # heading whose body is a single backtick-quoted lowercase tier/phase
+    # token followed by a parenthesised count.
+    ROLE_COUNT_BREAKDOWN_HEADING = re.compile(r"^#+\s+`[a-z][a-z_]*`\s+\(\d+ roles?\)\s*$")
+
+    def test_role_count_claims_in_tracked_docs_are_justified(self) -> None:
+        catalog_total = _catalog_role_count()
+        secure_cloud_total = _secure_cloud_role_count()
+        derived = {catalog_total, secure_cloud_total}
+        # `[\d,]` so a thousands separator is read as one number: matching
+        # bare `\d+` re-anchors after the comma, so "2,074 roles" would be
+        # read as a correct claim of 74. Up to four intervening words, so
+        # "74 highly specialised expert roles" is caught, not just
+        # "74 specialist roles". Singular "role" counts only in "role
+        # definition(s)" -- otherwise "Step 4 role table" reads as a count of
+        # four roles, which it is not. "of" is excluded from the intervening
+        # words so partitives ("2 of the four roles") are not read as a claim
+        # that there are two roles.
+        pattern = re.compile(
+            r"\b(\d[\d,]*)(?:\s+(?!of\b)[A-Za-z][\w-]*){0,4}\s+(?:roles\b|role definitions?\b)"
+        )
+        # Markdown emphasis and code spans sit between the number and the
+        # noun ("**74** roles", "`74` roles") and would otherwise break the
+        # match entirely -- the claim goes unseen rather than misread.
+        # Replaced with spaces, not stripped, so offsets and therefore line
+        # numbers stay accurate.
+        markup = str.maketrans({"*": " ", "`": " ", "_": " "})
+        offenders: list[str] = []
+        scanned_claims = 0
+        for relative_path in _tracked_files():
+            normalized = relative_path.replace("\\", "/")
+            if not normalized.endswith(".md") or normalized.startswith("plugin/"):
+                continue
+            if normalized.startswith(self.ROLE_COUNT_HISTORICAL_PREFIXES):
+                continue
+            path = REPOSITORY_ROOT / normalized
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            lines = text.splitlines()
+            scannable = text.translate(markup)
+            # Scanned over the whole text, not line by line: this repository
+            # wraps prose, so a claim routinely straddles a newline ("...71\n
+            # specialist roles..."). A per-line scan silently misses those.
+            for match in pattern.finditer(scannable):
+                line_number = text.count("\n", 0, match.start()) + 1
+                if self.ROLE_COUNT_BREAKDOWN_HEADING.match(lines[line_number - 1]):
+                    continue
+                claimed = int(match.group(1).replace(",", ""))
+                scanned_claims += 1
+                if claimed in derived:
+                    continue
+                if (normalized, claimed) in self.ALLOWED_LOCAL_ROLE_COUNTS:
+                    continue
+                offenders.append(
+                    f"{normalized}:{line_number}: claims {match.group(0)!r}, which is "
+                    f"neither the catalog total ({catalog_total}, roster/catalog.yaml), "
+                    f"the secure-cloud profile count ({secure_cloud_total}, "
+                    f"provider/profiles/secure-cloud/profile.json), nor an "
+                    f"ALLOWED_LOCAL_ROLE_COUNTS entry for this file"
+                )
+        self.assertEqual([], offenders)
+        # A scan matching nothing cannot fail. The live docs do state role
+        # counts; if this ever finds none, the pattern has rotted. Counted
+        # during the pass above rather than re-walking every file.
+        self.assertGreater(scanned_claims, 0, "no role-count claim found to check")
+
+    # A literal `kernel-v<major>.<minor>.<patch>` (or `plugin-v<...>`) frozen
+    # into prose goes stale the moment the next tag ships, unless the prose
+    # is itself a historical record of a specific past release/incident (a
+    # changelog entry, a postmortem naming the exact affected tag, a
+    # migration writeup, a proposal's after-the-fact release note, or the
+    # release workflow's own inline comments narrating a past incident --
+    # its actual tag creation is templated as `kernel-v${{ ... }}`, never a
+    # literal digit string). Every current allowlist entry was checked
+    # against the real tree before being added here, not assumed.
+    RELEASE_TAG_ALLOWLIST = {
+        "CHANGELOG.md": (
+            "the release changelog is a chronological record of exactly what "
+            "shipped at each tag; it must keep citing old tags verbatim"
+        ),
+        "SECURITY.md": (
+            "documents a specific past incident (keyless tag signing) tied to "
+            "the exact historical plugin tag that carries it; the postmortem "
+            "is only useful if that tag stays named"
+        ),
+        "docs/migration/monorepo-migration.md": (
+            "restates the same tag-signing incident plus a completed "
+            "migration's release history -- both are historical facts about "
+            "specific past tags, not live guidance"
+        ),
+        "docs/proposals/": (
+            "proposal documents are point-in-time decision records that cite "
+            "which tag a change actually shipped as, and are never revised "
+            "once the decision is made"
+        ),
+        ".github/workflows/release.yml": (
+            "the only literal digits here are inside comments narrating a "
+            "specific past signing incident for engineer context; the "
+            "workflow's actual tag creation is templated "
+            "(`kernel-v${{ steps.version.outputs.value }}`), never a literal "
+            "version string"
+        ),
+    }
+
+    def test_hardcoded_release_tags_are_confined_to_historical_records(self) -> None:
+        # Case-insensitive: a sentence-initial, capitalised form of the tag
+        # is ordinary prose and would otherwise walk straight past this
+        # check. (Deliberately not spelled out here -- this file is scanned
+        # too, and a literal example would trip its own guard.)
+        pattern = re.compile(r"(?:kernel|plugin)-v\d+\.\d+\.\d+", re.IGNORECASE)
+        allowed_prefixes = tuple(self.RELEASE_TAG_ALLOWLIST)
+        offenders: list[str] = []
+        for relative_path in _tracked_files():
+            normalized = relative_path.replace("\\", "/")
+            if normalized.startswith("plugin/") or normalized.startswith(allowed_prefixes):
+                continue
+            path = REPOSITORY_ROOT / normalized
+            if not path.is_file():
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            for match in pattern.finditer(text):
+                line_number = text.count("\n", 0, match.start()) + 1
+                offenders.append(f"{normalized}:{line_number}: hardcoded release tag '{match.group(0)}'")
+        self.assertEqual([], offenders)
 
 
 if __name__ == "__main__":

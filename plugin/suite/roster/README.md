@@ -32,7 +32,7 @@ establishing an organization-wide Python version. `bin/cadre` (repository
 root) resolves an interpreter for you — run `cadre select --task "..."` from
 anywhere it's on `PATH`, or `../../bin/cadre select --task "..."`
 (`..\bin\agents.ps1` in PowerShell) from this directory. See `RUNBOOK.md` for
-the wrapper's interpreter-probe details. The schema version 2 selector
+the wrapper's interpreter-probe details. The selector
 evaluates task text and Git changes, validates roles against `catalog.yaml`,
 and emits a reviewable plan with provider lifecycle applicability kept
 separate from mutation-oriented human gates; it does not execute agents,

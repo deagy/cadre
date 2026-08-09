@@ -110,9 +110,13 @@ python3 -m unittest discover -s roster/orchestration/test -p "test_*.py"
 python3 -B -m unittest discover -s kernel/test -p "test_*.py"
 ```
 
-The kernel is in-tree, so `cadre sdlc` and the lifecycle-contract tests above
-need no separate install and no `AGENTIC_SDLC_BIN` — set that env var only to
-point at a *different* kernel deliberately.
+The kernel is in-tree, so `cadre sdlc` and the kernel's own tests above need
+no separate install and no `AGENTIC_SDLC_BIN`. The orchestration tests also
+run with neither, but resolve the lifecycle contract by looking for an
+`agentic-sdlc` executable on `PATH`, so without one they run in *standalone*
+mode; CI sets `AGENTIC_SDLC_BIN` to this repository's own `bin/agentic-sdlc`
+to exercise the integrated paths, and you can too. Point the variable
+somewhere else only to use a *different* kernel deliberately.
 
 Generate a reviewable dispatch plan:
 
@@ -164,7 +168,7 @@ If the target project actually uses this repository's own cloud stack (Proxmox, 
 cadre sdlc init --root /path/to/target --profile secure-cloud
 ```
 
-A project with a different stack should stay on `quick`/`generic`/`web-service` — `secure-cloud` extends `generic` with 16 roles opinionated toward this repository's own infrastructure, and installing it onto an unrelated stack forces subagents shaped around infrastructure that project doesn't have.
+A project with a different stack should stay on `quick`/`generic`/`web-service` — `secure-cloud` extends `generic` with 19 roles opinionated toward this repository's own infrastructure, and installing it onto an unrelated stack forces subagents shaped around infrastructure that project doesn't have.
 
 Initialization detects candidate technologies and validation commands, but deliberately leaves human authorities, compliance applicability, persistent/production environment classification, and other consequential decisions unresolved. The target project owns those decisions and its lifecycle records under `.agentic-sdlc/`.
 
