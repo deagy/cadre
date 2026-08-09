@@ -55,14 +55,14 @@
       "native_workspace_isolation": null
     },
     "cline": {
-      "has_generated_wrapper": false,
-      "dispatch_naming": null,
+      "has_generated_wrapper": true,
+      "dispatch_naming": "start_subagent tool's preset: \"<role-id>\" argument (cline-agents plugin; role-id matches each bundled agents/<role-id>.md preset's name frontmatter)",
       "communication_mode_peer_support": "best_effort",
       "peer_support_gate": null,
       "nested_teams_supported": "not_applicable",
       "team_size_guidance": null,
-      "named_agent_dispatch_supported": false,
-      "named_agent_dispatch_workaround": "manual per-file injection only (no MCP-equivalent documented)",
+      "named_agent_dispatch_supported": true,
+      "named_agent_dispatch_workaround": null,
       "concurrency_bound_config_key": null,
       "native_workspace_isolation": null
     }

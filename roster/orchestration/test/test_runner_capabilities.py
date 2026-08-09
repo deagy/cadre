@@ -41,10 +41,23 @@ CATALOG_SCHEMA_PATH = REPOSITORY_ROOT / "roster" / "catalog.schema.json"
 RUNNER_ADAPTERS_PATH = (
     REPOSITORY_ROOT / ".agents" / "skills" / "run-agent-orchestration" / "references" / "runner-adapters.md"
 )
+CLINE_AGENTS_DIR = REPOSITORY_ROOT / "cline-plugins" / "cline-agents"
+CLINE_AGENTS_PRESETS_DIR = CLINE_AGENTS_DIR / "agents"
+CLINE_AGENTS_INDEX_TS = CLINE_AGENTS_DIR / "index.ts"
 
 
 def _load_manifest() -> dict:
     return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+
+
+def _load_catalog() -> dict:
+    import yaml  # local import: only this helper needs it
+
+    return yaml.safe_load((REPOSITORY_ROOT / "roster" / "catalog.yaml").read_text(encoding="utf-8"))
+
+
+def _catalog_role_ids(catalog: dict) -> list[str]:
+    return list(catalog["agents"])
 
 
 class ManifestExistenceAndContentTests(unittest.TestCase):
@@ -190,10 +203,40 @@ class RunnerAdaptersStructuralFactCoverageTests(unittest.TestCase):
     def test_fact_1_and_2_generated_wrapper_and_dispatch_naming(self) -> None:
         self.assertTrue(self.runners["claude-code"]["has_generated_wrapper"])
         self.assertTrue(self.runners["codex"]["has_generated_wrapper"])
-        self.assertFalse(self.runners["cline"]["has_generated_wrapper"])
+        self.assertTrue(self.runners["cline"]["has_generated_wrapper"])
         self.assertIn("agents:<role-id>", self.runners["claude-code"]["dispatch_naming"])
         self.assertIn(".codex/agents/<role-id>.toml", self.runners["codex"]["dispatch_naming"])
-        self.assertIsNone(self.runners["cline"]["dispatch_naming"])
+        self.assertIn("start_subagent", self.runners["cline"]["dispatch_naming"])
+        self.assertIn("preset", self.runners["cline"]["dispatch_naming"])
+
+    def test_cline_generated_wrapper_claim_is_grounded_in_a_real_committed_preset_per_role(self) -> None:
+        """The manifest's claim of a generated wrapper for Cline is only as
+        good as the committed artifact backing it -- assert against the
+        actual preset directory `port_cline_agents.py` produces
+        (drift-guarded byte-for-byte by
+        `plugin/tools/test_port_cline_agents.py`), rather than restating the
+        manifest's own boolean back at itself.
+        """
+        self.assertTrue(CLINE_AGENTS_PRESETS_DIR.is_dir())
+        preset_files = sorted(p.stem for p in CLINE_AGENTS_PRESETS_DIR.glob("*.md"))
+        self.assertTrue(preset_files, "expected at least one bundled Cline agent preset")
+
+        catalog = _load_catalog()
+        catalog_role_ids = sorted(_catalog_role_ids(catalog))
+        self.assertEqual(
+            catalog_role_ids,
+            preset_files,
+            "cline-plugins/cline-agents/agents/*.md must carry one preset per catalog role",
+        )
+
+    def test_cline_dispatch_naming_claim_is_grounded_in_index_ts(self) -> None:
+        """Assert the `preset` argument name and the tool that consumes it
+        are real identifiers in `cline-plugins/cline-agents/index.ts`, not
+        just prose repeated in the manifest.
+        """
+        source = CLINE_AGENTS_INDEX_TS.read_text(encoding="utf-8")
+        self.assertIn('name: "start_subagent"', source)
+        self.assertIn("preset: NonEmptyText", source)
 
     # Fact 3/4/5: peer communication_mode support, gate, nested teams, team size.
     def test_fact_3_4_5_communication_mode_and_team_shape(self) -> None:
@@ -219,8 +262,20 @@ class RunnerAdaptersStructuralFactCoverageTests(unittest.TestCase):
         self.assertIn("dispatch_secure_cloud_role", self.runners["codex"]["named_agent_dispatch_workaround"])
         self.assertIn("dispatch_secure_cloud_role", self.prose)
 
-        self.assertFalse(self.runners["cline"]["named_agent_dispatch_supported"])
-        self.assertIn("manual per-file injection", self.runners["cline"]["named_agent_dispatch_workaround"])
+        self.assertTrue(self.runners["cline"]["named_agent_dispatch_supported"])
+        self.assertIsNone(self.runners["cline"]["named_agent_dispatch_workaround"])
+
+    def test_cline_named_dispatch_claim_is_grounded_in_index_ts_tool_registrations(self) -> None:
+        """Both MCP tools the manifest's dispatch_naming/named_agent_dispatch
+        claims rely on -- `start_subagent` (direct named-preset dispatch)
+        and `dispatch_selected_roles` (fan-out across a `cadre select`
+        plan's staffed roles) -- must actually be registered tools in the
+        shipped plugin, not just described in the manifest.
+        """
+        source = CLINE_AGENTS_INDEX_TS.read_text(encoding="utf-8")
+        self.assertIn('name: "start_subagent"', source)
+        self.assertIn('name: "dispatch_selected_roles"', source)
+        self.assertIn("Unknown agent preset", source)  # named dispatch fails closed on an unknown preset
 
     # Fact 8: concurrency bound config key.
     def test_fact_8_concurrency_bound(self) -> None:
@@ -285,9 +340,15 @@ class NarrativeContentUndisturbedTests(unittest.TestCase):
 
 
 class ClineScopeRespectedTests(unittest.TestCase):
-    """AC-6: the manifest declares only absence-of-capability facts for
-    Cline and does not fabricate a tools/sandbox_mode grant no code in this
-    repository enforces.
+    """AC-6: the manifest declares only capability facts actually backed by
+    shipped, drift-guarded artifacts in this repository (the 74 committed
+    `cline-plugins/cline-agents/agents/*.md` presets and the `start_subagent`/
+    `dispatch_selected_roles` MCP tools in `cline-plugins/cline-agents/
+    index.ts`), and does not fabricate a `tools`/`sandbox_mode` grant --
+    per-tool policy enforcement for Cline is real (see
+    `resolveToolPolicyConfig` in `index.ts`) but is derived per-preset from
+    each preset's own `allowedTools` frontmatter, not from this manifest, so
+    this manifest correctly carries no `tools`/`sandbox_mode` key for Cline.
     """
 
     def test_cline_has_no_tools_or_sandbox_mode_grant(self) -> None:
@@ -295,18 +356,18 @@ class ClineScopeRespectedTests(unittest.TestCase):
         cline = manifest["runners"]["cline"]
         self.assertNotIn("tools", cline)
         self.assertNotIn("sandbox_mode", cline)
-        self.assertFalse(cline["has_generated_wrapper"])
-        self.assertFalse(cline["named_agent_dispatch_supported"])
+        self.assertTrue(cline["has_generated_wrapper"])
+        self.assertTrue(cline["named_agent_dispatch_supported"])
         self.assertIsNone(cline["native_workspace_isolation"])
 
-    # The companion grounding check -- that no code in the Cline plugin reads a
-    # tools/sandbox_mode grant -- used to live here as
-    # test_plugins_cline_index_does_not_reference_capability_manifest, reading
-    # plugins/cline/index.ts. That plugin moved to deagy/cadre-plugin in the
-    # register/plugin split, so the path can never exist here again and the
-    # test could only ever skip: a permanent green skip that reads like
-    # coverage. Removed rather than left disabled; the assertion belongs in
-    # that repository, against its own cline/index.ts.
+    def test_cline_index_ts_does_not_read_the_capability_manifest(self) -> None:
+        """Companion grounding check for the class docstring's claim that
+        per-preset tool policy comes from each preset's own `allowedTools`
+        frontmatter, not from `roster/runner-capabilities.json`: the plugin
+        source must not reference the manifest file at all.
+        """
+        source = CLINE_AGENTS_INDEX_TS.read_text(encoding="utf-8")
+        self.assertNotIn("runner-capabilities.json", source)
 
 
 class PackagingAllowlistParityTests(unittest.TestCase):
