@@ -1583,6 +1583,88 @@
           "code-review-request"
         ]
       }
+    },
+    {
+      "id": "AGENT-SUITE-MAINTENANCE-1",
+      "description": "Proposal 08 Bug 1 regression: routine roster self-maintenance (adding a role) shares roster/catalog.yaml and roster/**/AGENT.md paths with the debugging route's agent-tune-up coverage but carries no debugging keyword, so it must resolve to the agent-suite-maintenance workflow rather than being mislabeled debugging; task/files reused verbatim from test_selector.py::test_adding_a_role_routes_to_agent_suite_maintenance_not_debugging",
+      "task": "Add a new specialist role to the roster",
+      "changed_files": [
+        "roster/catalog.yaml",
+        "roster/planning/new-role/AGENT.md"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-AGENT-SUITE-MAINT-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "debugging-engineer",
+          "technical-writer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "agent-suite-governance",
+          "debugging",
+          "documentation"
+        ]
+      }
+    },
+    {
+      "id": "ARCHITECTURE-GLOB-NARROWED-1",
+      "description": "Proposal 08 Bug 2 regression: this repository's own roster/architecture/ phase directory (role definitions, not system architecture) must not match the architecture-design route or architecture-change risk_rule now that their paths are narrowed to architecture/** and docs/architecture/** instead of the self-matching **/architecture/**; task/files reused verbatim from test_selector.py::test_own_roster_architecture_directory_does_not_trigger_architecture_review. Absence of cloud-architect/threat-modeler here is the point of the fixture.",
+      "task": "Tweak the interaction-designer role's escalation wording",
+      "changed_files": [
+        "roster/architecture/interaction-designer/AGENT.md"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-ARCH-GLOB-NARROW-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "debugging-engineer",
+          "technical-writer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "agent-suite-governance",
+          "debugging",
+          "documentation"
+        ]
+      }
+    },
+    {
+      "id": "ARCHITECTURE-DOCS-TRUE-POSITIVE-1",
+      "description": "Proposal 08 Bug 2 true-positive proof: a genuine consuming-project system-architecture path under docs/architecture/** must still summon cloud-architect/threat-modeler after the glob narrowing (companion to ARCHITECTURE-GLOB-NARROWED-1, which proves the false positive is gone); task/files reused verbatim from test_selector.py::test_consuming_project_docs_architecture_path_still_matches",
+      "task": "Record the new ADR for the ingestion service",
+      "changed_files": [
+        "docs/architecture/adr-001.md"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-ARCH-DOCS-TRUE-POS-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "cloud-architect",
+          "technical-writer"
+        ],
+        "reviewers": [
+          "threat-modeler"
+        ],
+        "support": [],
+        "matched_routes": [
+          "documentation",
+          "architecture-design"
+        ]
+      }
     }
   ]
 }
