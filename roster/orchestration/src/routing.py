@@ -33,8 +33,15 @@ def glob_to_regex(pattern: str) -> Pattern[str]:
 
 
 def _keyword_matches(text: str, keyword: str) -> bool:
+    """Case-insensitive whole-word match: `keyword` must not be embedded in a
+    longer token. A hyphen is treated as a word character (not a boundary),
+    so `"runner"` matches "the runner failed" but not "cross-runner",
+    "runner-info", or "runners" — a hyphenated compound or a plural/suffixed
+    form is a different token, not the keyword on its own. Internal spaces in
+    a multi-word keyword still match across any run of whitespace.
+    """
     escaped = re.escape(keyword.lower()).replace(r"\ ", r"\s+")
-    return re.search(rf"(^|[^a-z0-9]){escaped}([^a-z0-9]|$)", text, re.IGNORECASE) is not None
+    return re.search(rf"(?<![a-z0-9-]){escaped}(?![a-z0-9-])", text, re.IGNORECASE) is not None
 
 
 def match_rule(rule: dict[str, Any], task_text: str, changed_files: list[str]) -> dict[str, Any]:

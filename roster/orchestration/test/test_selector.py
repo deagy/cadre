@@ -76,16 +76,47 @@ class RouteMatchReasonTests(unittest.TestCase):
             self.assertEqual(sorted(match), ["id", "reasons"])
 
     def test_keyword_match_names_the_keyword_that_fired(self) -> None:
-        # The diagnostic this field exists for: `pipeline`'s "runner" keyword
-        # substring-matches "cross-runner" in a task about neither CI nor
-        # runners. The plan must now say so without a source read. This pins
-        # the *visibility* of that behaviour, not the behaviour itself --
-        # tightening the keyword boundary is a separate change.
-        result = plan(task="improve cross-runner UX documentation", changed_files=[])
+        # The diagnostic this field exists for: the plan must say which
+        # keyword fired without a source read.
+        result = plan(task="the deployment runner failed unexpectedly", changed_files=[])
         reasons = {match["id"]: match["reasons"] for match in result["matched_routes"]}
         self.assertIn("pipeline", reasons)
         self.assertEqual(reasons["pipeline"]["keywords"], ["runner"])
         self.assertEqual(reasons["pipeline"]["paths"], [])
+
+    def test_keyword_boundary_excludes_hyphenated_compounds(self) -> None:
+        # Regression pin for the bug this behaviour once had: `pipeline`'s
+        # "runner" keyword must not substring-match inside a hyphenated
+        # compound like "cross-runner" -- a hyphen is a word character here,
+        # not a boundary, so "cross-runner" is one token, not "cross" plus
+        # the keyword "runner".
+        result = plan(task="improve cross-runner UX documentation", changed_files=[])
+        reasons = {match["id"]: match["reasons"] for match in result["matched_routes"]}
+        self.assertNotIn("pipeline", reasons)
+
+    def test_keyword_boundary_still_matches_the_word_on_its_own(self) -> None:
+        # Same keyword, real word boundaries either side -- must still fire.
+        result = plan(task="the shared runner keeps failing", changed_files=[])
+        reasons = {match["id"]: match["reasons"] for match in result["matched_routes"]}
+        self.assertIn("pipeline", reasons)
+        self.assertEqual(reasons["pipeline"]["keywords"], ["runner"])
+
+    def test_keyword_boundary_excludes_other_hyphenated_short_keywords(self) -> None:
+        # The same latent fault sat under other short keywords too: "cd",
+        # "index", "lock", "alert", "token" all substring-matched inside a
+        # hyphenated compound before the boundary fix. Pin one -- "index"
+        # inside "re-index-lock" -- as a true negative for its route
+        # (database-reliability), and the plain word as a true positive.
+        negative = plan(task="schedule a re-index-lock maintenance window", changed_files=[])
+        negative_reasons = {match["id"]: match["reasons"] for match in negative["matched_routes"]}
+        self.assertNotIn("database-reliability", negative_reasons)
+
+        positive = plan(task="the index needs a maintenance lock", changed_files=[])
+        positive_reasons = {match["id"]: match["reasons"] for match in positive["matched_routes"]}
+        self.assertIn("database-reliability", positive_reasons)
+        self.assertEqual(
+            sorted(positive_reasons["database-reliability"]["keywords"]), ["index", "lock"]
+        )
 
     def test_path_match_names_the_pattern_and_the_file(self) -> None:
         result = plan(task="Revise the operator guide", changed_files=["docs/runbook.md"])
