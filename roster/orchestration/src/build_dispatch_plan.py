@@ -121,6 +121,23 @@ def _select_workflow(
     route_ids = [route["id"] for route in matched_routes]
     if not has_agents:
         return "needs-triage"
+    # Before the production check, deliberately. A rollback is production-shaped
+    # and almost always trips the `production` risk rule too ("roll back the
+    # production release"), so checking production first swallowed every
+    # rollback and labelled it production-release -- which is why `rollback`
+    # was a documented, enumerated workflow no plan could ever be assigned
+    # (#157). Ordering only decides the *label*: `production`'s reviewers and
+    # its human gate come from the risk rules via _build_human_gates, not from
+    # this function, so a rollback still carries the production human gate it
+    # would have carried before.
+    # ...but not when the frame is incident coordination. incident-response
+    # carries its own "rollback coordination" keyword, so a task that merely
+    # *mentions* a rollback while describing escalation is support-escalation,
+    # not a rollback execution. The rollback route's roles are selected either
+    # way -- routes drive agents independently of this label -- so deferring
+    # here costs nothing but the narration.
+    if "rollback" in route_ids and set(route_ids).isdisjoint({"incident-response", "support"}):
+        return "rollback"
     if "production" in risk_ids:
         return "production-release"
     if "support" in route_ids or "incident-response" in route_ids:

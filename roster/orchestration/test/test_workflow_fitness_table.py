@@ -13,14 +13,14 @@ roster/workflows/*.md and routing.yaml, not from _select_workflow()'s
 current behavior -- see that file's own '_comment' block for the full
 methodology.
 
-Two fixtures (WF-ROLLBACK-GAP-1, WF-AGENT-SUITE-GOVERNANCE-MISLABEL-1) are
-marked "known_mismatch": true and are EXPECTED to fail against current code.
-That is not a bug in this test -- it is the entire point of an independent
-fitness table: real disagreement with the code under test is the signal a
-self-referential pinning test can never produce. Do not "fix" this test by
-weakening those two entries to match current behavior; fix _select_workflow()
-instead (out of scope for this file -- see the fixtures file's 'reasoning'
-and 'known_mismatch' fields for what each one would require).
+No fixture is currently marked "known_mismatch": true. Both cases that once
+were have since been fixed in the code rather than weakened here -- roster
+maintenance mislabelled as debugging (#154), and the unreachable rollback
+workflow (#157). The mechanism is dormant, not gone: a future case that
+disagrees with _select_workflow() should be added with that flag rather than
+bent to match current behavior. Real disagreement with the code under test is
+the signal a self-referential pinning test can never produce, and is the
+entire point of an independent fitness table.
 """
 
 from __future__ import annotations
@@ -136,22 +136,6 @@ class WorkflowFitnessTableAgainstSelectorTests(unittest.TestCase):
                 "fitness-table cases not marked known_mismatch disagreed with "
                 "build_dispatch_plan():\n  " + "\n  ".join(failures)
             )
-
-    @unittest.expectedFailure
-    def test_known_mismatch_wf_rollback_gap_1(self) -> None:
-        """'rollback' is a real selection.schema.json enum value that
-        _select_workflow() can never produce (see fixtures file reasoning).
-        This assertion is EXPECTED to fail until that gap is fixed."""
-        case = next(case for case in CASES if case["id"] == "WF-ROLLBACK-GAP-1")
-        actual = _run_case(case)
-        self.assertEqual(
-            actual["workflow"],
-            case["expected_workflow"],
-            "if this now passes, _select_workflow() gained a real rollback "
-            "branch -- update WF-ROLLBACK-GAP-1's known_mismatch flag in "
-            "workflow_fitness_table.json to false",
-        )
-
 
 
 if __name__ == "__main__":

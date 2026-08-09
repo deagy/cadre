@@ -1753,6 +1753,69 @@
         ],
         "workflow": "new-service"
       }
+    },
+    {
+      "id": "ROLLBACK-EXECUTION-1",
+      "task": "Roll back the production release to the last known-good artifact after failed verification",
+      "changed_files": [
+        "services/payments/main.go"
+      ],
+      "classification": "internal",
+      "expected": {
+        "primary": [
+          "backend-engineer",
+          "release-engineer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "deployment-realist",
+          "code-reviewer"
+        ],
+        "support": [
+          "observability-sre",
+          "evidence-curator"
+        ],
+        "matched_routes": [
+          "backend",
+          "rollback"
+        ],
+        "workflow": "rollback"
+      },
+      "task_id": "GOLDEN-ROLLBACK-EXECUTION-1",
+      "description": "rollback route; an explicit production rollback. Pins the ordering fixed in #157: the branch must sit ahead of the production risk check. The task deliberately trips the `production` risk, so moving the branch below that check flips this fixture to production-release -- the earlier wording did not trip it and so pinned nothing."
+    },
+    {
+      "id": "ROLLBACK-DURING-INCIDENT-1",
+      "task": "Roll back the deployment while coordinating the war room during the sev1 incident",
+      "changed_files": [
+        "incidents/2026-08-09.md"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-ROLLBACK-DURING-INCIDENT-1",
+      "description": "both the rollback and incident-response routes match. Covers _select_workflow()'s incident/support exclusion, which two reviewers found reachable but untested: when the frame is incident coordination the label stays support-escalation, while the rollback route's roles are still selected.",
+      "expected": {
+        "primary": [
+          "support-triage-agent",
+          "incident-commander",
+          "release-engineer",
+          "technical-writer"
+        ],
+        "reviewers": [
+          "deployment-realist"
+        ],
+        "support": [
+          "escalation-manager",
+          "observability-sre",
+          "evidence-curator"
+        ],
+        "matched_routes": [
+          "support",
+          "incident-response",
+          "rollback",
+          "documentation"
+        ],
+        "workflow": "support-escalation"
+      }
     }
   ]
 }
