@@ -140,6 +140,8 @@ PATH_SUBSTITUTIONS: list[tuple[str, str]] = [
     ("`../shared/team-profile.yaml`", "this project's team-profile documentation"),
     ("`../shared/technology-standards.md`", "this project's technology-standards documentation"),
     ("`../shared/operating-principles.md`", "this project's operating-principles documentation"),
+    ("`../shared/knowledge-use-policy.md`", "this project's knowledge-use-policy documentation"),
+    ("`../documentation/evidence-curator/AGENT.md`", "this project's evidence-curator role definition"),
     ("`SECURITY.md`", "this project's security documentation"),
     ("`roster/knowledge-store/README.md`", "this project's knowledge-store documentation"),
     ("`roster/shared/`", "this project's shared-policy directory"),

@@ -14,7 +14,7 @@ Each dispatch prompt must include:
 - the planned Python knowledge-store invocation and its result status; resolve its Python 3.10+ launcher at execution and preserve the supplied argv without shell interpretation;
 - retrieved passages with `source`, `conversation_id`, `message_id`, `chunk_id`, `content_hash`, `created_at`, and `classification` citations, plus the retrieved bundle and its integrity hash as point-in-time evidence;
 - nested citation `source_uri` omitted or redacted by default, and included only when separately authorized and necessary because it may reveal a local path;
-- knowledge-steward handoff expectations from `roster/shared/knowledge-use-policy.md`: durable decisions, findings, lessons, root causes, reusable patterns, or stale/conflicting guidance must be proposed to `knowledge-store-steward` with evidence and classification/scope metadata, or explicitly reported as `none`;
+- knowledge-steward handoff expectations from `roster/shared/knowledge-use-policy.md`: durable decisions, findings, lessons, root causes, reusable patterns, or stale/conflicting guidance must be proposed to `knowledge-store-steward` as a `knowledge_steward_handoffs` list (empty list when none), each item carrying `title`, `summary`, `evidence`, `origin`, `proposed_classification`, `source_scope`, `sensitivity_notes`, `conflicts_or_staleness`, and `recommended_action` (`ingest`, `update`, `reclassify`, or `defer` — never `delete`, which no capability supports; escalate a required deletion to the steward and an authorized human instead); `evidence` and `origin` follow the same omit-or-redact-local-paths-by-default rule as citation `source_uri`; this is a proposal only, not approval to ingest or mutate the knowledge store;
 - explicit permitted and prohibited actions;
 - expected response template or schema;
 - named receiving role or human owner;
@@ -43,9 +43,9 @@ risk acceptance, policy exceptions, merge/push, and self-approval unless an
 authorized human explicitly grants the specific action.
 
 Return: <required template/schema>, evidence, disposition, unresolved risks,
-knowledge_steward_handoff, handoff to <receiver>, and (write-capable roles
-only) the workspace-isolation result block: mode, path, branch, base revision,
-committed, reason if in-place.
+knowledge_steward_handoffs (list, empty if none), handoff to <receiver>, and
+(write-capable roles only) the workspace-isolation result block: mode, path,
+branch, base revision, committed, reason if in-place.
 ```
 
 ## Wave and gate rules
