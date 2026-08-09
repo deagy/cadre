@@ -16,6 +16,8 @@ from settings import SettingsError
 from staged_records import STATUS_VALUES as STAGED_STATUSES
 from staged_records import parse_record, validate_parsed
 from staged_store import (
+    delete_record,
+    deletion_evidence,
     disposition_record,
     export_records,
     get_history,
@@ -93,6 +95,18 @@ def _parser() -> argparse.ArgumentParser:
         help="the classification actually applied differs from the one proposed",
     )
     add_config(disposition)
+    delete_staged = subparsers.add_parser("delete-staged")
+    delete_staged.add_argument("--id", required=True, dest="record_id")
+    delete_staged.add_argument("--reason", required=True)
+    delete_staged.add_argument("--deleted-by", required=True, dest="deleted_by")
+    delete_staged.add_argument(
+        "--authorized-by",
+        dest="authorized_by",
+        help="required to delete an accepted record: the authorized human reversing the decision",
+    )
+    add_config(delete_staged)
+    deletion_log = subparsers.add_parser("deletion-evidence")
+    add_config(deletion_log)
     export_staged = subparsers.add_parser("export-staged")
     export_staged.add_argument("--output", required=True)
     export_staged.add_argument("--status", choices=STAGED_STATUSES)
@@ -293,6 +307,8 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
             "import-staged",
             "export-staged",
             "disposition-staged",
+            "delete-staged",
+            "deletion-evidence",
         ):
             _enforce_staging_scope(tier)
             # Installed here rather than inside open_store: the staging table
@@ -309,6 +325,16 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
                 return _import_staged(db, options.pop("directory"))
             if command == "export-staged":
                 return _export_staged(db, options.pop("output"), options.pop("status", None))
+            if command == "delete-staged":
+                return delete_record(
+                    db,
+                    options.pop("record_id"),
+                    reason=options.pop("reason"),
+                    deleted_by=options.pop("deleted_by"),
+                    authorized_by=options.pop("authorized_by", None),
+                )
+            if command == "deletion-evidence":
+                return {"deletions": deletion_evidence(db)}
             if command == "disposition-staged":
                 return disposition_record(
                     db,

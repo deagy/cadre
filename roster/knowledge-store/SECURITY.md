@@ -33,7 +33,7 @@ By default, a project without its own `.agents/knowledge-store/config.json` reso
 - Restrict filesystem access and avoid synchronizing the database to broadly shared folders.
 - Store embedding API keys only in a secret manager or environment injection mechanism, never in configuration or the database.
 - Log ingestion metadata and counts, not raw chat content.
-- The demo does not implement retention or deletion commands. Add authorized lifecycle operations and evidence before production use.
+- The demo does not implement retention or deletion of **ingested content** -- messages, chunks, or embeddings. Add authorized lifecycle operations and evidence for those before production use. `cadre knowledge delete-staged` is not that capability: it removes a *staged record*, which has never been ingested, and it writes deletion evidence (record id, title, content digest, status at deletion, reason, actor, and any authorizing human) that outlives the row it describes. Deleting an accepted staged record additionally requires a named authorized human.
 
 ## Known limitations
 

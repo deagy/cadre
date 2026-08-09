@@ -355,5 +355,102 @@ class DispositionTests(unittest.TestCase):
             )
         self.assertIn("KS-20260101-nope", str(caught.exception))
 
+
+class DeletionTests(unittest.TestCase):
+    """Step 7: deletion, with evidence that outlives the record.
+
+    Scope note: these delete rows from the staging table. A staged record has
+    never been ingested, so none of this is the ingested-content lifecycle
+    capability `SECURITY.md` withholds.
+    """
+
+    def setUp(self) -> None:
+        self.workspace = tempfile.TemporaryDirectory()
+        self.addCleanup(self.workspace.cleanup)
+        root = Path(self.workspace.name)
+        self.config_path = root / "config.json"
+        self.config_path.write_text(
+            json.dumps({"database": str(root / "knowledge.db")}), encoding="utf-8"
+        )
+        self._run("import-staged", "--directory", str(RECORDS))
+        self.proposed = self._first_with_status("proposed")
+        self.accepted = self._first_with_status("accepted")
+
+    def _run(self, *arguments: str) -> dict:
+        return cli.run([*arguments, "--config", str(self.config_path)])
+
+    def _first_with_status(self, status: str) -> str:
+        return self._run("list-staged", "--status", status)["records"][0]["id"]
+
+    def test_deleting_a_proposed_record_removes_it_and_leaves_evidence(self) -> None:
+        before = self._run("show-staged", "--id", self.proposed)["frontmatter"]
+        result = self._run(
+            "delete-staged", "--id", self.proposed,
+            "--reason", "duplicate of an existing record", "--deleted-by", "a-steward",
+        )
+        self.assertEqual(result["status"], "deleted")
+        with self.assertRaises(ValueError):
+            self._run("show-staged", "--id", self.proposed)
+
+        evidence = self._run("deletion-evidence")["deletions"]
+        self.assertEqual(len(evidence), 1)
+        entry = evidence[0]
+        self.assertEqual(entry["record_id"], self.proposed)
+        # The digest and title survive, so the deletion names what was removed.
+        self.assertEqual(entry["content_digest"], before["content_digest"])
+        self.assertEqual(entry["title"], before["title"])
+        self.assertEqual(entry["status_at_deletion"], "proposed")
+        self.assertEqual(entry["reason"], "duplicate of an existing record")
+        self.assertEqual(entry["deleted_by"], "a-steward")
+
+    def test_deleting_an_accepted_record_requires_an_authorized_human(self) -> None:
+        with self.assertRaises(Exception) as caught:
+            self._run(
+                "delete-staged", "--id", self.accepted,
+                "--reason", "changed my mind", "--deleted-by", "a-steward",
+            )
+        self.assertIn("authorized human", str(caught.exception))
+        # Refused means untouched, and unrecorded: a refused deletion is not
+        # a deletion and must not appear in the evidence log.
+        self.assertTrue(self._run("show-staged", "--id", self.accepted))
+        self.assertEqual(self._run("deletion-evidence")["deletions"], [])
+
+    def test_an_accepted_record_can_be_deleted_with_authorization(self) -> None:
+        self._run(
+            "delete-staged", "--id", self.accepted, "--reason", "superseded and withdrawn",
+            "--deleted-by", "a-steward", "--authorized-by", "the repository owner",
+        )
+        entry = self._run("deletion-evidence")["deletions"][0]
+        self.assertEqual(entry["authorized_by"], "the repository owner")
+        self.assertEqual(entry["status_at_deletion"], "accepted")
+
+    def test_an_empty_reason_is_refused(self) -> None:
+        with self.assertRaises(Exception) as caught:
+            self._run(
+                "delete-staged", "--id", self.proposed, "--reason", "  ", "--deleted-by", "s",
+            )
+        self.assertIn("indistinguishable from data loss", str(caught.exception))
+
+    def test_evidence_survives_the_record_and_accumulates(self) -> None:
+        self._run(
+            "delete-staged", "--id", self.proposed, "--reason", "first", "--deleted-by", "s",
+        )
+        second = self._first_with_status("proposed")
+        self._run("delete-staged", "--id", second, "--reason", "second", "--deleted-by", "s")
+        evidence = self._run("deletion-evidence")["deletions"]
+        self.assertEqual(len(evidence), 2)
+        self.assertEqual({e["record_id"] for e in evidence}, {self.proposed, second})
+        # Neither record exists any more; both deletions are still on record.
+        for record_id in (self.proposed, second):
+            with self.assertRaises(ValueError):
+                self._run("show-staged", "--id", record_id)
+
+    def test_deleting_an_unknown_record_names_it(self) -> None:
+        with self.assertRaises(Exception) as caught:
+            self._run(
+                "delete-staged", "--id", "KS-20260101-nope", "--reason", "x", "--deleted-by", "s",
+            )
+        self.assertIn("KS-20260101-nope", str(caught.exception))
+
 if __name__ == "__main__":
     unittest.main()
