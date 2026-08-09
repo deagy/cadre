@@ -33,6 +33,12 @@ Per-section merge rules (RO-FR-3..RO-FR-15, `requirements.md` SS4/SS5):
   `human_gate` (RO-FR-13) -- narrowing a base entry's matching conditions
   is treated as equivalent to weakening its `human_gate`/`reviewers`, even
   though those fields are never directly touched.
+  `exclude_paths` is deliberately *not* a widen field: a new overlay entry
+  may declare its own, but on an existing base entry it is immutable like
+  `human_gate`. Its polarity is inverted relative to the widen fields --
+  a superset of the base `exclude_paths` *narrows* the effective match --
+  so `_widen_field_superset` would enforce exactly the wrong direction and
+  let an overlay shed a base entry's `reviewers` coverage.
 - `team_recipes[]`: purely additive. A new, non-colliding `id` may be added;
   an existing base `id` is fully immutable (no widen exception -- RO-FR-7).
 - `change_intake`: `keywords` / `agents` / `quality_gates` are additive-only
