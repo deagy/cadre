@@ -1079,6 +1079,45 @@
       }
     },
     {
+      "id": "KNOWLEDGE-STORE-2",
+      "description": "knowledge-store route matched via keyword_groups alone (no path, no base 'keywords' hit); pins the PR #164 remediation's narrowed knowledge-store-flavoured phrasing ('lessons learned'/'agent knowledge base') as a still-true-positive after the keyword_groups narrowing that removed generic single words like 'findings'/'decisions'/'learnings'/'approved patterns' -- see KNOWLEDGE-STORE-NEG-1 for the adjacent false positive that narrowing was meant to eliminate",
+      "task": "Curate the lessons learned from this quarter's incidents into the agent knowledge base for reuse by future agents",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-KNOWLEDGE-STORE-2",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "knowledge-store-steward"
+        ],
+        "reviewers": [
+          "security-reviewer",
+          "compliance-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "knowledge-store"
+        ],
+        "workflow": "knowledge-ingestion"
+      }
+    },
+    {
+      "id": "KNOWLEDGE-STORE-NEG-1",
+      "description": "adjacent-domain false positive that PR #164's original keyword_groups ([\"record\",\"capture\",...,\"preserve\",\"add\"] AND [\"findings\",\"learnings\",...,\"approved patterns\",...]) wrongly routed to knowledge-store: a document-preservation task with no knowledge-store-flavoured phrase and no changed files under roster/knowledge-store/**. Pins the narrowed groups (requiring a specific phrase like 'agent knowledge'/'knowledge base'/'lessons learned'/'operational knowledge') as no longer matching generic 'preserve' + 'approved patterns' language; resolves to needs-triage since no other route matches this task either",
+      "task": "Preserve the approved patterns document for the release",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-KNOWLEDGE-STORE-NEG-1",
+      "expect_needs_triage": true,
+      "expected": {
+        "primary": [],
+        "reviewers": [],
+        "support": [],
+        "matched_routes": [],
+        "workflow": "needs-triage"
+      }
+    },
+    {
       "id": "ARCHITECTURE-DESIGN-1",
       "description": "architecture-design route; also pins the architecture-change risk_rule ('architecture' is a shared keyword), a genuine overlap in routing.yaml, not a fixture defect",
       "task": "Design the architecture and system design proposal",
