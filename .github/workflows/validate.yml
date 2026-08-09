@@ -246,9 +246,6 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
-    env:
-      CADRE_HOME: ${{ runner.temp }}/cadre-home
-      CADRE_BIN_DIR: ${{ runner.temp }}/cadre-bin
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -256,6 +253,14 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
+      - name: Scope the install to this runner's temp dir
+        # Set here rather than in a job-level `env:` block: the `runner`
+        # context is not available at job level, and referencing it there is
+        # what GitHub rejects as a workflow file issue.
+        run: |
+          set -eu
+          echo "CADRE_HOME=$RUNNER_TEMP/cadre-home" >> "$GITHUB_ENV"
+          echo "CADRE_BIN_DIR=$RUNNER_TEMP/cadre-bin" >> "$GITHUB_ENV"
       - name: Install a stub `claude` CLI on PATH
         run: |
           set -eu
@@ -282,9 +287,6 @@ jobs:
     name: install.ps1 (executed against a stub runner CLI)
     runs-on: windows-latest
     timeout-minutes: 10
-    env:
-      CADRE_HOME: ${{ runner.temp }}\cadre-home
-      CADRE_BIN_DIR: ${{ runner.temp }}\cadre-bin
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -292,6 +294,14 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
+      - name: Scope the install to this runner's temp dir
+        # Set here rather than in a job-level `env:` block: the `runner`
+        # context is not available at job level, and referencing it there is
+        # what GitHub rejects as a workflow file issue.
+        shell: pwsh
+        run: |
+          "CADRE_HOME=$(Join-Path $env:RUNNER_TEMP 'cadre-home')" | Add-Content -Path $env:GITHUB_ENV
+          "CADRE_BIN_DIR=$(Join-Path $env:RUNNER_TEMP 'cadre-bin')" | Add-Content -Path $env:GITHUB_ENV
       - name: Install a stub `claude` CLI on PATH
         shell: pwsh
         run: |
