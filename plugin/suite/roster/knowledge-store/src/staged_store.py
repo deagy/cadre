@@ -234,6 +234,60 @@ def put_record_text(db: sqlite3.Connection, text: str) -> str:
     return put_record(db, frontmatter, body)
 
 
+def put_generated_record(db: sqlite3.Connection, frontmatter: dict[str, Any], body: str) -> dict[str, Any]:
+    """Store a record whose id was generated (`finding_record.build_record`), refusing to
+    silently clobber whatever already occupies that id.
+
+    `put_record` upserts by id unconditionally, which is correct when a human
+    or steward is amending a record they know exists -- they typed its id on
+    purpose. It is the wrong behaviour for a *generated* id: the caller never
+    chose it, so a collision there is either the same finding proposed twice
+    (harmless -- the digest is a pure function of the body, so identical
+    content means nothing changed) or two different findings that happened to
+    land on the same id (never harmless -- `put_record`'s upsert would
+    silently overwrite one, including reverting an already-dispositioned
+    record's status back to 'proposed').
+
+    So: same id, same `content_digest` -> treated as already staged, nothing
+    written, existing status left untouched. Same id, different
+    `content_digest` -> refused loudly, nothing written. There is no third
+    case where this function writes over an existing row.
+    """
+    record_id = frontmatter["id"]
+    existing = get_record(db, record_id)
+    if existing is not None:
+        existing_frontmatter, _ = existing
+        if existing_frontmatter.get("content_digest") == frontmatter.get("content_digest"):
+            return {
+                "status": "already-staged",
+                "id": record_id,
+                "record_status": existing_frontmatter.get("status"),
+                "content_digest": frontmatter.get("content_digest"),
+                "note": (
+                    "A record with this generated id and identical content is already staged; "
+                    "nothing was written, so its current disposition (if any) was left untouched."
+                ),
+            }
+        raise StagedRecordError(
+            f"generated id {record_id!r} collides with an existing staged record whose content "
+            f"differs (existing content_digest {existing_frontmatter.get('content_digest')!r} != "
+            f"{frontmatter.get('content_digest')!r}). Refused rather than overwritten: reword the "
+            "finding's title so the generated id differs, or use `propose --input` with a "
+            "hand-assigned id if this is deliberately meant to replace that exact record."
+        )
+    put_record(db, frontmatter, body)
+    return {
+        "status": "staged",
+        "id": record_id,
+        "record_status": frontmatter.get("status"),
+        "content_digest": frontmatter.get("content_digest"),
+        "note": (
+            "Staged for knowledge-store-steward disposition. Staging is not ingestion: nothing is "
+            "retrievable until a steward accepts this record and it is ingested."
+        ),
+    }
+
+
 def get_record(db: sqlite3.Connection, record_id: str) -> tuple[dict[str, Any], str] | None:
     row = db.execute(
         "SELECT frontmatter_json, body FROM staged_records WHERE id = ?", (record_id,)
@@ -431,6 +485,26 @@ def delete_record(
     decision that the record is durable knowledge, so removing it afterwards
     is a reversal that needs a human, per the escalation the steward's role
     definition already describes.
+
+    Proposer-versus-decider check, decided deliberately (unlike the
+    asymmetry `disposition_record` already closed, this was open until now):
+    a still-`proposed` record has had no decision made about it yet, so its
+    own proposer may delete it -- that is just withdrawing a draft, and
+    nothing about the authorship/approval-separation invariant applies to a
+    record nobody has approved or rejected. Once a record carries *any*
+    disposition (`accepted`, `rejected`, or `deferred`), a decision exists,
+    and the same separation `disposition_record` enforces for making that
+    decision is enforced here for undoing evidence of it: the proposer may
+    not also be the one who deletes a dispositioned record, full stop --
+    independent of, and in addition to, the `accepted`/`authorized_by` check
+    above (an accepted record needs both a non-proposer deleter *and* human
+    authorization; the two checks protect different things). Without this,
+    an agent whose finding was rejected could quietly delete the rejection
+    and retry elsewhere, leaving only the retained deletion-evidence row --
+    accurate, but not something anyone would think to check. This mirrors
+    `roster/shared/agent-autonomy.yaml`'s
+    `ingest_update_reclassify_or_delete: knowledge_store_steward_only` in the
+    same spirit `disposition_record` already applies it.
     """
     loaded = get_record(db, record_id)
     if loaded is None:
@@ -442,6 +516,15 @@ def delete_record(
             "from data loss"
         )
     status = frontmatter.get("status")
+    if status != "proposed" and deleted_by == frontmatter.get("staged_by"):
+        raise StagedRecordError(
+            f"{deleted_by!r} staged this record and it already carries a disposition ({status!r}), "
+            "so deleting it must not be the proposer's own act either -- the same separation "
+            "disposition_record enforces for deciding a record's outcome applies to erasing "
+            "evidence of that decision. A steward other than the proposer must delete it. A "
+            "record that is still 'proposed' has no decision yet to protect and may be withdrawn "
+            "by its own proposer."
+        )
     if status == "accepted" and not (authorized_by or "").strip():
         raise StagedRecordError(
             f"record {record_id!r} was accepted, so deleting it reverses a steward's decision and "
@@ -484,6 +567,7 @@ __all__ = [
     "serialize_record",
     "put_record",
     "put_record_text",
+    "put_generated_record",
     "get_record",
     "get_record_text",
     "list_records",

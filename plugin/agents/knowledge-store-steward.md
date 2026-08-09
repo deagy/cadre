@@ -21,15 +21,16 @@ Operate the agent-facing vectorized knowledge store: authorize and normalize imp
 - Authorized source export and documented ownership
 - Access classification, retention requirement, source format, intended audiences, and embedding configuration
 - Retrieval evaluation questions and expected source evidence
-- Agent-proposed `knowledge_steward_handoffs` items, field list and redaction rule per `../shared/knowledge-use-policy.md`, staged as records under `proposed-knowledge/` in the frontmatter format defined by `proposed-knowledge.schema.json` — see Staging and Disposition below
+- Agent-proposed `knowledge_steward_handoffs` items, field list and redaction rule per `../shared/knowledge-use-policy.md`, staged as records via `cadre knowledge propose` in the frontmatter format defined by `proposed-knowledge.schema.json` — see Staging and Disposition below
 
 ## Outputs
 
 - Demo ingestion result with run ID and message/chunk counts; supplemental steward record for source identity, redaction/embedding summaries, failures, and approvals
 - Search results with point-in-time source/message/chunk references, content hashes, and untrusted-content warnings
-- Disposition for each proposed knowledge handoff, recorded by amending that record's frontmatter in place (see Staging and Disposition)
+- Disposition for each staged record, recorded via `cadre knowledge disposition-staged` with status, action, reason, classification, and deciding actor (see Staging and Disposition)
+- Deletion evidence for staged records removed via `cadre knowledge delete-staged`, preserved immutably with record id, content digest, status, reason, and actor
 - Preserved retrieved bundle and integrity hash for review/compliance evidence
-- Quality evaluation and access/retention gaps; supplemental deletion evidence until lifecycle commands are implemented
+- Quality evaluation and access/retention gaps
 
 ## Required checks
 
@@ -55,9 +56,13 @@ The ingestion is traceable and reproducible, sensitive-content handling is revie
 
 ## Staging and Disposition
 
-**Staging:** Agent-proposed knowledge is converted to durable records under `proposed-knowledge/` with YAML frontmatter containing `id` (unique, immutable), `content_digest` (sha256 of body), `staged_by` (actor who performed conversion), and other required fields. The `id` and `content_digest` together form the durable identity linking a proposal to its eventual disposition.
+**Staging:** Agent-proposed knowledge is staged as durable records via `cadre knowledge propose`, stored in this project's SQLite partition under `.agents/knowledge-store/` (gitignored). Each record carries YAML frontmatter with `id` (unique, immutable), `content_digest` (sha256 of body), `staged_by` (actor), and required schema fields per `proposed-knowledge.schema.json`. The `id` and `content_digest` together form the durable identity.
 
-**Disposition:** Each record's frontmatter is amended in place with `status` (proposed → accepted/rejected/deferred) and an optional `disposition` mapping containing `action` (what was decided), `reason` (why), `classification_used` (actual classification applied, if diverged from proposal), `diverged_from_proposal` (boolean), and `decided_by` (identity of deciding steward or authorized human). No deletion capability exists — `recommended_action` is ingest, update, reclassify, or defer only. An agent may not disposition its own proposal.
+**Disposition:** Each staged record is dispositioned via `cadre knowledge disposition-staged`, recording `status` (proposed → accepted/rejected/deferred) and an optional `disposition` mapping containing `action` (what was decided), `reason` (why), `classification_used` (classification applied, if diverged from proposal), `diverged_from_proposal` (boolean), and `decided_by` (identity of deciding steward or authorized human). Disposition history is append-only and exported as `<record-id>.history.json` beside the record whenever any disposition has been recorded through the CLI -- not only on a second one. Records dispositioned before that command existed carry a disposition with no history. An agent may not disposition its own proposal.
+
+**Deletion:** Staged records may be deleted via `cadre knowledge delete-staged`, which writes immutable deletion evidence (record id, title, content digest, status at deletion, reason, actor, and authorizing human if an accepted record). Deleting an accepted staged record requires a named authorized human. Deletion of *ingested* content (messages, chunks, embeddings) remains unimplemented; see `SECURITY.md` § Storage rules.
+
+**Snapshot:** `roster/knowledge-store/proposed-knowledge/` is a committed, generated export refreshed via `cadre knowledge export-staged`. It serves as a durable backup and visibility layer because the underlying SQLite store is gitignored. **The snapshot is not guaranteed to be current** — the store is the authoritative source, and the snapshot is an intentional periodic export, not a live mirror. Index dispositions and deletion evidence from this snapshot, with the understanding that it may lag behind the actual store; see `proposed-knowledge/README.md`. `Evidence-Curator` (`../documentation/evidence-curator/AGENT.md`) indexes staged records and their dispositions as part of the overall evidence surface.
 
 # Shared policy: roster/shared/operating-principles.md
 
