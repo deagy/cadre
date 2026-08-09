@@ -144,6 +144,7 @@ PATH_SUBSTITUTIONS: list[tuple[str, str]] = [
     ("`../documentation/evidence-curator/AGENT.md`", "this project's evidence-curator role definition"),
     ("`SECURITY.md`", "this project's security documentation"),
     ("`roster/knowledge-store/README.md`", "this project's knowledge-store documentation"),
+    ("`../../knowledge-store/AGENT.md`", "this project's knowledge-store-steward role definition"),
     (
         "`roster/knowledge-store/proposed-knowledge.schema.json`",
         "this project's staged-knowledge-record schema",
@@ -374,6 +375,7 @@ SKILL_PATH_SUBSTITUTIONS: list[tuple[str, str]] = [
     ("`roster/shared/README.md`", "this project's shared-policy documentation"),
     ("roster/shared/README.md", "this project's shared-policy documentation"),
     ("`roster/knowledge-store/README.md`", "this project's knowledge-store documentation"),
+    ("`../../knowledge-store/AGENT.md`", "this project's knowledge-store-steward role definition"),
     (
         "`roster/knowledge-store/proposed-knowledge.schema.json`",
         "this project's staged-knowledge-record schema",

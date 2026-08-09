@@ -93,6 +93,8 @@ Adapt waves to the selector plan, required quality gates, and workflow dependenc
 
 Wait for each dispatched agent's final response. Check its scope, evidence, disposition, unresolved risks, and receiver. Save run artifacts only when repository edits are authorized, using `roster/orchestration/runs/<task-id>/` unless the user specifies another location.
 
+After findings are consolidated, stage durable candidates: for every `knowledge_steward_handoffs` item returned across this round's dispatches, run `cadre knowledge propose --input <record>`, building the record's required frontmatter directly from that item's `title`, `evidence`, `origin`, `proposed_classification`, `source_scope`, `sensitivity_notes`, `conflicts_or_staleness`, `untrusted_instruction_risk`, and `recommended_action` — see [references/dispatch-contract.md](references/dispatch-contract.md) for the field list, `roster/knowledge-store/proposed-knowledge.schema.json` for the frontmatter contract they satisfy. The orchestrator supplies only the mechanical staging fields the handoff item cannot carry itself (`id`, `status`, `staged_by`; `content_digest` is computed from the record body), never a substantive one. Staging queues the candidate for `knowledge-store-steward` disposition; it is not ingestion, confers no retrievability, and is not approval — the orchestrator stages what an agent proposed, it does not decide durability on the agent's behalf. If every dispatched agent's `knowledge_steward_handoffs` was empty this round, say so in the summary instead of skipping the step silently.
+
 For every `team_recipes` entry actually dispatched this run, perform an
 explicit **Reconcile Team Findings** pass before folding its members' results
 into the summary below:
@@ -123,6 +125,7 @@ Return an outcome-first summary containing:
   or empty dispatch pass silently into "and then I did the work myself";
 - agents dispatched, completed, blocked, and deferred;
 - knowledge retrieval status and citations used;
+- `knowledge_steward_handoffs` staged this round (record ids from `cadre knowledge propose`), or stated as none;
 - findings and conflicting recommendations by severity;
 - human gates reached;
 - changed or generated artifacts and validation performed;

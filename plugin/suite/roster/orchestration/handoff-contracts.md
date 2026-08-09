@@ -17,7 +17,11 @@ Every handoff includes:
   `untrusted_instruction_risk` (`true | false | unknown`) signal preserved
   from the cited retrieval, never cleared by the proposing agent; an empty
   list means none. This is a proposal only, not approval to ingest or mutate
-  the knowledge store.
+  the knowledge store. The orchestrator stages durable candidates from this
+  list via `cadre knowledge propose` during consolidation (see the
+  `run-agent-orchestration` skill's "Consolidate Results"); staging queues a
+  candidate for `knowledge-store-steward` disposition and is neither
+  ingestion nor approval.
 - Required approvals and their status.
 - Recommended next agent and explicit acceptance criteria.
 - Intent record and requirements-baseline identifiers when supplied by the

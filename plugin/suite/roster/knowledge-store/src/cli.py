@@ -11,6 +11,7 @@ from typing import Any
 
 from config import TIER_GLOBAL_FALLBACK, load_config
 from database import open_store, store_stats
+from finding_record import FindingError, build_record
 from service import build_agent_context, ingest_file, search_store, stable_query_id
 from settings import SettingsError
 from staged_records import STATUS_VALUES as STAGED_STATUSES
@@ -24,6 +25,7 @@ from staged_store import (
     get_record,
     install_schema,
     list_records,
+    put_generated_record,
     put_record,
     put_record_text,
     serialize_record,
@@ -72,7 +74,27 @@ def _parser() -> argparse.ArgumentParser:
     # later disposition (and a separate ingest) puts anything in front of
     # retrieval.
     propose = subparsers.add_parser("propose")
-    propose.add_argument("--input", required=True, help="record file, or - for stdin")
+    propose_input = propose.add_mutually_exclusive_group(required=True)
+    propose_input.add_argument(
+        "--input", help="a fully-authored record file (frontmatter + body), or - for stdin"
+    )
+    propose_input.add_argument(
+        "--from-finding",
+        dest="from_finding",
+        help=(
+            "a JSON file (or - for stdin) with the record's fields; id, content_digest, and "
+            "status are generated -- see finding_record.FINDING_KEYS for the required keys"
+        ),
+    )
+    propose.add_argument(
+        "--render-only",
+        dest="render_only",
+        action="store_true",
+        help=(
+            "validate and print the record that would be staged, without writing it -- review "
+            "before proposing, or preview what --from-finding would generate"
+        ),
+    )
     add_config(propose)
     list_staged = subparsers.add_parser("list-staged")
     list_staged.add_argument("--status", choices=STAGED_STATUSES)
@@ -110,6 +132,15 @@ def _parser() -> argparse.ArgumentParser:
     export_staged = subparsers.add_parser("export-staged")
     export_staged.add_argument("--output", required=True)
     export_staged.add_argument("--status", choices=STAGED_STATUSES)
+    export_staged.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "compare the store against --output and report drift, writing nothing. Local-only: "
+            "the store is gitignored and machine-local, so CI has no store to compare against and "
+            "cannot run this meaningfully -- only an operator's own machine can"
+        ),
+    )
     add_config(export_staged)
     return parser
 
@@ -139,14 +170,76 @@ def _enforce_retrieval_scope(tier: str, options: dict[str, Any]) -> None:
         )
 
 
-def _propose(db: Any, source: str) -> dict[str, Any]:
-    """Stage one record read from a file or stdin.
+def _read_source(source: str) -> str:
+    return sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
 
-    Validation happens inside `put_record_text` before the write, so a
-    malformed record never reaches the table -- the failure is "it was never
-    staged", not "something invalid is staged and a checker will catch it".
+
+def _render_result(frontmatter: dict[str, Any], body: str) -> dict[str, Any]:
+    """Validate and format a not-yet-staged record for `--render-only`.
+
+    Runs the real validator (not a preview-only approximation) so a
+    render-only failure names the same problem `propose` would have refused
+    on. The rendered text is exactly what `put_record_text`/`propose --input -`
+    would accept, so a reviewer can pipe it straight through once satisfied.
     """
-    text = sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
+    findings = validate_parsed(frontmatter, body)
+    if findings:
+        raise ValueError("record does not satisfy the contract: " + "; ".join(findings))
+    return {
+        "status": "rendered",
+        "id": frontmatter.get("id"),
+        "content_digest": frontmatter.get("content_digest"),
+        "text": serialize_record(frontmatter, body),
+        "note": (
+            "Not staged: --render-only was passed. Review this, then re-run the same command "
+            "without --render-only (or pipe --text into `propose --input -`) to stage it."
+        ),
+    }
+
+
+def _propose(db: Any, options: dict[str, Any]) -> dict[str, Any]:
+    """Stage one record, from a fully-authored file or from a structured finding.
+
+    Two input shapes, one write path. `--input` is the original, unchanged:
+    a complete record (frontmatter + body) is read and validated as-is inside
+    `put_record_text`, so a malformed record never reaches the table.
+
+    `--from-finding` is the low-friction path this exists to add: a JSON
+    mapping with the record's fields (see `finding_record.FINDING_KEYS`) is
+    turned into a full record by `finding_record.build_record`, which
+    generates `id`, `content_digest`, and `status` rather than asking the
+    caller to hand-compute a sha256 or memorise the id pattern. It still goes
+    through the *same* contract validator before anything is written, and the
+    write itself goes through `put_generated_record`, which refuses (rather
+    than silently overwrites) a generated id that collides with different
+    existing content.
+
+    `--render-only` short-circuits either path before the write: the record
+    is built and validated, but never staged.
+    """
+    render_only = options.pop("render_only", False)
+    from_finding = options.pop("from_finding", None)
+    input_source = options.pop("input", None)
+
+    if from_finding is not None:
+        raw = _read_source(from_finding)
+        try:
+            finding = json.loads(raw)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"--from-finding did not contain valid JSON: {error}") from error
+        try:
+            frontmatter, body = build_record(finding)
+        except FindingError as error:
+            raise ValueError(str(error)) from error
+        if render_only:
+            return _render_result(frontmatter, body)
+        return put_generated_record(db, frontmatter, body)
+
+    if render_only:
+        frontmatter, body = parse_record(_read_source(input_source))
+        return _render_result(frontmatter, body)
+
+    text = _read_source(input_source)
     record_id = put_record_text(db, text)
     stored = list_records(db, None)
     summary = next(record for record in stored if record["id"] == record_id)
@@ -241,6 +334,81 @@ def _export_staged(db: Any, output: str, status: str | None) -> dict[str, Any]:
     }
 
 
+def _check_staged_export(db: Any, output: str, status: str | None) -> dict[str, Any]:
+    """Compare the store's records against a committed export snapshot, writing nothing.
+
+    **Local-only signal.** `roster/knowledge-store/proposed-knowledge/` is a
+    generated export of a store that `.gitignore` deliberately excludes from
+    version control (`SECURITY.md`), so there is no store on a CI runner to
+    compare against -- CI can validate that the committed snapshot is
+    well-formed (`staged_records.py`'s own drift guard), but it cannot tell
+    whether the snapshot still matches whatever the store currently holds.
+    This command can only answer that question on the machine that holds the
+    store, and only for that machine, at that moment. A clean result means
+    "this store agrees with this snapshot right now", not "the snapshot is
+    current" in any sense a build could rely on.
+
+    Compares frontmatter+body text and disposition-history sidecars
+    byte-for-byte against what `export-staged` (without `--check`) would
+    write, so a clean check is exactly the guarantee a real export would have
+    produced no diff. `--status` narrows which store records are compared,
+    the same as it narrows a real export; comparing a status-filtered store
+    against a snapshot exported without that filter will report the
+    untouched records as `extra_in_snapshot`, which is a true statement about
+    that mismatched comparison, not a bug -- keep `--status` consistent with
+    how the snapshot being checked was produced.
+    """
+    destination = Path(output)
+    exported = export_records(db, status)
+
+    existing_records: dict[str, Path] = {}
+    if destination.is_dir():
+        for path in destination.glob("*.md"):
+            if path.name == "README.md":
+                continue
+            existing_records[path.stem] = path
+
+    missing_from_snapshot: list[str] = []
+    stale_in_snapshot: list[str] = []
+    for record_id, text in sorted(exported.items()):
+        path = existing_records.pop(record_id, None)
+        if path is None:
+            missing_from_snapshot.append(record_id)
+        elif path.read_text(encoding="utf-8") != text:
+            stale_in_snapshot.append(record_id)
+    extra_in_snapshot = sorted(existing_records)
+
+    history_drift: list[str] = []
+    for record_id in sorted(exported):
+        history = get_history(db, record_id)
+        sidecar = destination / f"{record_id}.history.json"
+        if history:
+            if not sidecar.is_file():
+                history_drift.append(record_id)
+            else:
+                on_disk = json.loads(sidecar.read_text(encoding="utf-8"))
+                if on_disk != history:
+                    history_drift.append(record_id)
+        elif sidecar.is_file():
+            history_drift.append(record_id)
+
+    clean = not (missing_from_snapshot or stale_in_snapshot or extra_in_snapshot or history_drift)
+    return {
+        "status": "checked",
+        "clean": clean,
+        "missing_from_snapshot": missing_from_snapshot,
+        "stale_in_snapshot": stale_in_snapshot,
+        "extra_in_snapshot": extra_in_snapshot,
+        "history_drift": history_drift,
+        "directory": str(destination),
+        "note": (
+            "Local-only signal: the store is gitignored and machine-local, so CI has no store to "
+            "compare against and cannot run this meaningfully -- only an operator's own machine can. "
+            "A clean result describes this machine's store right now, not a build guarantee."
+        ),
+    }
+
+
 def _enforce_staging_scope(tier: str) -> None:
     """Refuse to stage records into the shared global-fallback store.
 
@@ -318,13 +486,18 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
             # existing store working with no migration step.
             install_schema(db)
             if command == "propose":
-                return _propose(db, options.pop("input"))
+                return _propose(db, options)
             if command == "list-staged":
                 return {"records": list_records(db, options.pop("status", None))}
             if command == "import-staged":
                 return _import_staged(db, options.pop("directory"))
             if command == "export-staged":
-                return _export_staged(db, options.pop("output"), options.pop("status", None))
+                check = options.pop("check", False)
+                output = options.pop("output")
+                status = options.pop("status", None)
+                if check:
+                    return _check_staged_export(db, output, status)
+                return _export_staged(db, output, status)
             if command == "delete-staged":
                 return delete_record(
                     db,

@@ -19,6 +19,7 @@ Collect, normalize, index, protect, and retain delivery and compliance evidence 
 ## Inputs
 
 - Intent and requirements baselines, artifact traceability, gate records, review decisions, test and scan results, plans, approvals, release records, configurations, logs, control mappings, and applicable formally defined BOMs
+- Staged knowledge records with dispositions and deletion evidence (indexed from the `roster/knowledge-store/proposed-knowledge/` snapshot; see `../../knowledge-store/AGENT.md` for snapshot durability and currency caveats)
 
 ## Outputs
 

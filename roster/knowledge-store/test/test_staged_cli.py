@@ -35,6 +35,31 @@ def _a_record() -> tuple[Path, dict]:
     return path, frontmatter
 
 
+def _a_finding(**overrides: object) -> dict:
+    """A well-formed structured finding for `propose --from-finding`.
+
+    Every key `finding_record.FINDING_KEYS` requires, plus `summary`
+    (which becomes the record body). Callers
+    override individual keys (including deleting one, for the
+    missing-field tests) rather than hand-building a fresh mapping each time.
+    """
+    base: dict[str, object] = {
+        "title": "a durable finding surfaced during review",
+        "summary": "## Finding\n\nSome durable, evidenced observation worth keeping.\n",
+        "evidence": ["roster/knowledge-store/src/cli.py:1"],
+        "origin": {"task": "TASK-1", "artifact": "cli.py", "revision": "deadbeef"},
+        "proposed_classification": "internal",
+        "source_scope": "testing",
+        "sensitivity_notes": "",
+        "conflicts_or_staleness": "",
+        "recommended_action": "ingest",
+        "untrusted_instruction_risk": False,
+        "staged_by": "reviewer-agent",
+    }
+    base.update(overrides)
+    return base
+
+
 class StagedCliTests(unittest.TestCase):
     def setUp(self) -> None:
         self.workspace = tempfile.TemporaryDirectory()
@@ -112,6 +137,169 @@ class StagedCliTests(unittest.TestCase):
     def test_an_invalid_status_filter_is_rejected_by_the_parser(self) -> None:
         with self.assertRaises(SystemExit):
             self._run("list-staged", "--status", "archived")
+
+
+class FromFindingTests(unittest.TestCase):
+    """`propose --from-finding`: the low-friction path from a structured
+    finding to a staged record, with id/digest/status generated rather than
+    hand-authored.
+    """
+
+    def setUp(self) -> None:
+        self.workspace = tempfile.TemporaryDirectory()
+        self.addCleanup(self.workspace.cleanup)
+        root = Path(self.workspace.name)
+        self.config_path = root / "config.json"
+        self.config_path.write_text(
+            json.dumps({"database": str(root / "knowledge.db")}), encoding="utf-8"
+        )
+
+    def _run(self, *arguments: str) -> dict:
+        return cli.run([*arguments, "--config", str(self.config_path)])
+
+    def _write_finding(self, finding: dict, name: str = "finding.json") -> Path:
+        path = Path(self.workspace.name) / name
+        path.write_text(json.dumps(finding), encoding="utf-8")
+        return path
+
+    def test_propose_from_finding_generates_a_well_formed_record(self) -> None:
+        finding = _a_finding()
+        result = self._run("propose", "--from-finding", str(self._write_finding(finding)))
+        self.assertEqual(result["status"], "staged")
+        self.assertRegex(result["id"], staged_records.ID_PATTERN.pattern)
+        shown = self._run("show-staged", "--id", result["id"])
+        self.assertEqual(shown["frontmatter"]["title"], finding["title"])
+        self.assertEqual(shown["frontmatter"]["status"], "proposed")
+        self.assertEqual(shown["frontmatter"]["content_digest"], result["content_digest"])
+        self.assertEqual(
+            staged_records.compute_digest(shown["body"]), result["content_digest"]
+        )
+        # Never computed by hand here either -- it must be the one true
+        # implementation's output, reachable through the normal validator.
+        self.assertEqual(staged_records.validate_record(shown["text"]), [])
+
+    def test_propose_from_finding_is_idempotent_for_identical_content(self) -> None:
+        finding = _a_finding()
+        path = self._write_finding(finding)
+        first = self._run("propose", "--from-finding", str(path))
+        second = self._run("propose", "--from-finding", str(path))
+        self.assertEqual(first["id"], second["id"])
+        self.assertEqual(second["status"], "already-staged")
+        self.assertEqual(len(self._run("list-staged")["records"]), 1)
+
+    def test_propose_from_finding_missing_field_names_it(self) -> None:
+        finding = _a_finding()
+        del finding["proposed_classification"]
+        with self.assertRaises(ValueError) as caught:
+            self._run("propose", "--from-finding", str(self._write_finding(finding)))
+        self.assertIn("proposed_classification", str(caught.exception))
+        self.assertEqual(self._run("list-staged")["records"], [])
+
+    def test_propose_from_finding_does_not_default_untrusted_instruction_risk(self) -> None:
+        finding = _a_finding()
+        del finding["untrusted_instruction_risk"]
+        with self.assertRaises(ValueError) as caught:
+            self._run("propose", "--from-finding", str(self._write_finding(finding)))
+        self.assertIn("untrusted_instruction_risk", str(caught.exception))
+        self.assertEqual(self._run("list-staged")["records"], [])
+
+    def test_propose_from_finding_does_not_default_proposed_classification(self) -> None:
+        finding = _a_finding()
+        del finding["proposed_classification"]
+        with self.assertRaises(ValueError) as caught:
+            self._run("propose", "--from-finding", str(self._write_finding(finding)))
+        self.assertIn("proposed_classification", str(caught.exception))
+
+    def test_propose_from_finding_requires_a_non_empty_body(self) -> None:
+        finding = _a_finding(summary="   ")
+        with self.assertRaises(ValueError) as caught:
+            self._run("propose", "--from-finding", str(self._write_finding(finding)))
+        self.assertIn("summary", str(caught.exception))
+
+    def test_propose_from_finding_rejects_invalid_json(self) -> None:
+        path = Path(self.workspace.name) / "broken.json"
+        path.write_text("{not valid json", encoding="utf-8")
+        with self.assertRaises(ValueError) as caught:
+            self._run("propose", "--from-finding", str(path))
+        self.assertIn("JSON", str(caught.exception))
+
+    def test_propose_from_finding_reads_stdin(self) -> None:
+        finding = _a_finding()
+        original = sys.stdin
+        sys.stdin = __import__("io").StringIO(json.dumps(finding))
+        self.addCleanup(lambda: setattr(sys, "stdin", original))
+        result = self._run("propose", "--from-finding", "-")
+        self.assertEqual(result["status"], "staged")
+
+    def test_propose_from_finding_collision_with_different_content_is_refused(self) -> None:
+        import finding_record
+
+        original_generate_id = finding_record.generate_id
+        finding_record.generate_id = lambda title, digest, when=None: "KS-20260101-forced-collision"
+        self.addCleanup(lambda: setattr(finding_record, "generate_id", original_generate_id))
+
+        first = _a_finding(summary="the first, original finding body")
+        second = _a_finding(
+            title="an unrelated second finding", summary="a completely different finding body"
+        )
+        self._run("propose", "--from-finding", str(self._write_finding(first, "first.json")))
+        with self.assertRaises(Exception) as caught:
+            self._run("propose", "--from-finding", str(self._write_finding(second, "second.json")))
+        self.assertIn("collides", str(caught.exception))
+        # The first record must be untouched by the refused second write.
+        shown = self._run("show-staged", "--id", "KS-20260101-forced-collision")
+        self.assertIn("first, original finding body", shown["body"])
+        self.assertEqual(len(self._run("list-staged")["records"]), 1)
+
+    def test_input_and_from_finding_are_mutually_exclusive(self) -> None:
+        # --input and --from-finding cannot both be given -- argparse enforces
+        # this structurally rather than the two code paths racing at runtime.
+        with self.assertRaises(SystemExit):
+            self._run(
+                "propose", "--input", "-", "--from-finding", "-",
+            )
+
+
+class RenderOnlyTests(unittest.TestCase):
+    """`propose --render-only`: preview a record without staging it."""
+
+    def setUp(self) -> None:
+        self.workspace = tempfile.TemporaryDirectory()
+        self.addCleanup(self.workspace.cleanup)
+        root = Path(self.workspace.name)
+        self.config_path = root / "config.json"
+        self.config_path.write_text(
+            json.dumps({"database": str(root / "knowledge.db")}), encoding="utf-8"
+        )
+
+    def _run(self, *arguments: str) -> dict:
+        return cli.run([*arguments, "--config", str(self.config_path)])
+
+    def test_render_only_with_from_finding_does_not_stage(self) -> None:
+        finding = _a_finding()
+        path = Path(self.workspace.name) / "finding.json"
+        path.write_text(json.dumps(finding), encoding="utf-8")
+        result = self._run("propose", "--from-finding", str(path), "--render-only")
+        self.assertEqual(result["status"], "rendered")
+        self.assertIn("text", result)
+        self.assertEqual(staged_records.validate_record(result["text"]), [])
+        self.assertEqual(self._run("list-staged")["records"], [])
+
+    def test_render_only_with_input_does_not_stage(self) -> None:
+        path, frontmatter = _a_record()
+        result = self._run("propose", "--input", str(path), "--render-only")
+        self.assertEqual(result["status"], "rendered")
+        self.assertEqual(result["id"], frontmatter["id"])
+        self.assertEqual(self._run("list-staged")["records"], [])
+
+    def test_render_only_still_validates_and_refuses_a_broken_record(self) -> None:
+        finding = _a_finding()
+        del finding["source_scope"]
+        path = Path(self.workspace.name) / "finding.json"
+        path.write_text(json.dumps(finding), encoding="utf-8")
+        with self.assertRaises(ValueError) as caught:
+            self._run("propose", "--from-finding", str(path), "--render-only")
+        self.assertIn("source_scope", str(caught.exception))
 
 
 class StagingScopeTests(unittest.TestCase):
@@ -243,6 +431,74 @@ class MigrationTests(unittest.TestCase):
             self._run("import-staged", "--directory", str(empty))
         self.assertIn("No .md staged-record files", str(caught.exception))
 
+
+class ExportCheckTests(unittest.TestCase):
+    """`export-staged --check`: compare the store to a committed snapshot,
+    writing nothing. A local-only signal -- CI has no store to compare
+    against, only this machine does.
+    """
+
+    def setUp(self) -> None:
+        self.workspace = tempfile.TemporaryDirectory()
+        self.addCleanup(self.workspace.cleanup)
+        root = Path(self.workspace.name)
+        self.config_path = root / "config.json"
+        self.config_path.write_text(
+            json.dumps({"database": str(root / "knowledge.db")}), encoding="utf-8"
+        )
+        self.exported = root / "exported"
+
+    def _run(self, *arguments: str) -> dict:
+        return cli.run([*arguments, "--config", str(self.config_path)])
+
+    def test_check_reports_clean_immediately_after_a_real_export(self) -> None:
+        self._run("import-staged", "--directory", str(RECORDS))
+        self._run("export-staged", "--output", str(self.exported))
+        result = self._run("export-staged", "--output", str(self.exported), "--check")
+        self.assertEqual(result["status"], "checked")
+        self.assertTrue(result["clean"])
+        self.assertEqual(result["missing_from_snapshot"], [])
+        self.assertEqual(result["stale_in_snapshot"], [])
+        self.assertEqual(result["extra_in_snapshot"], [])
+        self.assertEqual(result["history_drift"], [])
+        self.assertIn("Local-only", result["note"])
+
+    def test_check_writes_nothing(self) -> None:
+        self._run("import-staged", "--directory", str(RECORDS))
+        result = self._run("export-staged", "--output", str(self.exported), "--check")
+        self.assertFalse(self.exported.exists(), "--check must not create the output directory")
+        self.assertFalse(result["clean"])
+        self.assertTrue(result["missing_from_snapshot"])
+
+    def test_check_detects_a_record_the_snapshot_has_gone_stale_on(self) -> None:
+        self._run("import-staged", "--directory", str(RECORDS))
+        self._run("export-staged", "--output", str(self.exported))
+        record_id = self._run("list-staged", "--status", "proposed")["records"][0]["id"]
+        self._run(
+            "disposition-staged", "--id", record_id, "--action", "accepted",
+            "--reason", "drift test", "--classification-used", "internal",
+            "--decided-by", "someone-else",
+        )
+        result = self._run("export-staged", "--output", str(self.exported), "--check")
+        self.assertFalse(result["clean"])
+        self.assertIn(record_id, result["stale_in_snapshot"])
+        self.assertNotIn(record_id, result["missing_from_snapshot"])
+
+    def test_check_detects_a_record_the_snapshot_still_has_after_deletion(self) -> None:
+        self._run("import-staged", "--directory", str(RECORDS))
+        self._run("export-staged", "--output", str(self.exported))
+        record_id = self._run("list-staged", "--status", "proposed")["records"][0]["id"]
+        self._run("delete-staged", "--id", record_id, "--reason", "gone", "--deleted-by", "s")
+        result = self._run("export-staged", "--output", str(self.exported), "--check")
+        self.assertFalse(result["clean"])
+        self.assertIn(record_id, result["extra_in_snapshot"])
+
+    def test_check_ignores_the_readme(self) -> None:
+        self._run("import-staged", "--directory", str(RECORDS))
+        self._run("export-staged", "--output", str(self.exported))
+        (self.exported / "README.md").write_text("generated, do not edit\n", encoding="utf-8")
+        result = self._run("export-staged", "--output", str(self.exported), "--check")
+        self.assertTrue(result["clean"])
 
 
 class DispositionTests(unittest.TestCase):
@@ -451,6 +707,43 @@ class DeletionTests(unittest.TestCase):
                 "delete-staged", "--id", "KS-20260101-nope", "--reason", "x", "--deleted-by", "s",
             )
         self.assertIn("KS-20260101-nope", str(caught.exception))
+
+    def test_a_still_proposed_record_may_be_deleted_by_its_own_proposer(self) -> None:
+        # No decision exists yet to protect, so this is just withdrawing a
+        # draft -- the authorship/approval separation invariant does not
+        # apply to a record nobody has approved or rejected.
+        staged_by = self._run("show-staged", "--id", self.proposed)["frontmatter"]["staged_by"]
+        result = self._run(
+            "delete-staged", "--id", self.proposed, "--reason", "withdrawing my own draft",
+            "--deleted-by", staged_by,
+        )
+        self.assertEqual(result["status"], "deleted")
+
+    def test_a_dispositioned_record_cannot_be_deleted_by_its_own_proposer(self) -> None:
+        # Decision 2026-08-09: once a record carries a disposition, the
+        # proposer/decider separation extends to deleting it, mirroring
+        # disposition_record's own proposer-cannot-decide check.
+        staged_by = self._run("show-staged", "--id", self.accepted)["frontmatter"]["staged_by"]
+        with self.assertRaises(Exception) as caught:
+            self._run(
+                "delete-staged", "--id", self.accepted, "--reason", "trying to erase the outcome",
+                "--deleted-by", staged_by, "--authorized-by", "an authorized human",
+            )
+        self.assertIn("already carries a disposition", str(caught.exception))
+        # Refused means untouched and unrecorded, matching the accepted/
+        # authorized-by refusal case above.
+        self.assertTrue(self._run("show-staged", "--id", self.accepted))
+        self.assertEqual(self._run("deletion-evidence")["deletions"], [])
+
+    def test_a_dispositioned_record_can_be_deleted_by_someone_other_than_its_proposer(self) -> None:
+        staged_by = self._run("show-staged", "--id", self.accepted)["frontmatter"]["staged_by"]
+        deleter = staged_by + "-someone-else"
+        result = self._run(
+            "delete-staged", "--id", self.accepted, "--reason", "superseded",
+            "--deleted-by", deleter, "--authorized-by", "an authorized human",
+        )
+        self.assertEqual(result["status"], "deleted")
+
 
 if __name__ == "__main__":
     unittest.main()
