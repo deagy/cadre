@@ -1,8 +1,7 @@
 ---
 name: falsification-agent
 description: "Secure cloud agent suite role for the verify phase (falsification-agent)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/testing/falsification-agent/AGENT.md
 convertedFrom: agents/falsification-agent.md

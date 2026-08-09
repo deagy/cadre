@@ -1,8 +1,7 @@
 ---
 name: observability-sre
 description: "Secure cloud agent suite role for the operations phase (observability-sre)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/operations/observability-sre/AGENT.md
 convertedFrom: agents/observability-sre.md

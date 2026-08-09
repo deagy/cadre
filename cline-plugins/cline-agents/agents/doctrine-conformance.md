@@ -1,8 +1,7 @@
 ---
 name: doctrine-conformance
 description: "Secure cloud agent suite role for the review phase (doctrine-conformance)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/doctrine-conformance/AGENT.md
 convertedFrom: agents/doctrine-conformance.md

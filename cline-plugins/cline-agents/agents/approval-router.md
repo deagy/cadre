@@ -1,8 +1,7 @@
 ---
 name: approval-router
 description: "Secure cloud agent suite role for the review phase (approval-router)."
-modelId: anthropic/claude-haiku-4.6
-providerId: anthropic
+modelTier: haiku
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/governance/approval-router/AGENT.md
 convertedFrom: agents/approval-router.md

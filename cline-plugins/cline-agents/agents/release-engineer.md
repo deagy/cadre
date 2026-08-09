@@ -1,8 +1,7 @@
 ---
 name: release-engineer
 description: "Secure cloud agent suite role for the release phase (release-engineer)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/release-engineer/AGENT.md
 convertedFrom: agents/release-engineer.md

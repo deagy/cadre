@@ -1,8 +1,7 @@
 ---
 name: product-intent-agent
 description: "Secure cloud agent suite role for the planning phase (product-intent-agent)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/planning/product-intent-agent/AGENT.md
 convertedFrom: agents/product-intent-agent.md

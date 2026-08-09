@@ -1,8 +1,7 @@
 ---
 name: architecture-authority
 description: "Secure cloud agent suite role for the review phase (architecture-authority)."
-modelId: anthropic/claude-opus-4.6
-providerId: anthropic
+modelTier: opus
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/architecture-authority/AGENT.md
 convertedFrom: agents/architecture-authority.md

@@ -71,11 +71,15 @@ TOOL_MAP = {
     "Edit": "editor",
     "Write": "editor",
 }
-MODEL_TIER_MAP = {
-    "opus": "anthropic/claude-opus-4.6",
-    "sonnet": "anthropic/claude-sonnet-4.6",
-    "haiku": "anthropic/claude-haiku-4.6",
-}
+# Presets carry the capability *tier*, never a vendor-qualified model id and
+# never a provider. The tier is this repository's own domain knowledge --
+# catalog.yaml's header documents the heuristic that assigns it -- whereas
+# which provider and which concrete model serve that tier is an operator
+# decision. team-profile.yaml records `ai.model_provider: not_yet_selected`,
+# so shipping one baked into 74 generated artifacts contradicted this
+# repository's own stated position. The runtime resolves tier -> model id
+# from operator configuration at dispatch time (see cline-agents/README.md).
+MODEL_TIERS = ("opus", "sonnet", "haiku")
 
 # Applied in order, each a plain (non-regex) substring replacement, except
 # ROUTING_YAML_RE below which is applied first since the source text spans
@@ -246,8 +250,7 @@ def _convert_agent_file(source_path: Path, role: str) -> str:
     tools = [t.strip() for t in fields.get("tools", "").split(",") if t.strip()]
     allowed_tools = list(dict.fromkeys(TOOL_MAP[t] for t in tools))
     model = fields.get("model")
-    model_id = MODEL_TIER_MAP.get(model)
-    if model_id is None:
+    if model not in MODEL_TIERS:
         raise SystemExit(f"{role}: unknown model tier {model!r}")
 
     body = _convert_agent_body(role, body)
@@ -257,8 +260,7 @@ def _convert_agent_file(source_path: Path, role: str) -> str:
         "---",
         f"name: {fields['name']}",
         f'description: "{fields["description"]}"',
-        f"modelId: {model_id}",
-        "providerId: anthropic",
+        f"modelTier: {model}",
         f"allowedTools: [{', '.join(allowed_tools)}]",
         f"canonicalSource: {fields['canonical_source']}",
         f"convertedFrom: agents/{role}.md",

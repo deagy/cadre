@@ -1,8 +1,7 @@
 ---
 name: red-team
 description: "Secure cloud agent suite role for the verify phase (red-team)."
-modelId: anthropic/claude-opus-4.6
-providerId: anthropic
+modelTier: opus
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/red-team/AGENT.md
 convertedFrom: agents/red-team.md

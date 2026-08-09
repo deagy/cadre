@@ -1,8 +1,7 @@
 ---
 name: performance-testing-engineer
 description: "Secure cloud agent suite role for the verify phase (performance-testing-engineer)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/performance-testing-engineer/AGENT.md
 convertedFrom: agents/performance-testing-engineer.md

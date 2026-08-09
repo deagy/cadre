@@ -1,8 +1,7 @@
 ---
 name: quantum-timing-assurance-engineer
 description: "Secure cloud agent suite role for the security phase (quantum-timing-assurance-engineer)."
-modelId: anthropic/claude-opus-4.6
-providerId: anthropic
+modelTier: opus
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/security/quantum-timing-assurance-engineer/AGENT.md
 convertedFrom: agents/quantum-timing-assurance-engineer.md

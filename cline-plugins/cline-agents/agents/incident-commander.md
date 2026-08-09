@@ -1,8 +1,7 @@
 ---
 name: incident-commander
 description: "Secure cloud agent suite role for the support phase (incident-commander)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/support/incident-commander/AGENT.md
 convertedFrom: agents/incident-commander.md

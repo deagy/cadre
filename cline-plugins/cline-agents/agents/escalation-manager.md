@@ -1,8 +1,7 @@
 ---
 name: escalation-manager
 description: "Secure cloud agent suite role for the support phase (escalation-manager)."
-modelId: anthropic/claude-haiku-4.6
-providerId: anthropic
+modelTier: haiku
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/support/escalation-manager/AGENT.md
 convertedFrom: agents/escalation-manager.md

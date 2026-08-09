@@ -1,8 +1,7 @@
 ---
 name: finops-engineer
 description: "Secure cloud agent suite role for the operations phase (finops-engineer)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/operations/finops-engineer/AGENT.md
 convertedFrom: agents/finops-engineer.md

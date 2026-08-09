@@ -1,8 +1,7 @@
 ---
 name: release-owner-aide
 description: "Secure cloud agent suite role for the authority phase (release-owner-aide)."
-modelId: anthropic/claude-opus-4.6
-providerId: anthropic
+modelTier: opus
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/authority/release-owner-aide/AGENT.md
 convertedFrom: agents/release-owner-aide.md

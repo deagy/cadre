@@ -369,6 +369,56 @@ const envOr = (key: string, fallback: string): string =>
   process.env[key]?.trim() || fallback;
 
 const DEFAULT_BACKEND_MODE = envOr("CLINE_AGENTS_BACKEND_MODE", "auto");
+
+// Provider and model are operator configuration, never a shipped default.
+// There is deliberately no fallback provider: a bundled default would pick a
+// vendor on the operator's behalf and, where that vendor's credentials happen
+// to be present, silently route task and knowledge-store content to it. See
+// cline-agents/README.md for the configuration this expects.
+const env = (key: string): string | undefined => process.env[key]?.trim() || undefined;
+
+interface ProviderResolution {
+  providerId: string;
+  modelId: string;
+}
+
+/**
+ * Resolve the provider/model for one dispatch. Order, most specific first:
+ * per-call override, the preset's own explicit value, then operator
+ * configuration -- per-tier first so a plan's mixed tiers keep their
+ * distinction, falling back to a single model for every tier when only that
+ * is configured. Returns null when nothing resolves, so callers fail closed
+ * rather than guessing.
+ */
+function resolveProviderAndModel(
+  overrides: { providerId?: string; modelId?: string },
+  def: { providerId?: string; modelId?: string; modelTier?: string },
+): ProviderResolution | { missing: string[] } {
+  const tier = def.modelTier?.toLowerCase();
+  const tierModel = tier ? env(`CLINE_AGENTS_MODEL_${tier.toUpperCase()}`) : undefined;
+  const providerId = overrides.providerId ?? def.providerId ?? env("CLINE_AGENTS_PROVIDER_ID");
+  const modelId =
+    overrides.modelId ?? def.modelId ?? tierModel ?? env("CLINE_AGENTS_MODEL_ID");
+
+  const missing: string[] = [];
+  if (!providerId) missing.push("CLINE_AGENTS_PROVIDER_ID");
+  if (!modelId) {
+    missing.push(
+      tier ? `CLINE_AGENTS_MODEL_${tier.toUpperCase()} (or CLINE_AGENTS_MODEL_ID)` : "CLINE_AGENTS_MODEL_ID",
+    );
+  }
+  if (missing.length > 0) return { missing };
+  return { providerId: providerId as string, modelId: modelId as string };
+}
+
+function providerConfigurationError(presetName: string, missing: string[]): Error {
+  return new Error(
+    `Preset "${presetName}" cannot start: no model provider is configured. ` +
+      `Missing: ${missing.join(", ")}. ` +
+      "Set these in your environment, or pass providerId/modelId explicitly. " +
+      "This suite ships no default provider on purpose -- see cline-agents/README.md.",
+  );
+}
 type SubagentBackendMode = "auto" | "hub" | "local";
 
 // Tool names (Cline's own canonical builtin tool identifiers -- see
@@ -391,6 +441,13 @@ interface AgentDefinition {
   description?: string;
   providerId?: string;
   modelId?: string;
+  /**
+   * Capability tier (`opus`/`sonnet`/`haiku`) carried by generated presets.
+   * Deliberately not a vendor-qualified model id: the tier is this suite's
+   * own domain knowledge, while the provider and the concrete model that
+   * serve it are operator configuration. Resolved at dispatch time.
+   */
+  modelTier?: string;
   systemPrompt: string;
   cwd?: string;
   maxIterations?: number;
@@ -525,6 +582,7 @@ function toAgentDefinition(entry: {
     description: optStr(entry.data.description),
     providerId: optStr(entry.data.providerId),
     modelId: optStr(entry.data.modelId),
+    modelTier: optStr(entry.data.modelTier),
     systemPrompt: entry.body,
     cwd: optStr(entry.data.cwd),
     maxIterations: optInt(entry.data.maxIterations),
@@ -959,6 +1017,14 @@ const DispatchSelectedRolesInput = z
         "retrieval below -- the selector only plans retrieval once an authorized classification is " +
         "present (see build_dispatch_plan.py's _build_knowledge_context).",
     ),
+    providerId: NonEmptyText.optional().describe(
+      "Optional provider override applied to every role dispatched by this call. " +
+        "Defaults to CLINE_AGENTS_PROVIDER_ID; there is no built-in provider.",
+    ),
+    modelId: NonEmptyText.optional().describe(
+      "Optional model override applied to every role dispatched by this call. Overrides the " +
+        "per-tier configuration, so a mixed-tier plan will run entirely on this one model.",
+    ),
     retrieveKnowledge: z
       .boolean()
       .optional()
@@ -1117,11 +1183,16 @@ const setup = (api: SetupApi, ctx: SetupContext) => {
     }
 
     const cwd = resolveContainedCwd(baseCwd, input.workingDirectory ?? def.cwd);
-    const providerId = input.providerId ?? def.providerId ?? "anthropic";
-    const modelId = input.modelId ?? def.modelId;
-    if (!modelId) {
-      throw new Error(`Preset "${def.name}" has no modelId and no override was supplied.`);
+    const resolved = resolveProviderAndModel(
+      { providerId: input.providerId, modelId: input.modelId },
+      def,
+    );
+    if ("missing" in resolved) {
+      // Thrown before any session is started, so a misconfigured dispatch
+      // never reaches a provider at all.
+      throw providerConfigurationError(def.name, resolved.missing);
     }
+    const { providerId, modelId } = resolved;
     const prompt = [def.systemPrompt.trim(), input.instructions?.trim()].filter(Boolean).join("\n\n");
 
     const { toolPolicies, mode } = resolveToolPolicyConfig(def);
@@ -1278,6 +1349,8 @@ const setup = (api: SetupApi, ctx: SetupContext) => {
                   label: roleId,
                   task: input.task,
                   preset: roleId,
+                  providerId: input.providerId,
+                  modelId: input.modelId,
                   instructions,
                   notifyParent: input.notifyParent ?? false,
                 },
@@ -1313,8 +1386,12 @@ const setup = (api: SetupApi, ctx: SetupContext) => {
         const agents = readAgentDefinitions(baseCwd).map((a) => ({
           name: a.name,
           description: a.description,
-          providerId: a.providerId ?? "anthropic",
-          modelId: a.modelId,
+          providerId: a.providerId ?? env("CLINE_AGENTS_PROVIDER_ID") ?? "(none configured)",
+          modelId:
+            a.modelId ??
+            (a.modelTier ? env(`CLINE_AGENTS_MODEL_${a.modelTier.toUpperCase()}`) : undefined) ??
+            env("CLINE_AGENTS_MODEL_ID") ??
+            (a.modelTier ? `(tier ${a.modelTier}, none configured)` : "(none configured)"),
           source: a.source,
           allowedTools: a.allowedTools,
         }));

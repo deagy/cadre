@@ -1,8 +1,7 @@
 ---
 name: visual-designer
 description: "Secure cloud agent suite role for the design phase (visual-designer)."
-modelId: anthropic/claude-opus-4.6
-providerId: anthropic
+modelTier: opus
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/architecture/visual-designer/AGENT.md
 convertedFrom: agents/visual-designer.md

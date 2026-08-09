@@ -1,8 +1,7 @@
 ---
 name: secrets-identity-engineer
 description: "Secure cloud agent suite role for the security phase (secrets-identity-engineer)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/security/secrets-identity-engineer/AGENT.md
 convertedFrom: agents/secrets-identity-engineer.md

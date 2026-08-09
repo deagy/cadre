@@ -1,8 +1,7 @@
 ---
 name: agent-version-control
 description: "Secure cloud agent suite role for the operations phase (agent-version-control)."
-modelId: anthropic/claude-haiku-4.6
-providerId: anthropic
+modelTier: haiku
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/operations/agent-version-control/AGENT.md
 convertedFrom: agents/agent-version-control.md

@@ -1,8 +1,7 @@
 ---
 name: decommission-engineer
 description: "Secure cloud agent suite role for the operations phase (decommission-engineer)."
-modelId: anthropic/claude-sonnet-4.6
-providerId: anthropic
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/operations/decommission-engineer/AGENT.md
 convertedFrom: agents/decommission-engineer.md
