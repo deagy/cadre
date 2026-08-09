@@ -1014,6 +1014,13 @@ class _TeamDispatchJobRecord:
     total_members: int
     results: list[dict[str, Any] | None]
     created_monotonic: float
+    # Set once _finish_team() has joined every member thread *and* written the
+    # team-completed audit record. Deliberately distinct from "every member is
+    # terminal", which poll_team_status() reports: a member records its own
+    # result before the reaper writes that final line, so a caller that treats
+    # a terminal poll as "all background work is done" can tear down the audit
+    # directory while the reaper is still writing into it.
+    settled: threading.Event = dataclasses.field(default_factory=threading.Event)
 
 
 class TeamDispatchJobStore:
@@ -1040,17 +1047,39 @@ class TeamDispatchJobStore:
         for team_id in expired:
             del self._teams[team_id]
 
-    def register(self, team_id: str, results: list[dict[str, Any] | None]) -> None:
+    def register(
+        self,
+        team_id: str,
+        results: list[dict[str, Any] | None],
+        settled: threading.Event | None = None,
+    ) -> None:
         with self._lock:
             self._purge_expired_locked()
-            self._teams[team_id] = _TeamDispatchJobRecord(
+            record = _TeamDispatchJobRecord(
                 total_members=len(results), results=results, created_monotonic=time.monotonic()
             )
+            if settled is not None:
+                record.settled = settled
+            self._teams[team_id] = record
 
     def get(self, team_id: str) -> _TeamDispatchJobRecord | None:
         with self._lock:
             self._purge_expired_locked()
             return self._teams.get(team_id)
+
+    def wait_settled(self, team_id: str, timeout: float) -> bool:
+        """Block until the team's reaper thread has finished, or `timeout`.
+
+        Returns True once the team-completed audit write is done, False on
+        timeout or an unknown/expired team_id. This is what a caller needs
+        before deleting the audit path or otherwise tearing down state the
+        reaper still writes to -- poll_team_status() reporting a terminal
+        status is *not* that guarantee (see _TeamDispatchJobRecord.settled).
+        """
+        record = self.get(team_id)
+        if record is None:
+            return False
+        return record.settled.wait(timeout)
 
 
 # ---------------------------------------------------------------------------
@@ -2282,25 +2311,34 @@ def dispatch_team(
         threads.append(thread)
         thread.start()
 
+    team_settled = threading.Event()
+
     def _finish_team() -> None:
         """Join every member thread and write the team-wide "team-completed"
         summary audit record -- identical to what the wait=True path below
         does inline, factored out so wait=False can run it on a separate
         "reaper" thread instead of blocking the caller on it."""
-        for thread in threads:
-            thread.join()
-        status_counts: dict[str, int] = {}
-        for entry in results:
-            status_counts[entry["status"]] = status_counts.get(entry["status"], 0) + 1
-        write_audit_record(
-            build_audit_record(
-                **team_audit_base,
-                decision="team-completed",
-                team_size=len(resolved_members),
-                status_counts=status_counts,
-            ),
-            path=audit_path,
-        )
+        try:
+            for thread in threads:
+                thread.join()
+            status_counts: dict[str, int] = {}
+            for entry in results:
+                status_counts[entry["status"]] = status_counts.get(entry["status"], 0) + 1
+            write_audit_record(
+                build_audit_record(
+                    **team_audit_base,
+                    decision="team-completed",
+                    team_size=len(resolved_members),
+                    status_counts=status_counts,
+                ),
+                path=audit_path,
+            )
+        finally:
+            # In `finally` so a waiter is released even when the audit write
+            # raises: this signals "the reaper is done touching audit_path",
+            # not "the reaper succeeded". A failed write must not strand a
+            # caller that is waiting before tearing that path down.
+            team_settled.set()
 
     if not wait:
         active_job_store = job_store or _DEFAULT_TEAM_JOB_STORE
@@ -2309,7 +2347,7 @@ def dispatch_team(
         # copy, is what lets poll_team_status() observe live progress without
         # its own synchronization, exactly as this function's own wait=True
         # aggregation below already relies on.
-        active_job_store.register(team_id, results)
+        active_job_store.register(team_id, results, team_settled)
         # Finding 3 (review): every member's background thread has already
         # been started (the spawn loop above runs before this block) and is
         # actively spawning real child processes with real side effects.

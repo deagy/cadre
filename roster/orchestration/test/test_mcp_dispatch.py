@@ -2423,7 +2423,34 @@ class AsyncTeamDispatchTests(unittest.TestCase):
             gate=core.TeamConfirmationGate(),
         )
         kwargs.update(overrides)
-        return core.dispatch_team(**kwargs)
+        result = core.dispatch_team(**kwargs)
+        # wait=False leaves a detached "reaper" thread that joins the members
+        # and *then* writes the team-completed audit record into self.audit_path.
+        # poll_team_status() reports terminal as soon as the last member records
+        # its own result, which is strictly earlier -- so without this wait,
+        # setUp's TemporaryDirectory cleanup can rmtree the audit directory
+        # while the reaper is still writing into it (issue #167: OSError
+        # [Errno 39] Directory not empty). Registered here rather than in setUp
+        # because the team_id only exists once dispatch returns; addCleanup is
+        # LIFO, so this runs before the directory teardown registered in setUp.
+        # Keyed on the status, not merely on a team_id being present: a
+        # confirmation_required result also carries one, but returns before any
+        # member thread or reaper exists, so there is nothing to settle and
+        # nothing registered in the job store to settle against.
+        if result.get("status") == "team_dispatched_async":
+            store = kwargs.get("job_store") or core._DEFAULT_TEAM_JOB_STORE
+            self.addCleanup(self._settle_team, store, result["team_id"])
+        return result
+
+    def _settle_team(self, store, team_id: str) -> None:
+        # Assert rather than merely wait: a reaper that never settles is a
+        # real defect, and silently continuing to tear down the directory
+        # would reintroduce exactly the race this guards against.
+        self.assertTrue(
+            store.wait_settled(team_id, 5),
+            f"team {team_id} did not settle within 5s; its reaper thread may still be "
+            "writing to the audit path this test is about to delete",
+        )
 
     def _fake_result(self, text: str) -> dict:
         return {
@@ -2561,6 +2588,95 @@ class AsyncTeamDispatchTests(unittest.TestCase):
         self.assertEqual(len(polled["members"]), 1)
         self.assertEqual(polled["members"][0]["status"], "dispatched")
         self.assertIn("member done despite audit failure", polled["members"][0]["output"])
+
+    def test_terminal_poll_precedes_the_reaper_finishing_and_wait_settled_closes_the_gap(self) -> None:
+        # Issue #167. poll_team_status() reports terminal off the shared
+        # results list, which each member writes at its own index. The reaper
+        # thread then joins the members and writes the team-completed audit
+        # record. Those are two distinct instants, and treating the first as
+        # "all background work is finished" is what let TemporaryDirectory
+        # cleanup rmtree the audit directory mid-write.
+        #
+        # Deterministic without any sleep: the team-completed audit write is
+        # blocked on an Event this test controls, so the gap is held open for
+        # exactly as long as the assertions need it.
+        _write_wrapper(self.layout.plugin_file("application-engineer"), sandbox_mode="read-only")
+        real_write_audit_record = core.write_audit_record
+        release_reaper = threading.Event()
+
+        def blocking_write_audit_record(record, *, path=None):
+            if record.get("decision") == "team-completed":
+                self.assertTrue(release_reaper.wait(5), "test never released the reaper")
+            return real_write_audit_record(record, path=path)
+
+        job_store = core.TeamDispatchJobStore()
+        with mock.patch.object(core, "write_audit_record", side_effect=blocking_write_audit_record):
+            result = self._dispatch(
+                [{"role_id": "application-engineer", "brief": "task one"}],
+                wait=False,
+                job_store=job_store,
+                child_runner=lambda *a, **k: self._fake_result("member done"),
+            )
+            team_id = result["team_id"]
+
+            deadline = time.monotonic() + 5
+            polled = {"status": "running"}
+            while time.monotonic() < deadline and polled["status"] == "running":
+                polled = core.poll_team_status(team_id, job_store=job_store)
+                if polled["status"] == "running":
+                    time.sleep(0.02)
+            self.assertEqual(polled["status"], "team_dispatched")
+
+            # The gap, asserted directly: every member is terminal and the
+            # caller can already read the full result, yet the reaper has not
+            # written its final record. Tearing down audit_path here is the
+            # bug -- this is the state the old teardown ran in.
+            self.assertFalse(
+                job_store.wait_settled(team_id, 0.05),
+                "expected the reaper to still be running while its audit write is blocked",
+            )
+
+            release_reaper.set()
+            self.assertTrue(
+                job_store.wait_settled(team_id, 5),
+                "wait_settled must return True once the reaper has written team-completed",
+            )
+            # Settled means the reaper is done touching audit_path, so the
+            # record it was blocked on is now readable.
+            decisions = [
+                json.loads(line)["decision"]
+                for line in self.audit_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertIn("team-completed", decisions)
+
+    def test_wait_settled_is_false_for_an_unknown_team_id(self) -> None:
+        # Fails closed: an unknown or TTL-expired team_id must not report
+        # "settled", which a caller would read as permission to tear down.
+        self.assertFalse(core.TeamDispatchJobStore().wait_settled("no-such-team", 0.01))
+
+    def test_wait_settled_returns_true_even_when_the_reaper_audit_write_fails(self) -> None:
+        # team_settled.set() lives in a `finally`: the signal means "the reaper
+        # is done touching audit_path", not "the reaper succeeded". A failed
+        # write must not strand a caller waiting before teardown -- that would
+        # turn a best-effort audit failure into a hang.
+        _write_wrapper(self.layout.plugin_file("application-engineer"), sandbox_mode="read-only")
+        real_write_audit_record = core.write_audit_record
+
+        def failing_write_audit_record(record, *, path=None):
+            if record.get("decision") == "team-completed":
+                raise OSError("simulated audit-log write failure on team completion")
+            return real_write_audit_record(record, path=path)
+
+        job_store = core.TeamDispatchJobStore()
+        with mock.patch.object(core, "write_audit_record", side_effect=failing_write_audit_record):
+            result = self._dispatch(
+                [{"role_id": "application-engineer", "brief": "task one"}],
+                wait=False,
+                job_store=job_store,
+                child_runner=lambda *a, **k: self._fake_result("member done"),
+            )
+            self.assertTrue(job_store.wait_settled(result["team_id"], 5))
 
     def test_team_dispatched_async_audit_failure_still_returns_pollable_team_id(self) -> None:
         # Finding 3 (review, HIGH): by the time dispatch_team's wait=False
