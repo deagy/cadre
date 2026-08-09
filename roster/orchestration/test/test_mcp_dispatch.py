@@ -2733,11 +2733,24 @@ class AsyncTeamDispatchTests(unittest.TestCase):
                 job_store.wait_settled(team_id, 0.05),
                 "expected the reaper to still be running while its audit write is blocked",
             )
+            # The same gap as an MCP client sees it: poll_team_status is the
+            # only team API exposed by dispatch_server, so audit_settled is
+            # what makes this window visible to a real caller rather than
+            # only to this test.
+            self.assertFalse(
+                polled["audit_settled"],
+                "poll_team_status reported a terminal status with audit_settled true "
+                "while the reaper's audit write was still blocked",
+            )
 
             release_reaper.set()
             self.assertTrue(
                 job_store.wait_settled(team_id, 5),
                 "wait_settled must return True once the reaper has written team-completed",
+            )
+            self.assertTrue(
+                core.poll_team_status(team_id, job_store=job_store)["audit_settled"],
+                "audit_settled must become true once the reaper has finished",
             )
             # Settled means the reaper is done touching audit_path, so the
             # record it was blocked on is now readable.
@@ -2747,6 +2760,35 @@ class AsyncTeamDispatchTests(unittest.TestCase):
                 if line.strip()
             ]
             self.assertIn("team-completed", decisions)
+
+    def test_audit_settled_appears_only_on_the_terminal_poll_response(self) -> None:
+        # The field is the exposed half of the settle guarantee: dispatch_server
+        # surfaces poll_team_status and nothing else, so a real caller can only
+        # learn "safe to tear down audit_path" through this key. A non-terminal
+        # or unknown response must not carry it at all -- an absent key raises
+        # KeyError at the call site, whereas a False would read as a legitimate
+        # "not yet" and invite a caller to poll a team that will never settle.
+        self.assertNotIn("audit_settled", core.poll_team_status("no-such-team"))
+
+        _write_wrapper(self.layout.plugin_file("application-engineer"), sandbox_mode="read-only")
+        job_store = core.TeamDispatchJobStore()
+        result = self._dispatch(
+            [{"role_id": "application-engineer", "brief": "task one"}],
+            wait=False,
+            job_store=job_store,
+            child_runner=lambda *a, **k: self._fake_result("member done"),
+        )
+        team_id = result["team_id"]
+        deadline = time.monotonic() + 5
+        polled = {"status": "running"}
+        while time.monotonic() < deadline and polled["status"] == "running":
+            polled = core.poll_team_status(team_id, job_store=job_store)
+            if polled["status"] == "running":
+                self.assertNotIn("audit_settled", polled)
+                time.sleep(0.02)
+        self.assertEqual(polled["status"], "team_dispatched")
+        self.assertIn("audit_settled", polled)
+        self.assertIsInstance(polled["audit_settled"], bool)
 
     def test_wait_settled_is_false_for_an_unknown_team_id(self) -> None:
         # Fails closed: an unknown or TTL-expired team_id must not report

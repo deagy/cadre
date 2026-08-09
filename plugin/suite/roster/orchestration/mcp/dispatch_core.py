@@ -2413,10 +2413,22 @@ def poll_team_status(team_id: str, *, job_store: TeamDispatchJobStore | None = N
         while at least one member has not yet reached a terminal state
         (cheap progress signal: a count of members[] entries that are no
         longer None).
-      - {"status": "team_dispatched", "team_id": ..., "members": [...]} once
-        every member has reached a terminal state -- the exact shape
-        dispatch_team(wait=True) returns today, preserved so a caller that
-        only ever calls this function sees an identical result shape.
+      - {"status": "team_dispatched", "team_id": ..., "members": [...],
+        "audit_settled": bool} once every member has reached a terminal
+        state -- the shape dispatch_team(wait=True) returns today plus
+        `audit_settled`.
+
+    **`audit_settled` is not the same question as `status`.** A member
+    records its own result before the detached reaper thread joins the
+    members and writes the team-wide `team-completed` audit record, so
+    every member can be terminal -- `members` fully populated and readable
+    -- while the reaper is still writing to `audit_path`. `audit_settled`
+    is False in exactly that window.
+
+    A caller that owns `audit_path`'s lifecycle (a per-session temp
+    directory, say) must poll until `audit_settled` is True before deleting
+    or moving it; tearing it down on a terminal `status` alone races the
+    reaper. Callers that do not own that path can ignore the field.
 
     Safe to call more than once for the same team_id within the TTL.
     """
@@ -2427,4 +2439,10 @@ def poll_team_status(team_id: str, *, job_store: TeamDispatchJobStore | None = N
     completed = sum(1 for entry in record.results if entry is not None)
     if completed < record.total_members:
         return {"status": "running", "team_id": team_id, "completed": completed, "total": record.total_members}
-    return {"status": "team_dispatched", "team_id": team_id, "members": record.results}
+    return {
+        "status": "team_dispatched",
+        "team_id": team_id,
+        "members": record.results,
+        # is_set() rather than wait(0): polling must stay non-blocking.
+        "audit_settled": record.settled.is_set(),
+    }
