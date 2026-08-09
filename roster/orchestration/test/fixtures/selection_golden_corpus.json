@@ -71,7 +71,8 @@
         ],
         "matched_routes": [
           "frontend"
-        ]
+        ],
+        "workflow": "new-service"
       }
     },
     {
@@ -98,7 +99,8 @@
         ],
         "matched_routes": [
           "backend"
-        ]
+        ],
+        "workflow": "new-service"
       }
     },
     {
@@ -124,7 +126,8 @@
         ],
         "matched_routes": [
           "infrastructure"
-        ]
+        ],
+        "workflow": "infrastructure-change"
       }
     },
     {
@@ -150,7 +153,8 @@
         ],
         "matched_routes": [
           "pipeline"
-        ]
+        ],
+        "workflow": "pipeline-change"
       }
     },
     {
@@ -175,7 +179,8 @@
         "matched_routes": [
           "backend",
           "testing"
-        ]
+        ],
+        "workflow": "new-service"
       }
     },
     {
@@ -202,12 +207,13 @@
           "backend",
           "testing",
           "debugging"
-        ]
+        ],
+        "workflow": "debugging"
       }
     },
     {
       "id": "AGENT-SUITE-GOVERNANCE-1",
-      "description": "agent-suite-governance route; task/files reused verbatim from test_selector.py::test_plugin_packaging_routes_to_agent_suite_governance",
+      "description": "agent-suite-governance route; task/files reused verbatim from test_selector.py::test_plugin_packaging_routes_to_agent_suite_governance. KNOWN MISMATCH: expected.workflow is deliberately 'unclassified', not the 'debugging' _select_workflow() currently returns for this route -- packaging the provider is build/maintenance work, not defect investigation. See fixtures/workflow_fitness_table.json's WF-AGENT-SUITE-GOVERNANCE-MISLABEL-1 for the full reasoning; this is Proposal 03's named finding, deliberately left red rather than silently pinned to match the bug.",
       "task": "Package the Secure Cloud Agentic SDLC provider",
       "changed_files": [
         "provider/provider.json",
@@ -230,7 +236,8 @@
         ],
         "matched_routes": [
           "agent-suite-governance"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -255,7 +262,8 @@
         ],
         "matched_routes": [
           "infrastructure"
-        ]
+        ],
+        "workflow": "production-release"
       }
     },
     {
@@ -288,7 +296,8 @@
         ],
         "team_ids": [
           "cross-stack-build"
-        ]
+        ],
+        "workflow": "new-service"
       }
     },
     {
@@ -318,7 +327,8 @@
         ],
         "team_ids": [
           "competing-hypotheses-debugging"
-        ]
+        ],
+        "workflow": "debugging"
       }
     },
     {
@@ -335,7 +345,8 @@
         "primary": [],
         "reviewers": [],
         "support": [],
-        "matched_routes": []
+        "matched_routes": [],
+        "workflow": "needs-triage"
       }
     },
     {
@@ -358,7 +369,8 @@
         ],
         "matched_routes": [
           "product-intent"
-        ]
+        ],
+        "workflow": "product-intake"
       }
     },
     {
@@ -381,7 +393,8 @@
         "support": [],
         "matched_routes": [
           "requirements-baseline"
-        ]
+        ],
+        "workflow": "product-intake"
       }
     },
     {
@@ -406,7 +419,8 @@
         ],
         "matched_routes": [
           "governance-planning"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -430,7 +444,8 @@
         "support": [],
         "matched_routes": [
           "data-governance"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -456,7 +471,8 @@
         ],
         "matched_routes": [
           "cryptographic-assurance"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -481,7 +497,8 @@
         ],
         "matched_routes": [
           "quantum-timing-assurance"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -507,7 +524,8 @@
         "matched_routes": [
           "cryptographic-assurance",
           "quantum-timing-assurance"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -533,7 +551,8 @@
         ],
         "matched_routes": [
           "runtime-assurance"
-        ]
+        ],
+        "workflow": "runtime-assurance"
       }
     },
     {
@@ -557,7 +576,8 @@
         "support": [],
         "matched_routes": [
           "decommission"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -581,7 +601,8 @@
         "support": [],
         "matched_routes": [
           "orchestration"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -606,7 +627,8 @@
         "matched_routes": [
           "testing",
           "black-box-testing"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -631,7 +653,8 @@
         ],
         "matched_routes": [
           "end-user-testing"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -656,7 +679,8 @@
         ],
         "matched_routes": [
           "performance-testing"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -682,7 +706,8 @@
         ],
         "matched_routes": [
           "chaos-resilience"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -707,7 +732,8 @@
         ],
         "matched_routes": [
           "support"
-        ]
+        ],
+        "workflow": "support-escalation"
       }
     },
     {
@@ -734,7 +760,8 @@
         ],
         "matched_routes": [
           "incident-response"
-        ]
+        ],
+        "workflow": "support-escalation"
       }
     },
     {
@@ -759,7 +786,8 @@
         ],
         "matched_routes": [
           "observability"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -783,7 +811,8 @@
         "support": [],
         "matched_routes": [
           "secrets-identity"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -810,7 +839,8 @@
         "matched_routes": [
           "backend",
           "database-reliability"
-        ]
+        ],
+        "workflow": "new-service"
       }
     },
     {
@@ -834,7 +864,8 @@
         "support": [],
         "matched_routes": [
           "policy-as-code"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -861,7 +892,8 @@
         ],
         "matched_routes": [
           "supply-chain"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -886,7 +918,8 @@
         ],
         "matched_routes": [
           "cost-capacity"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -916,7 +949,8 @@
           "observability",
           "cost-capacity",
           "cost-operations"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -947,7 +981,8 @@
         "matched_routes": [
           "backend",
           "api-contract"
-        ]
+        ],
+        "workflow": "new-service"
       }
     },
     {
@@ -968,7 +1003,8 @@
         "support": [],
         "matched_routes": [
           "documentation"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -993,7 +1029,8 @@
         "support": [],
         "matched_routes": [
           "gitlab-evidence"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1017,7 +1054,8 @@
         "support": [],
         "matched_routes": [
           "knowledge-store"
-        ]
+        ],
+        "workflow": "knowledge-ingestion"
       }
     },
     {
@@ -1040,7 +1078,8 @@
         "support": [],
         "matched_routes": [
           "architecture-design"
-        ]
+        ],
+        "workflow": "new-service"
       }
     },
     {
@@ -1071,7 +1110,8 @@
         "matched_routes": [
           "backend",
           "database-reliability"
-        ]
+        ],
+        "workflow": "new-service"
       }
     },
     {
@@ -1090,7 +1130,8 @@
         "support": [],
         "matched_routes": [
           "halt-determination"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1109,7 +1150,8 @@
         "support": [],
         "matched_routes": [
           "approval-routing"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1128,7 +1170,8 @@
         "support": [],
         "matched_routes": [
           "doctrine-conformance-check"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1152,7 +1195,8 @@
         ],
         "matched_routes": [
           "architecture-authority-review"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1171,7 +1215,8 @@
         "support": [],
         "matched_routes": [
           "scope-boundary-check"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1192,7 +1237,8 @@
         "support": [],
         "matched_routes": [
           "phase-gate-check"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1211,7 +1257,8 @@
         "support": [],
         "matched_routes": [
           "assumption-register"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1230,7 +1277,8 @@
         "support": [],
         "matched_routes": [
           "decision-record-capture"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1251,7 +1299,8 @@
         "support": [],
         "matched_routes": [
           "red-team-assessment"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1270,7 +1319,8 @@
         "support": [],
         "matched_routes": [
           "premortem"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1289,7 +1339,8 @@
         "support": [],
         "matched_routes": [
           "first-principles-challenge"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1308,7 +1359,8 @@
         "support": [],
         "matched_routes": [
           "subtraction-review"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1327,7 +1379,8 @@
         "support": [],
         "matched_routes": [
           "falsification-test"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1346,7 +1399,8 @@
         "support": [],
         "matched_routes": [
           "deployment-realism-review"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1367,7 +1421,8 @@
         "support": [],
         "matched_routes": [
           "classification-and-marking"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1388,7 +1443,8 @@
         "support": [],
         "matched_routes": [
           "claim-conformance-check"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1407,7 +1463,8 @@
         "support": [],
         "matched_routes": [
           "vendor-register-review"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1429,7 +1486,8 @@
         "support": [],
         "matched_routes": [
           "retention-deletion-execution"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1448,7 +1506,8 @@
         "support": [],
         "matched_routes": [
           "agent-performance-evaluation"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1467,7 +1526,8 @@
         "support": [],
         "matched_routes": [
           "agent-version-provenance"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1486,7 +1546,8 @@
         "support": [],
         "matched_routes": [
           "ip-provenance-determination"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1514,7 +1575,8 @@
         ],
         "matched_routes": [
           "ai-feature"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1538,7 +1600,8 @@
         ],
         "matched_routes": [
           "visual-system"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1560,7 +1623,8 @@
         ],
         "matched_routes": [
           "delivery-sequencing"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {
@@ -1581,7 +1645,8 @@
         ],
         "matched_routes": [
           "code-review-request"
-        ]
+        ],
+        "workflow": "unclassified"
       }
     },
     {

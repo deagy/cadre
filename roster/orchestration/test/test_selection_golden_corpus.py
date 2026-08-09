@@ -31,6 +31,21 @@ quarantine mechanism: a fixture either matches build_dispatch_plan()'s
 current output or the whole suite fails. This is a deliberate v1 design
 choice (see the requirements baseline), not an oversight.
 
+Every fixture's "expected.workflow" was added by Proposal 03 of the
+orchestration review and independently checked against roster/workflows/*.md
+before being set (see _AGENT_GROUP_FIELDS's comment above). One fixture,
+AGENT-SUITE-GOVERNANCE-1, is a deliberate, documented exception: its
+"expected.workflow" is "unclassified" (the value independent judgment
+supports) while build_dispatch_plan() currently returns "debugging" for
+every agent-suite-governance route match regardless of whether the task is
+actually a defect fix. That one fixture is therefore CURRENTLY FAILING by
+design, not by accident -- see its "description" field and
+fixtures/workflow_fitness_table.json's WF-AGENT-SUITE-GOVERNANCE-MISLABEL-1
+for the full reasoning. Fixing _select_workflow() to make this fixture pass
+is out of scope for the change that added this comment; do not "fix" the
+test suite by reverting this fixture's expected workflow back to
+"debugging".
+
 Route-category coverage: test_corpus_covers_every_required_route_category
 below derives its required-route set from routing.yaml's routes[] array at
 import time (CONFIG["routes"]), rather than a hardcoded literal list, so a
@@ -76,6 +91,18 @@ CATALOG = load_catalog(AGENTS_ROOT / "catalog.yaml")
 # asserted only for fixtures whose purpose is to pin a team_recipes trigger.
 _AGENT_GROUP_FIELDS = ("primary", "reviewers", "support")
 
+# "workflow" was historically never compared here at all -- a fixture could
+# assert primary/reviewers/support/matched_routes and still leave
+# _select_workflow()'s output completely unchecked. Fixtures now carry an
+# expected "workflow" value alongside the existing "expected" block (see
+# _mismatches). Unlike primary/reviewers/support/matched_routes, these
+# expected values are not a blind copy of current output: each was checked
+# against roster/workflows/*.md before being added (see the PR that
+# introduced this field for which ones were spot-checked, and
+# fixtures/workflow_fitness_table.json for the independent methodology this
+# addition is modeled on). One fixture (AGENT-SUITE-GOVERNANCE-1) is a
+# documented, deliberate exception -- see its "workflow" comment below.
+
 
 def _load_cases() -> list[dict[str, Any]]:
     payload = json.loads(FIXTURES_PATH.read_text(encoding="utf-8"))
@@ -115,6 +142,11 @@ def _mismatches(case: dict[str, Any], actual: dict[str, Any]) -> list[str]:
         actual_value = actual["agents"][field]
         if actual_value != expected_value:
             mismatches.append(f"{field}: expected={expected_value!r}, got={actual_value!r}")
+
+    expected_workflow = expected["workflow"]
+    actual_workflow = actual["workflow"]
+    if actual_workflow != expected_workflow:
+        mismatches.append(f"workflow: expected={expected_workflow!r}, got={actual_workflow!r}")
 
     # Fixtures pin *which* routes matched, not why: a plan's route entries
     # carry a full `reasons` record, and hand-maintaining every pattern/file
