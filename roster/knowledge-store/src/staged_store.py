@@ -62,6 +62,17 @@ CREATE TABLE IF NOT EXISTS staged_record_dispositions (
   decided_at TEXT NOT NULL,
   PRIMARY KEY (record_id, sequence)
 );
+CREATE TABLE IF NOT EXISTS staged_record_deletions (
+  record_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  content_digest TEXT NOT NULL,
+  status_at_deletion TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  deleted_by TEXT NOT NULL,
+  authorized_by TEXT,
+  deleted_at TEXT NOT NULL,
+  PRIMARY KEY (record_id, deleted_at)
+);
 """
 
 
@@ -386,6 +397,85 @@ def disposition_record(
     return {"id": record_id, "status": action, "sequence": next_sequence}
 
 
+def deletion_evidence(db: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Every deletion ever performed, oldest first.
+
+    Deliberately carries no foreign key to `staged_records`: the whole point
+    is that this outlives the row it describes. Evidence that vanished with
+    its subject would make a deletion indistinguishable from data loss.
+    """
+    rows = db.execute(
+        "SELECT record_id, title, content_digest, status_at_deletion, reason, deleted_by, "
+        "authorized_by, deleted_at FROM staged_record_deletions ORDER BY deleted_at, record_id"
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def delete_record(
+    db: sqlite3.Connection,
+    record_id: str,
+    *,
+    reason: str,
+    deleted_by: str,
+    authorized_by: str | None = None,
+) -> dict[str, Any]:
+    """Delete a staged record, leaving evidence behind.
+
+    **This deletes a staging-table row, not ingested knowledge.** A staged
+    record has never been embedded or made retrievable; `SECURITY.md`'s
+    statement that the store implements no retention or deletion of ingested
+    content is unaffected by this function, and nothing here should be read as
+    satisfying that prerequisite.
+
+    An `accepted` record requires `authorized_by`. Acceptance is a steward's
+    decision that the record is durable knowledge, so removing it afterwards
+    is a reversal that needs a human, per the escalation the steward's role
+    definition already describes.
+    """
+    loaded = get_record(db, record_id)
+    if loaded is None:
+        raise StagedRecordError(f"No staged record with id {record_id!r} in this store.")
+    frontmatter, _ = loaded
+    if not reason.strip():
+        raise StagedRecordError(
+            "a deletion requires a reason: an unexplained deletion is indistinguishable "
+            "from data loss"
+        )
+    status = frontmatter.get("status")
+    if status == "accepted" and not (authorized_by or "").strip():
+        raise StagedRecordError(
+            f"record {record_id!r} was accepted, so deleting it reverses a steward's decision and "
+            "requires an authorized human: pass --authorized-by. Acceptance is not a draft state."
+        )
+    with db:
+        db.execute(
+            "INSERT INTO staged_record_deletions (record_id, title, content_digest, "
+            "status_at_deletion, reason, deleted_by, authorized_by, deleted_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                record_id,
+                frontmatter.get("title", ""),
+                frontmatter.get("content_digest", ""),
+                status,
+                reason,
+                deleted_by,
+                authorized_by,
+                _now(),
+            ),
+        )
+        # History goes with the record (ON DELETE CASCADE); the evidence row
+        # above is what survives, and it is written first so a failure here
+        # cannot leave a deletion unrecorded.
+        db.execute("DELETE FROM staged_records WHERE id = ?", (record_id,))
+    return {
+        "status": "deleted",
+        "id": record_id,
+        "content_digest": frontmatter.get("content_digest", ""),
+        "status_at_deletion": status,
+        "evidence_retained": True,
+    }
+
+
 __all__ = [
     "SCHEMA",
     "StagedRecordError",
@@ -400,4 +490,6 @@ __all__ = [
     "export_records",
     "disposition_record",
     "get_history",
+    "delete_record",
+    "deletion_evidence",
 ]

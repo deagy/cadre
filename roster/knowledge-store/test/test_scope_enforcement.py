@@ -400,13 +400,21 @@ class ScopeEnforcementTests(unittest.TestCase):
             action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
         )
         commands = set(subparsers_action.choices.keys())
-        # The exact set is pinned deliberately, so a lifecycle command cannot
-        # be added without this assertion forcing the author to confront AC-15.
-        # `propose`/`list-staged`/`show-staged` were added with the staged-record
-        # backend; none of them deletes anything, and staging is not ingestion.
-        # When deletion is implemented (step 7 of the staged-records proposal),
-        # AC-15 itself has to be re-decided here rather than quietly widened --
-        # the point of this test is that the decision is made, not avoided.
+        # AC-15 re-decided, 2026-08-09, when `delete-staged` was implemented.
+        #
+        # AC-15's guarantee is about the lifecycle of *ingested content*: the
+        # store embeds no retention or deletion of material that has been
+        # normalised, chunked, embedded and made retrievable. That guarantee is
+        # unchanged, and SECURITY.md still states it.
+        #
+        # `delete-staged` removes a row from the staging table. A staged record
+        # has never been ingested -- it is a candidate awaiting a steward, not
+        # knowledge in the store -- so deleting one is not the capability AC-15
+        # withholds. Widening the forbidden-name list to let it through would
+        # have been the wrong move; the distinction is asserted instead.
+        #
+        # The exact set stays pinned so the next lifecycle command still forces
+        # this decision rather than pattern-matching on the diff.
         self.assertEqual(
             {
                 "init",
@@ -420,11 +428,36 @@ class ScopeEnforcementTests(unittest.TestCase):
                 "import-staged",
                 "export-staged",
                 "disposition-staged",
+                "delete-staged",
+                "deletion-evidence",
             },
             commands,
         )
+        # Unchanged and still load-bearing: no command operates on ingested
+        # content's lifecycle. `delete-staged` is a distinct name precisely so
+        # a bare `delete` cannot be mistaken for it.
         for forbidden in ("delete", "retention", "purge", "expire"):
             self.assertNotIn(forbidden, commands)
+
+    def test_ac15_deletion_is_confined_to_staged_records(self) -> None:
+        """The re-decision above, asserted rather than only commented.
+
+        If `delete-staged` ever reaches ingested content -- messages, chunks,
+        or embeddings -- AC-15 is genuinely broken and this fails.
+        """
+        import inspect
+
+        import staged_store
+
+        source = inspect.getsource(staged_store.delete_record)
+        for ingested_table in ("messages", "chunks", "ingestion_runs", "retrieval_runs"):
+            self.assertNotIn(
+                ingested_table,
+                source,
+                f"delete_record touches {ingested_table!r}: staged-record deletion must not reach "
+                "ingested content, which is the capability AC-15 withholds",
+            )
+        self.assertIn("staged_records", source)
 
 
 if __name__ == "__main__":
