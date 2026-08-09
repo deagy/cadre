@@ -1,7 +1,7 @@
 ---
 id: KS-20260808-glob-regex-asymmetries
 title: "`glob_to_regex` newline and anchor asymmetries"
-status: proposed
+status: accepted
 evidence:
   - "roster/orchestration/src/routing.py"
   - "roster/orchestration/src/glob_containment.py"
@@ -18,6 +18,13 @@ recommended_action: ingest
 untrusted_instruction_risk: false
 staged_by: knowledge-store-steward
 content_digest: 96a3ce4953066f4575a764bb1ff38068d3820acbcdb0bdcded153f6e32e974c1
+disposition:
+  action: accepted
+  reason: "Accepted by the repository owner on 2026-08-09 with its staleness risk understood rather than dismissed. It documents current glob_to_regex behaviour and says so itself. Accepted because the cost of rediscovery is demonstrated: two reviewers independently assumed the opposite of the newline and anchor behaviours, and a dispatch brief asserted substring matching when the matcher is whole-word. No deletion capability exists, so if glob_to_regex changes this record must be corrected by update or reclassify, never removed."
+  classification_used: internal
+  diverged_from_proposal: false
+  decided_by: repository owner (Product Owner per roster/shared/team-profile.yaml)
+
 ---
 
 ## Summary
