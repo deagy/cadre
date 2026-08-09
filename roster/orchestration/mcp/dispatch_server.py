@@ -240,9 +240,17 @@ def build_server():
         Returns {"status": "not_found"} for an unknown or expired team_id,
         {"status": "running", "team_id": ..., "completed": N, "total": M}
         while at least one member hasn't reached a terminal state, or --
-        once every member has -- the exact same {"status": "team_dispatched",
-        "team_id": ..., "members": [...]} shape dispatch_team(wait=True)
-        returns directly. Safe to call more than once for the same team_id.
+        once every member has -- the {"status": "team_dispatched",
+        "team_id": ..., "members": [...], "audit_settled": bool} shape
+        (dispatch_team(wait=True)'s shape plus audit_settled).
+
+        audit_settled answers a different question from status: a member
+        records its result before the background reaper writes the team-wide
+        team-completed audit record, so members can be complete and readable
+        while that write is still in flight. If you own the audit path's
+        lifecycle, poll until audit_settled is true before deleting or moving
+        it; otherwise ignore it. Safe to call more than once for the same
+        team_id.
         """
         return core.poll_team_status(team_id)
 

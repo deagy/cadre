@@ -2408,6 +2408,82 @@ class AsyncTeamDispatchTests(unittest.TestCase):
         self.addCleanup(self.audit_dir.cleanup)
         self.audit_path = Path(self.audit_dir.name) / "audit.jsonl"
 
+        # Finding B (review, MEDIUM): "wait_settled() eventually returns True"
+        # is satisfiable by a lying implementation (always-True return, or the
+        # settled Event set at register() time instead of by the reaper). Track,
+        # independently of wait_settled itself, whether the reaper's
+        # "team-completed" audit write was ever actually *attempted* -- that
+        # call only happens inside the real _finish_team, after joining every
+        # member thread, in the same try block whose `finally` sets the
+        # settled Event (dispatch_core.py). Wrapping
+        # _write_audit_record_best_effort -- not write_audit_record, which
+        # several tests below already patch for their own fault injection and
+        # would fully shadow a wrapper installed on that name for the
+        # duration of their `with` block -- keeps this signal live even
+        # inside those nested patches, since _write_audit_record_best_effort
+        # itself is never patched by any test in this class.
+        self._team_completed_attempted: set[str] = set()
+        real_best_effort = core._write_audit_record_best_effort
+
+        def _tracking_best_effort(record, *, path=None):
+            if record.get("decision") == "team-completed" and record.get("team_id") is not None:
+                self._team_completed_attempted.add(record["team_id"])
+            return real_best_effort(record, path=path)
+
+        best_effort_patcher = mock.patch.object(
+            core, "_write_audit_record_best_effort", side_effect=_tracking_best_effort
+        )
+        best_effort_patcher.start()
+        self.addCleanup(best_effort_patcher.stop)
+
+        # Finding A (review, MEDIUM): nothing structurally stops a future
+        # wait=False core.dispatch_team(...) call in this class from
+        # bypassing the _dispatch() helper below (and therefore its
+        # settle-wait cleanup) entirely -- issue #167's race would come back
+        # silently. Wrap dispatch_team itself, not just the helper, so every
+        # wait=False async dispatch is observed regardless of call site.
+        # _assert_no_unguarded_async_dispatch (registered last, below) then
+        # fails loudly for any of them that _dispatch() did not also register
+        # a settle-wait cleanup for.
+        self._async_dispatched: dict[str, Any] = {}
+        self._helper_settled_teams: set[str] = set()
+        real_dispatch_team = core.dispatch_team
+
+        def _tracking_dispatch_team(*args, **kwargs):
+            result = real_dispatch_team(*args, **kwargs)
+            if kwargs.get("wait") is False and result.get("status") == "team_dispatched_async":
+                store = kwargs.get("job_store") or core._DEFAULT_TEAM_JOB_STORE
+                self._async_dispatched[result["team_id"]] = store
+            return result
+
+        dispatch_patcher = mock.patch.object(core, "dispatch_team", side_effect=_tracking_dispatch_team)
+        dispatch_patcher.start()
+        self.addCleanup(dispatch_patcher.stop)
+
+        # Registered here (in setUp) so it runs, LIFO, after every test- and
+        # helper-registered cleanup (including _settle_team below) but before
+        # audit_dir's teardown -- it is itself a real backstop wait, not just
+        # an assertion, so a genuine bypass still can't race the directory
+        # removal even though the test also fails loudly for it.
+        self.addCleanup(self._assert_no_unguarded_async_dispatch)
+
+    def _assert_no_unguarded_async_dispatch(self) -> None:
+        unguarded = {
+            team_id: store
+            for team_id, store in self._async_dispatched.items()
+            if team_id not in self._helper_settled_teams
+        }
+        if not unguarded:
+            return
+        for team_id, store in unguarded.items():
+            store.wait_settled(team_id, 5)
+        self.fail(
+            "wait=False dispatch_team() call(s) bypassed the _dispatch() helper's "
+            f"settle-wait cleanup: {sorted(unguarded)}. Route async team dispatch "
+            "through _dispatch() (or otherwise register a wait_settled cleanup) so "
+            "issue #167's race cannot silently return."
+        )
+
     def _dispatch(self, members, **overrides):
         kwargs = dict(
             members=members,
@@ -2423,7 +2499,56 @@ class AsyncTeamDispatchTests(unittest.TestCase):
             gate=core.TeamConfirmationGate(),
         )
         kwargs.update(overrides)
-        return core.dispatch_team(**kwargs)
+        result = core.dispatch_team(**kwargs)
+        # wait=False leaves a detached "reaper" thread that joins the members
+        # and *then* writes the team-completed audit record into self.audit_path.
+        # poll_team_status() reports terminal as soon as the last member records
+        # its own result, which is strictly earlier -- so without this wait,
+        # setUp's TemporaryDirectory cleanup can rmtree the audit directory
+        # while the reaper is still writing into it (issue #167: OSError
+        # [Errno 39] Directory not empty). Registered here rather than in setUp
+        # because the team_id only exists once dispatch returns; addCleanup is
+        # LIFO, so this runs before the directory teardown registered in setUp.
+        # Keyed on the status, not merely on a team_id being present: a
+        # confirmation_required result also carries one, but returns before any
+        # member thread or reaper exists, so there is nothing to settle and
+        # nothing registered in the job store to settle against.
+        if result.get("status") == "team_dispatched_async":
+            store = kwargs.get("job_store") or core._DEFAULT_TEAM_JOB_STORE
+            # Marks this team_id as accounted for before
+            # _assert_no_unguarded_async_dispatch's teardown check runs (see
+            # Finding A in setUp) -- registration, not execution order, is
+            # what proves this call site went through the helper.
+            self._helper_settled_teams.add(result["team_id"])
+            self.addCleanup(self._settle_team, store, result["team_id"])
+        return result
+
+    def _settle_team(self, store, team_id: str) -> None:
+        # Assert rather than merely wait: a reaper that never settles is a
+        # real defect, and silently continuing to tear down the directory
+        # would reintroduce exactly the race this guards against.
+        self.assertTrue(
+            store.wait_settled(team_id, 5),
+            f"team {team_id} did not settle within 5s; its reaper thread may still be "
+            "writing to the audit path this test is about to delete",
+        )
+        # Finding B (review, MEDIUM): the assertion above alone is satisfied
+        # by a lying wait_settled()/settled implementation (always-True
+        # return, or the Event set at register() time). Cross-check against
+        # setUp's independent, unfakeable observation that the reaper's
+        # "team-completed" audit write was actually attempted for this
+        # team_id -- that only happens from inside the real _finish_team,
+        # strictly before the real settled.set() (see setUp's comment). A
+        # wait_settled that reports True without that attempt having
+        # happened proves the settlement signal was fabricated, not real.
+        self.assertIn(
+            team_id,
+            self._team_completed_attempted,
+            f"store.wait_settled({team_id!r}, ...) reported settled, but no "
+            "team-completed audit write was ever attempted for this team -- "
+            "the settled signal appears to have been raised without the "
+            "reaper actually finishing.",
+        )
 
     def _fake_result(self, text: str) -> dict:
         return {
@@ -2561,6 +2686,210 @@ class AsyncTeamDispatchTests(unittest.TestCase):
         self.assertEqual(len(polled["members"]), 1)
         self.assertEqual(polled["members"][0]["status"], "dispatched")
         self.assertIn("member done despite audit failure", polled["members"][0]["output"])
+
+    def test_terminal_poll_precedes_the_reaper_finishing_and_wait_settled_closes_the_gap(self) -> None:
+        # Issue #167. poll_team_status() reports terminal off the shared
+        # results list, which each member writes at its own index. The reaper
+        # thread then joins the members and writes the team-completed audit
+        # record. Those are two distinct instants, and treating the first as
+        # "all background work is finished" is what let TemporaryDirectory
+        # cleanup rmtree the audit directory mid-write.
+        #
+        # Deterministic without any sleep: the team-completed audit write is
+        # blocked on an Event this test controls, so the gap is held open for
+        # exactly as long as the assertions need it.
+        _write_wrapper(self.layout.plugin_file("application-engineer"), sandbox_mode="read-only")
+        real_write_audit_record = core.write_audit_record
+        release_reaper = threading.Event()
+
+        def blocking_write_audit_record(record, *, path=None):
+            if record.get("decision") == "team-completed":
+                self.assertTrue(release_reaper.wait(5), "test never released the reaper")
+            return real_write_audit_record(record, path=path)
+
+        job_store = core.TeamDispatchJobStore()
+        with mock.patch.object(core, "write_audit_record", side_effect=blocking_write_audit_record):
+            result = self._dispatch(
+                [{"role_id": "application-engineer", "brief": "task one"}],
+                wait=False,
+                job_store=job_store,
+                child_runner=lambda *a, **k: self._fake_result("member done"),
+            )
+            team_id = result["team_id"]
+
+            deadline = time.monotonic() + 5
+            polled = {"status": "running"}
+            while time.monotonic() < deadline and polled["status"] == "running":
+                polled = core.poll_team_status(team_id, job_store=job_store)
+                if polled["status"] == "running":
+                    time.sleep(0.02)
+            self.assertEqual(polled["status"], "team_dispatched")
+
+            # The gap, asserted directly: every member is terminal and the
+            # caller can already read the full result, yet the reaper has not
+            # written its final record. Tearing down audit_path here is the
+            # bug -- this is the state the old teardown ran in.
+            self.assertFalse(
+                job_store.wait_settled(team_id, 0.05),
+                "expected the reaper to still be running while its audit write is blocked",
+            )
+            # The same gap as an MCP client sees it: poll_team_status is the
+            # only team API exposed by dispatch_server, so audit_settled is
+            # what makes this window visible to a real caller rather than
+            # only to this test.
+            self.assertFalse(
+                polled["audit_settled"],
+                "poll_team_status reported a terminal status with audit_settled true "
+                "while the reaper's audit write was still blocked",
+            )
+
+            release_reaper.set()
+            self.assertTrue(
+                job_store.wait_settled(team_id, 5),
+                "wait_settled must return True once the reaper has written team-completed",
+            )
+            self.assertTrue(
+                core.poll_team_status(team_id, job_store=job_store)["audit_settled"],
+                "audit_settled must become true once the reaper has finished",
+            )
+            # Settled means the reaper is done touching audit_path, so the
+            # record it was blocked on is now readable.
+            decisions = [
+                json.loads(line)["decision"]
+                for line in self.audit_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertIn("team-completed", decisions)
+
+    def test_audit_settled_appears_only_on_the_terminal_poll_response(self) -> None:
+        # The field is the exposed half of the settle guarantee: dispatch_server
+        # surfaces poll_team_status and nothing else, so a real caller can only
+        # learn "safe to tear down audit_path" through this key. A non-terminal
+        # or unknown response must not carry it at all -- an absent key raises
+        # KeyError at the call site, whereas a False would read as a legitimate
+        # "not yet" and invite a caller to poll a team that will never settle.
+        self.assertNotIn("audit_settled", core.poll_team_status("no-such-team"))
+
+        _write_wrapper(self.layout.plugin_file("application-engineer"), sandbox_mode="read-only")
+        job_store = core.TeamDispatchJobStore()
+        result = self._dispatch(
+            [{"role_id": "application-engineer", "brief": "task one"}],
+            wait=False,
+            job_store=job_store,
+            child_runner=lambda *a, **k: self._fake_result("member done"),
+        )
+        team_id = result["team_id"]
+        deadline = time.monotonic() + 5
+        polled = {"status": "running"}
+        while time.monotonic() < deadline and polled["status"] == "running":
+            polled = core.poll_team_status(team_id, job_store=job_store)
+            if polled["status"] == "running":
+                self.assertNotIn("audit_settled", polled)
+                time.sleep(0.02)
+        self.assertEqual(polled["status"], "team_dispatched")
+        self.assertIn("audit_settled", polled)
+        self.assertIsInstance(polled["audit_settled"], bool)
+
+    def test_wait_settled_is_false_for_an_unknown_team_id(self) -> None:
+        # Fails closed: an unknown or TTL-expired team_id must not report
+        # "settled", which a caller would read as permission to tear down.
+        self.assertFalse(core.TeamDispatchJobStore().wait_settled("no-such-team", 0.01))
+
+    def test_wait_settled_returns_true_even_when_the_reaper_audit_write_fails(self) -> None:
+        # team_settled.set() lives in a `finally`: the signal means "the reaper
+        # is done touching audit_path", not "the reaper succeeded". A failed
+        # write must not strand a caller waiting before teardown -- that would
+        # turn a best-effort audit failure into a hang.
+        _write_wrapper(self.layout.plugin_file("application-engineer"), sandbox_mode="read-only")
+        real_write_audit_record = core.write_audit_record
+
+        def failing_write_audit_record(record, *, path=None):
+            if record.get("decision") == "team-completed":
+                raise OSError("simulated audit-log write failure on team completion")
+            return real_write_audit_record(record, path=path)
+
+        job_store = core.TeamDispatchJobStore()
+        with mock.patch.object(core, "write_audit_record", side_effect=failing_write_audit_record):
+            result = self._dispatch(
+                [{"role_id": "application-engineer", "brief": "task one"}],
+                wait=False,
+                job_store=job_store,
+                child_runner=lambda *a, **k: self._fake_result("member done"),
+            )
+            self.assertTrue(job_store.wait_settled(result["team_id"], 5))
+
+    def test_wait_settled_returns_false_for_a_ttl_expired_team_id(self) -> None:
+        # Finding C (review, LOW): a TTL-expired team_id must fail closed the
+        # same way an unknown one does -- _purge_expired_locked() (shared by
+        # register()/get()) drops the record entirely once ttl_seconds has
+        # elapsed, so wait_settled has nothing left to wait on.
+        store = core.TeamDispatchJobStore(ttl_seconds=0.05)
+        store.register("expiring-team", [None], threading.Event())
+        time.sleep(0.15)
+        self.assertFalse(store.wait_settled("expiring-team", 0.05))
+
+    def test_wait_settled_timeout_expiry_returns_false_in_isolation(self) -> None:
+        # Finding C (review, LOW): an isolated check that a genuine timeout
+        # (as opposed to an unknown/expired id) returns False, and actually
+        # waits close to the requested duration rather than returning early.
+        store = core.TeamDispatchJobStore()
+        store.register("never-settles", [None])
+        start = time.monotonic()
+        result = store.wait_settled("never-settles", 0.1)
+        elapsed = time.monotonic() - start
+        self.assertFalse(result)
+        self.assertGreaterEqual(elapsed, 0.1)
+
+    def test_wait_settled_is_idempotent_across_repeated_calls(self) -> None:
+        # Finding C (review, LOW): a caller may reasonably poll/retry;
+        # wait_settled must keep returning True for an already-settled team,
+        # not consume the signal.
+        settled = threading.Event()
+        settled.set()
+        store = core.TeamDispatchJobStore()
+        store.register("already-settled", [{"status": "dispatched"}], settled)
+        self.assertTrue(store.wait_settled("already-settled", 1))
+        self.assertTrue(store.wait_settled("already-settled", 1))
+
+    def test_wait_settled_is_false_before_any_member_has_finished(self) -> None:
+        # Finding C (review, LOW): unlike
+        # test_terminal_poll_precedes_the_reaper_finishing_..., which holds
+        # the gap open between "every member terminal" and "reaper settled",
+        # this checks the earlier gap: wait_settled must not report settled
+        # while a member is still running and nothing is terminal yet.
+        _write_wrapper(self.layout.plugin_file("application-engineer"), sandbox_mode="read-only")
+        release = threading.Event()
+
+        def blocking_runner(*args, **kwargs):
+            release.wait(timeout=5)
+            return self._fake_result("member done")
+
+        job_store = core.TeamDispatchJobStore()
+        result = self._dispatch(
+            [{"role_id": "application-engineer", "brief": "task one"}],
+            wait=False,
+            job_store=job_store,
+            child_runner=blocking_runner,
+        )
+        team_id = result["team_id"]
+        self.assertFalse(job_store.wait_settled(team_id, 0.05))
+        release.set()
+
+    def test_wait_settled_is_false_for_a_synchronous_wait_true_dispatch(self) -> None:
+        # Finding C (review, LOW): dispatch_team(wait=True) (the default)
+        # never calls TeamDispatchJobStore.register() at all -- it aggregates
+        # and returns results inline instead of leaving anything pollable.
+        # wait_settled against an arbitrary store for that team_id must fail
+        # closed rather than, say, mistaking "never registered" for "settled".
+        _write_wrapper(self.layout.plugin_file("application-engineer"), sandbox_mode="read-only")
+        job_store = core.TeamDispatchJobStore()
+        result = self._dispatch(
+            [{"role_id": "application-engineer", "brief": "task one"}],
+            job_store=job_store,
+            child_runner=lambda *a, **k: self._fake_result("done"),
+        )
+        self.assertEqual(result["status"], "team_dispatched")
+        self.assertFalse(job_store.wait_settled(result["team_id"], 0.05))
 
     def test_team_dispatched_async_audit_failure_still_returns_pollable_team_id(self) -> None:
         # Finding 3 (review, HIGH): by the time dispatch_team's wait=False
