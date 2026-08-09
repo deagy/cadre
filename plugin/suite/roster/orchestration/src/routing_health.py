@@ -27,7 +27,8 @@ import sys
 from pathlib import Path
 from typing import Any, Iterator
 
-from routing import glob_to_regex, load_catalog, load_routing
+from glob_containment import CONTAINED, contains
+from routing import load_catalog, load_routing
 
 DEFAULT_CATALOG = Path(__file__).resolve().parents[2] / "catalog.yaml"
 DEFAULT_ROUTING = Path(__file__).resolve().parents[1] / "routing.yaml"
@@ -70,58 +71,6 @@ def _iter_references(config: dict[str, Any]) -> Iterator[tuple[str, str]]:
         yield f"cross_stack.support[{position}]", agent_id
 
 
-# Fillers substituted for each wildcard when synthesizing probe paths. More
-# than one per wildcard class matters: a single-depth filler alone would call
-# `paths: ["docs/**"]` + `exclude_paths: ["docs/*"]` fully shadowed, when in
-# truth only its top level is excluded and `docs/a/b.md` still matches.
-_DOUBLESTAR_SLASH_FILLERS = ("", "probe/", "probe/nested/")
-_DOUBLESTAR_FILLERS = ("probe.txt", "probe/nested.txt")
-_STAR_FILLERS = ("probe",)
-_QUESTION_FILLERS = ("x",)
-_MAX_PROBES_PER_PATTERN = 64
-
-
-def _probe_paths(pattern: str) -> list[str]:
-    """Synthesize candidate concrete paths for one include glob.
-
-    Returns only probes that the pattern itself actually matches. That filter
-    is what makes the caller's conclusion sound: an unrepresentative probe can
-    cause a missed finding, never a false one.
-    """
-    normalized = pattern.replace("\\", "/")
-    segments: list[str] = [""]
-    index = 0
-
-    def extend(fillers: tuple[str, ...]) -> None:
-        nonlocal segments
-        segments = [prefix + filler for prefix in segments for filler in fillers][:_MAX_PROBES_PER_PATTERN]
-
-    while index < len(normalized):
-        character = normalized[index]
-        if character == "*" and index + 1 < len(normalized) and normalized[index + 1] == "*":
-            index += 1
-            if index + 1 < len(normalized) and normalized[index + 1] == "/":
-                index += 1
-                extend(_DOUBLESTAR_SLASH_FILLERS)
-            else:
-                extend(_DOUBLESTAR_FILLERS)
-        elif character == "*":
-            extend(_STAR_FILLERS)
-        elif character == "?":
-            extend(_QUESTION_FILLERS)
-        else:
-            extend((character,))
-        index += 1
-
-    matcher = glob_to_regex(pattern)
-    # Deduplicate while preserving order, so findings are deterministic.
-    seen: dict[str, None] = {}
-    for candidate in segments:
-        if candidate and matcher.search(candidate):
-            seen.setdefault(candidate, None)
-    return list(seen)
-
-
 def _iter_path_rules(config: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
     for section in ("routes", "risk_rules"):
         for index, rule in enumerate(config.get(section, []) or []):
@@ -134,30 +83,33 @@ def check_exclude_path_reachability(config: dict[str, Any]) -> list[str]:
 
     Such a glob is dead: the rule keeps its entry, its `reviewers` and any
     `human_gate`, but contributes nothing on paths -- it survives on keywords
-    alone, silently, with no other check complaining (issue #162).
+    alone, or not at all if it has none (issue #162).
 
-    Deliberately one-directional. A pattern is reported only when every probe
-    the pattern itself matches is excluded, so an under-representative probe
-    set yields a missed finding rather than a false accusation. A pattern this
-    cannot synthesize a matching probe for is skipped rather than guessed at.
+    The verdict is exact, not sampled. `glob_containment.contains` decides
+    `L(paths[i]) subset-of union(L(exclude_paths))` for the whole dialect, so
+    a finding means every path the glob could ever match is excluded -- not
+    that some synthesized guesses were. A pattern the decision procedure
+    cannot settle within its state budget returns UNDETERMINED and is skipped
+    rather than reported, so the only imprecision is a missed finding.
     """
     findings: list[str] = []
     for location, rule in _iter_path_rules(config):
         excludes = rule.get("exclude_paths") or []
         if not excludes:
             continue
-        excluders = [glob_to_regex(pattern) for pattern in excludes]
+        has_keywords = bool(rule.get("keywords") or rule.get("keyword_groups"))
+        remainder = (
+            "so it contributes nothing and the rule matches on keywords alone"
+            if has_keywords
+            else "so it contributes nothing and the rule, having no keywords, can never match"
+        )
         for position, include in enumerate(rule.get("paths", []) or []):
-            probes = _probe_paths(include)
-            if not probes:
+            if contains(include, excludes) != CONTAINED:
                 continue
-            if all(any(excluder.search(probe) for excluder in excluders) for probe in probes):
-                findings.append(
-                    f"{location}.paths[{position}] {include!r} is fully shadowed by "
-                    f"exclude_paths {excludes!r}: every path it matches is excluded, so it "
-                    "contributes nothing and the rule matches on keywords alone "
-                    f"(probes tried: {probes!r})"
-                )
+            findings.append(
+                f"{location}.paths[{position}] {include!r} is fully shadowed by "
+                f"exclude_paths {excludes!r}: every path it matches is excluded, {remainder}"
+            )
     return findings
 
 
@@ -200,6 +152,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG)
     parser.add_argument("--routing", type=Path, default=DEFAULT_ROUTING)
+    # Accepted as a no-op for symmetry with this repo's other drift guards
+    # (`generate-role-metadata --check`, `generate-plugin --check`), which do
+    # distinguish check from write. This tool only ever reports, so it is
+    # already in "check" mode. `.pre-commit-config.yaml`'s `catalog-health`
+    # hook passes it, and argparse rejecting it made that hook exit 2 without
+    # ever running the check.
+    parser.add_argument("--check", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
 
     findings = run(args.catalog, args.routing)

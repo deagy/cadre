@@ -4,9 +4,11 @@ Verifies that every roster/catalog.yaml agent is reachable from
 roster/orchestration/routing.yaml (routes, risk_rules, team_recipes,
 change_intake.agents, or cross_stack.support), and that every agent ID
 referenced from those routing.yaml structures actually exists in
-catalog.yaml. See roster/orchestration/src/routing_health.py for the
-implementation; it reuses routing.py's load_routing/load_catalog rather than
-parsing either file a second time.
+catalog.yaml, and that no routing rule's `exclude_paths` fully shadows one of
+its own `paths` globs (issue #162). See roster/orchestration/src/
+routing_health.py for the implementation; it reuses routing.py's
+load_routing/load_catalog rather than parsing either file a second time, and
+decides shadowing exactly via glob_containment.py rather than by sampling.
 """
 
 from __future__ import annotations
@@ -24,12 +26,7 @@ REPOSITORY_ROOT = ROOT.parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from routing import load_catalog, load_routing  # noqa: E402
-from routing_health import (  # noqa: E402
-    _probe_paths,
-    check_exclude_path_reachability,
-    check_routing_coverage,
-    run,
-)
+from routing_health import check_exclude_path_reachability, check_routing_coverage, run  # noqa: E402
 
 CATALOG_PATH = REPOSITORY_ROOT / "roster" / "catalog.yaml"
 ROUTING_PATH = REPOSITORY_ROOT / "roster" / "orchestration" / "routing.yaml"
@@ -359,6 +356,30 @@ class RoutingCoverageTests(unittest.TestCase):
             self.assertNotEqual(0, result.returncode)
             self.assertIn("nonexistent-bogus-agent", result.stderr)
 
+    def test_standalone_cli_accepts_the_flag_the_pre_commit_hook_passes(self) -> None:
+        """`.pre-commit-config.yaml`'s `catalog-health` hook invokes this with
+        `--check`. argparse rejecting it made the hook exit 2 without ever
+        running the check, so the hook silently never worked.
+        """
+        hook_entry = (REPOSITORY_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+        self.assertIn("routing_health.py --check", hook_entry)
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "src" / "routing_health.py"),
+                "--check",
+                "--catalog",
+                str(CATALOG_PATH),
+                "--routing",
+                str(ROUTING_PATH),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+
     def test_standalone_cli_exits_zero_on_the_current_repository(self) -> None:
         script = ROOT / "src" / "routing_health.py"
         result = subprocess.run(
@@ -374,92 +395,155 @@ class RoutingCoverageTests(unittest.TestCase):
 class ExcludePathReachabilityTests(unittest.TestCase):
     """Issue #162: an `exclude_paths` set that swallows one of its own rule's
     `paths` globs leaves that glob dead -- the rule keeps its `reviewers` and
-    any `human_gate`, but matches on keywords alone, and before this check
-    nothing in CI noticed.
+    any `human_gate`, but matches on keywords alone, or never at all if it has
+    none.
 
-    The check is deliberately one-directional: it reports a glob only when
-    every probe the glob *itself* matches is excluded. An under-representative
-    probe set therefore costs a missed finding, never a false accusation.
+    The verdict is exact, decided by `glob_containment.contains`, not sampled.
+    An earlier sampling implementation was withdrawn because the finding is a
+    *universal* claim ("every path this glob matches is excluded") and an
+    incomplete sample makes a universal claim easier to satisfy -- the
+    false-accusation direction. The regression cases below are the concrete
+    false positives that implementation produced.
     """
 
     def test_current_repository_has_zero_findings(self) -> None:
         self.assertEqual([], check_exclude_path_reachability(load_routing(ROUTING_PATH)))
 
+    def _findings(self, section: str, rule: dict) -> list[str]:
+        return check_exclude_path_reachability({section: [rule]})
+
+    # -- true positives ---------------------------------------------------
+
     def test_an_exclude_identical_to_its_include_is_reported(self) -> None:
-        findings = check_exclude_path_reachability(
-            {"routes": [{"id": "a", "paths": ["foo/**"], "exclude_paths": ["foo/**"]}]}
-        )
+        findings = self._findings("routes", {"id": "a", "paths": ["foo/**"], "exclude_paths": ["foo/**"]})
         self.assertEqual(1, len(findings))
         self.assertIn('routes[0] (id="a").paths[0]', findings[0])
         self.assertIn("fully shadowed", findings[0])
 
     def test_an_exclude_broader_than_its_include_is_reported(self) -> None:
         # The realistic failure, and the one a verbatim-equality check misses.
-        findings = check_exclude_path_reachability(
-            {"routes": [{"id": "b", "paths": ["foo/**"], "exclude_paths": ["**"]}]}
+        self.assertEqual(
+            1, len(self._findings("routes", {"id": "b", "paths": ["foo/**"], "exclude_paths": ["**"]}))
         )
-        self.assertEqual(1, len(findings))
+
+    def test_shadowing_by_the_union_of_several_excludes_is_reported(self) -> None:
+        """No single exclusion covers the include; together they do. Only an
+        exact containment decision can see this.
+        """
+        self.assertEqual(
+            1,
+            len(
+                self._findings(
+                    "routes", {"id": "u", "paths": ["a/**"], "exclude_paths": ["a/*", "a/*/**"]}
+                )
+            ),
+        )
 
     def test_only_the_dead_glob_is_reported_when_a_sibling_survives(self) -> None:
-        findings = check_exclude_path_reachability(
-            {"routes": [{"id": "c", "paths": ["alive/**", "dead/**"], "exclude_paths": ["dead/**"]}]}
+        findings = self._findings(
+            "routes", {"id": "c", "paths": ["alive/**", "dead/**"], "exclude_paths": ["dead/**"]}
         )
         self.assertEqual(1, len(findings))
         self.assertIn(".paths[1]", findings[0])
-        self.assertIn("dead/**", findings[0])
 
     def test_risk_rules_are_checked_as_well_as_routes(self) -> None:
-        findings = check_exclude_path_reachability(
-            {"risk_rules": [{"id": "g", "paths": ["foo/**"], "exclude_paths": ["foo/**"]}]}
+        findings = self._findings(
+            "risk_rules", {"id": "g", "paths": ["foo/**"], "exclude_paths": ["foo/**"]}
         )
         self.assertEqual(1, len(findings))
         self.assertIn('risk_rules[0] (id="g")', findings[0])
+
+    def test_the_finding_distinguishes_a_keywordless_rule(self) -> None:
+        """A shadowed glob on a rule with no keywords is not "keyword-only" --
+        it is entirely dead, and the message must not misdescribe it.
+        """
+        keyworded = self._findings(
+            "routes", {"id": "k", "paths": ["foo/**"], "exclude_paths": ["**"], "keywords": ["x"]}
+        )
+        bare = self._findings("routes", {"id": "n", "paths": ["foo/**"], "exclude_paths": ["**"]})
+        self.assertIn("matches on keywords alone", keyworded[0])
+        self.assertIn("can never match", bare[0])
+
+    # -- false positives the sampling implementation produced --------------
+
+    def test_an_exclude_matching_the_old_probe_vocabulary_is_not_reported(self) -> None:
+        """Regression: every synthesized probe for a `**` glob ended in
+        `.txt`, so this realistic carve-out was reported as fully shadowed.
+        `roster/catalog-order.txt` is a real file matching the include.
+        """
+        self.assertEqual(
+            [], self._findings("routes", {"id": "r", "paths": ["roster/**"], "exclude_paths": ["**/*.txt"]})
+        )
+
+    def test_an_exclude_matching_the_old_star_filler_is_not_reported(self) -> None:
+        """Regression: `*` expanded to the single literal filler `probe`, so
+        any exclude naming that literal condemned the whole glob. `main.go`
+        matches the include and no exclude.
+        """
+        self.assertEqual(
+            [], self._findings("routes", {"id": "s", "paths": ["**/*.go"], "exclude_paths": ["**/probe.go"]})
+        )
+
+    def test_an_exclude_matching_the_old_question_filler_is_not_reported(self) -> None:
+        """Regression: `?` expanded to the single filler `x`. `a/b.go` lives."""
+        self.assertEqual(
+            [], self._findings("routes", {"id": "q", "paths": ["a/?.go"], "exclude_paths": ["a/x.go"]})
+        )
+
+    def test_a_deeply_nested_include_is_not_reported(self) -> None:
+        """Regression: enough `**/` segments overflowed the old probe budget,
+        which truncated to a biased prefix and dropped the surviving deep
+        paths -- reporting a live glob as dead.
+        """
+        self.assertEqual(
+            [],
+            self._findings(
+                "routes",
+                {
+                    "id": "t",
+                    "paths": ["**/a/**/b/**/c/**/d.md"],
+                    "exclude_paths": ["a/**", "probe/a/**", "probe/nested/a/b/**"],
+                },
+            ),
+        )
+
+    def test_the_broadest_possible_glob_is_not_reported_for_a_narrow_exclude(self) -> None:
+        self.assertEqual([], self._findings("routes", {"id": "w", "paths": ["**"], "exclude_paths": ["**/*.txt"]}))
+
+    # -- ordinary non-findings --------------------------------------------
 
     def test_a_partial_carve_out_is_not_reported(self) -> None:
         """The shape routing.yaml actually ships: a broad glob minus a subtree."""
         self.assertEqual(
             [],
-            check_exclude_path_reachability(
-                {"routes": [{"id": "d", "paths": ["**/architecture/**"], "exclude_paths": ["roster/**"]}]}
+            self._findings(
+                "routes", {"id": "d", "paths": ["**/architecture/**"], "exclude_paths": ["roster/**"]}
             ),
         )
 
     def test_a_depth_limited_exclusion_is_not_reported(self) -> None:
-        """`docs/*` excludes only the top level of `docs/**`; `docs/a/b.md`
-        still matches. A probe set with a single fixed depth would call this
-        fully shadowed -- this is the false positive the multi-depth fillers
-        exist to prevent.
-        """
+        """`docs/*` excludes only the top level of `docs/**`."""
         self.assertEqual(
-            [],
-            check_exclude_path_reachability(
-                {"routes": [{"id": "e", "paths": ["docs/**"], "exclude_paths": ["docs/*"]}]}
-            ),
+            [], self._findings("routes", {"id": "e", "paths": ["docs/**"], "exclude_paths": ["docs/*"]})
         )
 
     def test_a_rule_without_exclude_paths_is_not_reported(self) -> None:
-        self.assertEqual([], check_exclude_path_reachability({"routes": [{"id": "f", "paths": ["foo/**"]}]}))
+        self.assertEqual([], self._findings("routes", {"id": "f", "paths": ["foo/**"]}))
 
-    def test_every_synthesized_probe_matches_the_glob_it_came_from(self) -> None:
-        """The soundness property the whole check rests on."""
-        from routing import glob_to_regex
+    def test_a_rule_without_paths_is_not_reported(self) -> None:
+        for paths in ({}, {"paths": []}, {"paths": None}):
+            with self.subTest(paths=paths):
+                self.assertEqual([], self._findings("routes", {"id": "p", "exclude_paths": ["**"], **paths}))
 
-        for pattern in ("**/architecture/**", "docs/**", "backend/*.go", "a/?/c", "**", "exact/path.md"):
-            with self.subTest(pattern=pattern):
-                matcher = glob_to_regex(pattern)
-                probes = _probe_paths(pattern)
-                self.assertTrue(probes, f"no probe synthesized for {pattern!r}")
-                for probe in probes:
-                    self.assertTrue(matcher.search(probe), f"{probe!r} does not match {pattern!r}")
+    def test_a_literal_include_equal_to_a_literal_exclude_is_reported(self) -> None:
+        self.assertEqual(
+            1,
+            len(self._findings("routes", {"id": "l", "paths": ["a/b.md"], "exclude_paths": ["a/b.md"]})),
+        )
 
-    def test_probes_span_more_than_one_directory_depth(self) -> None:
-        depths = {probe.count("/") for probe in _probe_paths("docs/**")}
-        self.assertGreater(len(depths), 1, "single-depth probes would cause false positives")
+    # -- wiring ------------------------------------------------------------
 
     def test_findings_are_reported_through_the_top_level_run(self) -> None:
-        """Wiring check: the new findings must reach `run()`, not just the
-        function under test.
-        """
         with tempfile.TemporaryDirectory() as temporary_directory:
             broken = Path(temporary_directory) / "routing.yaml"
             config = json.loads(ROUTING_PATH.read_text(encoding="utf-8"))
@@ -470,6 +554,21 @@ class ExcludePathReachabilityTests(unittest.TestCase):
             broken.write_text(json.dumps(config), encoding="utf-8")
             findings = run(CATALOG_PATH, broken)
             self.assertTrue(any("fully shadowed" in finding for finding in findings), findings)
+
+    def test_run_reports_coverage_findings_alongside_shadowing_findings(self) -> None:
+        """`run()` concatenates both lists; neither may shadow the other."""
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            broken = Path(temporary_directory) / "routing.yaml"
+            config = json.loads(ROUTING_PATH.read_text(encoding="utf-8"))
+            for route in config["routes"]:
+                if route["id"] == "architecture-design":
+                    route["exclude_paths"] = ["**"]
+                    route.setdefault("reviewers", []).append("nonexistent-bogus-agent")
+                    break
+            broken.write_text(json.dumps(config), encoding="utf-8")
+            findings = run(CATALOG_PATH, broken)
+            self.assertTrue(any("fully shadowed" in f for f in findings), findings)
+            self.assertTrue(any("nonexistent-bogus-agent" in f for f in findings), findings)
 
 
 if __name__ == "__main__":
