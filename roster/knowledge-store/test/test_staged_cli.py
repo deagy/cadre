@@ -232,5 +232,116 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("No .md staged-record files", str(caught.exception))
 
 
+
+class DispositionTests(unittest.TestCase):
+    """Step 4: the steward decision, with history that outlives an overwrite."""
+
+    def setUp(self) -> None:
+        self.workspace = tempfile.TemporaryDirectory()
+        self.addCleanup(self.workspace.cleanup)
+        root = Path(self.workspace.name)
+        self.config_path = root / "config.json"
+        self.config_path.write_text(
+            json.dumps({"database": str(root / "knowledge.db")}), encoding="utf-8"
+        )
+        self.exported = root / "exported"
+        # A record that arrives undispositioned, so the transitions below are
+        # this test's doing rather than the corpus's.
+        self.record_id = next(
+            frontmatter["id"]
+            for frontmatter in (
+                staged_records.parse_record(path.read_text(encoding="utf-8"))[0]
+                for path in sorted(RECORDS.glob("*.md"))
+            )
+            if frontmatter["status"] == "proposed"
+        )
+        self._run("import-staged", "--directory", str(RECORDS))
+
+    def _run(self, *arguments: str) -> dict:
+        return cli.run([*arguments, "--config", str(self.config_path)])
+
+    def _disposition(self, action: str, reason: str, decided_by: str = "a-steward") -> dict:
+        return self._run(
+            "disposition-staged", "--id", self.record_id, "--action", action,
+            "--reason", reason, "--classification-used", "internal", "--decided-by", decided_by,
+        )
+
+    def test_a_disposition_updates_status_and_records_the_reason(self) -> None:
+        result = self._disposition("accepted", "durable and well evidenced")
+        self.assertEqual(result["status"], "accepted")
+        shown = self._run("show-staged", "--id", self.record_id)
+        self.assertEqual(shown["frontmatter"]["status"], "accepted")
+        self.assertEqual(shown["frontmatter"]["disposition"]["reason"], "durable and well evidenced")
+
+    def test_history_is_append_only_across_a_reversal(self) -> None:
+        # The case a single overwritten field would lose: deferred, then
+        # accepted. Both must survive, or this audit trail is worse than the
+        # git history it replaced.
+        self._disposition("deferred", "waiting on a second opinion")
+        self._disposition("accepted", "second opinion agreed")
+        history = self._run("show-staged", "--id", self.record_id)["disposition_history"]
+        self.assertEqual([entry["action"] for entry in history], ["deferred", "accepted"])
+        self.assertEqual([entry["sequence"] for entry in history], [1, 2])
+        self.assertEqual(history[0]["reason"], "waiting on a second opinion")
+
+    def test_the_proposer_cannot_disposition_their_own_record(self) -> None:
+        staged_by = self._run("show-staged", "--id", self.record_id)["frontmatter"]["staged_by"]
+        with self.assertRaises(Exception) as caught:
+            self._disposition("accepted", "self approval", decided_by=staged_by)
+        self.assertIn("cannot also disposition", str(caught.exception))
+        self.assertEqual(
+            self._run("show-staged", "--id", self.record_id)["frontmatter"]["status"], "proposed"
+        )
+        self.assertEqual(self._run("show-staged", "--id", self.record_id)["disposition_history"], [])
+
+    def test_an_empty_reason_is_refused(self) -> None:
+        with self.assertRaises(Exception) as caught:
+            self._disposition("accepted", "   ")
+        self.assertIn("not an audit trail", str(caught.exception))
+
+    def test_an_illegal_disposition_leaves_no_history_row(self) -> None:
+        # put_record validates before writing, so a rejected disposition must
+        # not appear in history either -- otherwise history would record
+        # decisions that never took effect.
+        original = staged_records.validate_parsed
+
+        def reject_everything(frontmatter, body):
+            return ["synthetic contract failure"]
+
+        staged_records.validate_parsed = reject_everything
+        import staged_store
+
+        staged_store.validate_parsed = reject_everything
+        self.addCleanup(lambda: setattr(staged_store, "validate_parsed", original))
+        self.addCleanup(lambda: setattr(staged_records, "validate_parsed", original))
+        with self.assertRaises(Exception):
+            self._disposition("accepted", "should not stick")
+        staged_store.validate_parsed = original
+        staged_records.validate_parsed = original
+        self.assertEqual(self._run("show-staged", "--id", self.record_id)["disposition_history"], [])
+
+    def test_export_writes_history_beside_the_record(self) -> None:
+        self._disposition("deferred", "first pass")
+        self._disposition("accepted", "resolved")
+        result = self._run("export-staged", "--output", str(self.exported))
+        self.assertGreaterEqual(result["histories"], 1)
+        sidecar = self.exported / f"{self.record_id}.history.json"
+        self.assertTrue(sidecar.is_file(), "export lost the disposition history")
+        history = json.loads(sidecar.read_text(encoding="utf-8"))
+        self.assertEqual([entry["action"] for entry in history], ["deferred", "accepted"])
+        # And the record itself still carries the current disposition.
+        frontmatter, _ = staged_records.parse_record(
+            (self.exported / f"{self.record_id}.md").read_text(encoding="utf-8")
+        )
+        self.assertEqual(frontmatter["status"], "accepted")
+
+    def test_dispositioning_an_unknown_record_names_it(self) -> None:
+        with self.assertRaises(Exception) as caught:
+            self._run(
+                "disposition-staged", "--id", "KS-20260101-nope", "--action", "accepted",
+                "--reason", "x", "--classification-used", "internal", "--decided-by", "s",
+            )
+        self.assertIn("KS-20260101-nope", str(caught.exception))
+
 if __name__ == "__main__":
     unittest.main()

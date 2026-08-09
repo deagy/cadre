@@ -16,7 +16,9 @@ from settings import SettingsError
 from staged_records import STATUS_VALUES as STAGED_STATUSES
 from staged_records import parse_record, validate_parsed
 from staged_store import (
+    disposition_record,
     export_records,
+    get_history,
     get_record,
     install_schema,
     list_records,
@@ -79,6 +81,18 @@ def _parser() -> argparse.ArgumentParser:
     import_staged = subparsers.add_parser("import-staged")
     import_staged.add_argument("--directory", required=True)
     add_config(import_staged)
+    disposition = subparsers.add_parser("disposition-staged")
+    disposition.add_argument("--id", required=True, dest="record_id")
+    disposition.add_argument("--action", required=True, choices=("accepted", "rejected", "deferred"))
+    disposition.add_argument("--reason", required=True)
+    disposition.add_argument("--classification-used", required=True, dest="classification_used")
+    disposition.add_argument("--decided-by", required=True, dest="decided_by")
+    disposition.add_argument(
+        "--diverged-from-proposal",
+        action="store_true",
+        help="the classification actually applied differs from the one proposed",
+    )
+    add_config(disposition)
     export_staged = subparsers.add_parser("export-staged")
     export_staged.add_argument("--output", required=True)
     export_staged.add_argument("--status", choices=STAGED_STATUSES)
@@ -145,7 +159,13 @@ def _show_staged(db: Any, record_id: str) -> dict[str, Any]:
     if loaded is None:
         raise ValueError(f"No staged record with id {record_id!r} in this store.")
     frontmatter, body = loaded
-    return {"id": record_id, "frontmatter": frontmatter, "body": body, "text": serialize_record(frontmatter, body)}
+    return {
+        "id": record_id,
+        "frontmatter": frontmatter,
+        "body": body,
+        "text": serialize_record(frontmatter, body),
+        "disposition_history": get_history(db, record_id),
+    }
 
 
 def _import_staged(db: Any, directory: str) -> dict[str, Any]:
@@ -184,11 +204,24 @@ def _export_staged(db: Any, output: str, status: str | None) -> dict[str, Any]:
     destination = Path(output)
     destination.mkdir(parents=True, exist_ok=True)
     exported = export_records(db, status)
+    histories = 0
     for record_id, text in exported.items():
         (destination / f"{record_id}.md").write_text(text, encoding="utf-8")
+        # The record carries its *current* disposition in frontmatter. Earlier
+        # ones cannot go there -- the frontmatter dialect is deliberately one
+        # level deep and holds no list of mappings -- so they are written
+        # beside it. Without this the export would silently lose the audit
+        # trail, which is exactly what the durability path exists to protect.
+        history = get_history(db, record_id)
+        if history:
+            histories += 1
+            (destination / f"{record_id}.history.json").write_text(
+                json.dumps(history, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
     return {
         "status": "exported",
         "count": len(exported),
+        "histories": histories,
         "directory": str(destination),
         "ids": sorted(exported),
     }
@@ -253,7 +286,14 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
             return build_agent_context(db, config, options.pop("query"), options)
         if command == "stats":
             return store_stats(db)
-        if command in ("propose", "list-staged", "show-staged", "import-staged", "export-staged"):
+        if command in (
+            "propose",
+            "list-staged",
+            "show-staged",
+            "import-staged",
+            "export-staged",
+            "disposition-staged",
+        ):
             _enforce_staging_scope(tier)
             # Installed here rather than inside open_store: the staging table
             # is a staged-record concern, and database.py should not depend on
@@ -269,6 +309,16 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
                 return _import_staged(db, options.pop("directory"))
             if command == "export-staged":
                 return _export_staged(db, options.pop("output"), options.pop("status", None))
+            if command == "disposition-staged":
+                return disposition_record(
+                    db,
+                    options.pop("record_id"),
+                    action=options.pop("action"),
+                    reason=options.pop("reason"),
+                    classification_used=options.pop("classification_used"),
+                    diverged_from_proposal=options.pop("diverged_from_proposal"),
+                    decided_by=options.pop("decided_by"),
+                )
             return _show_staged(db, options.pop("record_id"))
         raise ValueError(f"Unknown command: {command}")
     finally:
