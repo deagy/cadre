@@ -136,7 +136,7 @@ def _select_workflow(
     # not a rollback execution. The rollback route's roles are selected either
     # way -- routes drive agents independently of this label -- so deferring
     # here costs nothing but the narration.
-    if "rollback" in route_ids and not {"incident-response", "support"} & set(route_ids):
+    if "rollback" in route_ids and set(route_ids).isdisjoint({"incident-response", "support"}):
         return "rollback"
     if "production" in risk_ids:
         return "production-release"

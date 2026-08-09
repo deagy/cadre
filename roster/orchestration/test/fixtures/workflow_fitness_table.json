@@ -21,7 +21,6 @@
     "test_workflow_fitness_table.py runs build_dispatch_plan() against every",
     "case here and asserts actual workflow == expected_workflow. Two cases are",
     "deliberately expected to disagree with current code (see their 'reasoning'",
-    "and 'known_mismatch' fields) -- that disagreement is the entire point of",
     "this file: it is proof the table is independent, not a copy of the bug.",
     "",
     "Coverage: at least one case per selection.schema.json workflow enum value",
@@ -34,7 +33,8 @@
     "not modify _select_workflow(), and does not add a roster/workflows/*.md",
     "doc. If a case below implies the closed enum is genuinely missing a",
     "shape, that is Proposal 08's territory, not this file's -- see the PR",
-    "description for which cases (if any) that applies to."
+    "description for which cases (if any) that applies to.",
+    "No case is currently marked known_mismatch. Both that once were have been fixed in the code (#154, #157) rather than weakened here; add the flag for a future disagreement rather than bending a case to match current behavior."
   ],
   "cases": [
     {

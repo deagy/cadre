@@ -351,10 +351,12 @@
     },
     {
       "id": "rollback",
-      "keywords": ["roll back", "roll forward", "revert the release", "revert the deployment", "last known-good", "known-good artifact", "back out the release"],
+      "paths": [],
+      "keywords": ["roll back", "revert the release", "back out the release"],
+      "keyword_groups": [["rollback", "roll forward", "revert", "undo", "downgrade", "restore", "redeploy", "back out", "previous version", "prior build", "previous artifact", "last known-good"], ["release", "deployment", "deploy", "production", "rollout", "artifact"]],
       "primary": ["release-engineer"],
       "reviewers": ["deployment-realist"],
-      "support": ["incident-commander", "observability-sre", "evidence-curator"]
+      "support": ["observability-sre", "evidence-curator"]
     },
     {
       "id": "observability",

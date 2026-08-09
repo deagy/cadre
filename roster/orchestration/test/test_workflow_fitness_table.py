@@ -13,14 +13,14 @@ roster/workflows/*.md and routing.yaml, not from _select_workflow()'s
 current behavior -- see that file's own '_comment' block for the full
 methodology.
 
-Two fixtures (WF-ROLLBACK-GAP-1, WF-AGENT-SUITE-GOVERNANCE-MISLABEL-1) are
-marked "known_mismatch": true and are EXPECTED to fail against current code.
-That is not a bug in this test -- it is the entire point of an independent
-fitness table: real disagreement with the code under test is the signal a
-self-referential pinning test can never produce. Do not "fix" this test by
-weakening those two entries to match current behavior; fix _select_workflow()
-instead (out of scope for this file -- see the fixtures file's 'reasoning'
-and 'known_mismatch' fields for what each one would require).
+No fixture is currently marked "known_mismatch": true. Both cases that once
+were have since been fixed in the code rather than weakened here -- roster
+maintenance mislabelled as debugging (#154), and the unreachable rollback
+workflow (#157). The mechanism is dormant, not gone: a future case that
+disagrees with _select_workflow() should be added with that flag rather than
+bent to match current behavior. Real disagreement with the code under test is
+the signal a self-referential pinning test can never produce, and is the
+entire point of an independent fitness table.
 """
 
 from __future__ import annotations
@@ -136,28 +136,6 @@ class WorkflowFitnessTableAgainstSelectorTests(unittest.TestCase):
                 "fitness-table cases not marked known_mismatch disagreed with "
                 "build_dispatch_plan():\n  " + "\n  ".join(failures)
             )
-
-    def test_rollback_execution_is_labelled_rollback(self) -> None:
-        """A rollback execution must not be narrated as a forward release.
-
-        This was Proposal 03's second finding and is fixed in #157: 'rollback'
-        was an enumerated, documented workflow no plan could be assigned,
-        because the production risk check ran first and swallowed every
-        rollback. Kept as its own named test rather than folded into the
-        general agreement check, because the ordering it depends on is
-        load-bearing and easy to undo -- moving the rollback branch back below
-        the production check reintroduces the bug and fails here by name.
-        """
-        case = next(case for case in CASES if case["id"] == "WF-ROLLBACK-EXECUTION-1")
-        actual = _run_case(case)
-        self.assertEqual(
-            actual["workflow"],
-            case["expected_workflow"],
-            "a rollback execution was labelled "
-            f"{actual['workflow']!r}; the rollback branch in _select_workflow() "
-            "must stay ahead of the `production` risk check",
-        )
-
 
 
 if __name__ == "__main__":
