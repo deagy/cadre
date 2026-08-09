@@ -23,6 +23,15 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+### Added
+
+- **Routing rules can now exclude paths, not just include them.** `routes[]` and `risk_rules[]` in `roster/orchestration/routing.yaml` accept an `exclude_paths` array alongside `paths`. It subtracts at the *file* level: a broad include glob can carve out the paths it was never meant to reach, while still matching on any other changed file in the same change set. ([#156](https://github.com/deagy/cadre/issues/156))
+
+  Until now the only fix for a broad glob's false positive was to narrow the glob, which traded it for false negatives. `**/architecture/**` matched this repository's own `roster/architecture/` role definitions, so a prose tweak to one role summoned `cloud-architect` and `threat-modeler`; narrowing it to `architecture/**` + `docs/architecture/**` fixed that and silently stopped matching nested consuming-project paths like `services/payments/architecture/`. The broad glob is restored with `exclude_paths: ["roster/**"]`, which fixes the false positive *and* recovers the nested paths.
+
+  **The `backend` route's `**/*.py` asymmetry is deliberately not restored.** It could be, mechanically — but only by excluding `roster/**`, `plugin/**`, `engine/**`, `kernel/**`, `cadre_cli/**` and `bin/**`, and `engine/`, `plugin/` and `bin/` are perfectly ordinary directory names in a consuming project, whose Python would then drop out of routing with no signal. That trades a documented asymmetry for a hidden one. `roster/**` is a single, distinctly-Cadre name, which is why the architecture case is safe and this one is not.
+
+
 ### Changed
 
 - **The Cline agent-dispatch plugin no longer ships a default model provider, and no longer requires `ANTHROPIC_API_KEY`.** Every bundled preset carried `providerId: anthropic` and a vendor-qualified `modelId`, and the runtime fell back to the literal `"anthropic"` in two more places, so automatic dispatch selected Anthropic regardless of how Cline itself was configured — prompting for its credential, or, where that credential happened to exist, silently using it. Presets now carry only the capability tier (`opus`/`sonnet`/`haiku`), which is this suite's own domain knowledge; the provider and the concrete model serving a tier are operator configuration resolved at dispatch time, via `CLINE_AGENTS_PROVIDER_ID` and `CLINE_AGENTS_MODEL_OPUS`/`_SONNET`/`_HAIKU` (or a single `CLINE_AGENTS_MODEL_DEFAULT`). `dispatch_selected_roles` gains matching per-call `providerId`/`modelId` overrides, which `start_subagent` already had. ([#142](https://github.com/deagy/cadre/issues/142))

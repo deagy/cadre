@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import agentic_sdlc_contracts  # noqa: E402
 from build_dispatch_plan import build_dispatch_plan  # noqa: E402
-from routing import glob_to_regex, load_catalog, load_routing  # noqa: E402
+from routing import glob_to_regex, load_catalog, load_routing, match_rule  # noqa: E402
 from select_agents import (  # noqa: E402
     _origin_slug,
     discover_changed_files,
@@ -158,6 +158,45 @@ class RouteMatchReasonTests(unittest.TestCase):
         for match in [*result["matched_routes"], *result["matched_risks"]]:
             self.assertEqual(sorted(match), ["id", "reasons"])
             self.assertEqual(sorted(match["reasons"]), ["keyword_groups", "keywords", "paths"])
+
+
+class ExcludePathsTests(unittest.TestCase):
+    """`exclude_paths` subtracts at the file level, not the rule level.
+
+    Without it the only fix for a broad glob's false positive was to narrow
+    the glob, trading it for false negatives -- #154 narrowed
+    `**/architecture/**` to stop this repository's own roster/architecture/
+    matching, and lost every nested consuming-project path in the process
+    (#156).
+    """
+
+    RULE = {"id": "t", "paths": ["**/architecture/**"], "exclude_paths": ["roster/**"]}
+
+    def test_excluded_file_does_not_match(self) -> None:
+        result = match_rule(self.RULE, "", ["roster/architecture/interaction-designer/AGENT.md"])
+        self.assertFalse(result["matched"])
+        self.assertEqual(result["paths"], [])
+
+    def test_non_excluded_file_still_matches(self) -> None:
+        for path in ("docs/architecture/adr.md", "services/pay/architecture/topology.md"):
+            with self.subTest(path=path):
+                self.assertTrue(match_rule(self.RULE, "", [path])["matched"])
+
+    def test_exclusion_is_per_file_not_per_rule(self) -> None:
+        # One excluded file must not suppress a genuine match in the same
+        # change set -- the rule still fires, and reports only the file that
+        # actually matched.
+        result = match_rule(
+            self.RULE,
+            "",
+            ["roster/architecture/interaction-designer/AGENT.md", "docs/architecture/adr.md"],
+        )
+        self.assertTrue(result["matched"])
+        self.assertEqual([entry["file"] for entry in result["paths"]], ["docs/architecture/adr.md"])
+
+    def test_absent_exclude_paths_changes_nothing(self) -> None:
+        rule = {"id": "t", "paths": ["**/architecture/**"]}
+        self.assertTrue(match_rule(rule, "", ["roster/architecture/x.md"])["matched"])
 
 
 class SelectorTests(unittest.TestCase):

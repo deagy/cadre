@@ -1816,6 +1816,35 @@
         ],
         "workflow": "support-escalation"
       }
+    },
+    {
+      "id": "ARCHITECTURE-NESTED-RECOVERED-1",
+      "task": "Revise the payments service architecture topology",
+      "changed_files": [
+        "services/payments/architecture/topology.md"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-ARCHITECTURE-NESTED-1",
+      "description": "a consuming project's nested architecture directory. #154 had to narrow **/architecture/** to architecture/**+docs/architecture/** to stop this repository's own roster/architecture/ matching, which silently dropped nested paths like this one. #156's exclude_paths restores the broad glob and carves out roster/** instead, so this matches again.",
+      "expected": {
+        "primary": [
+          "cloud-architect",
+          "backend-engineer",
+          "technical-writer"
+        ],
+        "reviewers": [
+          "threat-modeler",
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "backend",
+          "documentation",
+          "architecture-design"
+        ],
+        "workflow": "new-service"
+      }
     }
   ]
 }
