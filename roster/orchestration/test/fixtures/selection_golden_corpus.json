@@ -158,6 +158,26 @@
       }
     },
     {
+      "id": "PIPELINE-NEGATIVE-1",
+      "description": "regression pin for the hyphen-boundary bug: pipeline's 'runner' keyword must NOT substring-match inside the hyphenated compound 'cross-runner'. Only the documentation route (via 'documentation' in the task text) should fire; a fix that under- or over-tightens the keyword boundary regex changes this fixture.",
+      "task": "Improve cross-runner UX documentation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-PIPELINE-NEGATIVE-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "technical-writer"
+        ],
+        "reviewers": [],
+        "support": [],
+        "matched_routes": [
+          "documentation"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
       "id": "TESTING-1",
       "description": "testing route, deliberately avoiding the black-box-testing/**/*.feature path overlap so only 'testing' and the incidental backend **/*.go path match",
       "task": "Add regression test coverage for checkout flow",
