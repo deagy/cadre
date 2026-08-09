@@ -167,6 +167,21 @@ jobs:
     needs: changed
     if: needs.changed.outputs.plugin == 'true'
     runs-on: ubuntu-latest
+    # Signing and publishing run under the `release` environment, which
+    # requires an explicit approval and limits the allowed refs to `main` and
+    # the `plugin-v*`/`kernel-v*` tags. Reaching `main` is not by itself
+    # authorization to mint a signed, published release: the run waits for a
+    # human to approve it, indefinitely, rather than proceeding unattended.
+    #
+    # Environment approval permits self-approval, unlike pull-request review
+    # -- which is why a solo maintainer can use it as a real gate rather than
+    # a wait timer that elapses whether or not anyone is watching.
+    #
+    # Note this gates *these jobs*, not the secret: while TAG_SIGNING_KEY is a
+    # repository secret, any job that omits `environment:` still reads it
+    # directly. Scoping the secret to this environment is what makes the gate
+    # protect the key -- see .github/TAG-SIGNING-SETUP.md step 2.
+    environment: release
     # Per-job, matching the kernel job: the SBOM below is attested, so this
     # needs the same Sigstore permissions.
     permissions:
@@ -333,6 +348,21 @@ jobs:
     needs: changed
     if: needs.changed.outputs.kernel == 'true'
     runs-on: ubuntu-latest
+    # Signing and publishing run under the `release` environment, which
+    # requires an explicit approval and limits the allowed refs to `main` and
+    # the `plugin-v*`/`kernel-v*` tags. Reaching `main` is not by itself
+    # authorization to mint a signed, published release: the run waits for a
+    # human to approve it, indefinitely, rather than proceeding unattended.
+    #
+    # Environment approval permits self-approval, unlike pull-request review
+    # -- which is why a solo maintainer can use it as a real gate rather than
+    # a wait timer that elapses whether or not anyone is watching.
+    #
+    # Note this gates *these jobs*, not the secret: while TAG_SIGNING_KEY is a
+    # repository secret, any job that omits `environment:` still reads it
+    # directly. Scoping the secret to this environment is what makes the gate
+    # protect the key -- see .github/TAG-SIGNING-SETUP.md step 2.
+    environment: release
     # Declared per-job rather than at the workflow level so the plugin job
     # above does not also gain the ability to mint attestations it never
     # uses. A job-level block replaces the workflow-level one outright, so
