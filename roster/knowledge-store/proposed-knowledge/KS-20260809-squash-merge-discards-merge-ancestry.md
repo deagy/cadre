@@ -1,23 +1,23 @@
 ---
-id: KS-20260809-squash-merge-discards-merge-ancestry
-title: squash-merging a branch that contains a merge commit discards the merge ancestry
-status: proposed
+id: "KS-20260809-squash-merge-discards-merge-ancestry"
+title: "squash-merging a branch that contains a merge commit discards the merge ancestry"
+status: "proposed"
 evidence:
   - "PR #170 (squash-merged into codex/review-cline-shortcomings)"
   - "PR #164 reported mergeStateStatus DIRTY immediately afterwards"
   - "roster/knowledge-store/proposed-knowledge/ -- seven add/add conflicts against main"
 origin:
-  task: "remediating the review of PR #164"
   artifact: "git history of codex/review-cline-shortcomings"
   revision: "0283117 (the reconciling merge that repaired it)"
-proposed_classification: internal
-source_scope: git workflow, release engineering, stacked pull requests
+  task: "remediating the review of PR #164"
+proposed_classification: "internal"
+source_scope: "git workflow, release engineering, stacked pull requests"
 sensitivity_notes: ""
 conflicts_or_staleness: ""
-recommended_action: ingest
+recommended_action: "ingest"
 untrusted_instruction_risk: false
-staged_by: orchestrator (session capture, no originating handoff item)
-content_digest: f1445a9b5a7e05291a2a7f1610012020026739ef90b2dfaa98985e7cb9de7c28
+staged_by: "orchestrator (session capture, no originating handoff item)"
+content_digest: "f1445a9b5a7e05291a2a7f1610012020026739ef90b2dfaa98985e7cb9de7c28"
 ---
 
 ## Summary

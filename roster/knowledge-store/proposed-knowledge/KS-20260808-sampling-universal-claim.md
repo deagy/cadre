@@ -1,23 +1,23 @@
 ---
-id: KS-20260808-sampling-universal-claim
-title: sampling cannot establish a universal claim
-status: proposed
+id: "KS-20260808-sampling-universal-claim"
+title: "sampling cannot establish a universal claim"
+status: "proposed"
 evidence:
   - "roster/orchestration/src/routing_health.py"
   - "roster/orchestration/src/glob_containment.py"
   - "PR #163"
 origin:
-  task: review of PR #163
   artifact: "roster/orchestration/src/routing_health.py, roster/orchestration/src/glob_containment.py"
   revision: "9cffcfa (merged)"
-proposed_classification: internal
-source_scope: testing, code-review, build, validation
+  task: "review of PR #163"
+proposed_classification: "internal"
+source_scope: "testing, code-review, build, validation"
 sensitivity_notes: ""
 conflicts_or_staleness: ""
-recommended_action: ingest
+recommended_action: "ingest"
 untrusted_instruction_risk: false
-staged_by: knowledge-store-steward
-content_digest: e3c19604b74866645efb8354c018b7469c4b763857f2be6d622c08e6007d6232
+staged_by: "knowledge-store-steward"
+content_digest: "e3c19604b74866645efb8354c018b7469c4b763857f2be6d622c08e6007d6232"
 ---
 
 ## Summary

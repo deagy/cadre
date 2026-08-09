@@ -1,22 +1,22 @@
 ---
-id: KS-20260809-cadre-select-reads-live-git-status
-title: cadre select reads live git status when --files is omitted
-status: proposed
+id: "KS-20260809-cadre-select-reads-live-git-status"
+title: "cadre select reads live git status when --files is omitted"
+status: "proposed"
 evidence:
   - "roster/orchestration/src/build_dispatch_plan.py"
   - "PR #169 -- routing verification contaminated by concurrent edits in the same tree"
 origin:
-  task: "narrowing the knowledge-store route's keyword_groups"
   artifact: "./bin/cadre select"
   revision: "c5b67b6"
-proposed_classification: internal
-source_scope: routing, selection, verification of this repository's own tooling
+  task: "narrowing the knowledge-store route's keyword_groups"
+proposed_classification: "internal"
+source_scope: "routing, selection, verification of this repository's own tooling"
 sensitivity_notes: ""
 conflicts_or_staleness: "describes current CLI behaviour; re-verify if select's changed-file resolution changes"
-recommended_action: ingest
+recommended_action: "ingest"
 untrusted_instruction_risk: false
-staged_by: orchestrator (session capture, no originating handoff item)
-content_digest: b2013d39f01aa7e47cdd2113bbdfa1bd74423b159af4e8428862977f104f5fd5
+staged_by: "orchestrator (session capture, no originating handoff item)"
+content_digest: "b2013d39f01aa7e47cdd2113bbdfa1bd74423b159af4e8428862977f104f5fd5"
 ---
 
 ## Summary

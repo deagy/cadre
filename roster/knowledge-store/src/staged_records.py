@@ -727,7 +727,16 @@ def validate_directory(path: Path | str = DEFAULT_DIRECTORY) -> list[str]:
 
     findings: list[str] = []
     seen_ids: dict[str, Path] = {}
-    for record_path in sorted(entry for entry in directory.glob("*.md") if entry.is_file()):
+    for record_path in sorted(
+        entry
+        for entry in directory.glob("*.md")
+        # A directory of records may also carry a README explaining what it is
+        # -- the export snapshot does, to stop anyone hand-editing generated
+        # files. It is documentation, not a record, and the exporter never
+        # writes a record under this name because record filenames are always
+        # the record id (`KS-YYYYMMDD-slug.md`).
+        if entry.is_file() and entry.name != "README.md"
+    ):
         try:
             text = record_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as error:

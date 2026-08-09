@@ -17,7 +17,11 @@ import unittest
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1] / "src"
-RECORDS = Path(__file__).resolve().parents[1] / "proposed-knowledge"
+# Purpose-built fixtures, not the live corpus: these tests must exercise the
+# awkward cases deliberately (dispositioned, untrusted-flagged, quotes,
+# colons, unicode, YAML-keyword lookalikes) rather than whatever the real
+# records happen to contain, and must not change meaning when the corpus does.
+RECORDS = Path(__file__).resolve().parent / "fixtures"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
@@ -76,11 +80,19 @@ class StagedCliTests(unittest.TestCase):
         for path in sorted(RECORDS.glob("*.md")):
             self._run("propose", "--input", str(path))
         everything = self._run("list-staged")["records"]
-        proposed = self._run("list-staged", "--status", "proposed")["records"]
-        accepted = self._run("list-staged", "--status", "accepted")["records"]
-        self.assertEqual(len(everything), len(proposed) + len(accepted))
-        self.assertTrue(accepted, "the committed corpus includes dispositioned records")
-        self.assertTrue(all(record["status"] == "accepted" for record in accepted))
+        # Partition rather than a two-status sum: the earlier version assumed
+        # the corpus held only proposed and accepted records, which was true of
+        # the data at the time and not of the contract. Every status a record
+        # can carry must be reachable through the filter.
+        by_status = {
+            status: self._run("list-staged", "--status", status)["records"]
+            for status in ("proposed", "accepted", "rejected", "deferred")
+        }
+        self.assertEqual(len(everything), sum(len(records) for records in by_status.values()))
+        for status, records in by_status.items():
+            self.assertTrue(all(record["status"] == status for record in records), status)
+        self.assertTrue(by_status["accepted"], "fixtures must include a dispositioned record")
+        self.assertTrue(by_status["deferred"], "fixtures must include a deferred record")
 
     def test_show_staged_returns_the_full_record_not_just_a_summary(self) -> None:
         path, frontmatter = _a_record()
