@@ -16,7 +16,11 @@ import unittest
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1] / "src"
-RECORDS = Path(__file__).resolve().parents[1] / "proposed-knowledge"
+# Purpose-built fixtures, not the live corpus: these tests must exercise the
+# awkward cases deliberately (dispositioned, untrusted-flagged, quotes,
+# colons, unicode, YAML-keyword lookalikes) rather than whatever the real
+# records happen to contain, and must not change meaning when the corpus does.
+RECORDS = Path(__file__).resolve().parent / "fixtures"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 

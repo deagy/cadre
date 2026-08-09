@@ -1,31 +1,30 @@
 ---
-id: KS-20260809-non-vacuity-fault-injection
-title: prove a guard is non-vacuous by injecting a fault
-status: accepted
+id: "KS-20260809-non-vacuity-fault-injection"
+title: "prove a guard is non-vacuous by injecting a fault"
+status: "accepted"
 evidence:
   - "PR #161"
   - "PR #163"
   - "PR #164"
   - "accumulated code-review findings across multiple pull requests"
 origin:
-  task: accumulated across reviews of PRs #161, #163, #164 and predecessors
-  artifact: code-review and testing practices
+  artifact: "code-review and testing practices"
   revision: "practice, not code — no single revision"
-proposed_classification: internal
-source_scope: testing, code-review, build, verification
+  task: "accumulated across reviews of PRs #161, #163, #164 and predecessors"
+proposed_classification: "internal"
+source_scope: "testing, code-review, build, verification"
 sensitivity_notes: ""
 conflicts_or_staleness: "complements but does not duplicate the two PR #163 records"
-recommended_action: ingest
+recommended_action: "ingest"
 untrusted_instruction_risk: false
-staged_by: knowledge-store-steward
-content_digest: 125e30446f0791476f8b0560e8e3fa58ad33ef9fada0ce070c11b8cc4b65ce76
+staged_by: "knowledge-store-steward"
+content_digest: "125e30446f0791476f8b0560e8e3fa58ad33ef9fada0ce070c11b8cc4b65ce76"
 disposition:
-  action: accepted
-  reason: "Accepted by the repository owner on 2026-08-09. The general practice the other records are instances of, and the widest retrieval value in the batch: it applies to any test, guard, linter or CI check rather than one subsystem. Evidence is the roughly twelve instances across PRs #161, #163, #164 and #171, every one surfaced by executing something rather than reading it."
-  classification_used: internal
+  action: "accepted"
+  classification_used: "internal"
+  decided_by: "repository owner (Product Owner per roster/shared/team-profile.yaml)"
   diverged_from_proposal: false
-  decided_by: repository owner (Product Owner per roster/shared/team-profile.yaml)
-
+  reason: "Accepted by the repository owner on 2026-08-09. The general practice the other records are instances of, and the widest retrieval value in the batch: it applies to any test, guard, linter or CI check rather than one subsystem. Evidence is the roughly twelve instances across PRs #161, #163, #164 and #171, every one surfaced by executing something rather than reading it."
 ---
 
 ## Summary

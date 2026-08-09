@@ -1,24 +1,24 @@
 ---
-id: KS-20260809-a-rule-whose-signal-cannot-reach-it
-title: a rule that reads correctly can still be unable to fire
-status: proposed
+id: "KS-20260809-a-rule-whose-signal-cannot-reach-it"
+title: "a rule that reads correctly can still be unable to fire"
+status: "proposed"
 evidence:
   - "PR #164 -- steward defers on injection risk, but no handoff field carried the signal"
   - "PR #171 -- the settle-wait held only because every call routed through one test helper"
   - "roster/orchestration/src/routing_health.py -- the pre-commit hook that argparse rejected"
   - ".pre-commit-config.yaml -- invalid YAML, so no hook had ever run"
 origin:
-  task: "reviews of PRs #164 and #171"
   artifact: "policy documents, role definitions, and test scaffolding"
   revision: "89436f0, 36f8b91"
-proposed_classification: internal
-source_scope: code review, policy authoring, test design, CI guards
+  task: "reviews of PRs #164 and #171"
+proposed_classification: "internal"
+source_scope: "code review, policy authoring, test design, CI guards"
 sensitivity_notes: ""
 conflicts_or_staleness: "sharpens [[KS-20260809-non-vacuity-fault-injection]]; the practice record covers detection, this covers the defect shape"
-recommended_action: ingest
+recommended_action: "ingest"
 untrusted_instruction_risk: false
-staged_by: orchestrator (session capture, no originating handoff item)
-content_digest: 2321524ee76be5ea9dffdd0d01fcfd90bc34cce3b6ebf1acb0df7bd1ed4b6319
+staged_by: "orchestrator (session capture, no originating handoff item)"
+content_digest: "2321524ee76be5ea9dffdd0d01fcfd90bc34cce3b6ebf1acb0df7bd1ed4b6319"
 ---
 
 ## Summary

@@ -172,11 +172,47 @@ belongs in its own proposal.
    anything.
 4. `disposition`, preserving append-only history.
 5. `export`.
-6. Delete the git directory and the two guards that would become vacuous.
+6. Turn the git directory into a generated export snapshot (**revised** --
+   see below).
 7. `delete`, with evidence, and the documentation corrections it forces.
 
 Steps 1–3 are the load-bearing ones: if the round trip is not lossless, nothing
 after it is safe.
+
+## Step 6, revised during implementation
+
+The original step 6 said "delete the git directory and the two guards that
+would become vacuous". Implementing it surfaced a contradiction with decision 1:
+deleting the directory outright leaves the corpus in a gitignored, machine-local
+SQLite with no backup, no cross-machine copy, and no visibility to anyone else --
+exactly the risk the periodic-export decision exists to close, and there would
+be a window with no committed copy at all.
+
+**Revised, and agreed with the Product Owner on 2026-08-09:**
+`roster/knowledge-store/proposed-knowledge/` is *kept* and becomes the
+generated export snapshot. It is no longer hand-authored, and no longer costs a
+pull request per record -- which was the entire point of moving to the store --
+but it remains the committed durability copy, refreshed deliberately by
+`cadre knowledge export-staged`.
+
+Two consequences follow, and both are improvements on the original plan:
+
+- **The guards are not vacuous and are kept.** `staged_records.py` and the
+  `staged-knowledge-records` pre-commit hook now validate the snapshot. A
+  malformed record still cannot land.
+- **Nothing verifies the snapshot is current.** The store it is exported from
+  is gitignored and machine-local, so no CI job can compare them. A stale
+  snapshot is possible and will validate perfectly. This is stated in the
+  directory's README rather than left for someone to discover, and it is the
+  honest cost of the arrangement.
+
+The tests moved off the corpus in the same change. They had been using the ten
+committed records as fixtures, which made them hostage to whatever the corpus
+happened to contain -- one assertion had already over-fitted to "the corpus
+holds only proposed and accepted records", which was true of the data and not of
+the contract. `roster/knowledge-store/test/fixtures/` now holds purpose-built
+records covering the dispositioned, untrusted-flagged, and serialisation-hazard
+cases deliberately.
 
 ## Non-goals
 

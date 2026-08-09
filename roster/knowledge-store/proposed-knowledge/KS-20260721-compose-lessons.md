@@ -1,22 +1,22 @@
 ---
-id: KS-20260721-compose-lessons
-title: Compose Runtime Lessons
-status: proposed
+id: "KS-20260721-compose-lessons"
+title: "Compose Runtime Lessons"
+status: "proposed"
 evidence:
   - "local compose troubleshooting experience"
   - "technology-standards.md reference to PostgreSQL and Podman Compose"
 origin:
-  task: local compose troubleshooting
-  artifact: operational experience
+  artifact: "operational experience"
   revision: "2026-07-21"
-proposed_classification: internal
-source_scope: operations, testing, documentation
+  task: "local compose troubleshooting"
+proposed_classification: "internal"
+source_scope: "operations, testing, documentation"
 sensitivity_notes: ""
 conflicts_or_staleness: ""
-recommended_action: ingest
+recommended_action: "ingest"
 untrusted_instruction_risk: false
-staged_by: knowledge-store-steward
-content_digest: 3fd21ac8a4a16c8d5bbdaa8da2c92720f70e172fc2a85a922b0f0dd17d3e977f
+staged_by: "knowledge-store-steward"
+content_digest: "3fd21ac8a4a16c8d5bbdaa8da2c92720f70e172fc2a85a922b0f0dd17d3e977f"
 ---
 
 ## Summary
