@@ -192,6 +192,37 @@ class RealRepoRegressionTests(unittest.TestCase):
     plausible against synthetic fixtures above.
     """
 
+    def _assert_mirror_matches_committed(self, kind: str, ported: list[str], generated_root: Path) -> None:
+        """Compare a regenerated mirror against the committed one as a *set*,
+        not just where the two happen to overlap.
+
+        The earlier version of this check iterated the regenerated files and
+        skipped any whose committed counterpart was missing. That made two
+        real drifts invisible: deleting a committed file entirely, and leaving
+        an orphan behind that no source produces. Both were verified to pass
+        silently before this was tightened.
+        """
+        committed_dir = CLINE_ROOT / "cline-agents" / kind
+        committed_names = {path.stem for path in sorted(committed_dir.glob("*.md"))}
+        regenerated_names = set(ported)
+
+        missing = sorted(regenerated_names - committed_names)
+        orphaned = sorted(committed_names - regenerated_names)
+        self.assertEqual(
+            missing, [], f"{kind}: produced by the converter but absent from the committed mirror: {missing}"
+        )
+        self.assertEqual(
+            orphaned, [], f"{kind}: committed but produced by no source; delete or regenerate: {orphaned}"
+        )
+
+        mismatches = []
+        for name in sorted(regenerated_names):
+            generated = (generated_root / f"{name}.md").read_text(encoding="utf-8")
+            committed = (committed_dir / f"{name}.md").read_text(encoding="utf-8")
+            if generated != committed:
+                mismatches.append(name)
+        self.assertEqual(mismatches, [], f"{kind}: diverged from committed content: {mismatches}")
+
     def test_agents_reproduce_committed_content_exactly(self) -> None:
         # The committed cline-agents/agents/*.md this test compares against
         # already reflects this converter's own output (including the 3
@@ -209,18 +240,23 @@ class RealRepoRegressionTests(unittest.TestCase):
 
             ported = p.port_agents(root)
             self.assertEqual(len(ported), 74)
+            self._assert_mirror_matches_committed("agents", ported, root / "cline-agents" / "agents")
 
-            mismatches = []
-            for role in ported:
-                generated = (root / "cline-agents" / "agents" / f"{role}.md").read_text(encoding="utf-8")
-                committed_path = CLINE_ROOT / "cline-agents" / "agents" / f"{role}.md"
-                if not committed_path.is_file():
-                    continue
-                committed = committed_path.read_text(encoding="utf-8")
-                if generated != committed:
-                    mismatches.append(role)
+    def test_skills_reproduce_committed_content_exactly(self) -> None:
+        # The agents mirror had this and the skills mirror did not (issue
+        # #126): a hand-edit or stale regeneration in a skill body that did
+        # not happen to trip the leak patterns below went undetected, while
+        # the equivalent in an agent preset failed CI.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "cline-agents" / "skills").mkdir(parents=True)
+            import shutil
 
-            self.assertEqual(mismatches, [], f"Unexpected divergence from committed content: {mismatches}")
+            shutil.copytree(generated_package() / "skills", root / "skills")
+
+            ported = p.port_skills(root)
+            self.assertEqual(len(ported), 8)
+            self._assert_mirror_matches_committed("skills", ported, root / "cline-agents" / "skills")
 
     def test_skills_have_no_remaining_roster_relative_leakage(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -286,20 +322,60 @@ class RealRepoRegressionTests(unittest.TestCase):
         # agents/ and skills/ being ported are build artifacts under
         # plugin/, while cline-agents/ (the port target) is committed under
         # cline-plugins/ -- so --root and --source genuinely differ here.
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(REPO_ROOT / "tools" / "port_cline_agents.py"),
-                "--root",
-                str(CLINE_ROOT),
-                "--source",
-                str(generated_package()),
-            ],
-            capture_output=True,
-            text=True,
-        )
+        #
+        # --root points at a *copy*, never CLINE_ROOT itself. Writing into the
+        # committed tree made this test silently repair drift instead of
+        # letting the mirror checks report it: an edited or orphaned skill was
+        # regenerated away before test_skills_reproduce_committed_content_exactly
+        # ever looked, and the agents equivalent only survived because
+        # unittest happens to run methods alphabetically, putting it before
+        # this one. A guard whose correctness depends on method-name ordering
+        # is not a guard.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            import shutil
+
+            shutil.copytree(CLINE_ROOT / "cline-agents", root / "cline-agents")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "tools" / "port_cline_agents.py"),
+                    "--root",
+                    str(root),
+                    "--source",
+                    str(generated_package()),
+                ],
+                capture_output=True,
+                text=True,
+            )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Ported 74 agent(s) and 8 skill(s)", result.stdout)
+
+    def test_the_suite_leaves_the_committed_mirror_untouched(self) -> None:
+        # The property the fix above restores, asserted directly rather than
+        # left to be rediscovered: no test may write into the committed
+        # mirror, because a suite that regenerates it cannot also detect that
+        # it drifted.
+        mirror = CLINE_ROOT / "cline-agents"
+        before = {
+            path.relative_to(mirror).as_posix(): path.read_bytes()
+            for path in sorted(mirror.rglob("*.md"))
+        }
+        subprocess.run(
+            [sys.executable, "-B", "-m", "unittest", "discover", "-s", str(REPO_ROOT / "tools"),
+             "-p", "test_port_cline_agents.py", "-k", "test_cli_runs_cleanly_against_this_checkout"],
+            cwd=REPO_ROOT.parent,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        after = {
+            path.relative_to(mirror).as_posix(): path.read_bytes()
+            for path in sorted(mirror.rglob("*.md"))
+        }
+        self.assertEqual(sorted(before), sorted(after), "the suite added or removed committed mirror files")
+        changed = sorted(name for name in before if before[name] != after.get(name))
+        self.assertEqual(changed, [], f"the suite rewrote committed mirror files: {changed}")
 
 
 if __name__ == "__main__":
