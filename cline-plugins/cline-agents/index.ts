@@ -377,10 +377,13 @@ const DEFAULT_BACKEND_MODE = envOr("CLINE_AGENTS_BACKEND_MODE", "auto");
 // cline-agents/README.md for the configuration this expects.
 const env = (key: string): string | undefined => process.env[key]?.trim() || undefined;
 
-interface ProviderResolution {
-  providerId: string;
-  modelId: string;
-}
+// Tagged rather than discriminated by shape: `"missing" in resolved` would
+// silently stop discriminating the day ProviderResolution gained a field of
+// that name, and the failure would be a resolved provider treated as missing
+// (or worse, the reverse).
+type ProviderResolution =
+  | { status: "resolved"; providerId: string; modelId: string }
+  | { status: "unconfigured"; missing: string[] };
 
 /**
  * The capability tiers a preset may declare. Kept in lockstep with
@@ -426,7 +429,7 @@ function resolveProviderAndModel(
     modelTier?: string;
     source?: AgentDefinition["source"];
   },
-): ProviderResolution | { missing: string[] } {
+): ProviderResolution {
   const operatorAuthored = def.source !== "project";
   const presetProvider = operatorAuthored ? def.providerId : undefined;
   const presetModel = operatorAuthored ? def.modelId : undefined;
@@ -457,8 +460,8 @@ function resolveProviderAndModel(
   if (!modelId) {
     missing.push(tierVar ? `${tierVar} (or CLINE_AGENTS_MODEL_DEFAULT)` : "CLINE_AGENTS_MODEL_DEFAULT");
   }
-  if (missing.length > 0) return { missing };
-  return { providerId: providerId as string, modelId: modelId as string };
+  if (missing.length > 0) return { status: "unconfigured", missing };
+  return { status: "resolved", providerId: providerId as string, modelId: modelId as string };
 }
 
 function providerConfigurationError(presetName: string, missing: string[]): Error {
@@ -1241,7 +1244,7 @@ const setup = (api: SetupApi, ctx: SetupContext) => {
       { providerId: input.providerId, modelId: input.modelId },
       def,
     );
-    if ("missing" in resolved) {
+    if (resolved.status === "unconfigured") {
       // Thrown before any session is started, so a misconfigured dispatch
       // never reaches a provider at all.
       throw providerConfigurationError(def.name, resolved.missing);
@@ -1443,15 +1446,14 @@ const setup = (api: SetupApi, ctx: SetupContext) => {
         // whole change exists to remove.
         const agents = readAgentDefinitions(baseCwd).map((a) => {
           const resolved = resolveProviderAndModel({}, a);
-          const unresolved = "missing" in resolved;
           return {
             name: a.name,
             description: a.description,
             // Left undefined rather than filled with prose: a caller could
             // otherwise pass "(none configured)" straight back in as a
             // providerId. The human-readable form belongs in `text` below.
-            providerId: unresolved ? undefined : resolved.providerId,
-            modelId: unresolved ? undefined : resolved.modelId,
+            providerId: resolved.status === "resolved" ? resolved.providerId : undefined,
+            modelId: resolved.status === "resolved" ? resolved.modelId : undefined,
             // The one model fact a bundled preset actually carries -- without
             // it, the field that replaced modelId is invisible to callers.
             modelTier: a.modelTier,

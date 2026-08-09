@@ -106,6 +106,26 @@ const FAKE_TOOL_CTX = {} as AgentToolContext;
 // the dispatch_selected_roles block needs to assert on it too.
 const startConfigs: Array<Record<string, unknown>> = [];
 
+// Presets ship no provider (issue #142); these stand in for the operator
+// configuration the dispatch path resolves against. File-scoped rather than
+// inside one describe: the start_subagent and dispatch_selected_roles blocks
+// both need them, and a describe-scoped afterAll would tear them down before
+// the later block ran. Cleared at file end because they are process-wide --
+// a leaked provider would mask a fail-closed regression elsewhere.
+beforeAll(() => {
+  process.env.CLINE_AGENTS_PROVIDER_ID = "test-provider";
+  process.env.CLINE_AGENTS_MODEL_OPUS = "test/opus-model";
+  process.env.CLINE_AGENTS_MODEL_SONNET = "test/sonnet-model";
+  process.env.CLINE_AGENTS_MODEL_HAIKU = "test/haiku-model";
+});
+
+afterAll(() => {
+  delete process.env.CLINE_AGENTS_PROVIDER_ID;
+  delete process.env.CLINE_AGENTS_MODEL_OPUS;
+  delete process.env.CLINE_AGENTS_MODEL_SONNET;
+  delete process.env.CLINE_AGENTS_MODEL_HAIKU;
+});
+
 describe("cline-agents plugin manifest", () => {
   it("declares the tools and rules capabilities and registers the expected tool surface", async () => {
     expect(plugin.manifest.capabilities).toEqual(["tools", "rules"]);
@@ -615,12 +635,6 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
   let startedSessionIds: string[];
   let createSpy: ReturnType<typeof vi.spyOn>;
   beforeAll(() => {
-    // Presets ship no provider (issue #142): these are the operator
-    // configuration the dispatch path resolves against.
-    process.env.CLINE_AGENTS_PROVIDER_ID = "test-provider";
-    process.env.CLINE_AGENTS_MODEL_OPUS = "test/opus-model";
-    process.env.CLINE_AGENTS_MODEL_SONNET = "test/sonnet-model";
-    process.env.CLINE_AGENTS_MODEL_HAIKU = "test/haiku-model";
     startedSessionIds = [];
     let counter = 0;
     const fakeCore = {
