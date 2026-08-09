@@ -1753,6 +1753,37 @@
         ],
         "workflow": "new-service"
       }
+    },
+    {
+      "id": "ROLLBACK-EXECUTION-1",
+      "task": "Roll back the payments release to the last known-good artifact",
+      "changed_files": [
+        "services/payments/main.go"
+      ],
+      "classification": "internal",
+      "expected": {
+        "primary": [
+          "backend-engineer",
+          "release-engineer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "deployment-realist",
+          "code-reviewer"
+        ],
+        "support": [
+          "incident-commander",
+          "observability-sre",
+          "evidence-curator"
+        ],
+        "matched_routes": [
+          "backend",
+          "rollback"
+        ],
+        "workflow": "rollback"
+      },
+      "task_id": "GOLDEN-ROLLBACK-EXECUTION-1",
+      "description": "rollback route; an explicit execution task. Pins the ordering fixed in #157 -- the branch must sit ahead of the production risk check, which previously swallowed every rollback and labelled it production-release."
     }
   ]
 }

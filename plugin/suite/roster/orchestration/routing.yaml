@@ -350,6 +350,13 @@
       "support": ["support-triage-agent", "escalation-manager", "observability-sre"]
     },
     {
+      "id": "rollback",
+      "keywords": ["roll back", "roll forward", "revert the release", "revert the deployment", "last known-good", "known-good artifact", "back out the release"],
+      "primary": ["release-engineer"],
+      "reviewers": ["deployment-realist"],
+      "support": ["incident-commander", "observability-sre", "evidence-curator"]
+    },
+    {
       "id": "observability",
       "paths": ["observability/**", "monitoring/**", "dashboards/**", "alerts/**", "prometheus/**", "grafana/**", "telemetry/**", "**/runbooks/operations/**"],
       "keywords": ["observability", "slo", "sli", "error budget", "alert", "dashboard", "metrics", "traces", "logs", "monitoring"],

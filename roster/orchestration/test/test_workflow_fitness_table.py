@@ -137,19 +137,25 @@ class WorkflowFitnessTableAgainstSelectorTests(unittest.TestCase):
                 "build_dispatch_plan():\n  " + "\n  ".join(failures)
             )
 
-    @unittest.expectedFailure
-    def test_known_mismatch_wf_rollback_gap_1(self) -> None:
-        """'rollback' is a real selection.schema.json enum value that
-        _select_workflow() can never produce (see fixtures file reasoning).
-        This assertion is EXPECTED to fail until that gap is fixed."""
-        case = next(case for case in CASES if case["id"] == "WF-ROLLBACK-GAP-1")
+    def test_rollback_execution_is_labelled_rollback(self) -> None:
+        """A rollback execution must not be narrated as a forward release.
+
+        This was Proposal 03's second finding and is fixed in #157: 'rollback'
+        was an enumerated, documented workflow no plan could be assigned,
+        because the production risk check ran first and swallowed every
+        rollback. Kept as its own named test rather than folded into the
+        general agreement check, because the ordering it depends on is
+        load-bearing and easy to undo -- moving the rollback branch back below
+        the production check reintroduces the bug and fails here by name.
+        """
+        case = next(case for case in CASES if case["id"] == "WF-ROLLBACK-EXECUTION-1")
         actual = _run_case(case)
         self.assertEqual(
             actual["workflow"],
             case["expected_workflow"],
-            "if this now passes, _select_workflow() gained a real rollback "
-            "branch -- update WF-ROLLBACK-GAP-1's known_mismatch flag in "
-            "workflow_fitness_table.json to false",
+            "a rollback execution was labelled "
+            f"{actual['workflow']!r}; the rollback branch in _select_workflow() "
+            "must stay ahead of the `production` risk check",
         )
 
 

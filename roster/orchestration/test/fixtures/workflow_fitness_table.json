@@ -183,8 +183,8 @@
       "reasoning": "production-release.md's G8 precondition-check -> G9 deploy-immutable-artifact -> verify -> G10 shape matches routing.yaml's 'production' risk rule (deploy/release/production keyword groups) exactly. Task/files reused verbatim from selection_golden_corpus.json's PRODUCTION-RISK-1."
     },
     {
-      "id": "WF-ROLLBACK-GAP-1",
-      "description": "KNOWN MISMATCH: an explicit rollback-execution task; 'rollback' is a real enum value in selection.schema.json but _select_workflow() has no branch that can ever return it",
+      "id": "WF-ROLLBACK-EXECUTION-1",
+      "description": "an explicit rollback-execution task; fixed in #157 by a rollback route plus a branch ahead of the production risk check",
       "task": "Roll back the production release to the last known-good artifact after failed verification",
       "changed_files": [
         "terraform/service/main.tf"
@@ -192,8 +192,7 @@
       "classification": "internal",
       "task_id": "FITNESS-ROLLBACK-GAP-1",
       "expected_workflow": "rollback",
-      "known_mismatch": true,
-      "reasoning": "rollback.md's Trigger -> Preserve Evidence -> Release Engineer selects known-good procedure -> emergency human authorization -> Deploy known-good artifact -> Verify shape is exactly this task: a rollback triggered by a failed verification, executed against a known-good artifact. But build_dispatch_plan.py's _select_workflow() (roster/orchestration/src/build_dispatch_plan.py) has no branch that returns 'rollback' at all -- grep the function and it is not reachable from any route/risk combination. Concretely: this task's changed_files/task text match the 'infrastructure' route, and because the wording also trips routing.yaml's 'production' risk rule (group1 'production' + group2 'release'), the 'if \"production\" in risk_ids: return \"production-release\"' branch fires FIRST (build_dispatch_plan.py lines ~121-122) and short-circuits before any rollback-specific check could run even if one existed. This is a distinct bug from the agent-suite-governance mislabeling below: 'rollback' is dead code in the schema's closed enum, not a case of the wrong existing value being picked. It does not require a new enum value (rollback already exists in selection.schema.json) so it is in scope for this proposal, not Proposal 08 -- see the PR description."
+      "reasoning": "rollback.md's Trigger -> Preserve Evidence -> Release Engineer selects known-good procedure -> emergency human authorization -> Deploy known-good artifact -> Verify shape is exactly this task. Before #157 'rollback' was an enumerated, documented workflow no plan could be assigned: the production risk check ran first and swallowed it. The branch now runs ahead of that check, and excludes incident-coordination framing so a task merely mentioning rollback stays support-escalation."
     },
     {
       "id": "WF-UNCLASSIFIED-1",
