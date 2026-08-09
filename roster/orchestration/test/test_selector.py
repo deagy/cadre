@@ -158,7 +158,7 @@ class SelectorTests(unittest.TestCase):
             classification="internal",
             task_id="PLUGIN-1",
         )
-        self.assertEqual(result["workflow"], "debugging")
+        self.assertEqual(result["workflow"], "agent-suite-maintenance")
         self.assertIn("application-engineer", result["agents"]["primary"])
         self.assertIn("debugging-engineer", result["agents"]["primary"])
         self.assertIn("test-engineer", result["agents"]["reviewers"])
@@ -881,7 +881,10 @@ class SelectorTests(unittest.TestCase):
             classification="internal",
             task_id="AGENT-PATH-1",
         )
-        self.assertEqual(result["workflow"], "debugging")
+        # Path-only match (no debugging keyword in the task text) on a
+        # roster AGENT.md is routine roster maintenance, not a defect --
+        # see _select_workflow()'s debugging_by_keyword check.
+        self.assertEqual(result["workflow"], "agent-suite-maintenance")
         self.assertIn("debugging-engineer", result["agents"]["primary"])
         self.assertIn("technical-writer", result["agents"]["primary"])
 
@@ -892,7 +895,7 @@ class SelectorTests(unittest.TestCase):
             classification="internal",
             task_id="GOV-1",
         )
-        self.assertEqual(result["workflow"], "debugging")
+        self.assertEqual(result["workflow"], "agent-suite-maintenance")
         self.assertIn("application-engineer", result["agents"]["primary"])
         self.assertIn("debugging-engineer", result["agents"]["primary"])
         self.assertIn("test-engineer", result["agents"]["reviewers"])
@@ -1128,6 +1131,27 @@ class SelectorTests(unittest.TestCase):
         )
         self.assertEqual(result["agents"]["primary"], ["application-engineer", "debugging-engineer"])
         self.assertEqual(result["agents"]["reviewers"], ["test-engineer", "code-reviewer"])
+        self.assertEqual(result["workflow"], "agent-suite-maintenance")
+
+    def test_adding_a_role_routes_to_agent_suite_maintenance_not_debugging(self) -> None:
+        # Proposal 08, Bug 1: routine roster self-maintenance (adding a
+        # role) has no debugging keyword and must not fall through to the
+        # "debugging" workflow just because it shares paths with the
+        # debugging route's agent-tune-up coverage.
+        result = plan(
+            task="Add a new specialist role to the roster",
+            changed_files=["roster/catalog.yaml", "roster/planning/new-role/AGENT.md"],
+        )
+        self.assertEqual(result["workflow"], "agent-suite-maintenance")
+        self.assertNotEqual(result["workflow"], "debugging")
+
+    def test_orchestration_only_route_routes_to_agent_suite_maintenance(self) -> None:
+        result = plan(
+            task="Adjust the agent selector agent routing dispatch plan",
+            changed_files=["notes.txt"],
+        )
+        self.assertEqual([route["id"] for route in result["matched_routes"]], ["orchestration"])
+        self.assertEqual(result["workflow"], "agent-suite-maintenance")
 
     def test_adds_human_gates_for_production_database_migrations(self) -> None:
         result = plan(
@@ -1168,6 +1192,39 @@ class SelectorTests(unittest.TestCase):
         )
         self.assertIn("cloud-architect", result["agents"]["primary"])
         self.assertIn("threat-modeler", result["agents"]["reviewers"])
+        self.assertNotIn("threat-modeler", result["agents"]["support"])
+
+    def test_consuming_project_docs_architecture_path_still_matches(self) -> None:
+        # Proposal 08, Bug 2 true-positive proof: a genuine consuming-
+        # project system-architecture path under docs/ must still summon
+        # the architecture-review roles after the "**/architecture/**"
+        # glob was narrowed.
+        result = plan(
+            task="Record the new ADR for the ingestion service",
+            changed_files=["docs/architecture/adr-001.md"],
+        )
+        route_ids = [route["id"] for route in result["matched_routes"]]
+        self.assertIn("architecture-design", route_ids)
+        self.assertIn("cloud-architect", result["agents"]["primary"])
+        self.assertIn("threat-modeler", result["agents"]["reviewers"])
+
+    def test_own_roster_architecture_directory_does_not_trigger_architecture_review(self) -> None:
+        # Proposal 08, Bug 2: this repository's own roster/architecture/
+        # phase directory (role definitions like cloud-architect/
+        # threat-modeler themselves) must not be misread as a consuming
+        # project's system-architecture work just because it shares the
+        # literal path segment "architecture".
+        result = plan(
+            task="Tweak the interaction-designer role's escalation wording",
+            changed_files=["roster/architecture/interaction-designer/AGENT.md"],
+        )
+        route_ids = [route["id"] for route in result["matched_routes"]]
+        self.assertNotIn("architecture-design", route_ids)
+        risk_ids = [risk["id"] for risk in result["matched_risks"]]
+        self.assertNotIn("architecture-change", risk_ids)
+        self.assertNotIn("cloud-architect", result["agents"]["primary"])
+        self.assertNotIn("threat-modeler", result["agents"]["primary"])
+        self.assertNotIn("cloud-architect", result["agents"]["support"])
         self.assertNotIn("threat-modeler", result["agents"]["support"])
 
     def test_greenfield_service_brief_pulls_in_design_and_threat_modeling_support(self) -> None:
