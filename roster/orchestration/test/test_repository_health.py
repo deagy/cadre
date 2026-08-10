@@ -1277,8 +1277,6 @@ class RepositoryHealthTests(unittest.TestCase):
                     ["test-engineer", "code-reviewer"],
                     ["technical-writer"],
                     "agent-suite-maintenance",
-                    None,
-                    None,
                 ),
                 (
                     "cadre_cli/_version.py",
@@ -1287,11 +1285,9 @@ class RepositoryHealthTests(unittest.TestCase):
                     ["test-engineer", "code-reviewer"],
                     ["technical-writer"],
                     "agent-suite-maintenance",
-                    None,
-                    None,
                 ),
             ]
-            for relative_path, route_id, primary, reviewers, support, workflow, risks, gates in positive_cases:
+            for relative_path, route_id, primary, reviewers, support, workflow in positive_cases:
                 with self.subTest(path=relative_path):
                     positive = subprocess.run(
                         [
@@ -1325,10 +1321,6 @@ class RepositoryHealthTests(unittest.TestCase):
                     self.assertEqual(reviewers, positive_plan["agents"]["reviewers"])
                     self.assertEqual(support, positive_plan["agents"]["support"])
                     self.assertEqual(workflow, positive_plan["workflow"])
-                    if risks is not None:
-                        self.assertEqual(risks, positive_plan["matched_risks"])
-                    if gates is not None:
-                        self.assertEqual(gates, positive_plan["required_quality_gates"])
 
             for relative_path in ("pyproject.toml", "kernel/pyproject.toml", "engine/pyproject.toml"):
                 with self.subTest(path=relative_path):

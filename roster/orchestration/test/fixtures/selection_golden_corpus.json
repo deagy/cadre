@@ -1003,8 +1003,6 @@
         "reviewers": [],
         "support": [],
         "matched_routes": [],
-        "matched_risks": [],
-        "required_quality_gate_ids": [],
         "workflow": "needs-triage"
       }
     },
