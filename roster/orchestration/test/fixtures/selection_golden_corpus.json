@@ -1007,6 +1007,29 @@
       }
     },
     {
+      "id": "PACKAGING-KERNEL-ENGINE-BIN-OUT-OF-SCOPE-1",
+      "description": "#196 negative fixture, completing the CHANGELOG's intentionally-unclaimed list: the kernel module, its validation requirements and dev entrypoint, the engine package, and bin/ stay unclaimed by path for the same base-ruleset reason as the nested pyproject.toml files -- kernel/, engine/, and bin/ are ordinary downstream directory names, and routing_overlay.py lets a consumer widen a base route but never narrow it. Pinned so a future dependency-manifest or supply-chain glob cannot quietly widen into them.",
+      "task": "Inspect selected file",
+      "changed_files": [
+        "kernel/agentic_sdlc/__init__.py",
+        "kernel/requirements-validation.txt",
+        "kernel/dev_entrypoint.py",
+        "kernel/agentic_sdlc/gate_issues.py",
+        "engine/agentic_sdlc_langgraph/cli.py",
+        "bin/cadre"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-PACKAGING-KERNEL-ENGINE-BIN-OOS-1",
+      "expect_needs_triage": true,
+      "expected": {
+        "primary": [],
+        "reviewers": [],
+        "support": [],
+        "matched_routes": [],
+        "workflow": "needs-triage"
+      }
+    },
+    {
       "id": "PACKAGING-CADRE-CLI-INIT-1",
       "description": "#196 positive fixture: cadre_cli/__init__.py routes through agent-suite-governance as a distinctive file in this repository's pip distribution package.",
       "task": "Inspect selected file",

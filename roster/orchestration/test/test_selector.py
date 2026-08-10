@@ -311,6 +311,34 @@ class SelectorTests(unittest.TestCase):
                 self.assertEqual([], result["matched_routes"])
                 self.assertEqual("needs-triage", result["status"])
 
+    def test_kernel_engine_and_bin_paths_remain_unclaimed_by_path(self) -> None:
+        # The rest of the CHANGELOG's intentionally-unclaimed list (#196).
+        # kernel/, engine/, and bin/ are ordinary downstream directory names,
+        # so claiming them in the base ruleset would route a consumer's own
+        # tree through a Cadre-specific route it cannot narrow. Pinned here so
+        # a future glob cannot quietly widen into them: the dependency-manifest
+        # gap makes a supply-chain route the likeliest source of that drift.
+        for relative_path in (
+            "kernel/agentic_sdlc/__init__.py",
+            "kernel/requirements-validation.txt",
+            "kernel/dev_entrypoint.py",
+            "kernel/agentic_sdlc/gate_issues.py",
+            "engine/agentic_sdlc_langgraph/cli.py",
+            "bin/cadre",
+        ):
+            with self.subTest(path=relative_path):
+                result = plan(
+                    task="Inspect selected file",
+                    changed_files=[relative_path],
+                    classification="internal",
+                    task_id="ROUTING-196-KERNEL-ENGINE-BIN-NEGATIVE",
+                )
+                self.assertEqual([], result["matched_routes"])
+                self.assertEqual("needs-triage", result["status"])
+                self.assertEqual([], result["agents"]["primary"])
+                self.assertEqual([], result["agents"]["reviewers"])
+                self.assertEqual([], result["agents"]["support"])
+
     def test_selects_frontend_and_backend_with_cross_stack_coordination(self) -> None:
         result = plan(
             task="Add a React upload form backed by a PostgreSQL API",
