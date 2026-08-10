@@ -38,8 +38,58 @@ def _validate_classification(classification: Any) -> str:
     return classification
 
 
+def resolve_retention_until(
+    config: dict[str, Any], classification: str, retention_days_override: Any = None
+) -> str | None:
+    """Resolve the retention window `ingest` records for a message, or `None` for indefinite.
+
+    Retention Option B (issue #184): the window is decided once per `ingest`
+    call and stored per message, rather than left as a paper obligation
+    tracked outside the store.
+
+    `restricted` is refused here, not silently defaulted, when
+    `retention.refuse_restricted_without_window` is set (the default): the
+    most sensitive classification is exactly the one where "nobody decided a
+    retention window" must not be indistinguishable from "kept indefinitely
+    on purpose". An explicit `--retention-days` always overrides the
+    classification default, for every classification, including `restricted`.
+    """
+    retention_config = config.get("retention", {})
+    if retention_days_override is not None:
+        _positive_integer_days(retention_days_override, "--retention-days")
+        return _days_from_now(retention_days_override)
+
+    if classification == "restricted":
+        if retention_config.get("refuse_restricted_without_window", True):
+            raise ValueError(
+                "restricted content requires an explicit retention window: pass "
+                "--retention-days <n>. restricted has no configured default precisely "
+                "so an unresolved retention decision cannot be mistaken for a deliberate "
+                "indefinite one."
+            )
+        return None
+
+    days = retention_config.get("default_days_by_classification", {}).get(classification)
+    if days is None:
+        return None
+    return _days_from_now(days)
+
+
+def _positive_integer_days(value: Any, name: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError(f"{name} must be a positive integer number of days")
+
+
+def _days_from_now(days: int) -> str:
+    from datetime import timedelta
+
+    until = datetime.now(timezone.utc) + timedelta(days=days)
+    return until.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
 def ingest_file(db: Any, config: dict[str, Any], options: dict[str, Any]) -> dict[str, Any]:
     classification = _validate_classification(options.get("classification"))
+    retention_until = resolve_retention_until(config, classification, options.get("retention_days"))
     messages = normalize_file(options["input"], source=options["source"], classification=classification)
     run_id = begin_run(db, options["source"], messages[0].get("source_uri") if messages else None)
     chunk_count = 0
@@ -53,10 +103,15 @@ def ingest_file(db: Any, config: dict[str, Any], options: dict[str, Any]) -> dic
             protected["injection_risk"] = protected["injection_risk"] or protected_title["injection_risk"]
             chunks = chunk_text(protected["content"], config["chunking"])
             vectors = embed_texts(chunks, config["embedding"])
-            save_message(db, message, protected, chunks, vectors, config["embedding"])
+            save_message(db, message, protected, chunks, vectors, config["embedding"], retention_until)
             chunk_count += len(chunks)
         complete_run(db, run_id, len(messages), chunk_count)
-        return {"run_id": run_id, "messages": len(messages), "chunks": chunk_count}
+        return {
+            "run_id": run_id,
+            "messages": len(messages),
+            "chunks": chunk_count,
+            "retention_until": retention_until,
+        }
     except Exception as error:
         db.rollback()
         fail_run(db, run_id, error)

@@ -16,7 +16,18 @@ Resolve Python 3.10+ as documented in the runbook. From each internal-tool compo
 <python> -B -m unittest discover -s test -p "test_*.py"
 ```
 
-After changing `roster/catalog.yaml`, `roster/`, or `.agents/skills/`, run `cadre generate-role-metadata` (it regenerates `roster/catalog.yaml`, routing's `knowledge_focus` block, and the generated half of `provider/`) and re-run `roster/orchestration/test/test_repository_health.py`, which fails on drift. Regenerating the packaged plugin itself is `cadre generate-plugin --output plugin`, run in this same repository and committed alongside the source change; `.github/workflows/validate.yml`'s `generated-content` job re-runs it with `--check` so drift cannot outlive a pull request. Run lifecycle integration tests against the in-tree `kernel/`.
+After changing `roster/catalog.yaml`, `roster/`, or `.agents/skills/`, regenerate derived output before committing. `git add` any new files **first** — the generator copies git-tracked files and silently skips untracked ones, so regenerating before staging ships a package referencing a file it does not contain:
+
+```sh
+./bin/cadre generate-authority-aides   # only when editing roster/authority/aides.yaml or _template.md.tmpl
+./bin/cadre generate-role-metadata     # roster/catalog.yaml, routing's knowledge_focus, generated half of provider/
+./bin/cadre generate-plugin --output plugin
+python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin
+```
+
+The order is load-bearing, `generate-plugin` never touches `cline-plugins/`, and this applies to code and to this file itself — `plugin/suite/` bundles `roster/` and `AGENTS.md`, so a new module under `roster/*/src/` is part of the packaged CLI. Then re-run both guards, whose coverage is not redundant: `roster/orchestration/test/test_repository_health.py` and `python3 -m unittest discover -s plugin/tools -p "test_*.py"`. Run lifecycle integration tests against the in-tree `kernel/`.
+
+**`roster/RUNBOOK.md` §17, "Regenerating derived output", is the canonical version** — it explains why each step exists, why the order matters, what each guard catches, and the `git add` gotcha in both of its directions. Extend it there rather than restating it here.
 
 For Go services, use `gofmt`, `go tool goimports`, `go vet ./...`, `go test ./...`, `go test -race ./...`, and `go tool golangci-lint run ./...`. For React frontends, use the project-pinned package manager for install, test, typecheck, and build commands. Podman, PostgreSQL migrations, Helm, and OpenTofu remain disposable or validation-only unless a project has explicit production approval; follow the component README and never target a persistent environment without approval.
 

@@ -476,10 +476,17 @@ def delete_record(
     """Delete a staged record, leaving evidence behind.
 
     **This deletes a staging-table row, not ingested knowledge.** A staged
-    record has never been embedded or made retrievable; `SECURITY.md`'s
-    statement that the store implements no retention or deletion of ingested
-    content is unaffected by this function, and nothing here should be read as
-    satisfying that prerequisite.
+    record has never been embedded or made retrievable. This function never
+    reaches any of the ingested-content tables in `database.py`'s SCHEMA
+    (`test_scope_enforcement.py`'s `test_ac15_deletion_is_confined_to_staged_records`
+    asserts this structurally, by name, against this very function's source
+    -- see that test before editing this docstring, since naming those
+    tables literally here would break it) -- deletion of ingested content is
+    a separate capability, `ingested_deletion.delete_ingested` (issue #184,
+    `cadre knowledge delete-ingested`), with its own evidence table and its
+    own steward-only authorization requirements. Nothing here should be read
+    as that capability, and nothing there reaches the staging table this
+    function operates on.
 
     An `accepted` record requires `authorized_by`. Acceptance is a steward's
     decision that the record is durable knowledge, so removing it afterwards

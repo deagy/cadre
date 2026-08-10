@@ -830,28 +830,98 @@ Codex has no plugin-bundled-subagent mechanism, so its 86 namespaced `agents-<ro
 
 A namespaced `.toml` wrapper alone only lets a human or a project-local override name the role directly; it does not fix how a running Codex *session* dispatches one of these roles as a subagent mid-task. That dispatch mechanic — and the MCP server that makes it work correctly — is documented in `.agents/skills/run-agent-orchestration/references/runner-adapters.md`'s "Codex CLI" section; see that file's "Register the MCP dispatch server" step before relying on Codex-hosted subagent dispatch.
 
+### Regenerating derived output
+
 The plugin is self-contained: generated wrappers embed role and shared-policy
 instructions, while skills and runtime files are packaged under `skills/` and
-`suite/`. Regenerate it in place with `cadre generate-plugin --output plugin`
+`suite/`. Regenerate it in place with `./bin/cadre generate-plugin --output plugin`
 after role, policy, workflow, runtime, or skill changes, and commit the
 result in the same pull request; `.github/workflows/validate.yml`'s
 `generated-content` job fails the build on drift (`--check`).
 
+**`generate-role-metadata` must run before `generate-plugin`, and nothing
+checks that it did.** `generate-plugin` reads `roster/catalog.yaml` rather than
+deriving role metadata from frontmatter, but it copies each role's `AGENT.md`
+straight out of the working tree. Edit a role's frontmatter and run
+`generate-plugin` alone and it exits 0 in silence, having written a package
+whose bundled `suite/roster/<phase>/<role>/AGENT.md` carries the new value
+while its own `suite/roster/catalog.yaml` and Codex wrapper still carry the
+old one. `generate_provider_copy()` does refuse a stale `provider/`, but it
+compares against content derived from the same stale `catalog.yaml`, so the
+two agree and the guard stays quiet. Running the steps in order is the only
+thing that prevents this.
+
+These are spelled `./bin/cadre` rather than the bare `cadre` used elsewhere in
+this runbook. A bare `cadre` can resolve to a globally installed plugin build
+of a different version that does not recognise these subcommands -- which, for
+regeneration specifically, means silently committing output built by the wrong
+generator. Elsewhere the stakes are lower and bare `cadre` is fine.
+
+`./bin/cadre generate-plugin` does **not** regenerate the Cline mirror. Porting the
+74 role presets and 8 skills into `cline-plugins/cline-agents/` is a separate
+command that must run *after* `generate-plugin`, because it reads the freshly
+written `plugin/` tree:
+
+```sh
+python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin
+```
+
+Its guard is separate too: `plugin/tools/test_port_cline_agents.py` compares
+the committed mirror byte-for-byte against a fresh port, run by CI's
+`plugin-tools` job rather than `generated-content`. A change that stops after
+`generate-plugin` leaves `cline-plugins/cline-agents/agents/<role>.md`
+diverged from its source and fails there.
+
+**`git add` new files before regenerating.** Two of the sources are read out of
+git's index rather than the working tree: `roster/` (`git ls-files roster`) and
+`.agents/skills/`. Untracked files there are skipped without warning, so a new
+module under `roster/*/src/` that is not yet staged is missing from
+`plugin/suite/`, even though an already-tracked file edited to import it *is*
+copied (the copy reads working-tree content, not the committed blob). The
+result is a packaged CLI importing a module the package does not contain,
+which surfaces as a `ModuleNotFoundError` inside the `cline-agents` npm
+suite's knowledge-store retrieval test — reported as a `status: unavailable`
+assertion mismatch, a long way from the Python edit that caused it.
+
+`generate_global_plugin.py` fails loudly for two specific cases of this —
+untracked role `AGENT.md` files named by `catalog.yaml`, and untracked scripts
+named by `bin/subcommands.tsv` — but an ordinary new source module matches
+neither and is skipped in silence. (Three helper modules under
+`roster/orchestration/src/` are named individually and packaged even when
+untracked; that carve-out covers those three files, not new ones.)
+
+**The remaining sources behave the opposite way, so check both directions.**
+The documentation paths — `AGENTS.md`, `CONTRIBUTING.md`, `IDENTITY.md`, and
+everything under `docs/` — and the whole `provider/` bundle are selected by a
+filesystem walk with no tracked test, so an untracked new `docs/*.md` or
+`provider/extensions/*.json` **is** copied into the package. The hazard there
+is the mirror image: regenerate, see a clean `plugin/` diff, commit the
+packaged copy, and leave the source file untracked. `bin/` is neither case —
+the packaged `bin/cadre` is synthesized from `bin/subcommands.tsv` rather than
+copied, and the scripts it dispatches to live under `roster/`. Stage new files
+first and every source behaves identically.
+
+Editing the repository-root `AGENTS.md` also requires a regeneration pass:
+`plugin/suite/AGENTS.md` is generated from it. Root `CLAUDE.md` is not
+packaged, and `plugin/AGENTS.md` / `plugin/CLAUDE.md` are hand-authored
+documents describing the plugin directory itself — they are never regenerated
+and need manual upkeep.
+
 Editing `roster/authority/aides.yaml` or `roster/authority/_template.md.tmpl`
-requires an extra step first: run `cadre generate-authority-aides` to
+requires an extra step first: run `./bin/cadre generate-authority-aides` to
 regenerate the 8 `roster/authority/*-aide/AGENT.md` files, *then*
-`cadre generate-role-metadata` so `provider/` picks them up.
-`cadre generate-authority-aides --check` is the CI drift-guard equivalent
-for this table, parallel to `cadre generate-plugin --check --output` for the
+`./bin/cadre generate-role-metadata` so `provider/` picks them up.
+`./bin/cadre generate-authority-aides --check` is the CI drift-guard equivalent
+for this table, parallel to `./bin/cadre generate-plugin --check --output` for the
 package as a whole.
 
 Every role's `AGENT.md` carries `---`-delimited frontmatter (see §2 above),
 so editing a role's `AGENT.md` requires the same kind of extra step: run
-`cadre generate-role-metadata` to regenerate `roster/catalog.yaml` and
+`./bin/cadre generate-role-metadata` to regenerate `roster/catalog.yaml` and
 `roster/orchestration/routing.yaml`'s `knowledge_focus` block from the
 frontmatter and the generated half of `provider/`. `cadre
 generate-role-metadata --check` is the CI drift-guard equivalent. The
-packaged plugin then picks the change up when `cadre generate-plugin --output plugin`
+packaged plugin then picks the change up when `./bin/cadre generate-plugin --output plugin`
 is re-run and committed, as described above.
 
 ## 17a. Unified operator settings (`roster/shared/src/settings.py`)

@@ -34,6 +34,30 @@ DEFAULTS: dict[str, Any] = {
     },
     "chunking": {"max_characters": 2400, "overlap_characters": 240},
     "ingestion": {"default_classification": "internal", "redact_secrets": True},
+    # Retention Option B (issue #184): `ingest` records a retention window per
+    # message rather than leaving retention a paper obligation tracked
+    # outside the store. `null` means indefinite (no window recorded).
+    #
+    # Every configured classification is `null` **on purpose, and provisionally**:
+    # concrete day counts are an open Product Owner / Engineering Lead decision
+    # recorded in `roster/shared/team-profile.yaml`, and shipping working
+    # numbers ahead of that decision would let them become policy by default
+    # inertia. Indefinite is the honest placeholder -- it records "no window has
+    # been decided" rather than asserting one nobody chose. It is not a claim
+    # that keeping content forever is the right answer; it is the state that
+    # keeps the decision visibly open. Set real windows here (or per-project via
+    # config) once the decision lands.
+    #
+    # `restricted` is deliberately absent from this map: `refuse_restricted_without_window`
+    # makes its omission meaningful -- ingesting `restricted` content always
+    # requires an explicit caller-supplied window, never a silent default. That
+    # refusal is what stops the placeholder above from quietly extending to the
+    # one tier where "kept forever because nobody decided" is least acceptable,
+    # so it stays on while the other windows are open.
+    "retention": {
+        "default_days_by_classification": {"internal": None, "confidential": None, "public": None},
+        "refuse_restricted_without_window": True,
+    },
 }
 
 
@@ -147,7 +171,7 @@ def load_config(
         supplied = loaded
 
     config = _merge(DEFAULTS, supplied)
-    for section in ("embedding", "chunking", "ingestion"):
+    for section in ("embedding", "chunking", "ingestion", "retention"):
         if not isinstance(config.get(section), dict):
             raise ValueError(f"{section} must be a JSON object")
     if not isinstance(config.get("database"), str) or not config["database"].strip():
@@ -178,6 +202,33 @@ def load_config(
         raise ValueError("chunking.overlap_characters must be a non-negative integer")
     if chunking["overlap_characters"] >= chunking["max_characters"]:
         raise ValueError("chunk overlap must be smaller than max_characters")
+
+    retention = config["retention"]
+    by_classification = retention.get("default_days_by_classification")
+    if not isinstance(by_classification, dict):
+        raise ValueError("retention.default_days_by_classification must be a JSON object")
+    if "restricted" in by_classification:
+        # Fail loudly rather than silently: service.resolve_retention_until
+        # never reads a "restricted" entry from this map at all -- restricted
+        # always either raises (refuse_restricted_without_window, the
+        # default) or falls through to indefinite, controlled solely by that
+        # boolean, never by a configured day count. A "restricted" key here
+        # would be dead configuration that looks load-bearing but silently
+        # does nothing, which is worse than simply rejecting it up front.
+        raise ValueError(
+            "retention.default_days_by_classification must not set 'restricted': restricted "
+            "content's retention window is controlled only by "
+            "retention.refuse_restricted_without_window and an explicit --retention-days at "
+            "ingest time, never by a configured default -- a 'restricted' entry here would be "
+            "silently ignored, so it is rejected instead."
+        )
+    for classification, days in by_classification.items():
+        if days is None:
+            continue
+        _positive_integer(days, f"retention.default_days_by_classification.{classification}")
+    if not isinstance(retention.get("refuse_restricted_without_window"), bool):
+        raise ValueError("retention.refuse_restricted_without_window must be a boolean")
+
     if return_tier:
         return config, tier
     return config

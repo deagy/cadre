@@ -101,18 +101,42 @@ For production-quality semantic retrieval, `openai-compatible` sends chunk text 
 
 ```text
 init
-ingest --input <file> [--source <name>] [--classification <level>]
+ingest --input <file> [--source <name>] [--classification <level>] [--retention-days <n>]
 search --query <text> --classification <level> [--top <n>] [--source <name> | --all-sources]
 context --agent <role> --task-id <id> --query <text> --classification <level> [--top <n>] [--source <name> | --all-sources]
 stats
+retention-report [--as-of <iso-8601 date or timestamp>]
+delete-ingested --scope {source|conversation|message} --id <id> --reason <text> --deleted-by <actor> --authorized-by <human> --trigger <trigger> [--source <name>] [--dry-run]
+
+propose (--input <file>|- | --from-finding <file>|-) [--render-only]
+list-staged [--status <status>]
+show-staged --id <id>
+import-staged --directory <dir>
+export-staged --output <dir> [--status <status>] [--check]
+disposition-staged --id <id> --action <accepted|rejected|deferred> --reason <text> --classification-used <level> --decided-by <actor> [--diverged-from-proposal]
+delete-staged --id <id> --reason <text> --deleted-by <actor> [--authorized-by <human>]
+deletion-evidence [--source <name> | --all-sources]
 ```
 
 Without `--config`, configuration is read using the project-local-then-global resolution above; if no config file exists at the resolved location, built-in defaults apply relative to that same directory. An existing config resolves its database path relative to the config directory. A supplied `--config` path must exist and contain a JSON object; otherwise the command fails closed.
 
 At the global-fallback tier only (see "Enforced scope at the global-fallback
-tier" above), `search`/`context` require exactly one of `--source`/
-`--all-sources`, and `ingest` requires an explicit `--source`. Project-local
-and explicit-`--config` invocations impose no such requirement.
+tier" above), `search`/`context`/`deletion-evidence` require exactly one of `--source`/
+`--all-sources`, and `ingest`/`delete-ingested` require an explicit
+`--source`. Project-local and explicit-`--config` invocations impose no such
+requirement. `deletion-evidence` is scoped for the same reason retrieval is:
+an evidence row is not content, but it carries the deleting project's
+identifier, its steward's free-text reason, and asserted actor identities, so
+reading every project's rows out of a shared store is a cross-project read and
+has to say so. A source-scoped read returns ingested-content evidence only --
+staged-record deletions carry no source to filter by and cannot exist in the
+shared store at all.
+
+`retention-report --as-of` takes an ISO-8601 date or timestamp and is compared
+as an instant, not as text: a date alone means midnight UTC starting that day
+(pass a full timestamp to include that day's expiries), a value without an
+offset is read as UTC, and anything unparseable is refused rather than
+silently sorted against stored values.
 
 `context` is the agent-facing command. It returns a schema-versioned bundle containing trust requirements, citations, and retrieved passages. `search` is a lower-level diagnostic command. Both require an explicit classification and apply exact-match classification and optional source filtering before ranking. `--top` must be an integer from 1 through 20, enforcing the orchestration policy limit.
 
@@ -122,8 +146,28 @@ Read-only retrieval means agents cannot mutate stored content or lifecycle state
 
 Citations are point-in-time references, not immutable or permanently stable identifiers: re-ingestion can update content under the same source/conversation/message identity. Preserve each retrieved bundle plus its integrity hash for review/compliance evidence until the store provides versioned or append-only content and audits returned result snapshots.
 
-The demo has no retention or deletion commands. Its ingestion response reports only run ID, message count, and chunk count; redaction and embedding summaries require supplemental steward records until implemented.
+The demo now has retention and deletion commands, added by issue #184. This corrects an
+earlier statement here that was already false once #181 shipped `delete-staged`, `deletion-evidence`,
+and the rest of the staged-record lifecycle commands listed above -- and it is now false in a second,
+larger way: `ingest` records a per-message retention window (`retention_until`, config's `retention`
+block). Every shipped default is indefinite -- no window is recorded for `internal`,
+`confidential`, or `public` unless a caller passes `--retention-days` or a project configures
+one -- and `restricted` is refused outright unless `--retention-days` is passed explicitly.
+Indefinite is a deliberate placeholder, not a judgement that content should be kept forever:
+concrete windows are an open Product Owner / Engineering Lead decision recorded in
+`roster/shared/team-profile.yaml`, and shipping working day-counts ahead of it would let them
+become policy by default inertia. Until windows are configured, nothing ages out on its own and
+`retention-report` has nothing to report; deletion is entirely steward-initiated. `retention-report`
+lists expired content read-only, without deleting anything; and `delete-ingested` is the
+steward-only, evidenced capability that actually removes ingested messages and their chunks by
+`--scope {source|conversation|message}`, always requiring `--reason`, `--deleted-by`,
+`--authorized-by`, and `--trigger`. See `SECURITY.md` for the full contract (including the
+`delete_status` field that distinguishes a confirmed-removed deletion from a merely-attempted or
+failed one), honest limits, and the distinction
+from `delete-staged` (which never touches ingested content at all). Its ingestion response
+additionally reports the resolved `retention_until`; redaction and embedding summaries still
+require supplemental steward records until implemented.
 
 ## Compatibility
 
-The Python implementation retains the existing SQLite tables, indexes, identifiers, SHA-256 hashes, JSON vector encoding, hashing-vector algorithm, and provider/model selection. Existing databases are opened in place. Rows whose stored embedding dimension does not match the configured dimension are excluded rather than scored; re-ingest after changing provider, model, or dimensions. Back up the database before any runtime migration and never mix implementations against one database concurrently.
+The Python implementation retains the existing SQLite tables, indexes, identifiers, SHA-256 hashes, JSON vector encoding, hashing-vector algorithm, and provider/model selection. Existing databases are opened in place: a store created before `retention_until` existed gains that nullable column additively on next open (`database._migrate_additive_columns`), with pre-existing rows reading back as "no window recorded" rather than failing to open. Rows whose stored embedding dimension does not match the configured dimension are excluded rather than scored; re-ingest after changing provider, model, or dimensions. Back up the database before any runtime migration, before running `delete-ingested` (deletion is intentionally irreversible -- the evidence table records that a deletion happened and what its content hashed to, not the content itself, so a backup is the only way to recover the actual data), and never mix implementations against one database concurrently.

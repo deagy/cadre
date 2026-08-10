@@ -340,13 +340,18 @@ class Rule2DeletionEscalationTests(unittest.TestCase, StagedRecordDefectMixin):
     """Rule 2: `recommended_action: delete` is its own error, not a generic
     enum failure -- it is the case a human is most likely to attempt."""
 
-    def test_delete_reports_the_no_deletion_capability_escalation(self) -> None:
+    def test_delete_reports_the_act_vs_capability_escalation(self) -> None:
+        """Re-decided again when delete-ingested shipped (issue #184): the store now has
+
+        deletion capability, so the reason is act-vs-capability, not capability absence.
+        """
         findings = self.assert_defect(
             render(with_field("recommended_action", "recommended_action: delete")),
-            "the knowledge store implements no deletion capability at all",
+            "proposing a deletion and being authorized to perform one are different acts",
         )
         joined = "\n".join(findings)
         self.assertIn("escalates to knowledge-store-steward and an authorized human", joined)
+        self.assertNotIn("no deletion capability at all", joined)
 
     def test_delete_does_not_fall_through_to_the_generic_enum_message(self) -> None:
         findings = validate_record(
