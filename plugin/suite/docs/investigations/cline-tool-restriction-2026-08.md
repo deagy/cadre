@@ -181,7 +181,7 @@ explicitly rather than either overclaiming full verification or repeating
   `plugin/tools/test_port_cline_agents.py` and PR #149's parity test).
 - **What each can do:** gated by `allowedTools` → `toolPolicies`, coarsened
   to Cline's four canonical tool names (`read_files`, `search_codebase`,
-  `run_commands`, `editor`) plus `mode: "plan"` for the 28 read-only roles.
+  `run_commands`, `editor`) plus `mode: "plan"` for the 28 of them at the `read_only` tier.
   A `document_author`/`code_author`/`test_author`/`environment_operator`-tier
   role (the write-capable tiers per `roster/runner-capabilities.json`) maps
   to `run_commands`/`editor` being present in its `allowedTools`, same as it
