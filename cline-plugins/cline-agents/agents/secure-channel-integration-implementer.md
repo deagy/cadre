@@ -1,7 +1,7 @@
 ---
 name: secure-channel-integration-implementer
 description: "Secure cloud agent suite role for the security phase (secure-channel-integration-implementer)."
-modelTier: haiku
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/security/secure-channel-integration-implementer/AGENT.md
 convertedFrom: agents/secure-channel-integration-implementer.md

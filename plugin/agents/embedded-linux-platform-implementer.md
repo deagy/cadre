@@ -2,8 +2,8 @@
 name: embedded-linux-platform-implementer
 description: Secure cloud agent suite role for the build phase (embedded-linux-platform-implementer).
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: haiku
-effort: low
+model: sonnet
+effort: medium
 generated: true
 canonical_source: roster/engineering/embedded-linux-platform-implementer/AGENT.md
 ---

@@ -2,8 +2,8 @@
 name: sonicos-config-implementer
 description: Secure cloud agent suite role for the build phase (sonicos-config-implementer).
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: haiku
-effort: low
+model: sonnet
+effort: medium
 generated: true
 canonical_source: roster/engineering/sonicos-config-implementer/AGENT.md
 ---

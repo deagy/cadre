@@ -1,7 +1,7 @@
 ---
 name: guardrail-policy-implementer
 description: "Secure cloud agent suite role for the build phase (guardrail-policy-implementer)."
-modelTier: haiku
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/guardrail-policy-implementer/AGENT.md
 convertedFrom: agents/guardrail-policy-implementer.md

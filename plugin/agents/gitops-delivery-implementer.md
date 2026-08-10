@@ -2,8 +2,8 @@
 name: gitops-delivery-implementer
 description: Secure cloud agent suite role for the build phase (gitops-delivery-implementer).
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: haiku
-effort: low
+model: sonnet
+effort: medium
 generated: true
 canonical_source: roster/engineering/gitops-delivery-implementer/AGENT.md
 ---

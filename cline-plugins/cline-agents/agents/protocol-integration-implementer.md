@@ -1,7 +1,7 @@
 ---
 name: protocol-integration-implementer
 description: "Secure cloud agent suite role for the build phase (protocol-integration-implementer)."
-modelTier: haiku
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/protocol-integration-implementer/AGENT.md
 convertedFrom: agents/protocol-integration-implementer.md

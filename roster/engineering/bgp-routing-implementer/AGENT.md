@@ -2,9 +2,9 @@
 id: bgp-routing-implementer
 phase: build
 capability: code_author
-model: haiku
-codex_model: gpt-5.6-luna
-reasoning_effort: low
+model: sonnet
+codex_model: gpt-5.6-terra
+reasoning_effort: medium
 knowledge_focus: BGP, route policy, peering, lab validation, route-leak prevention, and blast radius
 ---
 # BGP Routing Implementer

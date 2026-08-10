@@ -2,8 +2,8 @@
 name: c-systems-implementer
 description: Secure cloud agent suite role for the build phase (c-systems-implementer).
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: haiku
-effort: low
+model: sonnet
+effort: medium
 generated: true
 canonical_source: roster/engineering/c-systems-implementer/AGENT.md
 ---

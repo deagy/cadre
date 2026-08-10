@@ -2,8 +2,8 @@
 name: bgp-routing-implementer
 description: Secure cloud agent suite role for the build phase (bgp-routing-implementer).
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: haiku
-effort: low
+model: sonnet
+effort: medium
 generated: true
 canonical_source: roster/engineering/bgp-routing-implementer/AGENT.md
 ---

@@ -1,7 +1,7 @@
 ---
 name: ansible-automation-implementer
 description: "Secure cloud agent suite role for the build phase (ansible-automation-implementer)."
-modelTier: haiku
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/ansible-automation-implementer/AGENT.md
 convertedFrom: agents/ansible-automation-implementer.md

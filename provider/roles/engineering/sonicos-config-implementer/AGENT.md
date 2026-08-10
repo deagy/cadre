@@ -2,9 +2,9 @@
 id: sonicos-config-implementer
 phase: build
 capability: code_author
-model: haiku
-codex_model: gpt-5.6-luna
-reasoning_effort: low
+model: sonnet
+codex_model: gpt-5.6-terra
+reasoning_effort: medium
 knowledge_focus: SonicOS configuration, API payloads, policies, NAT, VPN, HA, diffs, rollback, and lab validation
 ---
 # SonicOS Config Implementer

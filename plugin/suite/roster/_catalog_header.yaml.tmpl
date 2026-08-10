@@ -16,6 +16,19 @@ version: 1
 #           retains design and scope ownership, and it holds no approval,
 #           deployment, or risk-acceptance authority.
 #
+#           Blast radius overrides that: an execution specialist is sonnet,
+#           not haiku, when it is the *sole* author of artifacts that once
+#           merged (a) execute with kernel or elevated privilege, (b) change
+#           network reachability or security posture, (c) mutate persistent
+#           infrastructure or data durability, (d) handle cryptographic
+#           material, or (e) perform destructive or history-rewriting
+#           operations. Execution routes select the specialist as sole
+#           primary with the accountable role in `support`, so on those routes
+#           no higher-tier agent co-authors — the tier of the specialist is
+#           the tier of the work. UI/styling, tests and fixtures, build
+#           configuration, and application-level code in memory-safe
+#           languages stay haiku.
+#
 # `codex_model` is the OpenAI/Codex CLI equivalent, propagated into the
 # generated `.toml` wrapper's `model` key. Codex does not share Claude's
 # haiku/sonnet/opus naming, so this is a separate field, not a reused value —

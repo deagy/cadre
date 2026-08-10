@@ -2,8 +2,8 @@
 name: secure-channel-integration-implementer
 description: Secure cloud agent suite role for the security phase (secure-channel-integration-implementer).
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: haiku
-effort: low
+model: sonnet
+effort: medium
 generated: true
 canonical_source: roster/security/secure-channel-integration-implementer/AGENT.md
 ---

@@ -2,9 +2,9 @@
 id: git-operations-implementer
 phase: build
 capability: code_author
-model: haiku
-codex_model: gpt-5.6-luna
-reasoning_effort: low
+model: sonnet
+codex_model: gpt-5.6-terra
+reasoning_effort: medium
 knowledge_focus: scoped version-control operations, conflict resolution, and repository safety
 ---
 # Git Operations Implementer

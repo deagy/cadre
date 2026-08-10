@@ -2,9 +2,9 @@
 id: ansible-automation-implementer
 phase: build
 capability: code_author
-model: haiku
-codex_model: gpt-5.6-luna
-reasoning_effort: low
+model: sonnet
+codex_model: gpt-5.6-terra
+reasoning_effort: medium
 knowledge_focus: Ansible playbooks, roles, inventories, collections, check mode, idempotence, and device automation
 ---
 # Ansible Automation Implementer

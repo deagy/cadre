@@ -16,6 +16,19 @@ version: 1
 #           retains design and scope ownership, and it holds no approval,
 #           deployment, or risk-acceptance authority.
 #
+#           Blast radius overrides that: an execution specialist is sonnet,
+#           not haiku, when it is the *sole* author of artifacts that once
+#           merged (a) execute with kernel or elevated privilege, (b) change
+#           network reachability or security posture, (c) mutate persistent
+#           infrastructure or data durability, (d) handle cryptographic
+#           material, or (e) perform destructive or history-rewriting
+#           operations. Execution routes select the specialist as sole
+#           primary with the accountable role in `support`, so on those routes
+#           no higher-tier agent co-authors — the tier of the specialist is
+#           the tier of the work. UI/styling, tests and fixtures, build
+#           configuration, and application-level code in memory-safe
+#           languages stay haiku.
+#
 # `codex_model` is the OpenAI/Codex CLI equivalent, propagated into the
 # generated `.toml` wrapper's `model` key. Codex does not share Claude's
 # haiku/sonnet/opus naming, so this is a separate field, not a reused value —
@@ -730,23 +743,23 @@ agents:
     definition: security/supply-chain-remediation-implementer/AGENT.md
     phase: security
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   c-systems-implementer:
     definition: engineering/c-systems-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   cpp-systems-implementer:
     definition: engineering/cpp-systems-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   cmake-build-implementer:
     definition: engineering/cmake-build-implementer/AGENT.md
     phase: build
@@ -758,16 +771,16 @@ agents:
     definition: engineering/starlingx-config-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   edge-cloud-integration-implementer:
     definition: engineering/edge-cloud-integration-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   quantum-network-integration-implementer:
     definition: engineering/quantum-network-integration-implementer/AGENT.md
     phase: build
@@ -828,9 +841,9 @@ agents:
     definition: engineering/guardrail-policy-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   embedding-index-implementer:
     definition: engineering/embedding-index-implementer/AGENT.md
     phase: build
@@ -842,9 +855,9 @@ agents:
     definition: engineering/linux-systems-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   kernel-module-implementer:
     definition: engineering/kernel-module-implementer/AGENT.md
     phase: build
@@ -856,16 +869,16 @@ agents:
     definition: engineering/ebpf-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   device-driver-implementer:
     definition: engineering/device-driver-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   firmware-implementer:
     definition: engineering/firmware-implementer/AGENT.md
     phase: build
@@ -877,16 +890,16 @@ agents:
     definition: engineering/embedded-c-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   rtos-integration-implementer:
     definition: engineering/rtos-integration-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   secure-boot-implementer:
     definition: security/secure-boot-implementer/AGENT.md
     phase: security
@@ -898,9 +911,9 @@ agents:
     definition: engineering/network-config-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   kubernetes-networking-implementer:
     definition: engineering/kubernetes-networking-implementer/AGENT.md
     phase: build
@@ -912,9 +925,9 @@ agents:
     definition: engineering/bgp-routing-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   network-observability-implementer:
     definition: engineering/network-observability-implementer/AGENT.md
     phase: build
@@ -926,30 +939,30 @@ agents:
     definition: engineering/network-security-policy-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   protocol-integration-implementer:
     definition: engineering/protocol-integration-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   sonicos-config-implementer:
     definition: engineering/sonicos-config-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   embedded-linux-platform-implementer:
     definition: engineering/embedded-linux-platform-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   precision-timing-implementer:
     definition: engineering/precision-timing-implementer/AGENT.md
     phase: build
@@ -975,23 +988,23 @@ agents:
     definition: engineering/network-management-automation-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   ansible-automation-implementer:
     definition: engineering/ansible-automation-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   bare-metal-provisioning-implementer:
     definition: engineering/bare-metal-provisioning-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   kubernetes-operator-implementer:
     definition: engineering/kubernetes-operator-implementer/AGENT.md
     phase: build
@@ -1003,30 +1016,30 @@ agents:
     definition: engineering/distributed-storage-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   gitops-delivery-implementer:
     definition: engineering/gitops-delivery-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   pki-certificate-lifecycle-implementer:
     definition: security/pki-certificate-lifecycle-implementer/AGENT.md
     phase: security
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   secure-channel-integration-implementer:
     definition: security/secure-channel-integration-implementer/AGENT.md
     phase: security
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   javascript-maintenance-implementer:
     definition: engineering/javascript-maintenance-implementer/AGENT.md
     phase: build
@@ -1038,16 +1051,16 @@ agents:
     definition: engineering/sql-query-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   shell-automation-implementer:
     definition: engineering/shell-automation-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   css-layout-implementer:
     definition: engineering/css-layout-implementer/AGENT.md
     phase: build
@@ -1129,9 +1142,9 @@ agents:
     definition: engineering/git-operations-implementer/AGENT.md
     phase: build
     capability: code_author
-    model: haiku
-    codex_model: gpt-5.6-luna
-    reasoning_effort: low
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
   release-automation-implementer:
     definition: engineering/release-automation-implementer/AGENT.md
     phase: build

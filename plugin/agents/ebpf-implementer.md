@@ -2,8 +2,8 @@
 name: ebpf-implementer
 description: Secure cloud agent suite role for the build phase (ebpf-implementer).
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: haiku
-effort: low
+model: sonnet
+effort: medium
 generated: true
 canonical_source: roster/engineering/ebpf-implementer/AGENT.md
 ---

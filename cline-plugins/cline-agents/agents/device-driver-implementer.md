@@ -1,7 +1,7 @@
 ---
 name: device-driver-implementer
 description: "Secure cloud agent suite role for the build phase (device-driver-implementer)."
-modelTier: haiku
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/device-driver-implementer/AGENT.md
 convertedFrom: agents/device-driver-implementer.md

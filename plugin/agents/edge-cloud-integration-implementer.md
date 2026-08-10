@@ -2,8 +2,8 @@
 name: edge-cloud-integration-implementer
 description: Secure cloud agent suite role for the build phase (edge-cloud-integration-implementer).
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: haiku
-effort: low
+model: sonnet
+effort: medium
 generated: true
 canonical_source: roster/engineering/edge-cloud-integration-implementer/AGENT.md
 ---

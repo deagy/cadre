@@ -1,7 +1,7 @@
 ---
 name: linux-systems-implementer
 description: "Secure cloud agent suite role for the build phase (linux-systems-implementer)."
-modelTier: haiku
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/linux-systems-implementer/AGENT.md
 convertedFrom: agents/linux-systems-implementer.md

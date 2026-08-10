@@ -2,8 +2,8 @@
 name: network-security-policy-implementer
 description: Secure cloud agent suite role for the build phase (network-security-policy-implementer).
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: haiku
-effort: low
+model: sonnet
+effort: medium
 generated: true
 canonical_source: roster/engineering/network-security-policy-implementer/AGENT.md
 ---

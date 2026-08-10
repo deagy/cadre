@@ -1,7 +1,7 @@
 ---
 name: shell-automation-implementer
 description: "Secure cloud agent suite role for the build phase (shell-automation-implementer)."
-modelTier: haiku
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/shell-automation-implementer/AGENT.md
 convertedFrom: agents/shell-automation-implementer.md

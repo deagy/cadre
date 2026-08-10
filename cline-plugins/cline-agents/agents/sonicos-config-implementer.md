@@ -1,7 +1,7 @@
 ---
 name: sonicos-config-implementer
 description: "Secure cloud agent suite role for the build phase (sonicos-config-implementer)."
-modelTier: haiku
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/sonicos-config-implementer/AGENT.md
 convertedFrom: agents/sonicos-config-implementer.md

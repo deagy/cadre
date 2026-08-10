@@ -2,8 +2,8 @@
 name: supply-chain-remediation-implementer
 description: Secure cloud agent suite role for the security phase (supply-chain-remediation-implementer).
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: haiku
-effort: low
+model: sonnet
+effort: medium
 generated: true
 canonical_source: roster/security/supply-chain-remediation-implementer/AGENT.md
 ---

@@ -1,7 +1,7 @@
 ---
 name: embedded-c-implementer
 description: "Secure cloud agent suite role for the build phase (embedded-c-implementer)."
-modelTier: haiku
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/embedded-c-implementer/AGENT.md
 convertedFrom: agents/embedded-c-implementer.md

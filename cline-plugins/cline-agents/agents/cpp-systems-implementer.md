@@ -1,7 +1,7 @@
 ---
 name: cpp-systems-implementer
 description: "Secure cloud agent suite role for the build phase (cpp-systems-implementer)."
-modelTier: haiku
+modelTier: sonnet
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/cpp-systems-implementer/AGENT.md
 convertedFrom: agents/cpp-systems-implementer.md

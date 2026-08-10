@@ -1711,9 +1711,20 @@ class SelectorTests(unittest.TestCase):
         self.assertNotIn("kubernetes-manifest-implementer", result["agents"]["primary"])
 
     def test_retrieval_pipeline_executor_retains_ai_and_knowledge_accountability(self) -> None:
+        # The accountable roles moved from co-primary to `support` when
+        # execution routes stopped dispatching two authors over the same
+        # files. What this test guards is unchanged: they must still be
+        # *selected*, so the specialist never runs without them, and the
+        # independent security review must survive.
         result = plan(task="Implement retrieval chunking", changed_files=["retrieval/chunking.py"])
         self.assertIn("retrieval-pipeline-implementer", result["agents"]["primary"])
-        self.assertIn("ai-engineer", result["agents"]["primary"])
+        # ai-engineer is the execution route's accountable role, so it advises
+        # rather than co-authoring -- but it is still selected.
+        self.assertIn("ai-engineer", result["agents"]["support"])
+        self.assertNotIn("ai-engineer", result["agents"]["primary"])
+        # knowledge-store-steward stays primary: it is contributed by the broad
+        # knowledge-store route, which matched independently, not by the
+        # execution route. Only execution routes demote their accountable role.
         self.assertIn("knowledge-store-steward", result["agents"]["primary"])
         self.assertIn("security-reviewer", result["agents"]["reviewers"])
 

@@ -2,8 +2,8 @@
 name: shell-automation-implementer
 description: Secure cloud agent suite role for the build phase (shell-automation-implementer).
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: haiku
-effort: low
+model: sonnet
+effort: medium
 generated: true
 canonical_source: roster/engineering/shell-automation-implementer/AGENT.md
 ---
