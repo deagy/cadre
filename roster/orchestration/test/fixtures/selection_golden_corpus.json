@@ -2566,7 +2566,7 @@
     },
     {
       "id": "NODE-TYPESCRIPT-EXECUTION-1",
-      "description": "Non-React Node/TypeScript tooling selects the narrow executor under backend-engineer accountability; frontend-engineer still co-matches via the broad frontend route's 'typescript' keyword, so the accountable browser-facing role is retained rather than replaced.",
+      "description": "Non-React Node/TypeScript tooling selects the narrow executor under backend-engineer accountability. The broad frontend route no longer co-matches: 'typescript' needs a browser/UI corroborator, so a Node build script does not draw frontend-engineer, accessibility-reviewer, or interaction-designer. Workflow is 'unclassified' because no execution route contributes a workflow shape -- see the frontend-narrowing commit.",
       "task": "Implement Node TypeScript utility",
       "changed_files": [
         "tools/build.mts"
@@ -2576,25 +2576,21 @@
       "expect_needs_triage": false,
       "expected": {
         "primary": [
-          "frontend-engineer",
           "node-typescript-implementer",
           "backend-engineer"
         ],
         "reviewers": [
           "test-engineer",
-          "code-reviewer",
-          "accessibility-reviewer"
+          "code-reviewer"
         ],
         "support": [
           "product-intent-agent",
-          "requirements-agent",
-          "interaction-designer"
+          "requirements-agent"
         ],
         "matched_routes": [
-          "frontend",
           "node-typescript-execution"
         ],
-        "workflow": "new-service"
+        "workflow": "unclassified"
       }
     },
     {
@@ -2858,7 +2854,7 @@
     },
     {
       "id": "JAVASCRIPT-MAINTENANCE-EXECUTION-1",
-      "description": "Established JavaScript maintenance retains frontend accountability and review coverage.",
+      "description": "Bare 'javascript maintenance' is ambiguous between browser and Node work, so it no longer draws the browser-facing reviewers by keyword alone. Naming a browser surface (or touching frontend/web/ui paths) re-selects the frontend route and its accessibility review.",
       "task": "javascript maintenance",
       "changed_files": [],
       "classification": "internal",
@@ -2871,17 +2867,13 @@
         ],
         "reviewers": [
           "test-engineer",
-          "code-reviewer",
-          "accessibility-reviewer"
+          "code-reviewer"
         ],
-        "support": [
-          "interaction-designer"
-        ],
+        "support": [],
         "matched_routes": [
-          "frontend",
           "javascript-maintenance-execution"
         ],
-        "workflow": "new-service"
+        "workflow": "unclassified"
       }
     },
     {
@@ -4580,7 +4572,7 @@
     },
     {
       "id": "TYPESCRIPT_TEST_EXECUTION_GOLDEN_1",
-      "description": "Narrow typescript-test-execution route regression fixture.",
+      "description": "A bare TypeScript test task selects the test executor without the browser-facing frontend staffing; 'typescript' now requires a browser/UI corroborator to reach the frontend route.",
       "task": "Implement typescript test implementation",
       "changed_files": [],
       "classification": "internal",
@@ -4588,24 +4580,20 @@
       "expect_needs_triage": false,
       "expected": {
         "primary": [
-          "frontend-engineer",
           "test-engineer",
           "typescript-test-implementer"
         ],
         "reviewers": [
-          "code-reviewer",
-          "accessibility-reviewer"
+          "code-reviewer"
         ],
         "support": [
           "product-intent-agent",
-          "requirements-agent",
-          "interaction-designer"
+          "requirements-agent"
         ],
         "matched_routes": [
-          "frontend",
           "typescript-test-execution"
         ],
-        "workflow": "new-service"
+        "workflow": "unclassified"
       }
     }
   ]

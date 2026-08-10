@@ -387,6 +387,32 @@ class SelectorTests(unittest.TestCase):
                 self.assertEqual([], result["agents"]["reviewers"])
                 self.assertEqual([], result["agents"]["support"])
 
+    def test_bare_typescript_needs_a_browser_corroborator_to_reach_frontend(self) -> None:
+        # "typescript"/"javascript" are ambiguous between browser and Node work,
+        # so they no longer match the broad frontend route on their own -- that
+        # is what put frontend-engineer and accessibility-reviewer on Node build
+        # scripts. Genuine browser work must still match, which is the half of
+        # this change that is easy to break by over-narrowing.
+        node = plan(task="Implement Node TypeScript utility", changed_files=["tools/build.mts"])
+        self.assertNotIn("frontend", [m["id"] for m in node["matched_routes"]])
+        self.assertNotIn("frontend-engineer", node["agents"]["primary"])
+        self.assertNotIn("accessibility-reviewer", node["agents"]["reviewers"])
+
+        browser = plan(
+            task="Fix the typescript types on the browser upload component",
+            changed_files=[],
+        )
+        self.assertIn("frontend", [m["id"] for m in browser["matched_routes"]])
+        self.assertIn("frontend-engineer", browser["agents"]["primary"])
+
+        # A .ts file under a frontend path still reaches the route; the new
+        # exclude_paths only releases the Node-tooling shapes that
+        # node-typescript-execution owns.
+        app = plan(task="Update the api client", changed_files=["frontend/src/api.ts"])
+        self.assertIn("frontend", [m["id"] for m in app["matched_routes"]])
+        tooling = plan(task="Update the bundler config", changed_files=["tools/esbuild.ts"])
+        self.assertNotIn("frontend", [m["id"] for m in tooling["matched_routes"]])
+
     def test_selects_frontend_and_backend_with_cross_stack_coordination(self) -> None:
         result = plan(
             task="Add a React upload form backed by a PostgreSQL API",

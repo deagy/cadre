@@ -228,12 +228,75 @@
     },
     {
       "id": "frontend",
-      "paths": ["frontend/**", "web/**", "ui/**", "**/*.tsx", "**/*.jsx", "**/*.ts", "**/*.css", "**/*.scss"],
-      "keywords": ["frontend", "browser", "accessibility", "user interface", "client application", "react", "typescript", "javascript"],
-      "primary": ["frontend-engineer"],
-      "reviewers": ["test-engineer", "code-reviewer", "accessibility-reviewer"],
-      "support": ["interaction-designer"],
-      "quality_gates": ["G3", "G5", "G6", "G7"]
+      "paths": [
+        "frontend/**",
+        "web/**",
+        "ui/**",
+        "**/*.tsx",
+        "**/*.jsx",
+        "**/*.ts",
+        "**/*.css",
+        "**/*.scss"
+      ],
+      "keywords": [
+        "frontend",
+        "browser",
+        "accessibility",
+        "user interface",
+        "client application",
+        "react"
+      ],
+      "primary": [
+        "frontend-engineer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer",
+        "accessibility-reviewer"
+      ],
+      "support": [
+        "interaction-designer"
+      ],
+      "quality_gates": [
+        "G3",
+        "G5",
+        "G6",
+        "G7"
+      ],
+      "keyword_groups": [
+        [
+          "typescript",
+          "javascript"
+        ],
+        [
+          "browser",
+          "ui",
+          "user interface",
+          "component",
+          "react",
+          "dom",
+          "css",
+          "styling",
+          "page",
+          "render",
+          "client",
+          "accessibility",
+          "a11y",
+          "form",
+          "layout",
+          "viewport",
+          "frontend"
+        ]
+      ],
+      "exclude_paths": [
+        "tools/**",
+        "scripts/**",
+        "cli/**",
+        "server/**",
+        "sdk/**",
+        "plugins/**",
+        "**/*.config.ts"
+      ]
     },
     {
       "id": "visual-system",
