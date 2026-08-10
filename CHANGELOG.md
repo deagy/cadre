@@ -47,6 +47,11 @@ check and reporting "nothing to do". See
 
   **The `backend` route's `**/*.py` asymmetry is deliberately not restored.** It could be, mechanically — but only by excluding `roster/**`, `plugin/**`, `engine/**`, `kernel/**`, `cadre_cli/**` and `bin/**`, and `engine/`, `plugin/` and `bin/` are perfectly ordinary directory names in a consuming project, whose Python would then drop out of routing with no signal. That trades a documented asymmetry for a hidden one. `roster/**` is a single, distinctly-Cadre name, which is why the architecture case is safe and this one is not.
 
+- **Destructive-git protection is now bundled into what the plugin ships, not just this repository's own local settings.** A destructive-git guard has existed in `.claude/settings.json` for a while, but only protected this checkout — a consuming project that installed the plugin got no equivalent protection. The same guard logic is now wired into the main plugin's own `hooks/hooks.json` (Claude Code) and into the Cline plugin's `startPresetSubagent` dispatch path as a `beforeTool` hook, so both runners get it as soon as the plugin is installed. ([#129](https://github.com/deagy/cadre/issues/129))
+
+  **This is a genuine behavior change, on by default.** Once a project installs the plugin, destructive git commands — `git reset --hard`, `git clean -f`, `git branch -D`, `git push --force`, or a checkout/branch-switch that would discard uncommitted or unpushed work — are refused whenever the working tree actually has something to lose. The guard is fail-open on parse ambiguity rather than a blanket blocklist: it only blocks the specific patterns it can confidently identify as destructive against current state, not every git invocation that looks unusual.
+
+  **An opt-out exists:** setting `CADRE_DISABLE_WORKSPACE_MUTATION_GUARD=1` (or `true`) in the environment disables the guard. It is deliberately kept outside generated configuration, so that regenerating the plugin cannot silently re-enable it for someone who opted out.
 
 ### Fixed
 

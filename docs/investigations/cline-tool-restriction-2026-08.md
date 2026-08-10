@@ -208,15 +208,28 @@ explicitly rather than either overclaiming full verification or repeating
 
 ## What remains open (not resolved by this investigation)
 
-1. **Live-runtime enforcement is source-verified, not integration-tested.**
-   Whether `@cline/core`'s actual session loop honors `toolPolicies`/`mode:
-   "plan"` at the moment a model attempts a denied call was not exercised
-   end-to-end in this repository's test suite (it mocks `ClineCore`
-   deliberately, per its own comment, because that requires a live
-   model-backed session). I read the shipped SDK's own minified source and
-   schema and found consistent, non-fabricated support for the claims
-   `index.ts`'s comments make, but that is not the same as watching a denied
-   call actually get refused.
+1. **Live-runtime enforcement is source-verified, not integration-tested —
+   accepted as a documented residual risk, not silently dropped.**
+   `toolPolicies`/`mode: "plan"` enforcement is verified by reading the
+   shipped `@cline/core` SDK's own minified source and its
+   `ChatSessionConfigSchema` (both confirm the config shape `index.ts`'s
+   comments claim, and both are real, non-fabricated SDK constructs — see
+   above). It is **not** verified by an executed integration test: whether
+   the live session loop actually *refuses* a denied tool call at the
+   moment a model attempts one was never exercised end-to-end in this
+   repository's test suite, because `cline-plugins/cline-agents/index.test.mts`
+   deliberately mocks `ClineCore` (per its own comment) — a real `ClineCore`
+   session requires a live, model-backed call this environment cannot make
+   (no network/credentials available to this investigation). This gap is
+   recorded here as an **accepted, documented residual risk**, not an
+   oversight and not silently dropped: the claim actually verified is
+   "the plugin constructs and passes the correct policy object," not "the
+   SDK enforces it at dispatch time." What would resolve it: a live-model
+   integration test becoming feasible (credentials/network available to a
+   test run), exercised against a real `ClineCore` session attempting a
+   tool call excluded from `allowedTools`, and asserting the call is
+   refused rather than merely that the policy object was constructed
+   correctly.
 2. **Global/project custom presets with no `allowedTools` get full ambient
    access.** Documented behavior, not a defect in the 74 bundled roles, but
    worth a line in `cline-plugins/cline-agents/README.md` if it doesn't
@@ -267,3 +280,40 @@ here.
   fully read — a generated/minified bundle)
 - `git log`/`git show` against `13deb5e`, `df43bce`, `ea4dc2b`, `d7823a5`,
   `00cdf58`; `gh issue view 129`; `gh pr view 148`, `gh pr view 149`
+
+## Addendum (2026-08-09, Wave 4 — issue-129-destructive-git-2026-08-09)
+
+This addendum records a change to the picture above; it does not alter the
+original investigation's findings, which stand as a point-in-time record of
+what was true when written. Read together with the original text, not in
+place of it.
+
+**"What remains open" item 3, and the parallel claim in section 4** ("nothing
+in Cline's `toolPolicies`/`mode: "plan"` construct substitutes for it
+either") **are now superseded for Cline specifically.** Since this
+investigation was written, `cline-plugins/cline-agents/index.ts` gained a
+`beforeTool` guard (`createDestructiveGitGuardHook`, wired into
+`startPresetSubagent`), using a real interception point in the installed
+`@cline/core`/`@cline/shared` SDK (`AgentRuntimeHooks.beforeTool`) — verified
+by reading the installed SDK source directly, not assumed from its type
+declarations alone (see the code comment above `createDestructiveGitGuardHook`
+in `index.ts` for that verification). This closes the subcommand-level git
+restriction gap this investigation's item 3 and section 4 described as
+unaddressed by anything in Cline's `toolPolicies`/`mode: "plan"` mechanism.
+
+**Scope, precisely:** this closes the gap for subagents dispatched through
+*this plugin's dispatch path* — the guard is wired into `startPresetSubagent`
+specifically, not into Cline generally. It does not follow that every
+conceivable Cline session, or a tool call outside this plugin's
+`start_subagent`/`message_subagent` flow, is covered. Item 1 above (live,
+model-backed enforcement of `toolPolicies`/`mode: "plan"` is source-verified,
+not integration-tested) and item 2 (custom presets with no `allowedTools`
+get full ambient access) are unaffected by this addendum and remain open on
+their own terms.
+
+For the guard's full scope, what it checks, its fail-open design rationale,
+its known/deliberate gaps, and its opt-out, see
+`cline-plugins/cline-agents/README.md`'s "Destructive-git guard
+(`beforeTool`)" section — not duplicated here, since that is the
+maintained, current description and this addendum would otherwise drift out
+of sync with it.

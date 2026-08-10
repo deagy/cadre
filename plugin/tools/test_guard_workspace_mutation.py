@@ -17,6 +17,7 @@ Claude Code runtime is needed to exercise the decision logic.
 from __future__ import annotations
 
 import json
+import shlex
 import shutil
 import subprocess
 import sys
@@ -45,6 +46,15 @@ def _init_repo(path: Path) -> None:
     _git(path, "init", "-q", "-b", "main")
     _git(path, "config", "user.email", "test@example.com")
     _git(path, "config", "user.name", "Test User")
+
+
+def wrap_in_bash_c(script: str) -> str:
+    """Wrap `script` in one more layer of `bash -c '<script>'`, using
+    `shlex.quote` so nesting composes correctly regardless of depth --
+    mirrors the TS test suite's `wrapInBashC` helper in
+    `cline-plugins/cline-agents/test/presets.test.mts`.
+    """
+    return "bash -c " + shlex.quote(script)
 
 
 class GuardTestCase(unittest.TestCase):
@@ -410,6 +420,32 @@ class MainEntrypointTests(GuardTestCase):
         self.assertEqual(0, exit_code)
         self.assertEqual("", out.strip())
 
+    def test_unexpected_exception_from_evaluate_command_fails_open(self) -> None:
+        # Wave 6 regression (issue #129): every other test_*_does_not_crash
+        # case above is satisfied by an earlier `if`-guard returning early
+        # before main()'s own try/except around `evaluate_command` is ever
+        # reached. This test forces an exception past all of the earlier
+        # input-validation guards so the outer `except Exception as exc:`
+        # catch-all (main()'s own fail-open safety net) actually fires, and
+        # asserts it still exits 0 with no stdout that would deny the
+        # command -- i.e. it fails open rather than crashing or denying.
+        from unittest import mock
+
+        payload = json.dumps(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "git status"},
+                "cwd": str(self.repo),
+            }
+        )
+        with mock.patch.object(
+            guard, "evaluate_command", side_effect=RuntimeError("boom")
+        ):
+            exit_code, out = self.run_main(payload)
+        self.assertEqual(0, exit_code)
+        self.assertEqual("", out.strip())
+
 
 # ---------------------------------------------------------------------------
 # Unparseable command segments are skipped, not treated as destructive
@@ -422,6 +458,225 @@ class MalformedCommandTests(GuardTestCase):
 
     def test_git_in_unresolvable_directory_fails_open(self) -> None:
         self.assert_allowed("git -C /path/does/not/exist reset --hard")
+
+
+# ---------------------------------------------------------------------------
+# Finding 1 (Wave 3 review, issue #129): `env` wrapper bypass
+# ---------------------------------------------------------------------------
+
+
+class EnvWrapperTests(GuardTestCase):
+    def test_blocks_bare_env_wrapping_destructive_git(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        decision = self.assert_blocked("env git reset --hard")
+        self.assertIn("uncommitted changes", decision["reason"])
+
+    def test_blocks_env_with_var_assignment_before_command(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked("env FOO=bar git reset --hard")
+
+    def test_blocks_env_dash_i_before_command(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked("env -i git reset --hard")
+
+    def test_blocks_env_dash_i_with_var_assignment_before_command(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked("env -i FOO=bar git reset --hard")
+
+    def test_blocks_env_dash_u_name_before_command(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked("env -u FOO git reset --hard")
+
+    def test_allows_env_wrapping_non_destructive_git(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.assert_allowed("env git status")
+
+    # -- Wave 6 regression: env -C/--chdir/-S also take a value token, same
+    # as -u/--unset. Missing them let `strip_leading_wrappers` mistake the
+    # flag's value for the start of the real command and stop skipping too
+    # early, so `parse_git_invocation` never saw `git` as tokens[0] and the
+    # destructive command passed through unblocked. See issue #129.
+
+    def test_blocks_env_dash_capital_c_before_command(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        decision = self.assert_blocked("env -C . git reset --hard")
+        self.assertIn("uncommitted changes", decision["reason"])
+
+    def test_blocks_env_dash_dash_chdir_before_command(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked("env --chdir . git reset --hard")
+
+    def test_env_dash_capital_s_value_is_skipped_so_next_token_is_reached(self) -> None:
+        # `-S`/`--split-string` takes a single following token as its value
+        # (the string `env` itself would later shell-split into argv); this
+        # guard works on already-tokenized command lines rather than
+        # re-implementing that shell-split, so the faithful thing to assert
+        # here is that the `-S` value token is correctly skipped and a
+        # subsequent, genuinely separate destructive `git` token is still
+        # reached and blocked -- not a full simulation of -S's runtime
+        # split-and-exec semantics.
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        decision = self.assert_blocked("env -S 'echo hi' git reset --hard")
+        self.assertIn("uncommitted changes", decision["reason"])
+
+
+# ---------------------------------------------------------------------------
+# Finding 2 (Wave 3 review, issue #129): `bash -c "..."` / `sh -c "..."`
+# inline indirection
+# ---------------------------------------------------------------------------
+
+
+class ShellDashCRecursionTests(GuardTestCase):
+    def test_blocks_bash_dash_c_destructive_git(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        decision = self.assert_blocked('bash -c "git reset --hard"')
+        self.assertIn("uncommitted changes", decision["reason"])
+
+    def test_blocks_sh_dash_c_with_chained_segments(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        decision = self.assert_blocked('sh -c "cd /tmp && git reset --hard"')
+        self.assertIn("uncommitted changes", decision["reason"])
+
+    def test_blocks_combined_short_flags_bash_dash_lc(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked('bash -lc "git reset --hard"')
+
+    def test_allows_bash_dash_c_non_destructive(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.assert_allowed('bash -c "git status"')
+
+    def test_nested_shell_dash_c_second_level_is_blocked(self) -> None:
+        # A second level of `bash -c` inside the first is well within the
+        # recursion bound (_MAX_SHELL_RECURSION_DEPTH == 3), so this is
+        # blocked, not a documented gap.
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        decision = self.assert_blocked("bash -c \"bash -c 'git reset --hard'\"")
+        self.assertIn("uncommitted changes", decision["reason"])
+
+    def test_blocks_shell_dash_c_nested_exactly_at_recursion_bound(self) -> None:
+        # Mirrors the Cline guard's "blocks a destructive command nested
+        # exactly at the recursion bound (3 levels)" test in
+        # cline-plugins/cline-agents/test/presets.test.mts.
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        nested = wrap_in_bash_c(wrap_in_bash_c(wrap_in_bash_c("git reset --hard")))
+        decision = self.assert_blocked(nested)
+        self.assertIn("uncommitted changes", decision["reason"])
+
+    def test_nested_shell_dash_c_beyond_recursion_bound_is_a_documented_gap(self) -> None:
+        # This is the known, documented limit of the recursion bound
+        # (_MAX_SHELL_RECURSION_DEPTH == 3): a fourth level of `bash -c`
+        # inside the first three is NOT recursed into, so this is allowed
+        # even though the innermost command is destructive on a dirty tree.
+        # Mirrors the Cline guard's "documented known gap: nesting one level
+        # deeper than the recursion bound is not covered" test in
+        # cline-plugins/cline-agents/test/presets.test.mts. This test
+        # asserts the actual (gap) behavior so a future change to the bound
+        # is a deliberate, reviewed decision rather than a silent regression
+        # in either direction.
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        nested = wrap_in_bash_c(wrap_in_bash_c(wrap_in_bash_c(wrap_in_bash_c("git reset --hard"))))
+        self.assert_allowed(nested)
+
+
+# ---------------------------------------------------------------------------
+# Opt-out env var (Wave 3 review, issue #129)
+# ---------------------------------------------------------------------------
+
+
+class DisableEnvVarTests(GuardTestCase):
+    def run_main_with_env(self, stdin_text: str, env: dict):
+        import io
+        from unittest import mock
+
+        stdin = io.StringIO(stdin_text)
+        stdout = io.StringIO()
+        with mock.patch.object(sys, "stdin", stdin), mock.patch.object(
+            sys, "stdout", stdout
+        ), mock.patch.dict("os.environ", env, clear=False):
+            exit_code = guard.main()
+        return exit_code, stdout.getvalue()
+
+    def test_disable_env_var_set_to_1_allows_destructive_command(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        payload = json.dumps(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "git reset --hard"},
+                "cwd": str(self.repo),
+            }
+        )
+        exit_code, out = self.run_main_with_env(
+            payload, {"CADRE_DISABLE_WORKSPACE_MUTATION_GUARD": "1"}
+        )
+        self.assertEqual(0, exit_code)
+        self.assertEqual("", out.strip())
+
+    def test_disable_env_var_set_to_true_case_insensitive(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        payload = json.dumps(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "git reset --hard"},
+                "cwd": str(self.repo),
+            }
+        )
+        exit_code, out = self.run_main_with_env(
+            payload, {"CADRE_DISABLE_WORKSPACE_MUTATION_GUARD": "TRUE"}
+        )
+        self.assertEqual(0, exit_code)
+        self.assertEqual("", out.strip())
+
+    def test_disable_env_var_unset_still_blocks(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        payload = json.dumps(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "git reset --hard"},
+                "cwd": str(self.repo),
+            }
+        )
+        exit_code, out = self.run_main_with_env(payload, {})
+        self.assertEqual(0, exit_code)
+        parsed = json.loads(out)
+        self.assertEqual("deny", parsed["hookSpecificOutput"]["permissionDecision"])
+
+    def test_disable_env_var_set_to_0_still_blocks(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        payload = json.dumps(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "git reset --hard"},
+                "cwd": str(self.repo),
+            }
+        )
+        exit_code, out = self.run_main_with_env(
+            payload, {"CADRE_DISABLE_WORKSPACE_MUTATION_GUARD": "0"}
+        )
+        self.assertEqual(0, exit_code)
+        parsed = json.loads(out)
+        self.assertEqual("deny", parsed["hookSpecificOutput"]["permissionDecision"])
 
 
 if __name__ == "__main__":

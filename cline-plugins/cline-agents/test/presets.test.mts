@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -8,10 +9,13 @@ import type { AgentTool, AgentToolContext } from "@cline/sdk";
 import {
   type AgentDefinition,
   countFlaggedPassages,
+  createDestructiveGitGuardHook,
+  evaluateGitCommand,
   formatKnowledgeInstructions,
   HANDOFFS_DIR,
   type KnowledgeContextRequest,
   type KnowledgeRetrievalResult,
+  normalizeRunCommandsInput,
   plugin,
   readAgentDefinitions,
   readSkillDefinitions,
@@ -386,6 +390,416 @@ describe("settled decision #2: real tool-policy and mode enforcement", () => {
     const { toolPolicies, mode } = resolveToolPolicyConfig({ allowedTools: undefined });
     expect(toolPolicies).toBeUndefined();
     expect(mode).toBeUndefined();
+  });
+});
+
+// deagy/cadre#129 residual: `toolPolicies` above can only grant/deny the
+// whole `run_commands` category, not a specific git subcommand. This block
+// exercises the `beforeTool` runtime-hook guard that closes that gap (see
+// the module-level comment above `createDestructiveGitGuardHook` in
+// index.ts for the interception-point evidence: a real, typed
+// `AgentRuntimeHooks.beforeTool` callback, confirmed live in the shipped
+// `@cline/core` runtime's own hook-composition code, not just its `.d.ts`).
+// Unlike the mocked-ClineCore suite below, these tests spawn a real,
+// disposable local `git` repo and call the guard's pure functions directly
+// -- no live model-backed session is needed to verify this logic, since it
+// never talks to a model at all.
+describe("destructive-git guard (deagy/cadre#129): subcommand-level restriction beyond toolPolicies", () => {
+  let repoDir: string;
+
+  beforeEach(() => {
+    repoDir = mkdtempSync(join(tmpdir(), "cline-agents-git-guard-"));
+    execFileSync("git", ["init", "-q"], { cwd: repoDir });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repoDir });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: repoDir });
+    writeFileSync(join(repoDir, "README.md"), "hello\n");
+    execFileSync("git", ["add", "."], { cwd: repoDir });
+    execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repoDir });
+  });
+
+  afterEach(() => {
+    rmSync(repoDir, { recursive: true, force: true });
+  });
+
+  describe("normalizeRunCommandsInput", () => {
+    it("handles a bare string", () => {
+      expect(normalizeRunCommandsInput("git status")).toEqual(["git status"]);
+    });
+
+    it("handles an array of strings", () => {
+      expect(normalizeRunCommandsInput(["git status", "ls"])).toEqual(["git status", "ls"]);
+    });
+
+    it("handles { commands: string[] }", () => {
+      expect(normalizeRunCommandsInput({ commands: ["git status"] })).toEqual(["git status"]);
+    });
+
+    it("handles structured { command, args } entries inside commands", () => {
+      expect(
+        normalizeRunCommandsInput({ commands: [{ command: "git", args: ["reset", "--hard"] }] }),
+      ).toEqual(["git reset --hard"]);
+    });
+
+    it("handles a single structured object with no commands wrapper", () => {
+      expect(normalizeRunCommandsInput({ command: "git", args: ["status"] })).toEqual(["git status"]);
+    });
+
+    it("returns an empty list for unrecognized shapes", () => {
+      expect(normalizeRunCommandsInput({ foo: "bar" })).toEqual([]);
+      expect(normalizeRunCommandsInput(undefined)).toEqual([]);
+    });
+  });
+
+  describe("evaluateGitCommand", () => {
+    it("allows git reset --hard HEAD on a clean tree with no branch move", async () => {
+      expect(await evaluateGitCommand("git reset --hard HEAD", repoDir)).toBeNull();
+    });
+
+    it("blocks git reset --hard on a dirty tree", async () => {
+      writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+      const decision = await evaluateGitCommand("git reset --hard HEAD", repoDir);
+      expect(decision?.reason).toMatch(/discard uncommitted changes/);
+    });
+
+    it("blocks git reset --hard that moves the branch, even on a clean tree", async () => {
+      writeFileSync(join(repoDir, "second.txt"), "second\n");
+      execFileSync("git", ["add", "."], { cwd: repoDir });
+      execFileSync("git", ["commit", "-q", "-m", "second"], { cwd: repoDir });
+      const decision = await evaluateGitCommand("git reset --hard HEAD~1", repoDir);
+      expect(decision?.reason).toMatch(/strand any unpushed commits/);
+    });
+
+    it("allows a non-destructive git command (status)", async () => {
+      expect(await evaluateGitCommand("git status", repoDir)).toBeNull();
+    });
+
+    it("allows plain git reset (no --hard) even on a dirty tree", async () => {
+      writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+      expect(await evaluateGitCommand("git reset", repoDir)).toBeNull();
+    });
+
+    it("blocks git clean -fd when it would remove untracked files", async () => {
+      writeFileSync(join(repoDir, "untracked.txt"), "junk\n");
+      const decision = await evaluateGitCommand("git clean -fd", repoDir);
+      expect(decision?.reason).toMatch(/permanently delete/);
+    });
+
+    it("allows git clean -n (dry run) even with untracked files present", async () => {
+      writeFileSync(join(repoDir, "untracked.txt"), "junk\n");
+      expect(await evaluateGitCommand("git clean -n", repoDir)).toBeNull();
+    });
+
+    it("allows git clean -fd on an already-clean tree", async () => {
+      expect(await evaluateGitCommand("git clean -fd", repoDir)).toBeNull();
+    });
+
+    it("blocks git branch -D", async () => {
+      execFileSync("git", ["branch", "throwaway"], { cwd: repoDir });
+      const decision = await evaluateGitCommand("git branch -D throwaway", repoDir);
+      expect(decision?.reason).toMatch(/bypasses git's own unmerged-work safety check/);
+    });
+
+    it("allows plain git branch -d", async () => {
+      execFileSync("git", ["branch", "throwaway"], { cwd: repoDir });
+      expect(await evaluateGitCommand("git branch -d throwaway", repoDir)).toBeNull();
+    });
+
+    it("blocks git push --force without --force-with-lease", async () => {
+      const decision = await evaluateGitCommand("git push --force origin main", repoDir);
+      expect(decision?.reason).toMatch(/silently overwrite commits/);
+    });
+
+    it("allows git push --force-with-lease", async () => {
+      expect(await evaluateGitCommand("git push --force-with-lease origin main", repoDir)).toBeNull();
+    });
+
+    it("blocks a remote branch delete push", async () => {
+      const decision = await evaluateGitCommand("git push origin --delete some-branch", repoDir);
+      expect(decision?.reason).toMatch(/deletes a remote branch/);
+    });
+
+    it("blocks git checkout <ref> -- <path> when the path is dirty", async () => {
+      execFileSync("git", ["branch", "other"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+      const decision = await evaluateGitCommand("git checkout other -- README.md", repoDir);
+      expect(decision?.reason).toMatch(/overwrite uncommitted changes/);
+    });
+
+    it("allows git checkout <ref> -- <path> when the path is clean", async () => {
+      execFileSync("git", ["branch", "other"], { cwd: repoDir });
+      expect(await evaluateGitCommand("git checkout other -- README.md", repoDir)).toBeNull();
+    });
+
+    it("allows the routine discard-own-edit checkout form (no source ref)", async () => {
+      writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+      expect(await evaluateGitCommand("git checkout -- README.md", repoDir)).toBeNull();
+    });
+
+    it("blocks switching to a local branch while the tree is dirty", async () => {
+      execFileSync("git", ["branch", "other"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+      const decision = await evaluateGitCommand("git checkout other", repoDir);
+      expect(decision?.reason).toMatch(/switching to branch 'other'/);
+    });
+
+    it("allows creating a new branch (-b) even with a dirty tree", async () => {
+      writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+      expect(await evaluateGitCommand("git checkout -b new-branch", repoDir)).toBeNull();
+    });
+
+    it("finds a destructive git invocation chained after a benign command", async () => {
+      writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+      const decision = await evaluateGitCommand("echo hi && git reset --hard HEAD", repoDir);
+      expect(decision?.reason).toMatch(/discard uncommitted changes/);
+    });
+
+    it("fails open on an unparseable/unbalanced-quote segment", async () => {
+      expect(await evaluateGitCommand("git reset --hard 'unterminated", repoDir)).toBeNull();
+    });
+
+    it("allows a non-git command entirely", async () => {
+      expect(await evaluateGitCommand("npm test", repoDir)).toBeNull();
+    });
+
+    it("blocks git restore --source=<ref> <path> when the path is dirty", async () => {
+      execFileSync("git", ["branch", "other"], { cwd: repoDir });
+      writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+      const decision = await evaluateGitCommand("git restore --source=other README.md", repoDir);
+      expect(decision?.reason).toMatch(/overwrite uncommitted changes/);
+    });
+
+    it("allows git restore --source=<ref> <path> when the path is clean", async () => {
+      execFileSync("git", ["branch", "other"], { cwd: repoDir });
+      expect(await evaluateGitCommand("git restore --source=other README.md", repoDir)).toBeNull();
+    });
+
+    it("allows the routine discard-own-edit restore form (no --source)", async () => {
+      writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+      expect(await evaluateGitCommand("git restore README.md", repoDir)).toBeNull();
+    });
+
+    it("blocks git reset --hard when invoked through `git -C <dir>` global-flag redirection", async () => {
+      writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+      const decision = await evaluateGitCommand(`git -C ${repoDir} reset --hard HEAD`, "/tmp/somewhere-else");
+      expect(decision?.reason).toMatch(/discard uncommitted changes/);
+    });
+
+    it("allows git reset --hard via -C redirection when the target repo is clean", async () => {
+      const decision = await evaluateGitCommand(`git -C ${repoDir} reset --hard HEAD`, "/tmp/somewhere-else");
+      expect(decision).toBeNull();
+    });
+
+    // Wave 3 finding 1 (deagy/cadre#129): `env` was missing from the
+    // wrapper-token strip set, so `env git reset --hard` was a complete,
+    // low-effort bypass -- an unrecognized leading token, silently allowed.
+    describe("env wrapper handling", () => {
+      it("blocks a bare `env git reset --hard` bypass on a dirty tree", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        const decision = await evaluateGitCommand("env git reset --hard HEAD", repoDir);
+        expect(decision?.reason).toMatch(/discard uncommitted changes/);
+      });
+
+      it("continues past env's own flags before the real command (env -i <command>)", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        const decision = await evaluateGitCommand("env -i git reset --hard HEAD", repoDir);
+        expect(decision?.reason).toMatch(/discard uncommitted changes/);
+      });
+
+      it("continues past env VAR=value pairs before the real command", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        const decision = await evaluateGitCommand("env FOO=bar BAZ=qux git reset --hard HEAD", repoDir);
+        expect(decision?.reason).toMatch(/discard uncommitted changes/);
+      });
+
+      it("still allows a non-destructive command wrapped in env", async () => {
+        expect(await evaluateGitCommand("env git status", repoDir)).toBeNull();
+      });
+
+      // Security-reviewer finding (deagy/cadre#129, Wave 6): `env -C <dir>`
+      // and its long form `env --chdir <dir>` take a value argument just
+      // like `-u`/`--unset`. A guard that fails to skip that value argument
+      // would misparse it as the start of the real command and miss the
+      // destructive git call that follows.
+      it("skips env -C <dir>'s value argument and blocks the destructive command that follows", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        const decision = await evaluateGitCommand("env -C . git reset --hard", repoDir);
+        expect(decision?.reason).toMatch(/discard uncommitted changes/);
+      });
+
+      it("skips env --chdir <dir>'s value argument and blocks the destructive command that follows", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        const decision = await evaluateGitCommand("env --chdir . git reset --hard", repoDir);
+        expect(decision?.reason).toMatch(/discard uncommitted changes/);
+      });
+    });
+
+    // Wave 3 finding 2 (deagy/cadre#129): a destructive command inline
+    // inside a quoted `bash -c`/`sh -c` string was invisible because
+    // tokenizeCommand treats the quoted string as one opaque token.
+    describe("bash -c / sh -c inline indirection", () => {
+      it("blocks `bash -c \"git reset --hard\"` on a dirty tree", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        const decision = await evaluateGitCommand('bash -c "git reset --hard HEAD"', repoDir);
+        expect(decision?.reason).toMatch(/discard uncommitted changes/);
+      });
+
+      it("blocks `sh -c \"cd /tmp && git reset --hard\"` (recurses and finds the chained git call)", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        const decision = await evaluateGitCommand(`sh -c "cd /tmp && git reset --hard HEAD"`, repoDir);
+        expect(decision?.reason).toMatch(/discard uncommitted changes/);
+      });
+
+      it("blocks `sh -lc \"git reset --hard\"` (combined short flags)", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        const decision = await evaluateGitCommand('sh -lc "git reset --hard HEAD"', repoDir);
+        expect(decision?.reason).toMatch(/discard uncommitted changes/);
+      });
+
+      it("allows a non-destructive command inside bash -c", async () => {
+        expect(await evaluateGitCommand('bash -c "git status"', repoDir)).toBeNull();
+      });
+
+      // Wraps `script` in one more `bash -c "<escaped script>"` layer.
+      // Composing this N times builds an N-deep nested inline-shell command
+      // without hand-escaping quotes for each level.
+      const wrapInBashC = (script: string): string =>
+        `bash -c "${script.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+
+      it("blocks a destructive command nested exactly at the recursion bound (3 levels)", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        const nested = wrapInBashC(wrapInBashC(wrapInBashC("git reset --hard HEAD")));
+        const decision = await evaluateGitCommand(nested, repoDir);
+        expect(decision?.reason).toMatch(/discard uncommitted changes/);
+      });
+
+      it("documented known gap: nesting one level deeper than the recursion bound is not covered", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        // MAX_SHELL_C_RECURSION_DEPTH is 3 -- this is a deliberate, documented
+        // limit, not a claim of full coverage. Asserting the current
+        // (permissive) behavior for a 4-level nesting here so a future change
+        // to the bound is a visible, intentional test update rather than a
+        // silent regression either way.
+        const nested = wrapInBashC(wrapInBashC(wrapInBashC(wrapInBashC("git reset --hard HEAD"))));
+        expect(await evaluateGitCommand(nested, repoDir)).toBeNull();
+      });
+    });
+  });
+
+  describe("createDestructiveGitGuardHook (beforeTool wiring)", () => {
+    it("skips a destructive run_commands call with a reason reaching the caller", async () => {
+      writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+      const hook = createDestructiveGitGuardHook(repoDir);
+      const result = await hook({
+        tool: { name: "run_commands" },
+        input: { commands: ["git reset --hard HEAD"] },
+      });
+      expect(result?.skip).toBe(true);
+      expect(result?.reason).toMatch(/discard uncommitted changes/);
+    });
+
+    it("has no opinion (undefined) for a non-destructive run_commands call", async () => {
+      const hook = createDestructiveGitGuardHook(repoDir);
+      const result = await hook({ tool: { name: "run_commands" }, input: { commands: ["git status"] } });
+      expect(result).toBeUndefined();
+    });
+
+    it("has no opinion for a tool other than run_commands, even with git-shaped text in its input", async () => {
+      writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+      const hook = createDestructiveGitGuardHook(repoDir);
+      const result = await hook({
+        tool: { name: "editor" },
+        input: { path: "README.md", new_text: "git reset --hard HEAD" },
+      });
+      expect(result).toBeUndefined();
+    });
+
+    it("evaluates structured {command, args} run_commands entries, not just bare strings", async () => {
+      writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+      const hook = createDestructiveGitGuardHook(repoDir);
+      const result = await hook({
+        tool: { name: "run_commands" },
+        input: { commands: [{ command: "git", args: ["reset", "--hard", "HEAD"] }] },
+      });
+      expect(result?.skip).toBe(true);
+    });
+
+    describe("CADRE_DISABLE_WORKSPACE_MUTATION_GUARD opt-out", () => {
+      const ENV_VAR = "CADRE_DISABLE_WORKSPACE_MUTATION_GUARD";
+      let originalValue: string | undefined;
+
+      beforeEach(() => {
+        originalValue = process.env[ENV_VAR];
+      });
+
+      afterEach(() => {
+        if (originalValue === undefined) delete process.env[ENV_VAR];
+        else process.env[ENV_VAR] = originalValue;
+      });
+
+      it("has no opinion on an otherwise-blocked command when set to 1", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        process.env[ENV_VAR] = "1";
+        const hook = createDestructiveGitGuardHook(repoDir);
+        const result = await hook({
+          tool: { name: "run_commands" },
+          input: { commands: ["git reset --hard HEAD"] },
+        });
+        expect(result).toBeUndefined();
+      });
+
+      it("has no opinion when set to true, case-insensitively", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        process.env[ENV_VAR] = "TRUE";
+        const hook = createDestructiveGitGuardHook(repoDir);
+        const result = await hook({
+          tool: { name: "run_commands" },
+          input: { commands: ["git reset --hard HEAD"] },
+        });
+        expect(result).toBeUndefined();
+      });
+
+      it("still blocks when the variable is unset", async () => {
+        delete process.env[ENV_VAR];
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        const hook = createDestructiveGitGuardHook(repoDir);
+        const result = await hook({
+          tool: { name: "run_commands" },
+          input: { commands: ["git reset --hard HEAD"] },
+        });
+        expect(result?.skip).toBe(true);
+      });
+
+      it("still blocks on an unrecognized value (e.g. \"0\")", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        process.env[ENV_VAR] = "0";
+        const hook = createDestructiveGitGuardHook(repoDir);
+        const result = await hook({
+          tool: { name: "run_commands" },
+          input: { commands: ["git reset --hard HEAD"] },
+        });
+        expect(result?.skip).toBe(true);
+      });
+    });
+
+    it("fails open (returns undefined, never throws) on a malformed context object", async () => {
+      const hook = createDestructiveGitGuardHook(repoDir);
+      // `context.tool` is `undefined` in real malformed-input cases, but here
+      // force a genuinely exceptional path through the catch-all: `input` is
+      // an object whose `commands` getter throws when read, so
+      // normalizeRunCommandsInput's property access itself raises inside the
+      // hook's try block, exercising the outer catch rather than any of the
+      // guard's own fail-open `null`-return branches.
+      const malformedInput = {
+        get commands(): unknown {
+          throw new Error("boom: malformed context");
+        },
+      };
+      await expect(
+        hook({ tool: { name: "run_commands" }, input: malformedInput } as unknown as Parameters<
+          typeof hook
+        >[0]),
+      ).resolves.toBeUndefined();
+    });
   });
 });
 

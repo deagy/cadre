@@ -189,6 +189,46 @@ LIFECYCLE_INSTALL_SKILL_TARGETS = tuple(
     if directory != "plugins/lifecycle"
 )
 
+# deagy/cadre#129: the destructive-git `PreToolUse` guard this repository
+# runs on itself (`.claude/settings.json` -> `.claude/hooks/
+# guard_workspace_mutation.py`) protects only sessions running against this
+# checkout. Packaging it into the main `cadre` plugin's own hooks/hooks.json
+# is what lets any *consuming* project that installs the plugin get the same
+# structural protection, without depending on the separately-installed,
+# optional cadre-lifecycle-* plugins. This repository's own copy stays the
+# single hand-authored source; the packaged copy is fanned out from it here
+# so there is exactly one script to review and the generated-content CI job
+# catches any hand-edit to the packaged copy, mirroring BOOTSTRAP_SOURCE
+# above for the lifecycle plugins' kernel-bootstrap script.
+GUARD_HOOK_SOURCE = REPOSITORY_ROOT / ".claude" / "hooks" / "guard_workspace_mutation.py"
+GUARD_HOOK_TARGET = "hooks/guard_workspace_mutation.py"
+# Command line mirrors this repository's own `.claude/settings.json` wiring
+# exactly (`python3 "${CLAUDE_PROJECT_DIR}/.claude/hooks/
+# guard_workspace_mutation.py"`), substituting `${CLAUDE_PLUGIN_ROOT}` for
+# `${CLAUDE_PROJECT_DIR}` -- the plugin-relative equivalent Claude Code
+# exposes to a plugin's own hook commands. See the hook module's own
+# docstring for the fail-open design stance and exactly what it does and
+# does not block; that reasoning applies unchanged once packaged, since the
+# script itself makes no assumption specific to this repository (no
+# hardcoded paths, no assumption about a checkout named "cadre" -- it reads
+# `cwd`/`tool_input` from the hook's own stdin JSON and shells out to `git`
+# generically).
+MAIN_PLUGIN_HOOKS = {
+    "hooks": {
+        "PreToolUse": [
+            {
+                "matcher": "Bash",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f'python3 "${{CLAUDE_PLUGIN_ROOT}}/{GUARD_HOOK_TARGET}"',
+                    }
+                ],
+            }
+        ]
+    }
+}
+
 # Detect and report only. This runs before the human has asked for anything,
 # on every session start, so it must not install, must not write, and must
 # not fail -- `--check` is built to those constraints and is silent when a
@@ -427,6 +467,12 @@ GENERATED_TOP_LEVEL = {
     # they are output, and drift against the register must fail the check.
     *PROVIDER_BUNDLE,
     "README.md",
+    # The main plugin's own PreToolUse guard (deagy/cadre#129), fanned out
+    # from GUARD_HOOK_SOURCE by generate_main_plugin_hook(). A top-level
+    # member (not nested like the lifecycle plugins' hooks/) because it
+    # belongs to the `cadre` package root itself, not a sub-plugin under
+    # plugins/.
+    "hooks",
 }
 
 
@@ -943,6 +989,26 @@ def generate_kernel_compatibility(plugin_root: Path) -> list[Path]:
     return written
 
 
+def generate_main_plugin_hook(plugin_root: Path) -> list[Path]:
+    """Package this repository's own destructive-git `PreToolUse` guard
+    (deagy/cadre#129) into the main `cadre` plugin, so any project that
+    installs the plugin gets the same structural protection this repository
+    runs on itself via `.claude/settings.json`, without needing the separate
+    cadre-lifecycle-* plugins. See GUARD_HOOK_SOURCE/MAIN_PLUGIN_HOOKS above
+    for the design rationale and command-line derivation.
+    """
+    written: list[Path] = []
+    guard_target = plugin_root / GUARD_HOOK_TARGET
+    guard_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(GUARD_HOOK_SOURCE, guard_target)
+    written.append(guard_target)
+
+    hooks_target = plugin_root / "hooks" / "hooks.json"
+    hooks_target.write_text(json.dumps(MAIN_PLUGIN_HOOKS, indent=2) + "\n", encoding="utf-8")
+    written.append(hooks_target)
+    return written
+
+
 def generate_bin_wrapper(plugin_root: Path) -> Path:
     target = plugin_root / "bin" / "cadre"
     rows = packaged_subcommands(REPOSITORY_ROOT)
@@ -1273,6 +1339,7 @@ def generate_package(
         + generate_agent_wrappers(catalog, plugin_root)
         + generate_provider_copy(catalog, plugin_root)
         + generate_kernel_compatibility(plugin_root)
+        + generate_main_plugin_hook(plugin_root)
         + [generate_bin_wrapper(plugin_root)]
     )
 

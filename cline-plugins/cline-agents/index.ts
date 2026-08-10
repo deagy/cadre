@@ -775,6 +775,794 @@ function resolveToolPolicyConfig(
 }
 
 // ---------------------------------------------------------------------------
+// Destructive-git guard (deagy/cadre#129 residual: subcommand-level restriction)
+// ---------------------------------------------------------------------------
+//
+// `toolPolicies` above can only grant or deny the whole `run_commands`
+// *category* -- it cannot express "run_commands, but not `git reset
+// --hard`". This section closes that gap for Cline the same way
+// `.claude/hooks/guard_workspace_mutation.py` (deagy/cadre#192) closes it
+// for Claude Code: a dirty-tree-aware refusal of specific destructive `git`
+// invocations, not a blind command-name blocklist.
+//
+// The interception point this uses is real, not assumed -- verified by
+// reading the installed SDK directly (`cline-plugins/node_modules/@cline/`,
+// package versions pinned in this plugin's package.json):
+//
+//   1. `AgentRuntimeHooks.beforeTool` (`@cline/shared/dist/agent.d.ts`) is a
+//      typed, schema-real callback: `(context: AgentBeforeToolContext) =>
+//      AgentBeforeToolResult | undefined | Promise<...>`, where
+//      `AgentBeforeToolContext.input` is the tool call's actual, unmodified
+//      input (argv-bearing for `run_commands`, not just its tool-category
+//      name), and `AgentBeforeToolResult.skip` short-circuits execution of
+//      that one tool call before it runs.
+//   2. This isn't just a type declaration hoping the runtime honors it: the
+//      shipped, non-minified-away runtime composes multiple `beforeTool`
+//      hooks and short-circuits the moment any of them returns
+//      `skip`/`stop` -- confirmed by reading the actual bundled source at
+//      `@cline/core/dist/index.js` (`beforeTool:async(Z)=>{...for(let j of
+//      W){let X=await j.beforeTool?.(...);if(!X)continue;
+//      if(X.stop||X.skip)return X; ...}}`), not merely its `.d.ts`.
+//   3. `CoreSessionConfig.hooks?: AgentHooks` (`@cline/core/dist/types/config.d.ts`)
+//      is where a session-starter supplies hooks, but `hooks` is one of
+//      `StartSessionInput`'s `LocalOnlyCoreSessionConfigKeys`
+//      (`@cline/core/dist/runtime/host/runtime-host.d.ts`) -- it must be
+//      passed through `mgr.start({ localRuntime: { hooks }, ... })`, not
+//      inside `config`. See `startPresetSubagent` below for the wiring.
+//   4. `run_commands`'s input shape (`RunCommandsInputUnionSchema`,
+//      `@cline/core/dist/extensions/tools/schemas.d.ts`) is an array of
+//      command strings, or structured `{command, args}` entries -- i.e.
+//      `beforeTool`'s `context.input` genuinely carries the argv the model
+//      is about to run, which is exactly the level of detail `toolPolicies`
+//      cannot see.
+//
+// What this could NOT verify in this environment (recorded honestly, same
+// stance as docs/investigations/cline-tool-restriction-2026-08.md's existing
+// caveat on `toolPolicies` itself): a live, model-backed `ClineCore` session
+// actually invoking `beforeTool` end-to-end and honoring `skip`. This
+// repository's test suite mocks `ClineCore` for the same reason that
+// investigation gives -- a real session needs a live model-backed call --
+// so the tests below verify this hook's pure command-evaluation logic and
+// that it is correctly wired into the `mgr.start()` call, not a live denial.
+//
+// Design stance mirrors guard_workspace_mutation.py exactly: false positives
+// (blocking routine work) are the real risk, not false negatives, so every
+// git-state lookup here fails OPEN (returns `null`/allows) on any error,
+// timeout, unresolved ref, or non-repo cwd. This is defense-in-depth on top
+// of `roster/shared/agent-autonomy.yaml`'s
+// `repository.discard_uncommitted_work_or_move_branches: never` and
+// `workspace-isolation.md`, not a replacement for either.
+//
+// Deliberately NOT covered, mirrored from guard_workspace_mutation.py's own
+// module docstring (Wave 3 independent review, deagy/cadre#129) -- kept as
+// an explicit, named list here (not only in that file's docstring or the
+// project README) so an operator reading this module directly sees the full
+// gap list without having to cross-reference the Python original:
+//
+//   1. `git stash drop`/`git stash clear` -- destructive to uncommitted work
+//      stashed earlier, but structurally different (stash entries, not the
+//      tracked working tree/branch state the checks above cover) and out of
+//      the original task's explicit dangerous-cases list. Known gap.
+//   2. Reflog expiry / `git gc --prune=now` -- destroys unreachable commits,
+//      but isn't a routine workflow operation here, and reliably detecting
+//      "would this prune something otherwise recoverable" is materially
+//      harder than the checks above. Known gap.
+//   3. Anything reached through a file the model writes and then executes
+//      (e.g. a shell script containing `git reset --hard`) rather than a
+//      literal `run_commands` string -- `beforeTool` only sees the
+//      `run_commands` input itself, so an indirection through a written-then-
+//      executed script is invisible to this hook by construction, not by
+//      choice. (The `bash -c "<string>"`/`sh -c "<string>"` inline-string
+//      form below IS handled, via bounded recursion -- this gap is
+//      specifically the write-a-file-then-execute-it indirection, which has
+//      no command-string representation to inspect at all.)
+//   4. `--git-dir`/`--work-tree` flags and the `GIT_DIR`/`GIT_WORK_TREE`
+//      environment variables -- `parseGitInvocation` recognizes and skips
+//      over `--git-dir`/`--work-tree` as global flags (so they don't get
+//      misparsed as the subcommand), but neither they nor the environment
+//      variable forms are applied to any of this guard's own state checks
+//      (`gitStatusPorcelain`, `runGit`, etc.), which always resolve state
+//      against the process cwd (or an explicit `-C <dir>`) instead. A
+//      command that redirects git at a different repository/worktree via
+//      one of these four mechanisms can therefore produce a confidently
+//      wrong "clean"/"not a branch move" read against the WRONG repository,
+//      and this guard would allow a command it should have blocked. Left
+//      unaddressed deliberately: correctly resolving the effective
+//      repository/worktree from an arbitrary combination of `-C`,
+//      `--git-dir`, `--work-tree`, `GIT_DIR`, `GIT_WORK_TREE`, and ordinary
+//      discovery is a materially harder problem than any other check here,
+//      and a wrong resolution risks the opposite failure mode (a false
+//      "dirty"/block on a legitimate multi-worktree command). Known gap,
+//      not a fix attempt.
+//
+// Also out of scope: git alias resolution (a user- or repo-configured
+// `git <alias>` that expands to a destructive underlying command, e.g. `git
+// config alias.nuke = 'reset --hard'`) is not resolved or expanded before
+// `parseGitInvocation` looks at the subcommand token -- `nuke` simply isn't
+// a recognized subcommand and falls through unblocked. Resolving aliases
+// would mean reading and trusting repository/global git config as part of a
+// security-relevant decision, which is its own scoped problem; left as a
+// known, undocumented-elsewhere gap here.
+//
+// Opt-out: setting `CADRE_DISABLE_WORKSPACE_MUTATION_GUARD=1` (or `true`,
+// case-insensitively) in the environment this process runs in disables this
+// hook entirely -- `createDestructiveGitGuardHook`'s returned function
+// checks it first, before any parsing, and returns `undefined` (no opinion)
+// immediately when set. This mirrors `guard_workspace_mutation.py`'s
+// identical opt-out (same env var name, same semantics) so both guards can
+// be disabled together. Deliberately environment-based rather than a
+// project config file or preset field: an environment variable lives in the
+// runtime an operator controls, not in generated/committed configuration
+// that could be silently regenerated away, so this is a narrow, explicit,
+// operator-controlled escape hatch rather than a config knob a model could
+// talk itself (or a compromised project file) into flipping.
+
+interface GitGuardDecision {
+  reason: string;
+}
+
+// Structural (locally declared, not imported) shape of the three
+// `@cline/shared` types this hook needs: `AgentBeforeToolContext`,
+// `AgentBeforeToolResult`, and `AgentRuntimeHooks["beforeTool"]`'s
+// signature (`node_modules/@cline/shared/dist/agent.d.ts`, confirmed real
+// and used by the shipped runtime -- see the module comment above).
+//
+// They are declared here instead of imported because the installed
+// `@cline/shared@0.0.70`'s own `dist/index.d.ts` re-exports that file via
+// an extensionless `export * from "./agent"` (and `AgentHooks` itself via
+// an equally extensionless `export * from "./agents"`), which is not
+// resolvable under this project's `tsconfig.json` `moduleResolution:
+// "NodeNext"` -- Node ESM relative-import resolution requires an explicit
+// `.js` extension, and TypeScript enforces the same rule when resolving
+// declaration files under NodeNext. Confirmed with `tsc --traceResolution`
+// against the exact installed package (not asserted from memory):
+// `Resolving module './agent' from '.../\@cline/shared/dist/index.d.ts' ...
+// Directory '.../dist/agent' does not exist, skipping all lookups in it ...
+// Module name './agent' was not resolved.` The same trace shows
+// `./llms/tools` (source of `ToolPolicy`, imported successfully elsewhere
+// in this file) fails to resolve identically -- but `ToolPolicy` still
+// typechecks because `@cline/shared`'s index re-exports it through an
+// explicit named list (`export type { ToolPolicy, ... } from
+// "./llms/tools"`), which TypeScript can still surface as a (deferred)
+// export even when the underlying module path can't be resolved, whereas a
+// wildcard `export *` has no names to offer once its target is
+// unresolvable. This is a packaging defect in the installed SDK version,
+// not a mistake in this plugin's tsconfig; the workaround is scoped to the
+// three symbols it actually blocks.
+interface DestructiveGitGuardToolContext {
+  tool?: { name?: string };
+  input: unknown;
+}
+interface DestructiveGitGuardToolResult {
+  skip?: boolean;
+  stop?: boolean;
+  reason?: string;
+  input?: unknown;
+  policy?: unknown;
+}
+type DestructiveGitGuardBeforeToolHook = (
+  context: DestructiveGitGuardToolContext,
+) => DestructiveGitGuardToolResult | undefined | Promise<DestructiveGitGuardToolResult | undefined>;
+
+/**
+ * Split a shell command line into top-level segments on `&&`, `||`, `;`,
+ * and `|`, respecting single/double quoting. Not a full shell parser --
+ * good enough to find each independent `git ...` invocation in a chained
+ * command line without being fooled by an operator sitting inside a quoted
+ * string. Ports `guard_workspace_mutation.py`'s `split_top_level`.
+ */
+function splitTopLevel(command: string): string[] {
+  const segments: string[] = [];
+  let buf = "";
+  let quote: string | null = null;
+  let i = 0;
+  const n = command.length;
+  while (i < n) {
+    const ch = command[i];
+    if (quote) {
+      buf += ch;
+      if (ch === quote && (i === 0 || command[i - 1] !== "\\")) quote = null;
+      i += 1;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      buf += ch;
+      i += 1;
+      continue;
+    }
+    const pair = command.slice(i, i + 2);
+    if (pair === "&&" || pair === "||") {
+      segments.push(buf);
+      buf = "";
+      i += 2;
+      continue;
+    }
+    if (ch === ";" || ch === "|") {
+      segments.push(buf);
+      buf = "";
+      i += 1;
+      continue;
+    }
+    buf += ch;
+    i += 1;
+  }
+  segments.push(buf);
+  return segments.map((s) => s.trim()).filter((s) => s.length > 0);
+}
+
+/**
+ * Best-effort `shlex.split(..., posix=True)` equivalent: quote-aware
+ * whitespace tokenization with backslash escapes. Returns `null` on
+ * unbalanced quoting (the caller then skips that segment rather than
+ * guessing, matching the Python hook's behavior).
+ */
+function tokenizeCommand(segment: string): string[] | null {
+  const tokens: string[] = [];
+  let current = "";
+  let inToken = false;
+  let quote: string | null = null;
+  let i = 0;
+  const n = segment.length;
+  while (i < n) {
+    const ch = segment[i];
+    if (quote) {
+      if (ch === quote) {
+        quote = null;
+      } else if (quote === '"' && ch === "\\" && i + 1 < n && (segment[i + 1] === '"' || segment[i + 1] === "\\")) {
+        current += segment[i + 1];
+        i += 1;
+      } else {
+        current += ch;
+      }
+      i += 1;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      inToken = true;
+      i += 1;
+      continue;
+    }
+    if (ch === "\\" && i + 1 < n) {
+      current += segment[i + 1];
+      inToken = true;
+      i += 2;
+      continue;
+    }
+    if (/\s/.test(ch)) {
+      if (inToken) {
+        tokens.push(current);
+        current = "";
+        inToken = false;
+      }
+      i += 1;
+      continue;
+    }
+    current += ch;
+    inToken = true;
+    i += 1;
+  }
+  if (quote) return null;
+  if (inToken) tokens.push(current);
+  return tokens;
+}
+
+const ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
+// "env" added (Wave 3 finding 1, deagy/cadre#129): `env git reset --hard`
+// was a complete, low-effort bypass -- `env` is a real command, not a shell
+// builtin, so it reached this guard as an unrecognized leading token and the
+// `git ...` invocation behind it was never inspected. Handled specially
+// below (not just added to the plain wrapper set) because, unlike
+// `sudo`/`command`/`exec`/`nohup`/`time`, `env` accepts its own flags and
+// `VAR=value` assignment pairs before the real command
+// (`env VAR=value... <command>`, `env -i <command>`).
+const WRAPPER_TOKENS = new Set(["sudo", "command", "exec", "nohup", "time", "env"]);
+const GIT_GLOBAL_FLAGS_WITH_VALUE = ["-C", "--git-dir", "--work-tree", "--namespace", "-c"];
+// GNU coreutils `env` flags that take a following value argument (so it
+// must be skipped along with the flag itself, not mistaken for the real
+// command). Conservative, not exhaustive -- an unrecognized `env` flag
+// falls through to `t.startsWith("-")` below and is skipped on its own
+// without consuming a value, which is safe here: it can only make this
+// guard fail open one token later than ideal, never mis-treat a value as
+// the command.
+const ENV_FLAGS_WITH_VALUE = new Set(["-u", "--unset", "-C", "--chdir", "-S", "--split-string"]);
+
+function stripLeadingWrappers(tokens: string[]): string[] {
+  let i = 0;
+  while (i < tokens.length) {
+    if (ENV_ASSIGN_RE.test(tokens[i])) {
+      i += 1;
+      continue;
+    }
+    if (!WRAPPER_TOKENS.has(tokens[i])) break;
+    const isEnv = tokens[i] === "env";
+    i += 1;
+    if (!isEnv) continue;
+    // Continue past `env`'s own flags/`VAR=value` pairs before the real
+    // command: `env VAR=value... <command>`, `env -i <command>`.
+    while (i < tokens.length) {
+      const t = tokens[i];
+      if (ENV_ASSIGN_RE.test(t)) {
+        i += 1;
+        continue;
+      }
+      if (t.startsWith("-") && t !== "-") {
+        i += ENV_FLAGS_WITH_VALUE.has(t) ? 2 : 1;
+        continue;
+      }
+      break;
+    }
+  }
+  return tokens.slice(i);
+}
+
+/**
+ * Return `{ subcommand, subArgs, explicitCwd }` for a token list that
+ * starts with `git`, skipping global flags (including `-C <dir>`), or
+ * `null` if this isn't a recognizable `git <subcommand> ...` invocation.
+ */
+function parseGitInvocation(
+  tokens: string[],
+): { subcommand: string; subArgs: string[]; explicitCwd?: string } | null {
+  if (tokens.length === 0 || tokens[0] !== "git") return null;
+  let i = 1;
+  let explicitCwd: string | undefined;
+  while (i < tokens.length) {
+    const t = tokens[i];
+    if (t === "-C") {
+      if (i + 1 < tokens.length) explicitCwd = tokens[i + 1];
+      i += 2;
+      continue;
+    }
+    if (GIT_GLOBAL_FLAGS_WITH_VALUE.includes(t)) {
+      i += 2;
+      continue;
+    }
+    if (GIT_GLOBAL_FLAGS_WITH_VALUE.some((flag) => t.startsWith(`${flag}=`))) {
+      i += 1;
+      continue;
+    }
+    if (t.startsWith("-")) {
+      i += 1;
+      continue;
+    }
+    break;
+  }
+  if (i >= tokens.length) return null;
+  return { subcommand: tokens[i], subArgs: tokens.slice(i + 1), explicitCwd };
+}
+
+// ---------------------------------------------------------------------------
+// git state helpers -- all fail open (return null) on any error, so an
+// unresolvable repo state never turns into a false-positive block.
+// ---------------------------------------------------------------------------
+
+async function runGit(
+  args: string[],
+  cwd: string,
+  timeoutMs = 5000,
+): Promise<{ code: number | null; stdout: string; stderr: string } | null> {
+  try {
+    const { stdout, stderr } = await execFileAsync("git", args, { cwd, timeout: timeoutMs, encoding: "utf8" });
+    return { code: 0, stdout: stdout ?? "", stderr: stderr ?? "" };
+  } catch (err) {
+    const e = err as { code?: number; stdout?: string; stderr?: string };
+    if (typeof e.stdout === "string" || typeof e.stderr === "string") {
+      return { code: typeof e.code === "number" ? e.code : null, stdout: e.stdout ?? "", stderr: e.stderr ?? "" };
+    }
+    return null; // git missing, timed out, or otherwise unresolved
+  }
+}
+
+async function gitStatusPorcelain(cwd: string, paths?: string[]): Promise<string | null> {
+  const args = ["status", "--porcelain"];
+  if (paths && paths.length > 0) args.push("--", ...paths);
+  const result = await runGit(args, cwd);
+  if (!result || result.code !== 0) return null;
+  return result.stdout;
+}
+
+async function isLocalBranch(cwd: string, name: string): Promise<boolean> {
+  const result = await runGit(["show-ref", "--verify", "--quiet", `refs/heads/${name}`], cwd);
+  return result?.code === 0;
+}
+
+// ---------------------------------------------------------------------------
+// Per-subcommand checks -- each returns a decision to deny, or `null` to
+// express no opinion (allow). Ports guard_workspace_mutation.py's
+// check_reset/check_clean/check_branch/check_push/check_checkout/
+// check_restore, same scope and same deliberate exclusions (see that file's
+// module docstring for what is and isn't covered, and why).
+// ---------------------------------------------------------------------------
+
+async function checkReset(subArgs: string[], cwd: string): Promise<GitGuardDecision | null> {
+  if (!subArgs.includes("--hard")) return null;
+  const positional = subArgs.filter((a) => !a.startsWith("-"));
+  const ref = positional[0];
+
+  const status = await gitStatusPorcelain(cwd);
+  const dirty = Boolean(status && status.trim().length > 0);
+
+  let movesBranch = false;
+  if (ref) {
+    const head = await runGit(["rev-parse", "--verify", "HEAD"], cwd);
+    const target = await runGit(["rev-parse", "--verify", ref], cwd);
+    if (head?.code === 0 && target?.code === 0) {
+      movesBranch = head.stdout.trim() !== target.stdout.trim();
+    }
+  }
+
+  if (!dirty && !movesBranch) return null;
+
+  const reasons: string[] = [];
+  if (dirty) reasons.push("discard uncommitted changes in the working tree");
+  if (movesBranch) {
+    reasons.push(
+      "move the current branch to a different commit, which can strand any unpushed commits currently on it",
+    );
+  }
+  return {
+    reason:
+      `Blocked: \`git reset --hard\` would ${reasons.join(" and ")}. ` +
+      "If you want to give up your own uncommitted edits, commit or stash them first " +
+      "(`git stash push`). If you need the branch to point somewhere else, use a " +
+      "non---hard reset (`git reset <ref>` keeps the working tree contents) or ask the " +
+      "operator to confirm a hard reset themselves.",
+  };
+}
+
+async function checkClean(subArgs: string[], cwd: string): Promise<GitGuardDecision | null> {
+  const shortChars = new Set<string>();
+  const longOpts = new Set<string>();
+  for (const a of subArgs) {
+    if (a.startsWith("--")) longOpts.add(a.split("=", 1)[0]);
+    else if (a.startsWith("-") && a.length > 1) for (const c of a.slice(1)) shortChars.add(c);
+  }
+  const isForce = shortChars.has("f") || longOpts.has("--force");
+  const isDryRun = shortChars.has("n") || longOpts.has("--dry-run");
+  if (!isForce || isDryRun) return null;
+
+  const dryArgs = ["clean", "-n"];
+  if (shortChars.has("d")) dryArgs.push("-d");
+  if (shortChars.has("x")) dryArgs.push("-x");
+  if (shortChars.has("X")) dryArgs.push("-X");
+
+  const result = await runGit(dryArgs, cwd);
+  if (!result || result.code !== 0) return null;
+  if (!result.stdout.trim()) return null;
+
+  const files = result.stdout
+    .trim()
+    .split("\n")
+    .map((l) => l.trim());
+  const example = files[0] ?? "an untracked path";
+  return {
+    reason:
+      `Blocked: \`git clean\` would permanently delete ${files.length} untracked path(s) ` +
+      `(e.g. ${example}), which git cannot recover afterward -- there is no commit or ` +
+      "stash to undo it from. Review what would be removed with `git clean -n` (add -d/-x " +
+      "to match your flags) first, then either re-run once you've confirmed it, or remove " +
+      "the specific paths you actually intend to delete by name.",
+  };
+}
+
+function checkBranch(subArgs: string[]): GitGuardDecision | null {
+  const shortChars = new Set<string>();
+  const longOpts = new Set<string>();
+  const positional: string[] = [];
+  for (const a of subArgs) {
+    if (a.startsWith("--")) longOpts.add(a.split("=", 1)[0]);
+    else if (a.startsWith("-") && a.length > 1) for (const c of a.slice(1)) shortChars.add(c);
+    else positional.push(a);
+  }
+  const forceDelete =
+    shortChars.has("D") ||
+    ((shortChars.has("d") || longOpts.has("--delete")) && (shortChars.has("f") || longOpts.has("--force")));
+  if (!forceDelete) return null;
+
+  const target = positional[0] ?? "<branch>";
+  return {
+    reason:
+      `Blocked: \`git branch -D\`/\`--delete --force\` on '${target}' bypasses git's own ` +
+      "unmerged-work safety check and can discard commits that no other ref points at. " +
+      `Use \`git branch -d ${target}\` instead -- it refuses when the branch has unmerged ` +
+      "work -- or ask the operator to force-delete it themselves if that's really intended.",
+  };
+}
+
+function checkPush(subArgs: string[]): GitGuardDecision | null {
+  const hasForce = subArgs.some((a) => a === "-f" || a === "--force");
+  const hasLease = subArgs.some((a) => a === "--force-with-lease" || a.startsWith("--force-with-lease="));
+  const hasDeleteFlag = subArgs.some((a) => a === "--delete" || a === "-d");
+  const hasColonRefspec = subArgs.some((a) => /^:\S+$/.test(a));
+
+  if (hasDeleteFlag || hasColonRefspec) {
+    return {
+      reason:
+        "Blocked: this push deletes a remote branch, which removes it for everyone " +
+        "using that remote and can't be undone from this working tree. If this is " +
+        "really intended, ask the operator to delete the remote branch themselves.",
+    };
+  }
+  if (hasForce && !hasLease) {
+    return {
+      reason:
+        "Blocked: `git push --force` can silently overwrite commits someone else has " +
+        "already pushed, with no local way to detect it beforehand. Use " +
+        "`git push --force-with-lease` instead -- it refuses on its own if the remote " +
+        "has moved since your last fetch.",
+    };
+  }
+  return null;
+}
+
+/**
+ * Shared logic for `git checkout <ref> -- <paths>` and
+ * `git restore --source=<ref> <paths>`: only destructive when a source ref
+ * is given AND the target paths currently have uncommitted changes.
+ */
+async function checkRefIntoPaths(
+  cwd: string,
+  ref: string | undefined,
+  paths: string[],
+  cmd: string,
+): Promise<GitGuardDecision | null> {
+  if (!ref) return null; // no ref: routine "discard my own edit" form, always allowed
+
+  const status = await gitStatusPorcelain(cwd, paths.length > 0 ? paths : undefined);
+  if (status === null) return null; // can't determine dirty state; the real command decides on its own
+  if (!status.trim()) return null; // nothing uncommitted at those paths to lose
+
+  const pathDesc = paths.length > 0 ? paths.join(", ") : "the given path(s)";
+  return {
+    reason:
+      `Blocked: \`git ${cmd}\` from '${ref}' would overwrite uncommitted changes to ` +
+      `${pathDesc} with that ref's version, destroying the current edits with no way ` +
+      `back. Commit or stash the current changes first (\`git stash push -- ${pathDesc}\`), ` +
+      "or re-run naming only paths that are actually clean.",
+  };
+}
+
+async function checkBranchSwitch(cwd: string, branch: string): Promise<GitGuardDecision | null> {
+  const status = await gitStatusPorcelain(cwd);
+  if (status === null) return null;
+  if (!status.trim()) return null;
+  return {
+    reason:
+      `Blocked: switching to branch '${branch}' while the working tree has uncommitted ` +
+      "changes risks carrying edits onto a branch they don't belong on, or stranding " +
+      "another session's expectation of what branch this tree is on. Commit or stash " +
+      "your changes first (`git stash push`), or confirm with the operator before " +
+      "switching a tree you didn't create.",
+  };
+}
+
+async function checkCheckout(subArgs: string[], cwd: string): Promise<GitGuardDecision | null> {
+  if (subArgs.length === 0) return null; // bare `git checkout`: lists status, not destructive
+  if (subArgs.includes("-b") || subArgs.includes("-B")) return null;
+
+  if (subArgs.includes("--")) {
+    const idx = subArgs.indexOf("--");
+    const pre = subArgs.slice(0, idx).filter((a) => !a.startsWith("-"));
+    const paths = subArgs.slice(idx + 1);
+    return checkRefIntoPaths(cwd, pre[0], paths, "checkout");
+  }
+
+  const positional = subArgs.filter((a) => !a.startsWith("-"));
+  if (positional.length === 0) return null;
+
+  if (positional.length === 1) {
+    const name = positional[0];
+    if (await isLocalBranch(cwd, name)) return checkBranchSwitch(cwd, name);
+    return null; // not a known local branch: bare pathspec checkout, always allowed
+  }
+
+  const [ref, ...paths] = positional;
+  return checkRefIntoPaths(cwd, ref, paths, "checkout");
+}
+
+async function checkRestore(subArgs: string[], cwd: string): Promise<GitGuardDecision | null> {
+  if (subArgs.length === 0) return null;
+
+  let source: string | undefined;
+  const paths: string[] = [];
+  let i = 0;
+  while (i < subArgs.length) {
+    const a = subArgs[i];
+    if (a === "--source" || a === "-s") {
+      source = subArgs[i + 1];
+      i += 2;
+      continue;
+    }
+    if (a.startsWith("--source=")) {
+      source = a.split("=", 2)[1];
+      i += 1;
+      continue;
+    }
+    if (a === "--") {
+      paths.push(...subArgs.slice(i + 1));
+      break;
+    }
+    if (a.startsWith("-")) {
+      i += 1;
+      continue;
+    }
+    paths.push(a);
+    i += 1;
+  }
+  return checkRefIntoPaths(cwd, source, paths, "restore");
+}
+
+type GitGuardHandler = (subArgs: string[], cwd: string) => Promise<GitGuardDecision | null> | GitGuardDecision | null;
+
+const GIT_GUARD_HANDLERS: Record<string, GitGuardHandler> = {
+  reset: checkReset,
+  checkout: checkCheckout,
+  restore: checkRestore,
+  clean: checkClean,
+  branch: (subArgs) => checkBranch(subArgs),
+  push: (subArgs) => checkPush(subArgs),
+};
+
+function resolveGitGuardCwd(baseCwd: string, explicitCwd: string | undefined): string {
+  if (!explicitCwd) return baseCwd;
+  return isAbsolute(explicitCwd) ? explicitCwd : resolve(baseCwd, explicitCwd);
+}
+
+// Wave 3 finding 2 (deagy/cadre#129): `bash -c "<string>"`/`sh -c
+// "<string>"`/`sh -lc "<string>"` inline indirection. Without this,
+// `tokenizeCommand` treats the quoted `-c` argument as one opaque token, so
+// `parseGitInvocation` never sees the `git ...` invocation hiding inside it
+// -- and this is a routine idiom (`bash -c "step1 && git reset --hard"`),
+// not just an adversarial one.
+const SHELL_C_INVOKERS = new Set(["bash", "sh", "zsh"]);
+// Bounded recursion depth: an inline `-c` script is itself re-evaluated
+// through `evaluateGitCommand`, which can itself contain another `bash -c
+// "..."` invocation, and so on. Bounded (rather than unbounded) to avoid
+// runaway recursion on a pathological or maliciously nested command string;
+// 3 covers the realistic "step1 && bash -c '... && sh -c \"git ...\"'"
+// nesting depth this hook is meant to catch without becoming an unbounded
+// walk. A command nested deeper than this bound is a documented, known gap
+// -- NOT silently claimed as covered -- see the regression test exercising
+// exactly this in presets.test.mts.
+const MAX_SHELL_C_RECURSION_DEPTH = 3;
+
+/**
+ * If `tokens` is a `bash`/`sh`/`zsh` invocation carrying a `-c <script>`
+ * (optionally combined with other short flags, e.g. `-lc`, and optionally
+ * preceded by other flags, e.g. `--login -c`), return the script string.
+ * Returns `null` for any other shape, including when a non-flag token (the
+ * script's own following argv, or an ambiguous case) appears before `-c` is
+ * found, or `--` is reached first.
+ */
+function extractShellDashCScript(tokens: string[]): string | null {
+  if (tokens.length < 2 || !SHELL_C_INVOKERS.has(tokens[0])) return null;
+  for (let i = 1; i < tokens.length; i += 1) {
+    const t = tokens[i];
+    if (t === "--") return null;
+    if (t === "-c" || (/^-[a-zA-Z]+$/.test(t) && t.includes("c"))) {
+      return tokens[i + 1] ?? null;
+    }
+    if (!t.startsWith("-")) return null; // non-flag token before -c: not this shape
+  }
+  return null;
+}
+
+/**
+ * Evaluate one `run_commands` command string for destructive `git` usage.
+ * Returns a decision to deny, or `null` to allow. Never throws: unparseable
+ * segments are skipped rather than treated as destructive (same stance as
+ * `guard_workspace_mutation.py`'s `evaluate_command`).
+ */
+async function evaluateGitCommand(
+  command: string,
+  baseCwd: string,
+  depth = 0,
+): Promise<GitGuardDecision | null> {
+  for (const segment of splitTopLevel(command)) {
+    const tokens = tokenizeCommand(segment);
+    if (tokens === null) continue;
+    const stripped = stripLeadingWrappers(tokens);
+
+    if (depth < MAX_SHELL_C_RECURSION_DEPTH) {
+      const inlineScript = extractShellDashCScript(stripped);
+      if (inlineScript !== null) {
+        const decision = await evaluateGitCommand(inlineScript, baseCwd, depth + 1);
+        if (decision) return decision;
+        continue;
+      }
+    }
+
+    const parsed = parseGitInvocation(stripped);
+    if (!parsed) continue;
+    const handler = GIT_GUARD_HANDLERS[parsed.subcommand];
+    if (!handler) continue;
+    const cwd = resolveGitGuardCwd(baseCwd, parsed.explicitCwd);
+    const decision = await handler(parsed.subArgs, cwd);
+    if (decision) return decision;
+  }
+  return null;
+}
+
+/**
+ * Normalize a `run_commands` tool call's raw `input` (matching
+ * `RunCommandsInputUnionSchema` -- see module comment above) into a flat
+ * list of command strings to evaluate. Handles every shape that schema
+ * accepts: a bare string, an array of strings, an array of `{command,
+ * args}` entries, `{ commands: ... }` in any of those forms, and a single
+ * `{command, args}` / `{command}` / `{cmd}` object.
+ */
+function normalizeRunCommandsInput(input: unknown): string[] {
+  const commands: string[] = [];
+  const pushEntry = (entry: unknown) => {
+    if (typeof entry === "string") {
+      commands.push(entry);
+      return;
+    }
+    if (!entry || typeof entry !== "object") return;
+    const obj = entry as { command?: unknown; args?: unknown; cmd?: unknown };
+    const cmd =
+      typeof obj.command === "string" ? obj.command : typeof obj.cmd === "string" ? obj.cmd : undefined;
+    if (!cmd) return;
+    const args = Array.isArray(obj.args) ? obj.args.filter((a): a is string => typeof a === "string") : [];
+    commands.push([cmd, ...args].join(" "));
+  };
+
+  if (typeof input === "string") {
+    commands.push(input);
+  } else if (Array.isArray(input)) {
+    for (const entry of input) pushEntry(entry);
+  } else if (input && typeof input === "object") {
+    const obj = input as { commands?: unknown };
+    if (typeof obj.commands === "string") {
+      commands.push(obj.commands);
+    } else if (Array.isArray(obj.commands)) {
+      for (const entry of obj.commands) pushEntry(entry);
+    } else if (obj.commands && typeof obj.commands === "object") {
+      pushEntry(obj.commands);
+    } else {
+      pushEntry(input);
+    }
+  }
+  return commands;
+}
+
+/**
+ * Build a `beforeTool` runtime hook (see module comment above for the
+ * interception-point evidence) that refuses a destructive `git` invocation
+ * inside a `run_commands` call before it executes. Fails open -- returns
+ * `undefined` (no opinion) -- on any internal error, non-`run_commands`
+ * tool, or unresolved git state, matching `guard_workspace_mutation.py`'s
+ * "false positives are the real risk" design stance. This is
+ * defense-in-depth alongside `toolPolicies`/`mode: "plan"` above and
+ * `roster/shared/agent-autonomy.yaml`, not a replacement for either.
+ */
+function createDestructiveGitGuardHook(baseCwd: string): DestructiveGitGuardBeforeToolHook {
+  return async (context: DestructiveGitGuardToolContext): Promise<DestructiveGitGuardToolResult | undefined> => {
+    // Opt-out, checked before any parsing (see module comment above): an
+    // operator can set CADRE_DISABLE_WORKSPACE_MUTATION_GUARD=1 (or "true",
+    // case-insensitively) in the environment this process runs in to
+    // disable this hook entirely. Mirrors guard_workspace_mutation.py's
+    // identical opt-out (same env var name).
+    const optOut = (process.env.CADRE_DISABLE_WORKSPACE_MUTATION_GUARD ?? "").trim().toLowerCase();
+    if (optOut === "1" || optOut === "true") return undefined;
+    try {
+      if (context.tool?.name !== "run_commands") return undefined;
+      const commands = normalizeRunCommandsInput(context.input);
+      for (const command of commands) {
+        const decision = await evaluateGitCommand(command, baseCwd);
+        if (decision) return { skip: true, reason: decision.reason };
+      }
+      return undefined;
+    } catch {
+      // Fail open: an internal guard error must never block routine work.
+      return undefined;
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
 // cwd containment (settled decision #4)
 // ---------------------------------------------------------------------------
 
@@ -1170,6 +1958,12 @@ export {
   sanitizeToolResult,
   runGitlabEvidenceCli,
   HANDOFFS_DIR,
+  // Destructive-git guard (deagy/cadre#129): exported so the pure logic is
+  // independently unit-testable without a real ClineCore backend, same
+  // rationale as the tool-policy/cwd-containment exports above.
+  evaluateGitCommand,
+  normalizeRunCommandsInput,
+  createDestructiveGitGuardHook,
   type AgentDefinition,
   type KnowledgeContextRequest,
   type KnowledgeRetrievalResult,
@@ -1270,6 +2064,12 @@ const setup = (api: SetupApi, ctx: SetupContext) => {
         toolPolicies,
         mode,
       },
+      // `hooks` is a local-runtime-only bootstrap option (see the
+      // destructive-git-guard module comment above for why it can't live
+      // under `config` alongside `toolPolicies`): a `beforeTool` guard that
+      // refuses destructive `git` invocations `toolPolicies` cannot see
+      // into, scoped to this subagent's own `cwd`.
+      localRuntime: { hooks: { beforeTool: createDestructiveGitGuardHook(cwd) } },
       interactive: false,
     });
 
