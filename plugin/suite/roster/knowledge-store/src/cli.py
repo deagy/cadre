@@ -92,7 +92,13 @@ def _parser() -> argparse.ArgumentParser:
     # act on with delete-ingested.
     retention_report_parser = subparsers.add_parser("retention-report")
     retention_report_parser.add_argument(
-        "--as-of", dest="as_of", help="ISO-8601 timestamp to evaluate expiry against (default: now)"
+        "--as-of",
+        dest="as_of",
+        help=(
+            "ISO-8601 date or timestamp to evaluate expiry against (default: now). "
+            "A date alone means midnight UTC starting that day, so pass a full "
+            "timestamp to include that day's expiries."
+        ),
     )
     add_config(retention_report_parser)
     delete_ingested_parser = subparsers.add_parser("delete-ingested")
@@ -176,6 +182,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     add_config(delete_staged)
     deletion_log = subparsers.add_parser("deletion-evidence")
+    deletion_log.add_argument("--source", help="scope evidence to one project's deletions")
+    deletion_log.add_argument(
+        "--all-sources",
+        dest="all_sources",
+        action="store_true",
+        help="explicitly opt into reading every project's deletion evidence",
+    )
     add_config(deletion_log)
     export_staged = subparsers.add_parser("export-staged")
     export_staged.add_argument("--output", required=True)
@@ -510,6 +523,37 @@ def _enforce_ingested_deletion_scope(tier: str, options: dict[str, Any]) -> None
         )
 
 
+def _enforce_evidence_scope(tier: str, options: dict[str, Any]) -> None:
+    """Gate `deletion-evidence` at the shared global-fallback tier only.
+
+    Mirrors `_enforce_retrieval_scope` rather than `_enforce_staging_scope`:
+    the answer at the shared tier is "say whose evidence you want", not
+    "refused". Every other command that reads the shared store makes the
+    caller name a scope; evidence rows carry the deleting project's
+    identifier, its steward's free-text reason, and asserted
+    `deleted_by`/`authorized_by` identities, so an unscoped read is a
+    cross-project read and should have to say so.
+
+    Project-local and explicit-`--config` tiers are already isolated by
+    database, so no new requirement is imposed on them.
+    """
+    if tier != TIER_GLOBAL_FALLBACK:
+        return
+    source = options.get("source")
+    all_sources = options.get("all_sources")
+    if source and all_sources:
+        raise ValueError(
+            "Ambiguous scope: pass either --source <project-identifier> or "
+            "--all-sources against the shared global knowledge store, not both."
+        )
+    if not source and not all_sources:
+        raise ValueError(
+            "A project scope is required to read deletion evidence from the shared global "
+            "knowledge store: pass --source <project-identifier> to scope this read, or "
+            "--all-sources to explicitly opt into cross-project evidence."
+        )
+
+
 def run(arguments: list[str] | None = None) -> dict[str, Any]:
     options = vars(_parser().parse_args(arguments))
     command = options.pop("command")
@@ -538,7 +582,10 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
             # Read-only, ungated at every tier -- like `stats`, it reports
             # metadata (source, classification, retention_until, counts),
             # never content, and deletes nothing.
-            return build_retention_report(db, as_of=options.pop("as_of", None))
+            try:
+                return build_retention_report(db, as_of=options.pop("as_of", None))
+            except IngestedDeletionError as error:
+                raise ValueError(str(error)) from error
         if command == "delete-ingested":
             _enforce_ingested_deletion_scope(tier, options)
             install_ingested_deletion_schema(db)
@@ -562,16 +609,35 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
             # (ingested_deletion.py) are two distinct capabilities with two
             # distinct schemas, so each entry carries "kind" to keep the
             # distinction visible in the merged output rather than blurring
-            # it. Deliberately not tier-gated like the staged-only commands
-            # below: ingested content can be deleted from the shared
-            # global-fallback store (delete-ingested is reachable there with
-            # --source), so hiding its evidence at that tier would make
-            # legitimate deletions invisible to the steward who needs to see
-            # them.
+            # it.
+            #
+            # Not gated by `_enforce_staging_scope` (which refuses outright at
+            # the shared tier), because ingested content *can* be deleted from
+            # the shared global-fallback store and hiding its evidence there
+            # would make legitimate deletions invisible to the steward who
+            # needs to see them. But "visible" is not "unscoped": a row carries
+            # the deleting project's identifier, a free-text reason, and
+            # asserted actor identities, so at the shared tier this reads like
+            # `search`/`context` and takes the same explicit scope choice.
+            _enforce_evidence_scope(tier, options)
+            source = options.pop("source", None)
+            options.pop("all_sources", None)
             install_schema(db)
             install_ingested_deletion_schema(db)
-            staged_evidence = [{"kind": "staged", **row} for row in deletion_evidence(db)]
-            ingested_evidence = [{"kind": "ingested", **row} for row in ingested_deletion_evidence(db)]
+            # `--source` names an *ingest* source, and staged records have no
+            # source to match -- so a source-scoped read returns
+            # ingested-content evidence only, at every tier. In the shared
+            # store there is nothing to omit (staged records cannot be written
+            # there at all, per `_enforce_staging_scope`); in a project-local
+            # store, ask without `--source` to see staged deletions too.
+            # Returning them unfiltered under a scoped read would reopen the
+            # gap this scoping closes.
+            staged_evidence = (
+                [] if source else [{"kind": "staged", **row} for row in deletion_evidence(db)]
+            )
+            ingested_evidence = [
+                {"kind": "ingested", **row} for row in ingested_deletion_evidence(db, source=source)
+            ]
             return {"deletions": staged_evidence + ingested_evidence}
         if command in (
             "propose",

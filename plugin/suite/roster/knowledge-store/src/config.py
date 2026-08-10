@@ -37,11 +37,25 @@ DEFAULTS: dict[str, Any] = {
     # Retention Option B (issue #184): `ingest` records a retention window per
     # message rather than leaving retention a paper obligation tracked
     # outside the store. `null` means indefinite (no window recorded).
+    #
+    # Every configured classification is `null` **on purpose, and provisionally**:
+    # concrete day counts are an open Product Owner / Engineering Lead decision
+    # recorded in `roster/shared/team-profile.yaml`, and shipping working
+    # numbers ahead of that decision would let them become policy by default
+    # inertia. Indefinite is the honest placeholder -- it records "no window has
+    # been decided" rather than asserting one nobody chose. It is not a claim
+    # that keeping content forever is the right answer; it is the state that
+    # keeps the decision visibly open. Set real windows here (or per-project via
+    # config) once the decision lands.
+    #
     # `restricted` is deliberately absent from this map: `refuse_restricted_without_window`
     # makes its omission meaningful -- ingesting `restricted` content always
-    # requires an explicit caller-supplied window, never a silent default.
+    # requires an explicit caller-supplied window, never a silent default. That
+    # refusal is what stops the placeholder above from quietly extending to the
+    # one tier where "kept forever because nobody decided" is least acceptable,
+    # so it stays on while the other windows are open.
     "retention": {
-        "default_days_by_classification": {"internal": 365, "confidential": 90, "public": None},
+        "default_days_by_classification": {"internal": None, "confidential": None, "public": None},
         "refuse_restricted_without_window": True,
     },
 }
