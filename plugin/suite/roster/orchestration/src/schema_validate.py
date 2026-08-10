@@ -267,6 +267,7 @@ def validate_routing(routing: dict[str, Any], schema: dict[str, Any]) -> list[st
         findings.extend(_find_duplicate_array_ids(routing.get("routes"), "routes"))
         findings.extend(_find_duplicate_array_ids(routing.get("risk_rules"), "risk_rules"))
         findings.extend(_find_duplicate_array_ids(routing.get("team_recipes"), "team_recipes"))
+        findings.extend(_find_duplicate_array_ids(routing.get("context_packs"), "context_packs"))
         findings.extend(_find_cross_stack_inconsistency(routing))
         findings.extend(_find_team_recipe_inconsistencies(routing))
     return findings

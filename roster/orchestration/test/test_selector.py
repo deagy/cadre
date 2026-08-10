@@ -131,6 +131,16 @@ class RouteMatchReasonTests(unittest.TestCase):
         result = plan(task="Rotate the session token used for authorization", changed_files=[])
         self.assertEqual(result["matched_routes"], [])
 
+    def test_vendor_context_pack_is_bound_without_becoming_an_agent(self) -> None:
+        result = plan(task="Integrate Toshiba Q-KMS with our QKD gateway", changed_files=[])
+        packs = result["context_packs"]
+        self.assertEqual([pack["id"] for pack in packs], ["toshiba-qkms-context"])
+        self.assertEqual(packs[0]["version"], 1)
+        self.assertEqual(packs[0]["definition"], "context-packs/toshiba-qkms-context/CONTEXT.md")
+        self.assertRegex(packs[0]["content_hash"], r"^sha256:[0-9a-f]{64}$")
+        selected = {agent for group in result["agents"].values() for agent in group}
+        self.assertNotIn("toshiba-qkms-context", selected)
+
     def test_reasons_are_deterministic_across_identical_calls(self) -> None:
         # Reasons ride inside the fingerprinted payload, so unstable ordering
         # here would turn `dispatch_fingerprint` into a coin flip.
@@ -751,7 +761,7 @@ class SelectorTests(unittest.TestCase):
             task="Deploy to production with Terraform",
             changed_files=["terraform/service/main.tf"],
         )
-        self.assertEqual(result["schema_version"], 4)
+        self.assertEqual(result["schema_version"], 5)
         self.assertEqual(result["workflow"], "production-release")
         self.assertEqual(self.quality_gate_ids(result), ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9"])
         production_gate = next(
@@ -1639,6 +1649,19 @@ class SelectorTests(unittest.TestCase):
         )
         self.assertIn("technical-writer", result["agents"]["primary"])
         self.assertNotIn("kubernetes-manifest-implementer", result["agents"]["primary"])
+
+    def test_retrieval_pipeline_executor_retains_ai_and_knowledge_accountability(self) -> None:
+        result = plan(task="Implement retrieval chunking", changed_files=["retrieval/chunking.py"])
+        self.assertIn("retrieval-pipeline-implementer", result["agents"]["primary"])
+        self.assertIn("ai-engineer", result["agents"]["primary"])
+        self.assertIn("knowledge-store-steward", result["agents"]["primary"])
+        self.assertIn("security-reviewer", result["agents"]["reviewers"])
+
+    def test_generic_documentation_does_not_select_the_adr_writer(self) -> None:
+        result = plan(task="Update operator documentation", changed_files=["docs/guides/operations.md"])
+        self.assertIn("technical-writer", result["agents"]["primary"])
+        self.assertIn("technical-documentation-implementer", result["agents"]["primary"])
+        self.assertNotIn("adr-writer", result["agents"]["primary"])
 
     def test_forge_specific_workflows_keep_cicd_accountability_and_select_their_specialist(self) -> None:
         # Before the forge-neutrality repair the pipeline route carried only

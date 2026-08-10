@@ -159,6 +159,21 @@ def validate_routing_config(config: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(
                 f"{rule.get('id', 'rule')} keyword_groups must contain non-empty string groups"
             )
+    context_packs = config.get("context_packs", [])
+    if not isinstance(context_packs, list):
+        raise ValueError("routing.yaml context_packs must be a list")
+    context_ids: set[str] = set()
+    for pack in context_packs:
+        if not isinstance(pack, dict):
+            raise ValueError("routing.yaml context_packs entries must be objects")
+        pack_id, definition, version = pack.get("id"), pack.get("definition"), pack.get("version")
+        if not isinstance(pack_id, str) or not pack_id or not isinstance(definition, str) or not definition:
+            raise ValueError("routing.yaml context_packs entries require non-empty id and definition")
+        if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+            raise ValueError(f"{pack_id} context pack version must be a positive integer")
+        if pack_id in context_ids:
+            raise ValueError(f"duplicate context pack id: {pack_id}")
+        context_ids.add(pack_id)
     for recipe in config.get("team_recipes", []):
         if recipe.get("type") == "dynamic":
             instances = recipe.get("instances", {})
@@ -232,4 +247,16 @@ def match_routes(
         reasons = match_rule(route, task_text, changed_files)
         if reasons["matched"]:
             matches.append({"id": route["id"], "reasons": reasons, "rule": route})
+    return matches
+
+
+def match_context_packs(
+    config: dict[str, Any], task_text: str, changed_files: list[str]
+) -> list[dict[str, Any]]:
+    """Select non-authoring context packs using the ordinary route grammar."""
+    matches = []
+    for pack in config.get("context_packs", []):
+        reasons = match_rule(pack, task_text, changed_files)
+        if reasons["matched"]:
+            matches.append({"id": pack["id"], "reasons": reasons, "rule": pack})
     return matches

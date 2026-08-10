@@ -10,13 +10,14 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from risk_classifier import apply_cross_stack, classify_risks
-from routing import _keyword_matches, match_routes
+from routing import _keyword_matches, match_context_packs, match_routes
 from agentic_sdlc_contracts import require_lifecycle_contract, try_lifecycle_contract
 from provenance import build_provenance
 
 CLASSIFICATIONS = {"public", "internal", "confidential", "restricted"}
 MAXIMUM_KNOWLEDGE_TOP = 20
 KNOWLEDGE_STORE_ROOT = Path(__file__).resolve().parents[2] / "knowledge-store"
+ROSTER_ROOT = Path(__file__).resolve().parents[2]
 STANDALONE_REASON = "Agentic SDLC executable not found; team dispatch is unaffected."
 # Cross-references the Agentic SDLC kernel's own mutation-gate taxonomy
 # (contracts/mutation-gates.json) rather than parallel-defining it here.
@@ -440,6 +441,26 @@ def _validate_agents(groups: dict[str, list[str]], catalog: list[str]) -> None:
             raise ValueError(f"Routing selected an unknown agent: {agent}")
 
 
+def _build_context_packs(matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Bind selected non-authoring reference packs to their exact bytes."""
+    packs = []
+    for match in matches:
+        rule = match["rule"]
+        definition = rule["definition"]
+        path = ROSTER_ROOT / definition
+        if not path.is_file():
+            raise ValueError(f"Context pack definition is missing: {definition}")
+        packs.append(
+            {
+                "id": rule["id"],
+                "version": rule["version"],
+                "definition": definition,
+                "content_hash": "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+        )
+    return packs
+
+
 def build_dispatch_plan(
     config: dict[str, Any],
     catalog: list[str],
@@ -466,6 +487,7 @@ def build_dispatch_plan(
         raise ValueError("provenance binding requires both catalog_path and routing_path, or neither")
     gates, lifecycle_contract_version = _lifecycle_gates(require_sdlc)
     matched_routes = match_routes(config, input_data["task"], input_data["changed_files"])
+    matched_context_packs = match_context_packs(config, input_data["task"], input_data["changed_files"])
     matched_risks = classify_risks(config, input_data["task"], input_data["changed_files"])
     primary = [agent for match in matched_routes for agent in match["rule"].get("primary", [])]
     reviewers = [agent for match in matched_routes for agent in match["rule"].get("reviewers", [])]
@@ -573,7 +595,7 @@ def build_dispatch_plan(
     )
 
     dispatch = {
-        "schema_version": 4,
+        "schema_version": 5,
         "task_id": task_id,
         "generated_at": generated_at,
         "status": "ready" if selected_agents else "needs-triage",
@@ -589,6 +611,7 @@ def build_dispatch_plan(
         },
         "matched_routes": [{"id": match["id"], "reasons": _reasons(match)} for match in matched_routes],
         "matched_risks": [{"id": match["id"], "reasons": _reasons(match)} for match in matched_risks],
+        "context_packs": _build_context_packs(matched_context_packs),
         "agents": groups,
         "dispatch_disposition": _build_dispatch_disposition(groups),
         "teams": teams,

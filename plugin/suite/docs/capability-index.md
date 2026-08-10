@@ -2,7 +2,7 @@
 
 # Capability index
 
-This page lists all 86 roles from [`roster/catalog.yaml`](../roster/catalog.yaml)
+This page lists all 159 roles from [`roster/catalog.yaml`](../roster/catalog.yaml)
 grouped by their `capability` and `phase` fields, so you can find every role
 in a given class of change authority (for example, every role that can only
 review, or every role that can operate a live environment) or every role

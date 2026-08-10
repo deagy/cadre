@@ -1952,7 +1952,7 @@
     },
     {
       "id": "AI-FEATURE-1",
-      "description": "ai-feature route; authored to isolate the route",
+      "description": "AI feature with an eval harness; retains AI accountability and selects the bounded evaluation implementer.",
       "task": "Select an llm provider and build an eval harness for the summarization feature",
       "changed_files": [],
       "classification": "internal",
@@ -1960,10 +1960,11 @@
       "expect_needs_triage": false,
       "expected": {
         "primary": [
-          "ai-engineer"
+          "ai-engineer",
+          "test-engineer",
+          "eval-harness-implementer"
         ],
         "reviewers": [
-          "test-engineer",
           "code-reviewer",
           "security-reviewer"
         ],
@@ -1974,7 +1975,8 @@
           "cost-capacity-planner"
         ],
         "matched_routes": [
-          "ai-feature"
+          "ai-feature",
+          "eval-harness-execution"
         ],
         "workflow": "unclassified"
       }
@@ -2481,7 +2483,8 @@
         "primary": [
           "backend-engineer",
           "postgres-query-implementer",
-          "database-reliability-engineer"
+          "database-reliability-engineer",
+          "sql-query-implementer"
         ],
         "reviewers": [
           "test-engineer",
@@ -2496,7 +2499,8 @@
         "matched_routes": [
           "backend",
           "database-reliability",
-          "postgres-query-execution"
+          "postgres-query-execution",
+          "sql-query-execution"
         ],
         "workflow": "new-service"
       }
@@ -2648,6 +2652,1927 @@
           "backend",
           "documentation",
           "architecture-design"
+        ],
+        "workflow": "new-service"
+      }
+    },
+    {
+      "id": "TECHNICAL-DOCUMENTATION-EXECUTION-1",
+      "description": "Technical-documentation execution retains the accountable technical writer.",
+      "task": "technical documentation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-TECHNICAL-DOCUMENTATION-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "technical-writer",
+          "technical-documentation-implementer"
+        ],
+        "reviewers": [],
+        "support": [],
+        "matched_routes": [
+          "documentation",
+          "technical-documentation-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "ADR-WRITING-EXECUTION-1",
+      "description": "ADR drafting keeps technical-writer accountability and routes the decision record for review.",
+      "task": "draft an adr",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-ADR-WRITING-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "technical-writer",
+          "adr-writer"
+        ],
+        "reviewers": [
+          "decision-record"
+        ],
+        "support": [],
+        "matched_routes": [
+          "documentation",
+          "adr-writing-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "COMPOSE-STACK-EXECUTION-1",
+      "description": "Compose work retains infrastructure accountability and independent infrastructure review.",
+      "task": "docker compose",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-COMPOSE-STACK-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "compose-stack-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "infrastructure",
+          "compose-stack-execution"
+        ],
+        "workflow": "infrastructure-change"
+      }
+    },
+    {
+      "id": "CSS-LAYOUT-EXECUTION-1",
+      "description": "CSS layout work selects the narrow implementer with frontend accountability and accessibility review.",
+      "task": "css layout",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-CSS-LAYOUT-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "frontend-engineer",
+          "css-layout-implementer"
+        ],
+        "reviewers": [
+          "accessibility-reviewer"
+        ],
+        "support": [
+          "visual-designer"
+        ],
+        "matched_routes": [
+          "css-layout-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "DATA-TRANSFORMATION-EXECUTION-1",
+      "description": "Data transformation keeps backend and data-governance accountability alongside its bounded executor.",
+      "task": "data transformation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-DATA-TRANSFORMATION-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "data-governance-engineer",
+          "backend-engineer",
+          "data-transformation-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "data-transformation-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "DEPENDENCY-REMEDIATION-EXECUTION-1",
+      "description": "Dependency remediation adds an executor without displacing supply-chain review authority.",
+      "task": "dependency remediation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-DEPENDENCY-REMEDIATION-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "supply-chain-security-reviewer",
+          "dependency-remediation-implementer"
+        ],
+        "reviewers": [
+          "security-reviewer"
+        ],
+        "support": [
+          "release-engineer"
+        ],
+        "matched_routes": [
+          "supply-chain",
+          "dependency-remediation-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "FRONTEND-A11Y-REMEDIATION-EXECUTION-1",
+      "description": "Accessibility remediation retains frontend accountability and the independent accessibility reviewer.",
+      "task": "accessibility remediation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-FRONTEND-A11Y-REMEDIATION-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "frontend-engineer",
+          "frontend-accessibility-remediator"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer",
+          "accessibility-reviewer"
+        ],
+        "support": [
+          "interaction-designer"
+        ],
+        "matched_routes": [
+          "frontend",
+          "frontend-accessibility-remediation-execution"
+        ],
+        "workflow": "new-service"
+      }
+    },
+    {
+      "id": "GIT-OPERATIONS-EXECUTION-1",
+      "description": "A narrowly keyed Git operation does not turn the implementer into an approver.",
+      "task": "resolve merge conflict",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-GIT-OPERATIONS-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "git-operations-implementer"
+        ],
+        "reviewers": [
+          "code-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "git-operations-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "JAVASCRIPT-MAINTENANCE-EXECUTION-1",
+      "description": "Established JavaScript maintenance retains frontend accountability and review coverage.",
+      "task": "javascript maintenance",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-JAVASCRIPT-MAINTENANCE-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "frontend-engineer",
+          "javascript-maintenance-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer",
+          "accessibility-reviewer"
+        ],
+        "support": [
+          "interaction-designer"
+        ],
+        "matched_routes": [
+          "frontend",
+          "javascript-maintenance-execution"
+        ],
+        "workflow": "new-service"
+      }
+    },
+    {
+      "id": "KYVERNO-POLICY-EXECUTION-1",
+      "description": "Kyverno policy execution retains policy-as-code accountability and security review.",
+      "task": "kyverno policy",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-KYVERNO-POLICY-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "policy-as-code-engineer",
+          "kyverno-policy-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer",
+          "security-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "policy-as-code",
+          "kyverno-policy-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "PROMPT-ARTIFACT-EXECUTION-1",
+      "description": "Prompt artifact work remains under AI-engineer accountability and the existing AI review envelope.",
+      "task": "prompt artifact",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-PROMPT-ARTIFACT-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "ai-engineer",
+          "prompt-artifact-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer",
+          "security-reviewer"
+        ],
+        "support": [
+          "data-governance-engineer",
+          "cost-capacity-planner"
+        ],
+        "matched_routes": [
+          "ai-feature",
+          "prompt-artifact-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "PROXMOX-OPENTOFU-EXECUTION-1",
+      "description": "Proxmox-specific OpenTofu work retains both broad infrastructure and OpenTofu-module accountability.",
+      "task": "proxmox opentofu",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-PROXMOX-OPENTOFU-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "opentofu-module-implementer",
+          "proxmox-opentofu-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "infrastructure",
+          "opentofu-module-execution",
+          "proxmox-opentofu-execution"
+        ],
+        "workflow": "infrastructure-change"
+      }
+    },
+    {
+      "id": "RELEASE-AUTOMATION-EXECUTION-1",
+      "description": "Release automation remains led by release-engineer with supply-chain review.",
+      "task": "artifact assembly",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-RELEASE-AUTOMATION-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "release-engineer",
+          "release-automation-implementer"
+        ],
+        "reviewers": [
+          "supply-chain-security-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "release-automation-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "RETRIEVAL-PIPELINE-EXECUTION-1",
+      "description": "Retrieval pipeline execution retains the knowledge-store route while adding AI accountability.",
+      "task": "retrieval chunking",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-RETRIEVAL-PIPELINE-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "ai-engineer",
+          "knowledge-store-steward",
+          "retrieval-pipeline-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "security-reviewer",
+          "compliance-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "retrieval-pipeline-execution",
+          "knowledge-store"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "SHELL-AUTOMATION-EXECUTION-1",
+      "description": "Shell automation remains under application accountability and independent code/test review.",
+      "task": "shell automation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-SHELL-AUTOMATION-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "shell-automation-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "shell-automation-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "SQL-QUERY-EXECUTION-1",
+      "description": "Generic SQL query implementation retains backend and database-reliability accountability.",
+      "task": "sql query",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-SQL-QUERY-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "backend-engineer",
+          "database-reliability-engineer",
+          "sql-query-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "sql-query-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "TALOS-CONFIG-EXECUTION-1",
+      "description": "Talos configuration remains under infrastructure accountability and infrastructure review.",
+      "task": "talos configuration",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-TALOS-CONFIG-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "talos-config-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "infrastructure",
+          "talos-config-execution"
+        ],
+        "workflow": "infrastructure-change"
+      }
+    },
+    {
+      "id": "BROWSER-TEST-EXECUTION-1",
+      "description": "Browser test execution retains test and frontend accountability plus accessibility review.",
+      "task": "browser test",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-BROWSER-TEST-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "frontend-engineer",
+          "test-engineer",
+          "browser-test-implementer"
+        ],
+        "reviewers": [
+          "code-reviewer",
+          "accessibility-reviewer"
+        ],
+        "support": [
+          "interaction-designer"
+        ],
+        "matched_routes": [
+          "frontend",
+          "browser-test-execution"
+        ],
+        "workflow": "new-service"
+      }
+    },
+    {
+      "id": "EVAL-HARNESS-EXECUTION-1",
+      "description": "Evaluation harness work retains AI and test accountability with AI-route security review.",
+      "task": "eval harness",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-EVAL-HARNESS-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "ai-engineer",
+          "test-engineer",
+          "eval-harness-implementer"
+        ],
+        "reviewers": [
+          "code-reviewer",
+          "security-reviewer"
+        ],
+        "support": [
+          "data-governance-engineer",
+          "cost-capacity-planner"
+        ],
+        "matched_routes": [
+          "ai-feature",
+          "eval-harness-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "EXAMPLE-FIXTURE-EXECUTION-1",
+      "description": "Example fixture maintenance remains test-engineer-led and synthetic-fixture scoped.",
+      "task": "example fixture",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-EXAMPLE-FIXTURE-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "test-engineer",
+          "example-fixture-implementer"
+        ],
+        "reviewers": [
+          "code-reviewer"
+        ],
+        "support": [
+          "technical-writer"
+        ],
+        "matched_routes": [
+          "example-fixture-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "GHERKIN-TEST-EXECUTION-1",
+      "description": "Gherkin implementation retains the test-engineer and independent code review.",
+      "task": "gherkin feature",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GOLDEN-GHERKIN-TEST-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "test-engineer",
+          "gherkin-test-implementer"
+        ],
+        "reviewers": [
+          "code-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "testing",
+          "gherkin-test-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "AGENT_WORKFLOW_EXECUTION_GOLDEN_1",
+      "description": "Narrow agent-workflow-execution route regression fixture.",
+      "task": "Implement agent workflow implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "AGENT_WORKFLOW_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "agent-workflow-implementer"
+        ],
+        "reviewers": [
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "agent-workflow-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "AI_OBSERVABILITY_EXECUTION_GOLDEN_1",
+      "description": "Narrow ai-observability-execution route regression fixture.",
+      "task": "Implement ai observability implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "AI_OBSERVABILITY_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "ai-engineer",
+          "observability-sre",
+          "ai-observability-implementer"
+        ],
+        "reviewers": [
+          "security-reviewer",
+          "technical-writer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent",
+          "support-triage-agent"
+        ],
+        "matched_routes": [
+          "observability",
+          "ai-observability-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "ANSIBLE_AUTOMATION_EXECUTION_GOLDEN_1",
+      "description": "Narrow ansible-automation-execution route regression fixture.",
+      "task": "Implement ansible automation implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "ANSIBLE_AUTOMATION_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "ansible-automation-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "ansible-automation-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "BARE_METAL_PROVISIONING_EXECUTION_GOLDEN_1",
+      "description": "Narrow bare-metal-provisioning-execution route regression fixture.",
+      "task": "Implement bare metal provisioning implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "BARE_METAL_PROVISIONING_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "bare-metal-provisioning-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "bare-metal-provisioning-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "BGP_ROUTING_EXECUTION_GOLDEN_1",
+      "description": "Narrow bgp-routing-execution route regression fixture.",
+      "task": "Implement bgp routing implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "BGP_ROUTING_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "bgp-routing-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "bgp-routing-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "C_SYSTEMS_EXECUTION_GOLDEN_1",
+      "description": "Narrow c-systems-execution route regression fixture.",
+      "task": "Implement c systems implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "C_SYSTEMS_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "c-systems-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "c-systems-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "CMAKE_BUILD_EXECUTION_GOLDEN_1",
+      "description": "Narrow cmake-build-execution route regression fixture.",
+      "task": "Implement cmake build implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "CMAKE_BUILD_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "cmake-build-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "cmake-build-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "CPP_SYSTEMS_EXECUTION_GOLDEN_1",
+      "description": "Narrow cpp-systems-execution route regression fixture.",
+      "task": "Implement cpp systems implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "CPP_SYSTEMS_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "cpp-systems-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "cpp-systems-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "DEVICE_DRIVER_EXECUTION_GOLDEN_1",
+      "description": "Narrow device-driver-execution route regression fixture.",
+      "task": "Implement device driver implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "DEVICE_DRIVER_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "device-driver-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "device-driver-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "DISTRIBUTED_STORAGE_EXECUTION_GOLDEN_1",
+      "description": "Narrow distributed-storage-execution route regression fixture.",
+      "task": "Implement distributed storage implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "DISTRIBUTED_STORAGE_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "distributed-storage-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "distributed-storage-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "EBPF_EXECUTION_GOLDEN_1",
+      "description": "Narrow ebpf-execution route regression fixture.",
+      "task": "Implement ebpf implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "EBPF_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "ebpf-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "ebpf-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "EDGE_CLOUD_INTEGRATION_EXECUTION_GOLDEN_1",
+      "description": "Narrow edge-cloud-integration-execution route regression fixture.",
+      "task": "Implement edge cloud integration implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "EDGE_CLOUD_INTEGRATION_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "edge-cloud-integration-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "edge-cloud-integration-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "EMBEDDED_C_EXECUTION_GOLDEN_1",
+      "description": "Narrow embedded-c-execution route regression fixture.",
+      "task": "Implement embedded c implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "EMBEDDED_C_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "embedded-c-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "embedded-c-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "EMBEDDED_LINUX_PLATFORM_EXECUTION_GOLDEN_1",
+      "description": "Narrow embedded-linux-platform-execution route regression fixture.",
+      "task": "Implement embedded linux platform implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "EMBEDDED_LINUX_PLATFORM_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "embedded-linux-platform-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "embedded-linux-platform-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "EMBEDDING_INDEX_EXECUTION_GOLDEN_1",
+      "description": "Narrow embedding-index-execution route regression fixture.",
+      "task": "Implement embedding index implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "EMBEDDING_INDEX_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "ai-engineer",
+          "database-reliability-engineer",
+          "knowledge-store-steward",
+          "embedding-index-implementer"
+        ],
+        "reviewers": [
+          "backend-engineer",
+          "test-engineer",
+          "infrastructure-reviewer",
+          "security-reviewer",
+          "compliance-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "database-reliability",
+          "embedding-index-execution",
+          "knowledge-store"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "EVAL_DATASET_EXECUTION_GOLDEN_1",
+      "description": "Narrow eval-dataset-execution route regression fixture.",
+      "task": "Implement eval dataset implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "EVAL_DATASET_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "ai-engineer",
+          "test-engineer",
+          "eval-dataset-implementer"
+        ],
+        "reviewers": [
+          "code-reviewer",
+          "security-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent",
+          "data-governance-engineer",
+          "cost-capacity-planner"
+        ],
+        "matched_routes": [
+          "ai-feature",
+          "eval-dataset-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "FIRMWARE_EXECUTION_GOLDEN_1",
+      "description": "Narrow firmware-execution route regression fixture.",
+      "task": "Implement firmware implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "FIRMWARE_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "firmware-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "firmware-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "GITOPS_DELIVERY_EXECUTION_GOLDEN_1",
+      "description": "Narrow gitops-delivery-execution route regression fixture.",
+      "task": "Implement gitops delivery implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GITOPS_DELIVERY_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "gitops-delivery-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "gitops-delivery-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "GUARDRAIL_POLICY_EXECUTION_GOLDEN_1",
+      "description": "Narrow guardrail-policy-execution route regression fixture.",
+      "task": "Implement guardrail policy implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GUARDRAIL_POLICY_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "policy-as-code-engineer",
+          "guardrail-policy-implementer"
+        ],
+        "reviewers": [
+          "security-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "guardrail-policy-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "INFERENCE_GATEWAY_EXECUTION_GOLDEN_1",
+      "description": "Narrow inference-gateway-execution route regression fixture.",
+      "task": "Implement inference gateway implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "INFERENCE_GATEWAY_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "ai-engineer",
+          "inference-gateway-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer",
+          "security-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent",
+          "data-governance-engineer",
+          "cost-capacity-planner"
+        ],
+        "matched_routes": [
+          "ai-feature",
+          "inference-gateway-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "KERNEL_MODULE_EXECUTION_GOLDEN_1",
+      "description": "Narrow kernel-module-execution route regression fixture.",
+      "task": "Implement kernel module implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "KERNEL_MODULE_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "kernel-module-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "kernel-module-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "KUBERNETES_NETWORKING_EXECUTION_GOLDEN_1",
+      "description": "Narrow kubernetes-networking-execution route regression fixture.",
+      "task": "Implement kubernetes networking implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "KUBERNETES_NETWORKING_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "kubernetes-networking-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "infrastructure",
+          "kubernetes-networking-execution"
+        ],
+        "workflow": "infrastructure-change"
+      }
+    },
+    {
+      "id": "KUBERNETES_OPERATOR_EXECUTION_GOLDEN_1",
+      "description": "Narrow kubernetes-operator-execution route regression fixture.",
+      "task": "Implement kubernetes operator implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "KUBERNETES_OPERATOR_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "kubernetes-operator-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "infrastructure",
+          "kubernetes-operator-execution"
+        ],
+        "workflow": "infrastructure-change"
+      }
+    },
+    {
+      "id": "LINUX_SYSTEMS_EXECUTION_GOLDEN_1",
+      "description": "Narrow linux-systems-execution route regression fixture.",
+      "task": "Implement linux systems implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "LINUX_SYSTEMS_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "linux-systems-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "linux-systems-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "MCP_SERVER_EXECUTION_GOLDEN_1",
+      "description": "Narrow mcp-server-execution route regression fixture.",
+      "task": "Implement mcp server implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "MCP_SERVER_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "mcp-server-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "mcp-server-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "MIGRATION_TEST_EXECUTION_GOLDEN_1",
+      "description": "Narrow migration-test-execution route regression fixture.",
+      "task": "Implement migration test implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "MIGRATION_TEST_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "backend-engineer",
+          "test-engineer",
+          "database-reliability-engineer",
+          "migration-test-implementer"
+        ],
+        "reviewers": [
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "backend",
+          "migration-test-execution"
+        ],
+        "workflow": "new-service"
+      }
+    },
+    {
+      "id": "MODEL_ROUTING_EXECUTION_GOLDEN_1",
+      "description": "Narrow model-routing-execution route regression fixture.",
+      "task": "Implement model routing implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "MODEL_ROUTING_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "ai-engineer",
+          "model-routing-implementer"
+        ],
+        "reviewers": [
+          "security-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "model-routing-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "NETWORK_CONFIG_EXECUTION_GOLDEN_1",
+      "description": "Narrow network-config-execution route regression fixture.",
+      "task": "Implement network config implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "NETWORK_CONFIG_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "network-config-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "network-config-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "NETWORK_MANAGEMENT_AUTOMATION_EXECUTION_GOLDEN_1",
+      "description": "Narrow network-management-automation-execution route regression fixture.",
+      "task": "Implement network management automation implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "NETWORK_MANAGEMENT_AUTOMATION_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "network-management-automation-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "network-management-automation-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "NETWORK_OBSERVABILITY_EXECUTION_GOLDEN_1",
+      "description": "Narrow network-observability-execution route regression fixture.",
+      "task": "Implement network observability implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "NETWORK_OBSERVABILITY_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "observability-sre",
+          "network-observability-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer",
+          "technical-writer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent",
+          "support-triage-agent"
+        ],
+        "matched_routes": [
+          "observability",
+          "network-observability-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "NETWORK_SECURITY_POLICY_EXECUTION_GOLDEN_1",
+      "description": "Narrow network-security-policy-execution route regression fixture.",
+      "task": "Implement network security policy implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "NETWORK_SECURITY_POLICY_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "policy-as-code-engineer",
+          "network-security-policy-implementer"
+        ],
+        "reviewers": [
+          "security-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "network-security-policy-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "PKCS11_HSM_INTEGRATION_EXECUTION_GOLDEN_1",
+      "description": "Narrow pkcs11-hsm-integration-execution route regression fixture.",
+      "task": "Implement pkcs11 hsm integration implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "PKCS11_HSM_INTEGRATION_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "secrets-identity-engineer",
+          "pkcs11-hsm-integration-implementer"
+        ],
+        "reviewers": [
+          "security-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "pkcs11-hsm-integration-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "PKI_CERTIFICATE_LIFECYCLE_EXECUTION_GOLDEN_1",
+      "description": "Narrow pki-certificate-lifecycle-execution route regression fixture.",
+      "task": "Implement pki certificate lifecycle implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "PKI_CERTIFICATE_LIFECYCLE_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "secrets-identity-engineer",
+          "pki-certificate-lifecycle-implementer"
+        ],
+        "reviewers": [
+          "security-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "pki-certificate-lifecycle-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "PQC_INTEGRATION_EXECUTION_GOLDEN_1",
+      "description": "Narrow pqc-integration-execution route regression fixture.",
+      "task": "Implement pqc integration implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "PQC_INTEGRATION_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "cryptographic-assurance-engineer",
+          "pqc-integration-implementer"
+        ],
+        "reviewers": [
+          "security-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent",
+          "threat-modeler",
+          "secrets-identity-engineer"
+        ],
+        "matched_routes": [
+          "cryptographic-assurance",
+          "pqc-integration-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "PRECISION_TIMING_EXECUTION_GOLDEN_1",
+      "description": "Narrow precision-timing-execution route regression fixture.",
+      "task": "Implement precision timing implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "PRECISION_TIMING_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "precision-timing-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "precision-timing-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "PROTOCOL_FUZZING_EXECUTION_GOLDEN_1",
+      "description": "Narrow protocol-fuzzing-execution route regression fixture.",
+      "task": "Implement protocol fuzzing implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "PROTOCOL_FUZZING_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "test-engineer",
+          "protocol-fuzzing-implementer"
+        ],
+        "reviewers": [
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "protocol-fuzzing-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "PROTOCOL_INTEGRATION_EXECUTION_GOLDEN_1",
+      "description": "Narrow protocol-integration-execution route regression fixture.",
+      "task": "Implement protocol integration implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "PROTOCOL_INTEGRATION_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "protocol-integration-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "protocol-integration-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "QKD_QKMS_INTEGRATION_EXECUTION_GOLDEN_1",
+      "description": "Narrow qkd-qkms-integration-execution route regression fixture.",
+      "task": "Implement qkd qkms integration implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "QKD_QKMS_INTEGRATION_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "cryptographic-assurance-engineer",
+          "quantum-timing-assurance-engineer",
+          "qkd-qkms-integration-implementer"
+        ],
+        "reviewers": [
+          "security-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent",
+          "threat-modeler",
+          "secrets-identity-engineer"
+        ],
+        "matched_routes": [
+          "cryptographic-assurance",
+          "quantum-timing-assurance",
+          "qkd-qkms-integration-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "QUANTUM_NETWORK_INTEGRATION_EXECUTION_GOLDEN_1",
+      "description": "Narrow quantum-network-integration-execution route regression fixture.",
+      "task": "Implement quantum network integration implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "QUANTUM_NETWORK_INTEGRATION_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "quantum-network-integration-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "quantum-network-integration-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "RBAC_MANIFEST_EXECUTION_GOLDEN_1",
+      "description": "Narrow rbac-manifest-execution route regression fixture.",
+      "task": "Implement rbac manifest implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "RBAC_MANIFEST_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "secrets-identity-engineer",
+          "rbac-manifest-implementer"
+        ],
+        "reviewers": [
+          "security-reviewer",
+          "compliance-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent",
+          "threat-modeler"
+        ],
+        "matched_routes": [
+          "secrets-identity",
+          "rbac-manifest-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "SECRET_HYGIENE_EXECUTION_GOLDEN_1",
+      "description": "Narrow secret-hygiene-execution route regression fixture.",
+      "task": "Implement secret hygiene implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "SECRET_HYGIENE_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "secrets-identity-engineer",
+          "secret-hygiene-implementer"
+        ],
+        "reviewers": [
+          "security-reviewer",
+          "compliance-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "secrets-identity",
+          "secret-hygiene-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "SECURE_BOOT_EXECUTION_GOLDEN_1",
+      "description": "Narrow secure-boot-execution route regression fixture.",
+      "task": "Implement secure boot implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "SECURE_BOOT_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "secrets-identity-engineer",
+          "secure-boot-implementer"
+        ],
+        "reviewers": [
+          "security-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "secure-boot-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "SECURE_CHANNEL_INTEGRATION_EXECUTION_GOLDEN_1",
+      "description": "Narrow secure-channel-integration-execution route regression fixture.",
+      "task": "Implement secure channel integration implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "SECURE_CHANNEL_INTEGRATION_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "cryptographic-assurance-engineer",
+          "secure-channel-integration-implementer"
+        ],
+        "reviewers": [
+          "security-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "secure-channel-integration-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "SONICOS_CONFIG_EXECUTION_GOLDEN_1",
+      "description": "Narrow sonicos-config-execution route regression fixture.",
+      "task": "Implement sonicos config implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "SONICOS_CONFIG_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "sonicos-config-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "sonicos-config-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "STARLINGX_CONFIG_EXECUTION_GOLDEN_1",
+      "description": "Narrow starlingx-config-execution route regression fixture.",
+      "task": "Implement starlingx config implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "STARLINGX_CONFIG_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "starlingx-config-implementer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "starlingx-config-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "SUPPLY_CHAIN_REMEDIATION_EXECUTION_GOLDEN_1",
+      "description": "Narrow supply-chain-remediation-execution route regression fixture.",
+      "task": "Implement supply chain remediation implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "SUPPLY_CHAIN_REMEDIATION_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "supply-chain-remediation-implementer"
+        ],
+        "reviewers": [
+          "supply-chain-security-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "supply-chain-remediation-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "GO_TEST_EXECUTION_GOLDEN_1",
+      "description": "Narrow go-test-execution route regression fixture.",
+      "task": "Implement go test implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "GO_TEST_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "test-engineer",
+          "go-test-implementer"
+        ],
+        "reviewers": [
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "go-test-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "HARDWARE_TEST_EXECUTION_GOLDEN_1",
+      "description": "Narrow hardware-test-execution route regression fixture.",
+      "task": "Implement hardware test implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "HARDWARE_TEST_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "test-engineer",
+          "hardware-test-implementer"
+        ],
+        "reviewers": [
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "hardware-test-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "INTEROPERABILITY_TEST_EXECUTION_GOLDEN_1",
+      "description": "Narrow interoperability-test-execution route regression fixture.",
+      "task": "Implement interoperability test implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "INTEROPERABILITY_TEST_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "test-engineer",
+          "interoperability-test-implementer"
+        ],
+        "reviewers": [
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "interoperability-test-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "PYTHON_TEST_EXECUTION_GOLDEN_1",
+      "description": "Narrow python-test-execution route regression fixture.",
+      "task": "Implement python test implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "PYTHON_TEST_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "backend-engineer",
+          "test-engineer",
+          "python-test-implementer"
+        ],
+        "reviewers": [
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "backend",
+          "python-test-execution"
+        ],
+        "workflow": "new-service"
+      }
+    },
+    {
+      "id": "TYPESCRIPT_TEST_EXECUTION_GOLDEN_1",
+      "description": "Narrow typescript-test-execution route regression fixture.",
+      "task": "Implement typescript test implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "TYPESCRIPT_TEST_EXECUTION_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "frontend-engineer",
+          "test-engineer",
+          "typescript-test-implementer"
+        ],
+        "reviewers": [
+          "code-reviewer",
+          "accessibility-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent",
+          "interaction-designer"
+        ],
+        "matched_routes": [
+          "frontend",
+          "typescript-test-execution"
         ],
         "workflow": "new-service"
       }

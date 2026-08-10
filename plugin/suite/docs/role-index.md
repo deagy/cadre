@@ -2,7 +2,7 @@
 
 # Role index
 
-This index is a human-readable view of the 86 roles in
+This index is a human-readable view of the 159 roles in
 [`roster/catalog.yaml`](../roster/catalog.yaml). The catalog and each linked
 `AGENT.md` remain authoritative.
 
@@ -55,6 +55,12 @@ coordination, or escalation; the routing plan retains the accountable role and
 the required independent reviewers. Like every artifact author, a specialist
 cannot approve its own output, accept risk, or authorize a persistent or
 production mutation.
+
+Vendor and platform reference material is deliberately separate from these
+159 authority-bearing roles. The 20 non-authoring packs in
+[`roster/context-packs/`](../roster/context-packs/) are selected alongside a
+relevant role and provide bounded terminology, compatibility, and validation
+context; they never appear as primary/reviewer/support agents or approve work.
 
 | Role | Phase | Purpose | Definition |
 | --- | --- | --- | --- |
