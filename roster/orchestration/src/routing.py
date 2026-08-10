@@ -63,11 +63,22 @@ def glob_to_regex(pattern: str) -> Pattern[str]:
 
 def _keyword_matches(text: str, keyword: str) -> bool:
     """Case-insensitive whole-word match: `keyword` must not be embedded in a
-    longer token. A hyphen is treated as a word character (not a boundary),
-    so `"runner"` matches "the runner failed" but not "cross-runner",
-    "runner-info", or "runners" — a hyphenated compound or a plural/suffixed
-    form is a different token, not the keyword on its own. Internal spaces in
-    a multi-word keyword still match across any run of whitespace.
+    longer token, for the boundary characters this checks. A hyphen is
+    treated as a word character (not a boundary), so `"runner"` matches "the
+    runner failed" but not "cross-runner", "runner-info", or "runners" — a
+    hyphenated compound or a plural/suffixed form is a different token, not
+    the keyword on its own. Internal spaces in a multi-word keyword still
+    match across any run of whitespace.
+
+    The boundary class is `[a-z0-9-]` only — it does NOT exclude underscore
+    or `.`, so a keyword containing either of those characters CAN match
+    embedded in a longer token. `routing.yaml`'s `bootstrap_sdlc.py` keyword
+    is the one keyword in the current ruleset with this shape: it matches
+    inside `legacy_bootstrap_sdlc.py_old` and `my_bootstrap_sdlc.py_v2`, not
+    just the exact filename on its own. This is a known, accepted quirk of
+    that one keyword (see `test_bootstrap_sdlc_keyword_matches_embedded_in_a_longer_token`
+    in `roster/orchestration/test/test_selector.py`), not a general property
+    of whole-word matching — do not assume it for other keywords.
     """
     escaped = re.escape(keyword.lower()).replace(r"\ ", r"\s+")
     return re.search(rf"(?<![a-z0-9-]){escaped}(?![a-z0-9-])", text, re.IGNORECASE) is not None

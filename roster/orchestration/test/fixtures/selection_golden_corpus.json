@@ -14,19 +14,15 @@
     "A route/keyword edit that changes any of these fields must update this",
     "file in the same reviewable diff (see CLAUDE.md/AGENTS.md and B-FR-6).",
     "",
-    "Coverage: this corpus covers all 33 route categories defined in",
-    "routing.yaml's routes[] array as of the review that added this note",
-    "(product-intent, requirements-baseline, governance-planning,",
-    "data-governance, cryptographic-assurance, quantum-timing-assurance,",
-    "runtime-assurance,",
-    "agent-suite-governance, orchestration, frontend, backend,",
-    "infrastructure, pipeline, testing, debugging, black-box-testing,",
-    "end-user-testing, performance-testing, chaos-resilience, support,",
-    "incident-response, observability, secrets-identity,",
-    "database-reliability, policy-as-code, supply-chain, cost-capacity,",
-    "cost-operations, api-contract, documentation, gitlab-evidence,",
-    "knowledge-store, architecture-design), matching B-FR-5's 'initial corpus covers every",
-    "existing route category' requirement. Most single-route fixtures were",
+    "Coverage: this corpus covers every route category defined in",
+    "routing.yaml's routes[] array, matching B-FR-5's 'initial corpus covers",
+    "every existing route category' requirement. The route id list is not",
+    "enumerated here because it drifts every time a route is added, removed,",
+    "or renamed -- routing.yaml's routes[] array is the live list;",
+    "test_corpus_covers_every_required_route_category in",
+    "test_selection_golden_corpus.py is the enforcement, reading routing.yaml",
+    "directly rather than any count or enumeration recorded in this comment.",
+    "Most single-route fixtures were",
     "authored fresh (not reused from test_selector.py) specifically to",
     "isolate one route per case; where routing.yaml's own paths/keywords",
     "genuinely overlap between two or more routes (e.g. testing and",
@@ -912,6 +908,235 @@
         ],
         "matched_routes": [
           "supply-chain"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "PACKAGING-SUPPLY-CHAIN-DOUBLE-1",
+      "description": "#189 regression: plugin/tools/test_cline_git_plugin_packaging.py is the sole guard tying the root lockfile to cline-plugins/, so it must resolve to the supply-chain route by path alone even though the task text carries no supply-chain keyword (dependency/sbom/provenance/signing/etc. are all absent here) -- before the fix this returned an empty plan (needs-triage) purely because of task wording. It must simultaneously match the new packaging route (plugin/tools/** path, plus its own 'plugin packaging' keyword hit) -- deliberate double coverage per #189: packaging is the narrow owner, supply-chain is the fail-safe reviewer set for the sole SBOM-accuracy guard.",
+      "task": "Adjust the Cline git plugin packaging checker's tolerance",
+      "changed_files": [
+        "plugin/tools/test_cline_git_plugin_packaging.py"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-PACKAGING-SUPPLY-CHAIN-DOUBLE-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "debugging-engineer",
+          "supply-chain-security-reviewer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer",
+          "security-reviewer"
+        ],
+        "support": [
+          "release-engineer"
+        ],
+        "matched_routes": [
+          "supply-chain",
+          "packaging"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "PACKAGING-1",
+      "description": "#189 fix: an ordinary plugin/tools/ file other than the lockfile-guard test must resolve to the packaging route only -- application-engineer/debugging-engineer with test-engineer/code-reviewer, not a security reviewer chain -- proving the fix does not broaden supply-chain's paths glob-wide.",
+      "task": "Tighten the plugin manifest health guard's field checks",
+      "changed_files": [
+        "plugin/tools/test_manifest_health.py"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-PACKAGING-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "debugging-engineer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "packaging"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "PACKAGING-PYPROJECT-OUT-OF-SCOPE-1",
+      "description": "#189 review finding 2: root pyproject.toml is deliberately NOT a packaging-route path. It is a generic file present in arbitrary downstream Python projects, and routing.yaml ships as the BASE ruleset to every consuming project (routing_overlay.py only lets a consumer widen a base route, never narrow it) -- claiming it under a route named 'packaging' whose keywords are about this repo's own Cline ports and plugin manifests would be wrong for every consumer. A pyproject.toml-only change with no packaging keyword (and no other route's keyword -- the task text deliberately avoids change_intake baseline words like 'update'/'change' and supply-chain's 'dependency' so the result is genuinely needs-triage, not just support-only) is therefore needs-triage, not the packaging route. kernel/pyproject.toml, engine/pyproject.toml, root pyproject.toml, and cadre_cli/__init__.py all remain unrouted, a documented out-of-scope adjacent gap for a follow-up issue.",
+      "task": "Look at pyproject.toml",
+      "changed_files": [
+        "pyproject.toml"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-PACKAGING-PYPROJECT-OOS-1",
+      "expect_needs_triage": true,
+      "expected": {
+        "primary": [],
+        "reviewers": [],
+        "support": [],
+        "matched_routes": [],
+        "workflow": "needs-triage"
+      }
+    },
+    {
+      "id": "PACKAGING-NO-SUPPLY-CHAIN-LEAK-1",
+      "description": "#189 negative fixture: a plugin/tools/ file other than the single named lockfile-guard test must NOT match supply-chain -- proves decision 2's single-file addition to supply-chain's paths did not leak into a glob covering the rest of plugin/tools/.",
+      "task": "Harden the workspace mutation guard's detection logic",
+      "changed_files": [
+        "plugin/tools/test_guard_workspace_mutation.py"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-PACKAGING-NO-LEAK-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "debugging-engineer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "packaging"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "PACKAGING-GOVERNANCE-README-PIN-1",
+      "description": "#189 re-review finding 1 (code-reviewer, MEDIUM; revision 2) pin: packaging/plugin-README.md routes through agent-suite-governance ONLY. The packaging route no longer carries packaging/** at all -- copying agent-suite-governance's pre-existing imprecise glob onto a second route was not a license to double that imprecision's blast radius, and routing.yaml ships as a base ruleset a consumer can only widen, never narrow. The packaging route is now scoped to plugin/tools/** only. Staffing for this file is unaffected (agent-suite-governance's primary/reviewers are byte-identical to the packaging route's), only matched_routes visibility changes. The extra documentation route match (**/*.md) is incidental and unrelated to this decision.",
+      "task": "Reword the plugin README's install instructions",
+      "changed_files": [
+        "packaging/plugin-README.md"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-PACKAGING-GOV-README-PIN-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "debugging-engineer",
+          "technical-writer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "agent-suite-governance",
+          "documentation"
+        ],
+        "workflow": "agent-suite-maintenance"
+      }
+    },
+    {
+      "id": "PACKAGING-NO-LEAK-VERSION-BUMP-1",
+      "description": "#189 review finding 1 (test-engineer, HIGH) regression: reproduces the reported leak verbatim. 'version bump' was generic enough to fire on an unrelated Terraform provider pin task with no plugin/tools or packaging/ file involved. The keyword is now 'plugin version bump'; this task does not contain that exact phrase, so packaging must not appear in matched_routes -- infrastructure and supply-chain fire on their own merits (infra/main.tf path, 'terraform provider' keyword) and are unaffected.",
+      "task": "Do a version bump of the terraform provider pin",
+      "changed_files": [
+        "infra/main.tf"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-PACKAGING-NO-LEAK-VERSION-BUMP-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "infrastructure-provisioner",
+          "supply-chain-security-reviewer"
+        ],
+        "reviewers": [
+          "infrastructure-reviewer",
+          "security-reviewer"
+        ],
+        "support": [
+          "release-engineer"
+        ],
+        "matched_routes": [
+          "infrastructure",
+          "supply-chain"
+        ],
+        "workflow": "infrastructure-change"
+      }
+    },
+    {
+      "id": "PACKAGING-NO-LEAK-CHANGELOG-ENTRY-1",
+      "description": "#189 review finding 1 (test-engineer, HIGH) regression: reproduces the reported leak verbatim. 'changelog entry' was generic enough to fire on an unrelated docs/API task with no plugin/tools or packaging/ file involved. The keyword is now 'plugin changelog entry'; this task does not contain that exact phrase, so packaging must not appear in matched_routes -- backend and documentation fire on their own merits and are unaffected.",
+      "task": "Add a changelog entry for the new API endpoint",
+      "changed_files": [
+        "docs/CHANGELOG.md"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-PACKAGING-NO-LEAK-CHANGELOG-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "backend-engineer",
+          "technical-writer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "backend",
+          "documentation"
+        ],
+        "workflow": "new-service"
+      }
+    },
+    {
+      "id": "PACKAGING-NO-LEAK-INSTALL-SCRIPT-1",
+      "description": "#189 review finding 1 (test-engineer, HIGH) regression: reproduces the reported leak verbatim. 'install script' was generic enough to fire on an unrelated onboarding-docs task with no plugin/tools or packaging/ file involved. The keyword is now 'plugin install script'; this task does not contain that exact phrase, so packaging must not appear in matched_routes -- documentation fires on its own merits and is unaffected.",
+      "task": "Write an install script for the onboarding docs",
+      "changed_files": [
+        "docs/onboarding.md"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-PACKAGING-NO-LEAK-INSTALL-SCRIPT-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "technical-writer"
+        ],
+        "reviewers": [],
+        "support": [],
+        "matched_routes": [
+          "documentation"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "PACKAGING-NO-LEAK-BOOTSTRAP-SDLC-1",
+      "description": "#189 review finding 1 (test-engineer, HIGH) regression: reproduces the reported leak verbatim. 'bootstrap sdlc' was generic enough to fire on any docs task mentioning SDLC bootstrapping with no plugin/tools or packaging/ file involved. The keyword is now the literal filename 'bootstrap_sdlc.py'; this task does not contain that string, so packaging must not appear in matched_routes -- documentation fires on its own merits and is unaffected.",
+      "task": "Bootstrap SDLC gates for the new project",
+      "changed_files": [
+        "docs/onboarding.md"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-PACKAGING-NO-LEAK-BOOTSTRAP-SDLC-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "technical-writer"
+        ],
+        "reviewers": [],
+        "support": [],
+        "matched_routes": [
+          "documentation"
         ],
         "workflow": "unclassified"
       }
