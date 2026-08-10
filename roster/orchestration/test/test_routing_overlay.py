@@ -829,6 +829,27 @@ class SelectionPathIntegrationTests(ProjectOverlayFixture):
         for field in ("overlay_applied", "overlay_path", "overlay_content_hash"):
             self.assertNotIn(field, provenance)
 
+    def test_an_overlay_does_not_drop_context_packs_from_the_effective_config(self) -> None:
+        """`context_packs` is not in `_KNOWN_TOP_LEVEL_KEYS`, so the merge has
+        no rule for it. It survives only because the merge patches a copy of
+        the base rather than rebuilding the config from the keys it knows --
+        an implementation detail worth pinning, since rebuilding would
+        silently strip every pack from any project that has an overlay.
+        """
+        base = load_routing(REPOSITORY_ROOT / "roster" / "orchestration" / "routing.yaml")
+        self.assertTrue(base.get("context_packs"), "base config should ship context packs")
+        route = next(r for r in base["routes"] if r["id"] == "documentation")
+        effective = merge_routing(
+            base, {"routes": [{"id": "documentation", "keywords": [*route["keywords"], "x"]}]}
+        )
+        self.assertEqual(effective["context_packs"], base["context_packs"])
+
+    def test_context_packs_still_resolve_when_an_overlay_is_applied(self) -> None:
+        self._widen_documentation("operator handbook")
+        plan = self._select("revise the operator handbook for redfish bmc inventory")
+        self.assertTrue(plan["provenance"]["overlay_applied"])
+        self.assertEqual([p["id"] for p in plan["context_packs"]], ["redfish-bmc-context"])
+
     def test_a_narrowing_overlay_fails_selection_instead_of_being_ignored(self) -> None:
         # Widen-only is enforced at dispatch now, not just in the validators.
         self._write_overlay({"routes": [{"id": "documentation", "keywords": ["only-this"]}]})
