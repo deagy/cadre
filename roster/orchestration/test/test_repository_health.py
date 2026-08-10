@@ -394,6 +394,39 @@ class RepositoryHealthTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertFalse(path.exists(), str(path))
 
+    def test_main_plugin_packages_destructive_git_guard_hook(self) -> None:
+        """deagy/cadre#129: the main `cadre` plugin's own hooks/hooks.json
+        must wire the same destructive-git `PreToolUse` guard this repository
+        runs on itself, so any project that installs the plugin -- not just
+        this checkout, and not only projects that also install a
+        cadre-lifecycle-* plugin -- gets the same structural protection.
+        """
+        plugin_root = generated_package()
+        packaged_guard = plugin_root / "hooks" / "guard_workspace_mutation.py"
+        packaged_hooks_json = plugin_root / "hooks" / "hooks.json"
+        source_guard = REPOSITORY_ROOT / ".claude" / "hooks" / "guard_workspace_mutation.py"
+
+        self.assertTrue(packaged_guard.is_file(), str(packaged_guard))
+        self.assertTrue(packaged_hooks_json.is_file(), str(packaged_hooks_json))
+        # Byte-identical to this repository's own hand-authored copy: there
+        # is exactly one script to review, fanned out at package time.
+        self.assertEqual(
+            source_guard.read_bytes(), packaged_guard.read_bytes(),
+            "packaged hooks/guard_workspace_mutation.py has drifted from .claude/hooks/guard_workspace_mutation.py",
+        )
+
+        hooks = json.loads(packaged_hooks_json.read_text(encoding="utf-8"))
+        pre_tool_use = hooks["hooks"]["PreToolUse"]
+        self.assertEqual(1, len(pre_tool_use))
+        self.assertEqual("Bash", pre_tool_use[0]["matcher"])
+        commands = [entry["command"] for entry in pre_tool_use[0]["hooks"]]
+        self.assertIn('python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guard_workspace_mutation.py"', commands)
+
+        # This is a package-root hook, not a lifecycle sub-plugin's -- it
+        # must not be nested under plugins/lifecycle*/ where it would only
+        # ship to projects that separately opt into lifecycle governance.
+        self.assertFalse((plugin_root / "plugins" / "lifecycle" / "hooks" / "guard_workspace_mutation.py").exists())
+
     def test_secure_cloud_agents_plugin_covers_every_catalog_agent_and_skill(self) -> None:
         catalog_agents: dict[str, str] = {}
         current_agent: str | None = None

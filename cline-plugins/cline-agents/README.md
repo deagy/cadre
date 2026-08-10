@@ -231,6 +231,109 @@ This port intentionally departs from `examples/plugins/agents-squad` in three wa
 2. **Reserved bundled names.** Unlike the upstream template's project > global > bundled override precedence, this port rejects (not silently overrides) any global-/project-tier file whose `name:` collides with one of the 74 bundled role names.
 3. **Preset-only dispatch, containment-checked `cwd`.** `start_subagent` rejects a missing/unknown `preset` rather than defaulting to an unrestricted subagent. A caller-supplied `cwd`/`workingDirectory` that would escape the workspace root (e.g. `../../etc`) is rejected, not clamped.
 
+## Destructive-git guard (`beforeTool`)
+
+Every subagent this plugin dispatches through `startPresetSubagent` is wired
+with a `beforeTool` hook (`createDestructiveGitGuardHook` in `index.ts`) that
+inspects a `run_commands` tool call's actual argv *before* it runs and
+refuses specific destructive `git` invocations. This applies to every
+dispatched subagent regardless of that preset's own `allowedTools` — it sits
+underneath `toolPolicies`/`mode: "plan"` (above), not instead of them, and
+closes a gap those constructs cannot express on their own: `toolPolicies`
+can only grant or deny the whole `run_commands` *category*, never "allow
+`run_commands`, but not `git reset --hard`". This is the Cline-side
+counterpart to `.claude/hooks/guard_workspace_mutation.py`'s `PreToolUse`
+hook for Claude Code (deagy/cadre#129, deagy/cadre#192) — same design
+stance, ported logic, separate implementation (Cline exposes no equivalent
+of Claude Code's `PreToolUse`; the real interception point here is
+`AgentRuntimeHooks.beforeTool`, verified by reading the installed
+`@cline/core`/`@cline/shared` SDK source directly — see the code comment
+above `createDestructiveGitGuardHook` for how that was confirmed).
+
+**What it checks.** The guard parses each `run_commands` command string for
+top-level `git` invocations (splitting on `&&`/`||`/`;`/`|`, quote-aware) and
+inspects real git state — not a blind command-name blocklist — before
+refusing. It blocks:
+
+- `git reset --hard [<ref>]` when the working tree is dirty, or when `<ref>`
+  would move the branch pointer off current `HEAD` (stranding unpushed
+  commits).
+- `git clean -f`/`-fd`/`-fdx` when a dry run (`git clean -n`, run
+  automatically before deciding) shows it would actually remove something.
+- `git branch -D` / `--delete --force` (bypasses git's own unmerged-work
+  safety check; plain `-d`/`--delete` is left alone since git already
+  refuses that one itself).
+- `git push --force`/`-f` without `--force-with-lease`, and any remote
+  branch deletion (`--delete`/`-d`, or the `<remote> :<branch>` colon-refspec
+  form).
+- `git checkout <ref> -- <path>...` / `git checkout <ref> <path>...` and
+  `git restore --source=<ref> <path>...` when the target paths currently
+  have uncommitted changes.
+- Switching to a local branch (`git checkout <branch>`, no `-b`/`-B`) while
+  the working tree is dirty.
+
+**Fail-open by design.** Any parse ambiguity, unresolvable git state (not a
+repo, `git` missing, a ref that doesn't resolve, a timeout), or an internal
+guard error results in the command being allowed, not blocked. The stance
+mirrors `guard_workspace_mutation.py`'s own reasoning (read that file's
+module docstring directly for its current wording — it is maintained
+independently of this README and may be revised): false positives — blocking
+routine work — are the real risk here, not false negatives. A guard that
+blocks routine work gets disabled by its own users and then protects
+nothing; this guard is defense-in-depth on top of
+`roster/shared/agent-autonomy.yaml`'s
+`repository.discard_uncommitted_work_or_move_branches: never` rule and
+`workspace-isolation.md`, not a replacement for either.
+
+**Known, deliberate gaps — not covered by this guard:**
+
+- `git stash drop` / `git stash clear` — destructive to stashed work, but
+  structurally different from the tracked working-tree/branch-state cases
+  above; left as a known gap rather than folded in without its own
+  state-check design.
+- Reflog expiry / `git gc --prune=now` — destroys unreachable commits, but
+  reliably detecting "would this prune something otherwise recoverable" is
+  materially harder than the checks above.
+- Indirect execution: a command written to a file and then executed (e.g. a
+  shell script containing `git reset --hard`) is invisible to the guard by
+  construction, not by choice — it only sees the literal `run_commands`
+  argv it is handed.
+- `bash -c "<script>"` / `sh -c "<script>"` / `zsh -c "<script>"` (including
+  combined short flags such as `-lc`) are recognized and recursed into:
+  `extractShellDashCScript` pulls the inline script out of the wrapper and
+  `evaluateGitCommand` re-evaluates it for the same destructive-`git`
+  handling, up to `MAX_SHELL_C_RECURSION_DEPTH` (currently `3`) levels of
+  nesting. A script nested deeper than that bound remains a real, deliberate,
+  documented gap — not silently claimed as covered — see the regression test
+  exercising exactly this case in `presets.test.mts`. This guard's bound
+  (`3`) matches its Claude Code counterpart's
+  (`.claude/hooks/guard_workspace_mutation.py`'s
+  `_MAX_SHELL_RECURSION_DEPTH`, also `3`).
+- `env`-prefixed invocations are recognized and their wrapped command is
+  checked: `WRAPPER_TOKENS` includes `env` alongside `sudo`/`command`/
+  `exec`/`nohup`/`time`, and `stripLeadingWrappers` walks past `env`'s own
+  flags and `VAR=value` assignment pairs to reach the real command —
+  covering `env VAR=value... <command>`, `env -i <command>`, `env -u NAME
+  <command>`, `env -C <dir> <command>` / `env --chdir <dir> <command>`, and
+  `env -S <string> <command>` / `env --split-string <string> <command>`.
+- Git-dir/work-tree redirection (`--git-dir`, `--work-tree`, the `GIT_DIR`/
+  `GIT_WORK_TREE` environment variables) and git alias resolution (a custom
+  `git config alias.*` wrapping a destructive subcommand under a different
+  name) — both can cause the guard to evaluate the wrong repository's state,
+  or miss a destructive subcommand entirely, and are not handled as of this
+  writing. `.claude/hooks/guard_workspace_mutation.py`'s module docstring
+  documents the identical gap for its Claude Code counterpart in more
+  detail, if you want the fuller reasoning for why it's harder than the
+  checks above.
+
+**Opt-out.** Setting `CADRE_DISABLE_WORKSPACE_MUTATION_GUARD=1` (or `true`,
+case-insensitive) in the environment disables this guard, checked before any
+parsing or git state check — the same variable name and behavior as the
+Claude Code counterpart, `.claude/hooks/guard_workspace_mutation.py`. It is
+never referenced by generated `hooks.json`/plugin manifest output, so a
+plugin regeneration cannot silently re-enable the guard for an operator who
+deliberately opted out via their own environment.
+
 ## Custom agents and skills
 
 Same discovery model as the upstream template, minus bundled skills and
@@ -240,6 +343,18 @@ minus the ability to shadow a reserved bundled agent name:
 |---|---|---|---|
 | Agents | `agents/` next to `index.ts` (74 Cadre roles, reserved names) | `~/.cline/data/settings/agents/` | `<workspaceRoot>/.cline/agents/` |
 | Skills | `skills/` next to `index.ts` (8 skills, reserved names) | `~/.cline/data/settings/skills/` | `<workspaceRoot>/.cline/skills/` |
+
+**Warning: a hand-authored global or project preset with no `allowedTools`
+gets full, unrestricted ambient tool access.** `resolveToolPolicyConfig`
+only builds a deny-by-default `toolPolicies` map when a preset declares
+`allowedTools`; a global preset (`~/.cline/data/settings/agents/`) or
+project preset (`<workspaceRoot>/.cline/agents/`) that omits the field
+gets no restriction applied at all — by design, for fidelity to the
+upstream template's default full-tool behavior for a preset that never
+opted into this field. All 74 bundled presets set `allowedTools`
+automatically and are unaffected. If you hand-author your own preset, you
+must set `allowedTools` explicitly to get any tool restriction; leaving it
+out is not a safe default.
 
 ## Field mapping (source `agents/*.md` -> `cline-agents/agents/*.md`)
 
@@ -329,12 +444,39 @@ copy. See `package.json` for the exact pinned version.
 
 | Variable | Default |
 |---|---|
-| `CLINE_AGENTS_BACKEND_MODE` | `auto` (`auto` \| `hub` \| `local`) |
+| `CLINE_AGENTS_BACKEND_MODE` | `auto` (`auto` \| `hub` \| `local`) — see caveat below |
 | `CLINE_AGENTS_PROVIDER_ID` | *(none — required, see above)* |
 | `CLINE_AGENTS_MODEL_OPUS` / `_SONNET` / `_HAIKU` | *(none — per-tier model id)* |
 | `CLINE_AGENTS_MODEL_DEFAULT` | *(none — one model for every tier)* |
 | `CLINE_DATA_DIR` | `~/.cline/data` |
 | `CLINE_DIR` | `~/.cline` |
+
+**`CLINE_AGENTS_BACKEND_MODE` does not control the backend mode a subagent
+session actually starts with.** Every subagent this plugin dispatches
+(`start_subagent`) is always started with `backendMode: "local"`, regardless
+of this variable's value. This is forced, not merely defaulted: Cline's
+hub-mode session start silently never composes the `beforeTool` hooks that
+carry the "Destructive-git guard" above — confirmed by reading the installed
+`@cline/core` SDK directly, not assumed from its `.d.ts`. `HubRuntimeHost`
+(the runtime a discovered or preferred hub resolves to) never builds the
+in-process runtime that hosts hook composition at all, and the hub-client
+session-start path separately serializes its config through
+`JSON.stringify`, which drops the hook function with no warning. Either gap
+on its own would silently strip the guard from a hub-mode subagent session;
+forcing `"local"` removes both.
+
+- `auto` (the default), `local`, unset, and any unrecognized value all
+  resolve to `local`, exactly as before — this was already the practical
+  outcome for `local` and unset, and is now guaranteed rather than
+  incidental for `auto`/unrecognized values too.
+- Setting `CLINE_AGENTS_BACKEND_MODE=hub` now throws a hard, descriptive
+  error at session-manager construction time, naming the reason, instead of
+  being silently ignored as it previously was.
+
+`CLINE_AGENTS_BACKEND_MODE` remains meaningful for a session you construct
+yourself with `ClineCore.create()` outside this plugin's own subagent
+dispatch (see "Quick start" above) — this override applies only to the
+sessions `start_subagent` creates.
 
 ## Observability
 
