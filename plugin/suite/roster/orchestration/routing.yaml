@@ -1080,7 +1080,13 @@
     },
     {
       "id": "sql-query-execution",
-      "paths": ["sql/queries/**", "database/queries/**"],
+      "paths": [
+        "sql/queries/**",
+        "database/queries/**",
+        "db/queries/**",
+        "**/queries/**/*.sql",
+        "**/migrations/**/*.sql"
+      ],
       "keywords": ["sql query", "sql migration script", "query implementation"],
       "primary": ["backend-engineer", "database-reliability-engineer", "sql-query-implementer"],
       "reviewers": ["test-engineer", "code-reviewer"]
@@ -1161,6 +1167,7 @@
     {"id":"qkd-qkms-integration-execution","paths":["quantum/qkd-qkms/**"],"keywords":["qkd qkms integration implementation"],"primary":["cryptographic-assurance-engineer","qkd-qkms-integration-implementer"],"reviewers":["security-reviewer"]},
     {"id":"quantum-network-integration-execution","paths":["quantum/network/**"],"keywords":["quantum network integration implementation"],"primary":["infrastructure-provisioner","quantum-network-integration-implementer"],"reviewers":["infrastructure-reviewer"]},
     {"id":"rbac-manifest-execution","paths":["security/rbac/**"],"keywords":["rbac manifest implementation"],"primary":["secrets-identity-engineer","rbac-manifest-implementer"],"reviewers":["security-reviewer"]},
+    {"id":"rtos-integration-execution","paths":["rtos/**","embedded/rtos/**","firmware/rtos/**"],"keywords":["rtos integration implementation","rtos task implementation","rtos scheduling implementation"],"primary":["application-engineer","rtos-integration-implementer"],"reviewers":["test-engineer","code-reviewer"]},
     {"id":"secret-hygiene-execution","paths":["security/secret-hygiene/**"],"keywords":["secret hygiene implementation"],"primary":["secrets-identity-engineer","secret-hygiene-implementer"],"reviewers":["security-reviewer"]},
     {"id":"secure-boot-execution","paths":["security/secure-boot/**"],"keywords":["secure boot implementation"],"primary":["secrets-identity-engineer","secure-boot-implementer"],"reviewers":["security-reviewer"]},
     {"id":"secure-channel-integration-execution","paths":["security/secure-channels/**"],"keywords":["secure channel integration implementation"],"primary":["cryptographic-assurance-engineer","secure-channel-integration-implementer"],"reviewers":["security-reviewer"]},

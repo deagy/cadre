@@ -1080,7 +1080,13 @@
     },
     {
       "id": "sql-query-execution",
-      "paths": ["sql/queries/**", "database/queries/**"],
+      "paths": [
+        "sql/queries/**",
+        "database/queries/**",
+        "db/queries/**",
+        "**/queries/**/*.sql",
+        "**/migrations/**/*.sql"
+      ],
       "keywords": ["sql query", "sql migration script", "query implementation"],
       "primary": ["backend-engineer", "database-reliability-engineer", "sql-query-implementer"],
       "reviewers": ["test-engineer", "code-reviewer"]
