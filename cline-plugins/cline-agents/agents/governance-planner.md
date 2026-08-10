@@ -684,38 +684,26 @@ only controls how much surrounding prose accompanies it.
 
 # Workspace Isolation
 
-**Applies to:** Steps 0-2 and the end-of-task result block apply to every
-write-capable capability tier (any tier whose `sandbox_mode` in
+**"Never mutate a working tree you did not create" (the section immediately
+below) applies to every role, every tier, no exceptions.** Read it before
+running any `git` command that is not purely a query -- including when the
+rest of this policy does not apply to you.
+
+**Applies to:** every *other* section here -- the worktree-isolation steps
+(Steps 0-2) and the end-of-task result block -- binds only write-capable
+capability tiers (any tier whose `sandbox_mode` in
 this project's runner-capability manifest is not `read-only` -- currently
 `document_author`, `code_author`, `test_author`, and `environment_operator`;
 see `generate_global_plugin.py`'s `WRITE_CAPABLE_TIERS`). A read-only role
-has no edits to isolate, so those steps do not apply to it.
+has no edits to isolate, so those sections do not apply to it, and a
+read-only role's generated wrapper embeds only the universally binding part
+of this file: this header plus the section immediately below.
 
-**"Never mutate a working tree you did not create" (immediately below)
-applies to every role, every tier, no exceptions.** Read it before running
-any `git` command that is not purely a query -- including when the rest of
-this file does not apply to you.
-
-`cadre resolve-shared workspace-isolation.md` returns this file verbatim on
+`cadre resolve-shared workspace-isolation.md` returns this file in full on
 request regardless of the caller's tier -- shared policy resolution is
-filename-based, not capability-aware.
-
-This file governs one thing: **before you make your first edit, decide
-whether to work in a dedicated `git worktree` instead of the caller's main
-working tree, and say which you did.** It is prompt policy plus an
-orchestrator dispatch-contract expectation, not a mechanically enforced gate
--- nothing in the dispatch pipeline blocks an edit that skips this. Follow it
-because a silent choice here creates real review and audit risk: reviewers
-and follow-up agents assume the main working tree reflects your work unless
-you say otherwise, and an isolated-but-unreported change looks, from the
-main tree, like nothing happened.
-
-Every rule in `agent-autonomy.yaml` still applies unchanged.
-`repository.create_local_branch_or_worktree: allowed` already covers creating
-the worktree and branch described below; `commit: on_request`,
-`push: on_request`, and `merge: never` are untouched -- this file does not
-grant, imply, or expand any permission. Isolating your edits into a worktree
-is a location decision, not a commit/push/merge decision.
+filename-based, not capability-aware. So if you are read-only and need the
+sections your wrapper omitted (to review another role's isolation choice,
+say), fetch them; nothing hides them from you.
 
 ## Never mutate a working tree you did not create
 
@@ -759,8 +747,8 @@ no extra license here, and a role without them has no automatic immunity.
 The real incident behind this section was a write-capable documentation role
 that ran `git reset --hard main` to read a branch's diff, restored nothing,
 and truthfully reported that it had made no edits -- it never touched a file.
-It had already been given this file's worktree-isolation steps and followed
-them; what was missing was this rule.
+It had already been given, and followed, the worktree-isolation steps that
+govern write-capable roles; what was missing was this rule.
 
 **To inspect a revision that is not checked out, read it without changing
 anything:**
@@ -795,6 +783,28 @@ prominently in your result**, including the exact command and what state
 preceded it. A destructive action reported immediately is recoverable
 (`git reflog` still holds the old tip); the same action discovered three
 steps later, by someone wondering where their work went, may not be.
+
+## Isolating your own edits (write-capable tiers)
+
+Everything from here to the end of this file binds write-capable tiers only,
+per the applicability header above.
+
+These sections govern one thing: **before you make your first edit, decide
+whether to work in a dedicated `git worktree` instead of the caller's main
+working tree, and say which you did.** It is prompt policy plus an
+orchestrator dispatch-contract expectation, not a mechanically enforced gate
+-- nothing in the dispatch pipeline blocks an edit that skips this. Follow it
+because a silent choice here creates real review and audit risk: reviewers
+and follow-up agents assume the main working tree reflects your work unless
+you say otherwise, and an isolated-but-unreported change looks, from the
+main tree, like nothing happened.
+
+Every rule in `agent-autonomy.yaml` still applies unchanged.
+`repository.create_local_branch_or_worktree: allowed` already covers creating
+the worktree and branch described below; `commit: on_request`,
+`push: on_request`, and `merge: never` are untouched -- this file does not
+grant, imply, or expand any permission. Isolating your edits into a worktree
+is a location decision, not a commit/push/merge decision.
 
 ## Step 0 -- Already isolated?
 

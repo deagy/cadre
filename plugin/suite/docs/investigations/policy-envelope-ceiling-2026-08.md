@@ -107,6 +107,16 @@ is not a small-context prompt; it is the same prompt.
    ~240 lines off 28 reviewer wrappers. It does nothing for the execution
    specialists, and is worth doing only on its own merits.
 
+   **Implemented (deagy/cadre#211).** `UNIVERSAL_POLICY_SECTIONS` in
+   `generate_global_plugin.py` excerpts the file section by section for tiers
+   outside `WRITE_CAPABLE_TIERS`, keeping the applicability header and the
+   "Never mutate a working tree you did not create" section and raising
+   `PolicyExcerptError` if either goes missing. A read-only wrapper went from
+   1020 to 802 lines; write-capable wrappers were unaffected by the mechanism.
+   It is deliberately a separate mechanism from `TIER_SCOPED_POLICIES`, and
+   deliberately not a general envelope generator — recommendation 1 above
+   stands. See `roster/shared/README.md`, "Section-granular excerpts".
+
 ## Reproducing
 
 ```sh

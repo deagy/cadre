@@ -23,6 +23,14 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+### Changed
+
+- **Read-only roles' generated wrappers now carry `workspace-isolation.md` as a section-granular excerpt instead of in full** ([#211](https://github.com/deagy/cadre/issues/211)). The file already states its own applicability rule — the worktree-isolation steps and the end-of-task result block bind write-capable tiers only, while "Never mutate a working tree you did not create" binds every role at every tier — so a reviewer's wrapper was carrying ~240 lines describing a decision it cannot make. `generate_global_plugin.py`'s new `UNIVERSAL_POLICY_SECTIONS` embeds the applicability header plus that one universally binding section for any capability outside `WRITE_CAPABLE_TIERS` (28 of 159 roles), and the whole file for everyone else. **Consumer impact:** each of those 28 roles' Claude Code and Codex wrappers drops from 1020 to 802 lines (~21%); no rule that binds a read-only role was removed, and `cadre resolve-shared workspace-isolation.md` still returns the full file to any caller at any tier.
+
+  This is deliberately a *separate* mechanism from the existing (still empty) `TIER_SCOPED_POLICIES`, which decides whether a tier gets a file at all — that file granularity is what made the earlier attempt at this trim wrong, since dropping the file also dropped the never-mutate rule. The new mechanism fails closed: a renamed or removed heading raises `PolicyExcerptError` and breaks the build, and an empty section tuple is rejected, so it cannot express "drop the whole file". It is not a general policy-envelope generator and should not become one — [`docs/investigations/policy-envelope-ceiling-2026-08.md`](docs/investigations/policy-envelope-ceiling-2026-08.md) measured that case and recommends against it.
+
+  `workspace-isolation.md`'s own prose was reordered so both the full and excerpted renderings read correctly: the write-capable-only framing that used to sit in the preamble now lives in its own `## Isolating your own edits (write-capable tiers)` section. No rule's meaning changed, but every wrapper's copy of the file differs textually as a result.
+
 ## [0.19.0] - 2026-08-10
 
 Shipped to users as plugin [v0.16.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.16.0) — the packaged plugin is how register-side changes reach an installed runner.
