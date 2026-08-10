@@ -34,8 +34,8 @@ and the Cline mirror (`python3 plugin/tools/port_cline_agents.py --root
 cline-plugins --source plugin`) each have their own CI guard, and stopping
 after the first step is the usual way to leave a pull request red. `git add`
 new files before regenerating — untracked files are silently skipped. See
-`roster/RUNBOOK.md` §17 for the full sequence, the required ordering, and what
-each guard catches.
+`roster/RUNBOOK.md` §17, "Regenerating derived output", for the full sequence,
+the required ordering, and what each guard catches.
 
 This repository's own catalog/plugin feature and roadmap work is tracked
 through GitHub Issues/PRs for discussion and triage; this repository does not

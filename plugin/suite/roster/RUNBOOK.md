@@ -828,6 +828,8 @@ Codex has no plugin-bundled-subagent mechanism, so its 71 namespaced `agents-<ro
 
 A namespaced `.toml` wrapper alone only lets a human or a project-local override name the role directly; it does not fix how a running Codex *session* dispatches one of these roles as a subagent mid-task. That dispatch mechanic — and the MCP server that makes it work correctly — is documented in `.agents/skills/run-agent-orchestration/references/runner-adapters.md`'s "Codex CLI" section; see that file's "Register the MCP dispatch server" step before relying on Codex-hosted subagent dispatch.
 
+### Regenerating derived output
+
 The plugin is self-contained: generated wrappers embed role and shared-policy
 instructions, while skills and runtime files are packaged under `skills/` and
 `suite/`. Regenerate it in place with `cadre generate-plugin --output plugin`
@@ -850,12 +852,12 @@ the committed mirror byte-for-byte against a fresh port, run by CI's
 `generate-plugin` leaves `cline-plugins/cline-agents/agents/<role>.md`
 diverged from its source and fails there.
 
-**`git add` new files before regenerating.** For everything selected out of
-the repository tree — `roster/`, `.agents/skills/`, `bin/`, `provider/` — the
-generator walks git-*tracked* files and skips untracked ones without warning.
-A new module under `roster/*/src/` that is not yet staged is therefore missing
-from `plugin/suite/`, even though an already-tracked file edited to import it
-*is* copied (the copy reads working-tree content, not the committed blob). The
+**`git add` new files before regenerating.** Two of the sources are read out of
+git's index rather than the working tree: `roster/` (`git ls-files roster`) and
+`.agents/skills/`. Untracked files there are skipped without warning, so a new
+module under `roster/*/src/` that is not yet staged is missing from
+`plugin/suite/`, even though an already-tracked file edited to import it *is*
+copied (the copy reads working-tree content, not the committed blob). The
 result is a packaged CLI importing a module the package does not contain,
 which surfaces as a `ModuleNotFoundError` inside the `cline-agents` npm
 suite's knowledge-store retrieval test — reported as a `status: unavailable`
@@ -864,15 +866,20 @@ assertion mismatch, a long way from the Python edit that caused it.
 `generate_global_plugin.py` fails loudly for two specific cases of this —
 untracked role `AGENT.md` files named by `catalog.yaml`, and untracked scripts
 named by `bin/subcommands.tsv` — but an ordinary new source module matches
-neither and is skipped in silence.
+neither and is skipped in silence. (Three helper modules under
+`roster/orchestration/src/` are named individually and packaged even when
+untracked; that carve-out covers those three files, not new ones.)
 
-**The documentation paths behave the opposite way, so check both directions.**
-`AGENTS.md`, `CONTRIBUTING.md`, `IDENTITY.md`, and everything under `docs/`
-are selected by a filesystem check rather than from the tracked set, so an
-untracked new `docs/*.md` **is** copied into `plugin/suite/docs/`. The hazard
-there is the mirror image: regenerate, see a clean `plugin/` diff, commit the
-packaged copy, and leave the source file untracked. Stage new files first and
-the two branches behave identically.
+**The remaining sources behave the opposite way, so check both directions.**
+The documentation paths — `AGENTS.md`, `CONTRIBUTING.md`, `IDENTITY.md`, and
+everything under `docs/` — and the whole `provider/` bundle are selected by a
+filesystem walk with no tracked test, so an untracked new `docs/*.md` or
+`provider/extensions/*.json` **is** copied into the package. The hazard there
+is the mirror image: regenerate, see a clean `plugin/` diff, commit the
+packaged copy, and leave the source file untracked. `bin/` is neither case —
+the packaged `bin/cadre` is synthesized from `bin/subcommands.tsv` rather than
+copied, and the scripts it dispatches to live under `roster/`. Stage new files
+first and every source behaves identically.
 
 Editing the repository-root `AGENTS.md` also requires a regeneration pass:
 `plugin/suite/AGENTS.md` is generated from it. Root `CLAUDE.md` is not
