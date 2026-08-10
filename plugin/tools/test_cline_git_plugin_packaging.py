@@ -20,6 +20,7 @@ against a stale literal.
 from __future__ import annotations
 
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -33,6 +34,18 @@ ENTRYPOINTS = (
 # Supplied by Cline's host sandbox at runtime, so deliberately absent from the
 # root closure even though the workspace packages declare them.
 HOST_SUPPLIED_SCOPE = "@cline/"
+# An exact semver, optionally with a prerelease suffix -- deliberately an
+# allow-list, not a denylist of range shapes (``^``, ``~``, ``>=``, a
+# space-separated range, ``||``, an ``x``/``*`` wildcard segment, a ``-``
+# prerelease-range shorthand, ...). Enumerating every disallowed shape risks
+# missing one and letting a range slip through undetected -- the dangerous
+# failure mode here, per issue #190 -- so anything that is not affirmatively
+# exactly this shape is rejected instead. Note this intentionally does not
+# accept build metadata (a ``+`` suffix, e.g. ``4.4.3+build.5``): no manifest
+# in this repository declares that shape today, and treating it as rejected
+# rather than silently allow-listing it keeps this a strict allow-list rather
+# than one that grows implicitly.
+_EXACT_VERSION_PIN = re.compile(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?\Z")
 
 
 def _read_json(*parts: str) -> dict:
@@ -78,6 +91,65 @@ def _workspace_runtime_dependencies(
                 continue
             declarations.setdefault(name, {})[workspace] = version
     return declarations
+
+
+def _assert_declared_versions_are_exact_pins(
+    declarations: dict[str, dict[str, str]],
+) -> None:
+    """Refuse any declared runtime dependency version that is not an exact pin.
+
+    ``_resolve_workspace_package_key`` below trusts a top-level
+    ``node_modules/<dependency>`` lockfile entry only when its resolved
+    version exactly *string-equals* one of our workspaces' own declared
+    pins (see that function's docstring). That equality check has no semver
+    evaluator behind it -- it works today only because every runtime
+    dependency across all four ``package.json`` manifests happens to be
+    pinned to an exact version, with no ``^``, ``~``, or other range
+    operator anywhere (issue #190).
+
+    If a future dependency bump ever introduces a real range (for example
+    ``">=4.0.0 <5.0.0"``), the exact-match check would simply never match,
+    and the lookup would fall through to the workspace-scoped fallback
+    keys. Since npm usually does not hoist a workspace-scoped copy when
+    there is no genuine conflict, that fallback would usually come up
+    empty and raise a *different*, confusing "not found" assertion --
+    technically fail-closed and safe, but exactly the kind of red build
+    that tempts a maintainer into "fixing" it by loosening the exact-match
+    equality check in ``_resolve_workspace_package_key``. Loosening that
+    check is what would silently reopen issue #186's version-exclusivity
+    gap: the exact-match gate is what forces the resolver to fall through
+    to the workspace-scoped keys and verify exclusivity there, rather than
+    trusting a top-level key that merely happens to satisfy a range.
+
+    So this function asserts the precondition ``_resolve_workspace_package_key``
+    already depends on, up front and by name, instead of letting a range
+    surface first as that confusing downstream failure. Deliberately not a
+    semver range evaluator: issue #190 argues a real evaluator does not
+    belong in this test file, so a genuinely-needed range dependency
+    requires a proper, reviewed range evaluator added as a deliberate
+    change -- not a quick loosening of the exact-match gate this refusal
+    guards, and not a range implementation smuggled in here either.
+    """
+    for name, by_workspace in declarations.items():
+        for workspace, version in by_workspace.items():
+            if not _EXACT_VERSION_PIN.match(version):
+                raise AssertionError(
+                    f"{workspace} declares {name} as {version!r}, which is not an exact"
+                    " version pin (expected a bare MAJOR.MINOR.PATCH, optionally with a"
+                    " prerelease suffix -- no ^, ~, >=, space-separated range, ||, or"
+                    " x/* wildcard segment). This check does not evaluate semver ranges:"
+                    " it only does an exact-match comparison against declared pins in"
+                    " _resolve_workspace_package_key, deliberately, because adding a real"
+                    " range evaluator to this test file was rejected in favor of this"
+                    " refusal (issue #190) -- a range slipping past the exact-match gate"
+                    " undetected would reopen issue #186's version-exclusivity gap,"
+                    " which that same gate exists to prevent. To fix this: either pin"
+                    f" {name} to an exact version in cline-plugins/{workspace}/package.json"
+                    " (and package.json, if it also declares it), or, if a range is"
+                    " genuinely required, extend this check with a proper semver range"
+                    " evaluator as a deliberate, reviewed change rather than loosening the"
+                    " exact-match comparison in _resolve_workspace_package_key."
+                )
 
 
 def _resolve_workspace_package_key(
@@ -214,6 +286,56 @@ class TestClineGitPluginPackaging(unittest.TestCase):
             "no plugin-owned runtime dependencies found in cline-plugins/*/package.json;"
             " the derivation below would vacuously pass",
         )
+        # Runs before every test below, including the _resolve_workspace_package_key
+        # tests, so a future range dependency fails here with issue #190's clear
+        # message rather than first surfacing as that function's own confusing
+        # "not found ... nor at any workspace-scoped fallback key" failure.
+        _assert_declared_versions_are_exact_pins(self.declarations)
+
+    def test_all_declared_runtime_dependencies_are_exact_pins(self) -> None:
+        """Issue #190: state the precondition _resolve_workspace_package_key relies on.
+
+        Redundant with the call already made in setUp, on the real manifests --
+        kept as its own test so the assertion has a named, independently
+        reportable outcome rather than only ever failing as a setUp error
+        attributed to whichever test happened to run first.
+        """
+        _assert_declared_versions_are_exact_pins(self.declarations)
+
+    def test_a_semver_range_is_refused_with_a_clear_message_not_a_confusing_one(
+        self,
+    ) -> None:
+        """Issue #190: a range must fail loudly and explicitly, not as "not found".
+
+        Before ``_assert_declared_versions_are_exact_pins`` existed, a
+        declared range would have sailed straight into
+        ``_resolve_workspace_package_key``, whose exact-match comparison
+        would simply never match, fall through to the workspace-scoped
+        fallback keys, usually find nothing there either, and raise a "not
+        found" assertion that does not mention ranges or exact pins at all.
+        This test proves the new check catches the range itself, before
+        that confusing downstream failure, and names the dependency,
+        workspace, and declared value.
+        """
+        declarations = {"zod": {"cline-agents": ">=4.0.0 <5.0.0"}}
+        with self.assertRaises(AssertionError) as caught:
+            _assert_declared_versions_are_exact_pins(declarations)
+        message = str(caught.exception)
+        self.assertIn("cline-agents", message)
+        self.assertIn("zod", message)
+        self.assertIn(">=4.0.0 <5.0.0", message)
+        self.assertIn("not an exact", message)
+        self.assertIn("range evaluator", message)
+        self.assertNotIn("not found", message)
+
+    def test_a_trailing_newline_is_refused_not_silently_accepted(self) -> None:
+        """``$`` (without re.MULTILINE) matches before a trailing "\\n" too --
+        use ``\\Z`` so a version string with a trailing newline is refused
+        like any other non-exact-pin shape, rather than slipping through.
+        """
+        declarations = {"zod": {"cline-agents": "4.4.3\n"}}
+        with self.assertRaises(AssertionError):
+            _assert_declared_versions_are_exact_pins(declarations)
 
     def test_workspaces_agree_on_every_shared_runtime_dependency(self) -> None:
         for name, by_workspace in self.declarations.items():
