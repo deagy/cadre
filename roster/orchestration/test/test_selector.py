@@ -262,6 +262,55 @@ class SelectorTests(unittest.TestCase):
         self.assertIn("debugging-engineer", result["agents"]["primary"])
         self.assertIn("test-engineer", result["agents"]["reviewers"])
 
+    def test_repository_version_files_route_to_agent_suite_governance(self) -> None:
+        # These exact files carry Cadre's own package/module version markers.
+        # They must not be represented by a generic Python glob: routing.yaml
+        # ships as the base ruleset to consuming projects, whose source trees
+        # have no Cadre-specific routing meaning (#196).
+        for relative_path in ("cadre_cli/__init__.py", "cadre_cli/_version.py"):
+            with self.subTest(path=relative_path):
+                result = plan(
+                    task="Inspect selected file",
+                    changed_files=[relative_path],
+                    classification="internal",
+                    task_id="ROUTING-196-POSITIVE",
+                )
+                self.assertEqual(
+                    ["agent-suite-governance"],
+                    [route["id"] for route in result["matched_routes"]],
+                )
+                self.assertEqual(
+                    [{"pattern": relative_path, "file": relative_path}],
+                    result["matched_routes"][0]["reasons"]["paths"],
+                )
+                self.assertEqual(
+                    ["application-engineer", "debugging-engineer"],
+                    result["agents"]["primary"],
+                )
+                self.assertEqual(["test-engineer", "code-reviewer"], result["agents"]["reviewers"])
+                self.assertEqual(result["workflow"], "agent-suite-maintenance")
+
+    def test_generic_pyproject_manifests_remain_unclaimed_by_path(self) -> None:
+        # These manifests carry dependency pins, but kernel/ and engine/ are
+        # ordinary downstream directory names. A path-only base rule would be
+        # non-narrowable for consumers, so these stay needs-triage until the
+        # selector can express path-and-intent or repository identity (#196).
+        for relative_path in (
+            "pyproject.toml",
+            "kernel/pyproject.toml",
+            "engine/pyproject.toml",
+            "example/pyproject.toml",
+        ):
+            with self.subTest(path=relative_path):
+                result = plan(
+                    task="Inspect selected file",
+                    changed_files=[relative_path],
+                    classification="internal",
+                    task_id="ROUTING-196-PYPROJECT-NEGATIVE",
+                )
+                self.assertEqual([], result["matched_routes"])
+                self.assertEqual("needs-triage", result["status"])
+
     def test_selects_frontend_and_backend_with_cross_stack_coordination(self) -> None:
         result = plan(
             task="Add a React upload form backed by a PostgreSQL API",
@@ -1210,15 +1259,15 @@ class SelectorTests(unittest.TestCase):
         self.assertNotIn("security-reviewer", result["agents"]["reviewers"])
 
     def test_root_pyproject_toml_alone_does_not_route_to_packaging(self) -> None:
-        # #189 review finding 2 (code-reviewer, MEDIUM): routing.yaml ships as
-        # the BASE ruleset to every consuming project (routing_overlay.py only
-        # lets a consumer widen a base route, never narrow it), and root
+        # #189 review finding 2 and #196: routing.yaml ships as the BASE
+        # ruleset to every consuming project (routing_overlay.py only lets a
+        # consumer widen a base route, never narrow it), and root
         # pyproject.toml is a generic file present in arbitrary downstream
-        # Python projects. Claiming it under a route named "packaging" whose
-        # keywords are about this repo's own Cline ports and plugin manifests
-        # is wrong for every consumer, so pyproject.toml was removed from the
-        # route's paths. A pyproject.toml-only change with no packaging
-        # keyword in the task text now falls through to needs-triage.
+        # Python projects. Cadre-specific version files above are claimed
+        # under a narrower route, but generic pyproject.toml files are not.
+        # A pyproject.toml-only change with no route-specific task wording
+        # must continue to fall through to needs-triage for consumer-owned
+        # routing.
         result = plan(
             task="Look at pyproject.toml",
             changed_files=["pyproject.toml"],
@@ -1226,6 +1275,7 @@ class SelectorTests(unittest.TestCase):
             task_id="PKG-189-3",
         )
         route_ids = {match["id"] for match in result["matched_routes"]}
+        self.assertEqual(set(), route_ids)
         self.assertNotIn("packaging", route_ids)
         self.assertEqual(result["status"], "needs-triage")
 

@@ -1261,6 +1261,101 @@ class RepositoryHealthTests(unittest.TestCase):
             )
             self.assertEqual(["frontend/App.tsx"], json.loads(diff.stdout)["inputs"]["changed_files"])
 
+    @unittest.skipUnless(sys.platform != "win32", "packaged wrapper is a POSIX sh script")
+    def test_packaged_selector_routes_cadre_specific_packaging_paths_only(self) -> None:
+        wrapper = generated_package() / "bin" / "cadre"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            target = Path(temporary_directory) / "consumer"
+            target.mkdir()
+            subprocess.run(["git", "init", "-q", str(target)], check=True)
+
+            positive_cases = [
+                (
+                    "cadre_cli/__init__.py",
+                    "agent-suite-governance",
+                    ["application-engineer", "debugging-engineer"],
+                    ["test-engineer", "code-reviewer"],
+                    ["technical-writer"],
+                    "agent-suite-maintenance",
+                    None,
+                    None,
+                ),
+                (
+                    "cadre_cli/_version.py",
+                    "agent-suite-governance",
+                    ["application-engineer", "debugging-engineer"],
+                    ["test-engineer", "code-reviewer"],
+                    ["technical-writer"],
+                    "agent-suite-maintenance",
+                    None,
+                    None,
+                ),
+            ]
+            for relative_path, route_id, primary, reviewers, support, workflow, risks, gates in positive_cases:
+                with self.subTest(path=relative_path):
+                    positive = subprocess.run(
+                        [
+                            str(wrapper),
+                            "select",
+                            "--task",
+                            "Inspect selected file",
+                            "--files",
+                            relative_path,
+                            "--classification",
+                            "internal",
+                            "--task-id",
+                            f"PACKAGED-ROUTING-196-POSITIVE-{route_id}",
+                        ],
+                        cwd=target,
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                    )
+                    positive_plan = json.loads(positive.stdout)
+                    self.assertEqual(
+                        [route_id],
+                        [route["id"] for route in positive_plan["matched_routes"]],
+                    )
+                    self.assertEqual(
+                        [{"pattern": relative_path, "file": relative_path}],
+                        positive_plan["matched_routes"][0]["reasons"]["paths"],
+                    )
+                    self.assertEqual(primary, positive_plan["agents"]["primary"])
+                    self.assertEqual(reviewers, positive_plan["agents"]["reviewers"])
+                    self.assertEqual(support, positive_plan["agents"]["support"])
+                    self.assertEqual(workflow, positive_plan["workflow"])
+                    if risks is not None:
+                        self.assertEqual(risks, positive_plan["matched_risks"])
+                    if gates is not None:
+                        self.assertEqual(gates, positive_plan["required_quality_gates"])
+
+            for relative_path in ("pyproject.toml", "kernel/pyproject.toml", "engine/pyproject.toml"):
+                with self.subTest(path=relative_path):
+                    negative = subprocess.run(
+                        [
+                            str(wrapper),
+                            "select",
+                            "--task",
+                            "Inspect selected file",
+                            "--files",
+                            relative_path,
+                            "--classification",
+                            "internal",
+                            "--task-id",
+                            "PACKAGED-ROUTING-196-NEGATIVE",
+                        ],
+                        cwd=target,
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                    )
+                    negative_plan = json.loads(negative.stdout)
+                    self.assertEqual([], negative_plan["matched_routes"])
+                    self.assertEqual("needs-triage", negative_plan["status"])
+                    self.assertEqual("needs-triage", negative_plan["workflow"])
+
     def test_generated_package_has_no_source_paths_or_unsafe_relative_documentation_paths(self) -> None:
         generator = REPOSITORY_ROOT / "roster" / "orchestration" / "src" / "generate_global_plugin.py"
         with tempfile.TemporaryDirectory(prefix="agents-packaging-") as temporary_directory:

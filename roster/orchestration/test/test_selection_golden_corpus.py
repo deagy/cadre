@@ -159,6 +159,20 @@ def _mismatches(case: dict[str, Any], actual: dict[str, Any]) -> list[str]:
     if actual_routes != expected_routes:
         mismatches.append(f"matched_routes: expected={expected_routes!r}, got={actual_routes!r}")
 
+    if "matched_risks" in expected:
+        expected_risks = expected["matched_risks"]
+        actual_risks = [risk["id"] for risk in actual["matched_risks"]]
+        if actual_risks != expected_risks:
+            mismatches.append(f"matched_risks: expected={expected_risks!r}, got={actual_risks!r}")
+
+    if "required_quality_gate_ids" in expected:
+        expected_gates = expected["required_quality_gate_ids"]
+        actual_gates = [gate["id"] for gate in actual["required_quality_gates"]]
+        if actual_gates != expected_gates:
+            mismatches.append(
+                f"required_quality_gate_ids: expected={expected_gates!r}, got={actual_gates!r}"
+            )
+
     if "team_ids" in expected:
         expected_teams = sorted(expected["team_ids"])
         actual_teams = sorted(team["id"] for team in actual["teams"])
