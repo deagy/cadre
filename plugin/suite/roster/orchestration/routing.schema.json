@@ -78,6 +78,27 @@
         "$ref": "#/$defs/teamRecipe"
       }
     },
+    "context_packs": {
+      "description": "Non-authoring vendor/platform references selected alongside roles; they never declare agents or gates.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "version", "definition"],
+        "properties": {
+          "id": { "$ref": "#/$defs/nonempty" },
+          "version": { "type": "integer", "minimum": 1 },
+          "definition": { "$ref": "#/$defs/nonempty" },
+          "paths": { "$ref": "#/$defs/stringArray" },
+          "exclude_paths": { "$ref": "#/$defs/stringArray" },
+          "keywords": { "$ref": "#/$defs/nonemptyStringArray" },
+          "keyword_groups": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/nonemptyStringArray" }
+          }
+        }
+      }
+    },
     "knowledge_focus": {
       "type": "object",
       "propertyNames": {

@@ -2,7 +2,7 @@
 
 A distinct plugin from [`cline/`](../cline) (which only exposes the
 `agents_select` *planning* tool and never spawns anything). This plugin,
-`cline-agents`, ports this repository's 86 Cadre catalog roles (`agents/*.md`,
+`cline-agents`, ports this repository's 159 Cadre catalog roles (`agents/*.md`,
 the Claude Code / Codex subagent presets defined in this repository) into
 Cline SDK **agent presets** that a Cline session can actually dispatch as
 background subagents.
@@ -17,7 +17,7 @@ template"](#hardening-vs-upstream-template) below.
 
 ## `agents/` and `skills/` are regenerated content, not hand-authored
 
-The 86 files under `agents/` and the 8 files under `skills/` are produced by
+The 159 files under `agents/` and the 8 files under `skills/` are produced by
 [`tools/port_cline_agents.py`](../tools/port_cline_agents.py) (run from the
 repository root), which this repository's release-triggered regeneration
 workflow (`regenerate.yml`) now runs automatically alongside the rest of the
@@ -102,7 +102,7 @@ discovery tools (`list_agent_presets`/`list_skills`).
 | `dispatch_selected_roles` | Call `bin/cadre select` (the same authoritative selector the `cadre` plugin's `agents_select` tool uses) and, if the plan is staffed, immediately `start_subagent` every selected primary/reviewer role in one call. Support roles are returned in the plan but never auto-dispatched -- start them explicitly if wanted. Pass `retrieveKnowledge: true` (opt-in, not the default -- `classification` is caller-asserted, not authenticated) to also retrieve knowledge-store context per role before dispatch and inject it as fenced, labeled untrusted reference material with a trailing authority re-assertion -- a retrieval failure or timeout for one role never blocks dispatch or broadens access for any role. Closes the plan-to-dispatch gap `agents_select`'s own tool description points at. |
 | `message_subagent` | Send a follow-up message to a running subagent. |
 | `get_subagent` | Poll status, output, or error for a subagent session. |
-| `list_agent_presets` | List the 86 bundled Cadre role presets plus any accepted global/project overrides. |
+| `list_agent_presets` | List the 159 bundled Cadre role presets plus any accepted global/project overrides. |
 | `list_skills` / `get_skill` | Discover and load skill instructions: this repository's own 7 bundled skills (a static port of `skills/*/SKILL.md`, with any `references/*.md` inlined -- see `skills/*.md` in this plugin), plus any accepted global/project overlays. Like agent presets, a bundled skill name cannot be silently shadowed by a same-named global/project skill. |
 | `save_handoff` / `read_handoff` | Share text between subagents in the same conversation. |
 | `create_review_subtask` / `write_wiki_page` / `write_evidence_comment` | GitLab evidence tools, reached via `cadre gitlab-evidence` (this plugin has no MCP client, so it cannot attach `suite/roster/orchestration/mcp/gitlab_server.py` directly -- see `suite/roster/orchestration/mcp/GITLAB-EVIDENCE.md`). All three require `GITLAB_SVC_TOKEN`/`GITLAB_BASE_URL`/`GITLAB_DOCS_PROJECT_ID` in this process's environment and return `status="unavailable"` if unset. `create_review_subtask`/`write_evidence_comment` are create-only, single-call. `write_wiki_page` is the `human_approval`-tier tool: its first call never writes -- it returns `status="confirmation_required"` plus a token that must be shown to a human and replayed unchanged on a second call before anything is written. |
@@ -227,8 +227,8 @@ session start rather than silently selecting something else.
 
 This port intentionally departs from `examples/plugins/agents-squad` in three ways (verified accurate as of this port; see `index.ts` for the implementation):
 
-1. **Real, not advisory, tool enforcement.** Each preset's source `tools:` frontmatter is translated into Cline's canonical `allowedTools` names, then turned into an explicit deny-by-default `toolPolicies` map at dispatch time (`resolveToolPolicyConfig`). Genuinely read-only roles (28 of 86, no `run_commands`/`editor`/`apply_patch`) additionally get `mode: "plan"` as defense-in-depth.
-2. **Reserved bundled names.** Unlike the upstream template's project > global > bundled override precedence, this port rejects (not silently overrides) any global-/project-tier file whose `name:` collides with one of the 86 bundled role names.
+1. **Real, not advisory, tool enforcement.** Each preset's source `tools:` frontmatter is translated into Cline's canonical `allowedTools` names, then turned into an explicit deny-by-default `toolPolicies` map at dispatch time (`resolveToolPolicyConfig`). Genuinely read-only roles (28 of 159, no `run_commands`/`editor`/`apply_patch`) additionally get `mode: "plan"` as defense-in-depth.
+2. **Reserved bundled names.** Unlike the upstream template's project > global > bundled override precedence, this port rejects (not silently overrides) any global-/project-tier file whose `name:` collides with one of the 159 bundled role names.
 3. **Preset-only dispatch, containment-checked `cwd`.** `start_subagent` rejects a missing/unknown `preset` rather than defaulting to an unrestricted subagent. A caller-supplied `cwd`/`workingDirectory` that would escape the workspace root (e.g. `../../etc`) is rejected, not clamped.
 
 ## Destructive-git guard (`beforeTool`)
@@ -341,7 +341,7 @@ minus the ability to shadow a reserved bundled agent name:
 
 | Kind | Bundled | Global | Project |
 |---|---|---|---|
-| Agents | `agents/` next to `index.ts` (86 Cadre roles, reserved names) | `~/.cline/data/settings/agents/` | `<workspaceRoot>/.cline/agents/` |
+| Agents | `agents/` next to `index.ts` (159 Cadre roles, reserved names) | `~/.cline/data/settings/agents/` | `<workspaceRoot>/.cline/agents/` |
 | Skills | `skills/` next to `index.ts` (8 skills, reserved names) | `~/.cline/data/settings/skills/` | `<workspaceRoot>/.cline/skills/` |
 
 **Warning: a hand-authored global or project preset with no `allowedTools`
@@ -351,7 +351,7 @@ only builds a deny-by-default `toolPolicies` map when a preset declares
 project preset (`<workspaceRoot>/.cline/agents/`) that omits the field
 gets no restriction applied at all — by design, for fidelity to the
 upstream template's default full-tool behavior for a preset that never
-opted into this field. All 86 bundled presets set `allowedTools`
+opted into this field. All 159 bundled presets set `allowedTools`
 automatically and are unaffected. If you hand-author your own preset, you
 must set `allowedTools` explicitly to get any tool restriction; leaving it
 out is not a safe default.

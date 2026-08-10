@@ -1,6 +1,6 @@
 # Cline Plugin (`cadre`'s `agents_select` tool)
 
-A distinct plugin from [`cline-agents/`](../cline-agents) (which ports the 86 Cadre
+A distinct plugin from [`cline-agents/`](../cline-agents) (which ports the 159 Cadre
 roles into dispatchable Cline agent presets). This plugin, `cline`, exposes exactly
 one tool call, `agents_select`: deterministic, reviewable agent *dispatch planning*
 from this repository's Cadre catalog. It never invokes agents, retrieves knowledge,

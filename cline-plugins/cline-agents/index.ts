@@ -28,7 +28,7 @@ import { safeJsonStringify } from "@cline/shared";
 // ---------------------------------------------------------------------------
 //
 // `cline-agents` is a static, one-time, hand-authored port of this
-// repository's 86 Cadre catalog roles (`agents/*.md`, Claude Code / Codex
+// repository's 159 Cadre catalog roles (`agents/*.md`, Claude Code / Codex
 // subagent presets) into Cline SDK agent presets (`agents/*.md` in this
 // plugin, Markdown + YAML frontmatter, one per role). It is a distinct
 // plugin from `cline/` (which exposes the single `agents_select` dispatch
@@ -42,7 +42,7 @@ import { safeJsonStringify } from "@cline/shared";
 //      frontmatter is translated into an explicit deny-by-default
 //      `toolPolicies` map (see `resolveToolPolicyConfig` below), plus a
 //      `mode: "plan"` defense-in-depth guard for genuinely read-only roles.
-//   2. The 86 bundled role names are reserved against silent shadowing by a
+//   2. The 159 bundled role names are reserved against silent shadowing by a
 //      global- or project-tier preset of the same name (see
 //      `readAgentDefinitions`).
 //   3. `start_subagent` requires a known `preset` -- it never falls through
@@ -676,12 +676,12 @@ function toAgentDefinition(entry: {
 }
 
 /**
- * Load all available agent presets: bundled (this plugin's 86 converted
+ * Load all available agent presets: bundled (this plugin's 159 converted
  * Cadre roles) plus global and project overlays, in that discovery order.
  *
  * Unlike the upstream agents-squad template this port is based on -- whose
  * discovery precedence lets a project- or global-tier preset silently
- * override a bundled definition of the same name -- the 86 bundled role
+ * override a bundled definition of the same name -- the 159 bundled role
  * names are reserved. A global- or project-tier file whose frontmatter
  * `name:` collides with a reserved bundled name is rejected (skipped, with
  * a warning logged) rather than allowed to override the bundled role's
@@ -2082,7 +2082,7 @@ const setup = (api: SetupApi, ctx: SetupContext) => {
       "You are a coding assistant with access to Cadre role subagents. " +
       "Use `dispatch_selected_roles` (routes through the same `bin/cadre select` plan `agents_select` " +
       "uses, then immediately dispatches every selected primary/reviewer role) or `start_subagent` " +
-      "with a named `preset` to actually run one of the 86 bundled Cadre role presets as a background " +
+      "with a named `preset` to actually run one of the 159 bundled Cadre role presets as a background " +
       "subagent. Use `list_agent_presets`/`list_skills` to discover what is available before " +
       "dispatching, and `get_subagent`/`message_subagent` to poll or follow up with a running one.",
     source: "cline-agents",
@@ -2319,7 +2319,7 @@ const setup = (api: SetupApi, ctx: SetupContext) => {
     createTool({
       name: "list_agent_presets",
       description:
-        "List the available subagent presets: the 86 bundled Cadre role presets plus any accepted " +
+        "List the available subagent presets: the 159 bundled Cadre role presets plus any accepted " +
         "global/project-level definitions.",
       inputSchema: z.toJSONSchema(z.object({}).strict()),
       execute: async (_input: unknown, _toolCtx: AgentToolContext) => {

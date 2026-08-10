@@ -37,6 +37,22 @@ check and reporting "nothing to do". See
 
 - **`docs/investigations/` is exempt from the role-count drift guard.** Its counts are evidence of what was measured on a date, not claims about the present; the guard was rewriting a dated finding to track the live catalog.
 
+### Added — second wave
+
+- **Seventy-three further execution specialists, taking the catalog from 86 to 159.** These extend the first wave above into the remaining technology surfaces — `kyverno-policy-implementer`, `talos-config-implementer`, `rtos-integration-implementer`, `sql-query-implementer`, `bgp-routing-implementer`, `ansible-automation-implementer` and their siblings — concentrated in `build`, with matching narrow specialists in `verify`, `security`, and `operations`. 82 of the 159 roles are now `*-implementer`, and 77 sit in the `haiku` tier. The 1% wrapper-size caveat recorded for the first wave applies unchanged: this buys routing precision, not smaller prompts, until the policy-envelope mechanism lands.
+
+- **Non-authoring vendor and platform context packs.** Twenty reference packs under `roster/context-packs/` (`redfish-bmc`, `fpga-gateware`, `ceph-rook-storage`, `yang-gnmi-network-management`, `sonicwall-sonicos`, `hardware-root-of-trust`, and the quantum-network/QKD set among them) supply bounded terminology, compatibility, and validation context alongside a selected role. They are selected by keyword through the ordinary route grammar (`routing.yaml`'s `context_packs` array), and each pack the plan emits is bound to its exact bytes by a `content_hash`, so a reviewer can tell which text a dispatch actually carried. A pack is withheld unless the task's asserted classification permits it, and withheld entirely when no classification is asserted — the same fail-closed rule `_build_knowledge_context` applies.
+
+### Changed — second wave
+
+- **Execution routes select the specialist as sole primary, with the accountable role in `support`.** Previously both were dispatched as `primary`, so two `code_author` agents were staffed over the same files — which the proposal's own routing model does not ask for, and which conflicts with `operating-principles.md`'s "keep file ownership exclusive per agent." The accountable role is still selected on every one of those routes and still owns design and scope; it advises rather than co-authoring. Independent review is untouched, and six plans actually *gain* a reviewer: `test-engineer` was previously stripped from `reviewers` by the primary/reviewer dedup when it was also an accountable primary.
+
+- **27 execution specialists move from `haiku` to `sonnet`.** With the accountable role no longer co-authoring, the specialist's tier is the tier of the work. `catalog.yaml`'s heuristic gains an explicit blast-radius override: a specialist is sonnet, not haiku, when as sole author it produces artifacts that execute with kernel or elevated privilege, change network reachability or security posture, mutate persistent infrastructure or data durability, handle cryptographic material, or perform destructive or history-rewriting operations. That covers eBPF, device drivers, C/C++ and embedded systems, BGP and network/firewall configuration, bare-metal and storage provisioning, PKI, GitOps delivery, and git history operations. UI/styling, tests and fixtures, build configuration, and application-level code in memory-safe languages stay haiku.
+
+- **`schema_version` goes 4 → 5. This is a breaking change: `context_packs` is required and always emitted.** Every plan now carries a `context_packs` array — `[]` when nothing matched, which is most tasks. `selection.schema.json` is closed (`additionalProperties: false`) and is vendored away from the producer into both the pip wheel and the plugin distribution, so a consumer validating a freshly generated plan against a v4 copy they installed rejects it on the unknown property. Update the schema copy alongside the CLI. Plans archived under `schema_version: 4` stay readable as v4 documents and should be validated against a v4 schema.
+
+- **`roster/context-packs/` is vendored into the pip wheel.** It is a runtime resource, and without it any task matching a pack keyword aborted `cadre select` in a pip or pipx install. The CI smoke test now uses a task that trips two packs and asserts both are present, rather than a task that matches none.
+
 ## [0.18.0] - 2026-08-10
 
 Shipped to users as plugin [v0.15.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.15.0) — the packaged plugin is how register-side changes reach an installed runner.

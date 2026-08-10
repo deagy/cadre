@@ -159,6 +159,28 @@ def validate_routing_config(config: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(
                 f"{rule.get('id', 'rule')} keyword_groups must contain non-empty string groups"
             )
+    context_packs = config.get("context_packs", [])
+    if not isinstance(context_packs, list):
+        raise ValueError("routing.yaml context_packs must be a list")
+    # Context pack ids live in the SAME namespace as route, risk rule, and
+    # team recipe ids -- not a private one. A dispatch plan puts
+    # `matched_routes[].id`, `matched_risks[].id`, and `context_packs[].id`
+    # side by side, so an id claimed by both a route and a pack is ambiguous
+    # for any consumer keying on plan ids. `schema_validate.validate_routing`
+    # checks each array only against itself, so pooling here is the only
+    # place the cross-array collision is caught.
+    claimed_ids = set(ids)
+    for pack in context_packs:
+        if not isinstance(pack, dict):
+            raise ValueError("routing.yaml context_packs entries must be objects")
+        pack_id, definition, version = pack.get("id"), pack.get("definition"), pack.get("version")
+        if not isinstance(pack_id, str) or not pack_id or not isinstance(definition, str) or not definition:
+            raise ValueError("routing.yaml context_packs entries require non-empty id and definition")
+        if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+            raise ValueError(f"{pack_id} context pack version must be a positive integer")
+        if pack_id in claimed_ids:
+            raise ValueError(f"duplicate context pack id: {pack_id}")
+        claimed_ids.add(pack_id)
     for recipe in config.get("team_recipes", []):
         if recipe.get("type") == "dynamic":
             instances = recipe.get("instances", {})
@@ -232,4 +254,16 @@ def match_routes(
         reasons = match_rule(route, task_text, changed_files)
         if reasons["matched"]:
             matches.append({"id": route["id"], "reasons": reasons, "rule": route})
+    return matches
+
+
+def match_context_packs(
+    config: dict[str, Any], task_text: str, changed_files: list[str]
+) -> list[dict[str, Any]]:
+    """Select non-authoring context packs using the ordinary route grammar."""
+    matches = []
+    for pack in config.get("context_packs", []):
+        reasons = match_rule(pack, task_text, changed_files)
+        if reasons["matched"]:
+            matches.append({"id": pack["id"], "reasons": reasons, "rule": pack})
     return matches

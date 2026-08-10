@@ -10,7 +10,7 @@
     {
       "name": "cadre",
       "source": "./plugin",
-      "description": "Cadre role selection: 86 specialist roles with deterministic dispatch planning. The only plugin most projects need."
+      "description": "Cadre role selection: 159 specialist roles with deterministic dispatch planning. The only plugin most projects need."
     },
     {
       "name": "cadre-lifecycle-core",

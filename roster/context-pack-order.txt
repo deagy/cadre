@@ -1,0 +1,22 @@
+# Non-authoring vendor/platform context packs. These complement selected roles;
+# they are deliberately not catalog agents and never receive authority/wrappers.
+toshiba-qkms-context
+aliro-quantum-network-context
+qunnect-quantum-network-context
+thinkquantum-qkd-qrng-context
+realtime-linux-context
+linux-hardening-context
+container-host-os-context
+fpga-gateware-context
+sonicwall-sonicos-context
+quantum-network-standards-context
+embedded-linux-toolchain-context
+hardware-root-of-trust-context
+memory-safety-hardening-context
+yang-gnmi-network-management-context
+carrier-dataplane-context
+redfish-bmc-context
+ceph-rook-storage-context
+pki-enrollment-context
+secure-channel-protocols-context
+upgrade-compatibility-context

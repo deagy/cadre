@@ -191,9 +191,20 @@ jobs:
           echo "cadre pip/pipx distribution smoke test" > README.md
 
           "$CADRE" help >/dev/null
-          "$CADRE" select --root . --task "CI pip package smoke test" \
+          # The task text deliberately trips two context-pack keywords, and the
+          # plan is asserted rather than discarded. roster/context-packs/ is a
+          # runtime resource resolved from the installed wheel, so a task that
+          # matches no pack cannot detect it going unvendored -- which is
+          # exactly how that shipped broken once. Two packs, not one, so a
+          # single pack's definition going missing still fails the job.
+          # --classification internal is load-bearing: packs declare
+          # `classification: internal`, and a public or omitted classification
+          # correctly withholds them, reinstating the blind spot.
+          "$CADRE" select --root . \
+            --task "CI pip package smoke test: redfish bmc inventory and ceph rook storage" \
             --files README.md --classification internal \
-            --task-id ci-pip-smoke-1 >/dev/null
+            --task-id ci-pip-smoke-1 \
+            | python3 -c 'import json,sys; p=json.load(sys.stdin)["context_packs"]; ids=sorted(x["id"] for x in p); assert ids==["ceph-rook-storage-context","redfish-bmc-context"], f"expected both context packs from the installed wheel, got {ids}"'
 
           # generate-role-metadata --check is read-only and genuinely
           # expected to work from an install (see cadre_cli/__init__.py).

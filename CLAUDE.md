@@ -8,7 +8,7 @@ A runner-neutral **Cadre** monorepo. Four repositories were merged into this one
 
 | Directory | What it owns |
 | --- | --- |
-| `roster/` | 86 specialist role definitions (`<phase>/<role>/AGENT.md`), their inventory (`catalog.yaml`), deterministic orchestration/routing, shared policy, and the knowledge store. |
+| `roster/` | 159 specialist role definitions (`<phase>/<role>/AGENT.md`), 20 non-authoring context packs, their inventory (`catalog.yaml`), deterministic orchestration/routing, shared policy, and the knowledge store. |
 | `kernel/` | The G1–G10 lifecycle kernel: gate contracts, run-record validation, gate-authority semantics, project initializer. A separately versioned, separately publishable pip distribution. |
 | `engine/` | The LangGraph orchestration engine that drives a task through the gates as a compiled graph (`uv`, Python ≥3.11). |
 | `provider/` | The `secure-cloud` provider bundle: profiles, extensions, generated Codex wrappers, and `provider.json`'s `kernel_compatibility` window. |

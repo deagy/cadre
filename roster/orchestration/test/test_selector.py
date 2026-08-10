@@ -131,6 +131,50 @@ class RouteMatchReasonTests(unittest.TestCase):
         result = plan(task="Rotate the session token used for authorization", changed_files=[])
         self.assertEqual(result["matched_routes"], [])
 
+    def test_vendor_context_pack_is_bound_without_becoming_an_agent(self) -> None:
+        # Every pack under roster/context-packs/ declares classification
+        # `internal`, so the task has to assert at least that much for the
+        # pack to be emitted at all (see the withholding tests below).
+        result = plan(
+            task="Integrate Toshiba Q-KMS with our QKD gateway",
+            changed_files=[],
+            classification="internal",
+        )
+        packs = result["context_packs"]
+        self.assertEqual([pack["id"] for pack in packs], ["toshiba-qkms-context"])
+        self.assertEqual(packs[0]["version"], 1)
+        self.assertEqual(packs[0]["definition"], "context-packs/toshiba-qkms-context/CONTEXT.md")
+        self.assertEqual(packs[0]["classification"], "internal")
+        self.assertRegex(packs[0]["content_hash"], r"^sha256:[0-9a-f]{64}$")
+        selected = {agent for group in result["agents"].values() for agent in group}
+        self.assertNotIn("toshiba-qkms-context", selected)
+
+    def test_context_pack_is_withheld_from_a_lower_classification_task(self) -> None:
+        # An internal-classified pack must not ride along in a plan the caller
+        # asserted as public. What is withheld is the pack alone: routing and
+        # staffing must be identical to the internal-classified run, so a
+        # classification downgrade cannot silently change who gets dispatched.
+        arguments = {
+            "task": "Integrate Toshiba Q-KMS with our QKD gateway",
+            "changed_files": [],
+        }
+        public = plan(**arguments, classification="public")
+        internal = plan(**arguments, classification="internal")
+
+        self.assertEqual(public["context_packs"], [])
+        self.assertEqual([pack["id"] for pack in internal["context_packs"]], ["toshiba-qkms-context"])
+        self.assertEqual(
+            [match["id"] for match in public["matched_routes"]],
+            [match["id"] for match in internal["matched_routes"]],
+        )
+        self.assertEqual(public["agents"], internal["agents"])
+
+    def test_context_pack_is_withheld_when_no_classification_is_asserted(self) -> None:
+        # Fails closed exactly as _build_knowledge_context does: an unasserted
+        # classification is not treated as "public enough for internal packs".
+        result = plan(task="Integrate Toshiba Q-KMS with our QKD gateway", changed_files=[])
+        self.assertEqual(result["context_packs"], [])
+
     def test_reasons_are_deterministic_across_identical_calls(self) -> None:
         # Reasons ride inside the fingerprinted payload, so unstable ordering
         # here would turn `dispatch_fingerprint` into a coin flip.
@@ -342,6 +386,32 @@ class SelectorTests(unittest.TestCase):
                 self.assertEqual([], result["agents"]["primary"])
                 self.assertEqual([], result["agents"]["reviewers"])
                 self.assertEqual([], result["agents"]["support"])
+
+    def test_bare_typescript_needs_a_browser_corroborator_to_reach_frontend(self) -> None:
+        # "typescript"/"javascript" are ambiguous between browser and Node work,
+        # so they no longer match the broad frontend route on their own -- that
+        # is what put frontend-engineer and accessibility-reviewer on Node build
+        # scripts. Genuine browser work must still match, which is the half of
+        # this change that is easy to break by over-narrowing.
+        node = plan(task="Implement Node TypeScript utility", changed_files=["tools/build.mts"])
+        self.assertNotIn("frontend", [m["id"] for m in node["matched_routes"]])
+        self.assertNotIn("frontend-engineer", node["agents"]["primary"])
+        self.assertNotIn("accessibility-reviewer", node["agents"]["reviewers"])
+
+        browser = plan(
+            task="Fix the typescript types on the browser upload component",
+            changed_files=[],
+        )
+        self.assertIn("frontend", [m["id"] for m in browser["matched_routes"]])
+        self.assertIn("frontend-engineer", browser["agents"]["primary"])
+
+        # A .ts file under a frontend path still reaches the route; the new
+        # exclude_paths only releases the Node-tooling shapes that
+        # node-typescript-execution owns.
+        app = plan(task="Update the api client", changed_files=["frontend/src/api.ts"])
+        self.assertIn("frontend", [m["id"] for m in app["matched_routes"]])
+        tooling = plan(task="Update the bundler config", changed_files=["tools/esbuild.ts"])
+        self.assertNotIn("frontend", [m["id"] for m in tooling["matched_routes"]])
 
     def test_selects_frontend_and_backend_with_cross_stack_coordination(self) -> None:
         result = plan(
@@ -751,7 +821,7 @@ class SelectorTests(unittest.TestCase):
             task="Deploy to production with Terraform",
             changed_files=["terraform/service/main.tf"],
         )
-        self.assertEqual(result["schema_version"], 4)
+        self.assertEqual(result["schema_version"], 5)
         self.assertEqual(result["workflow"], "production-release")
         self.assertEqual(self.quality_gate_ids(result), ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9"])
         production_gate = next(
@@ -1639,6 +1709,30 @@ class SelectorTests(unittest.TestCase):
         )
         self.assertIn("technical-writer", result["agents"]["primary"])
         self.assertNotIn("kubernetes-manifest-implementer", result["agents"]["primary"])
+
+    def test_retrieval_pipeline_executor_retains_ai_and_knowledge_accountability(self) -> None:
+        # The accountable roles moved from co-primary to `support` when
+        # execution routes stopped dispatching two authors over the same
+        # files. What this test guards is unchanged: they must still be
+        # *selected*, so the specialist never runs without them, and the
+        # independent security review must survive.
+        result = plan(task="Implement retrieval chunking", changed_files=["retrieval/chunking.py"])
+        self.assertIn("retrieval-pipeline-implementer", result["agents"]["primary"])
+        # ai-engineer is the execution route's accountable role, so it advises
+        # rather than co-authoring -- but it is still selected.
+        self.assertIn("ai-engineer", result["agents"]["support"])
+        self.assertNotIn("ai-engineer", result["agents"]["primary"])
+        # knowledge-store-steward stays primary: it is contributed by the broad
+        # knowledge-store route, which matched independently, not by the
+        # execution route. Only execution routes demote their accountable role.
+        self.assertIn("knowledge-store-steward", result["agents"]["primary"])
+        self.assertIn("security-reviewer", result["agents"]["reviewers"])
+
+    def test_generic_documentation_does_not_select_the_adr_writer(self) -> None:
+        result = plan(task="Update operator documentation", changed_files=["docs/guides/operations.md"])
+        self.assertIn("technical-writer", result["agents"]["primary"])
+        self.assertIn("technical-documentation-implementer", result["agents"]["primary"])
+        self.assertNotIn("adr-writer", result["agents"]["primary"])
 
     def test_forge_specific_workflows_keep_cicd_accountability_and_select_their_specialist(self) -> None:
         # Before the forge-neutrality repair the pipeline route carried only

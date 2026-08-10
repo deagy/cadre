@@ -1,6 +1,6 @@
 # Role index
 
-This index is a human-readable view of the 86 roles in
+This index is a human-readable view of the 159 roles in
 [`roster/catalog.yaml`](../roster/catalog.yaml). The catalog and each linked
 `AGENT.md` remain authoritative.
 
@@ -27,6 +27,10 @@ tier, route, quality gate, human gate, ...), see the
 
 ## Architecture, security, and data
 
+Several security-phase execution specialists appear in this table. Like the
+engineering specialists in the next section, they implement a bounded approved
+slice under the accountable security role and hold no approval authority.
+
 | Role | Phase | Purpose | Definition |
 | --- | --- | --- | --- |
 | cloud-architect | design | Design secure, resilient, operable, cost-aware architecture. | [AGENT.md](../roster/architecture/cloud-architect/AGENT.md) |
@@ -39,6 +43,14 @@ tier, route, quality gate, human gate, ...), see the
 | quantum-timing-assurance-engineer | security | Validate that physical measurements from quantum and timing sources are trustworthy enough to act on. | [AGENT.md](../roster/security/quantum-timing-assurance-engineer/AGENT.md) |
 | secrets-identity-engineer | security | Review secrets, workload identity, credentials, RBAC, and access boundaries. | [AGENT.md](../roster/security/secrets-identity-engineer/AGENT.md) |
 | policy-as-code-engineer | security | Design machine-enforced guardrails for infrastructure and delivery policy. | [AGENT.md](../roster/security/policy-as-code-engineer/AGENT.md) |
+| secret-hygiene-implementer | security | Apply bounded secret-removal, redaction, configuration-loading, and logging fixes. | [AGENT.md](../roster/security/secret-hygiene-implementer/AGENT.md) |
+| rbac-manifest-implementer | security | Implement scoped RBAC, service-account, and least-privilege manifests from approved access requirements. | [AGENT.md](../roster/security/rbac-manifest-implementer/AGENT.md) |
+| supply-chain-remediation-implementer | security | Apply bounded dependency pinning, checksum, provenance, SBOM, and artifact-integrity fixes. | [AGENT.md](../roster/security/supply-chain-remediation-implementer/AGENT.md) |
+| secure-boot-implementer | security | Implement approved secure-boot configuration and test fixtures. | [AGENT.md](../roster/security/secure-boot-implementer/AGENT.md) |
+| pkcs11-hsm-integration-implementer | security | Implement approved PKCS #11 and HSM integration artifacts. | [AGENT.md](../roster/security/pkcs11-hsm-integration-implementer/AGENT.md) |
+| pqc-integration-implementer | security | Implement approved PQC and hybrid-cryptography integration artifacts. | [AGENT.md](../roster/security/pqc-integration-implementer/AGENT.md) |
+| pki-certificate-lifecycle-implementer | security | Implement approved PKI lifecycle artifacts: issuance, renewal, revocation, trust bundles, and mTLS fixtures. | [AGENT.md](../roster/security/pki-certificate-lifecycle-implementer/AGENT.md) |
+| secure-channel-integration-implementer | security | Implement approved secure-channel integration and regression fixtures. | [AGENT.md](../roster/security/secure-channel-integration-implementer/AGENT.md) |
 | database-reliability-engineer | operations | Assess PostgreSQL reliability, migrations, backups, recovery, and performance risk. | [AGENT.md](../roster/data/database-reliability-engineer/AGENT.md) |
 | observability-sre | operations | Design telemetry, SLOs, alerts, dashboards, and day-2 readiness. | [AGENT.md](../roster/operations/observability-sre/AGENT.md) |
 | finops-engineer | operations | Monitor live cost/utilization drift against the approved capacity model. | [AGENT.md](../roster/operations/finops-engineer/AGENT.md) |
@@ -53,6 +65,12 @@ coordination, or escalation; the routing plan retains the accountable role and
 the required independent reviewers. Like every artifact author, a specialist
 cannot approve its own output, accept risk, or authorize a persistent or
 production mutation.
+
+Vendor and platform reference material is deliberately separate from these
+159 authority-bearing roles. The 20 non-authoring packs in
+[`roster/context-packs/`](../roster/context-packs/) are selected alongside a
+relevant role and provide bounded terminology, compatibility, and validation
+context; they never appear as primary/reviewer/support agents or approve work.
 
 | Role | Phase | Purpose | Definition |
 | --- | --- | --- | --- |
@@ -74,6 +92,58 @@ production mutation.
 | kubernetes-manifest-implementer | build | Implement bounded Kubernetes manifests, RBAC, and policy artifacts. | [AGENT.md](../roster/engineering/kubernetes-manifest-implementer/AGENT.md) |
 | postgres-query-implementer | build | Implement bounded PostgreSQL queries, indexes, migrations, fixtures, and pgx integration. | [AGENT.md](../roster/engineering/postgres-query-implementer/AGENT.md) |
 | node-typescript-implementer | build | Implement bounded non-React TypeScript/Node tools, SDKs, plugins, and typed tests. | [AGENT.md](../roster/engineering/node-typescript-implementer/AGENT.md) |
+| c-systems-implementer | build | Implement bounded C, headers, native libraries, FFI shims, build fixes, and sanitizer-backed tests. | [AGENT.md](../roster/engineering/c-systems-implementer/AGENT.md) |
+| cpp-systems-implementer | build | Implement bounded C++ services and libraries, preserving RAII, safe concurrency, and test coverage. | [AGENT.md](../roster/engineering/cpp-systems-implementer/AGENT.md) |
+| cmake-build-implementer | build | Maintain bounded C/C++ build definitions, toolchains, targets, package metadata, and CI build glue. | [AGENT.md](../roster/engineering/cmake-build-implementer/AGENT.md) |
+| starlingx-config-implementer | build | Maintain bounded StarlingX configuration, manifest, Helm-package, and validation artifacts. | [AGENT.md](../roster/engineering/starlingx-config-implementer/AGENT.md) |
+| edge-cloud-integration-implementer | build | Implement bounded edge-cloud configuration glue and validation artifacts. | [AGENT.md](../roster/engineering/edge-cloud-integration-implementer/AGENT.md) |
+| quantum-network-integration-implementer | build | Implement bounded QKD, QKMS, QRNG, and quantum-network integration artifacts. | [AGENT.md](../roster/engineering/quantum-network-integration-implementer/AGENT.md) |
+| qkd-qkms-integration-implementer | build | Implement bounded QKD/QKMS key-delivery integration artifacts. | [AGENT.md](../roster/engineering/qkd-qkms-integration-implementer/AGENT.md) |
+| mcp-server-implementer | build | Implement bounded MCP servers, tools, schemas, permission boundaries, and tool-call tests. | [AGENT.md](../roster/engineering/mcp-server-implementer/AGENT.md) |
+| agent-workflow-implementer | build | Implement bounded agent orchestration flows, handoff contracts, routing glue, and state-machine behavior. | [AGENT.md](../roster/engineering/agent-workflow-implementer/AGENT.md) |
+| model-routing-implementer | build | Implement approved model/provider routing, fallback behavior, configuration, and fail-closed tests. | [AGENT.md](../roster/engineering/model-routing-implementer/AGENT.md) |
+| inference-gateway-implementer | build | Implement bounded model API adapters, streaming, retries, budgets, and telemetry. | [AGENT.md](../roster/engineering/inference-gateway-implementer/AGENT.md) |
+| ai-observability-implementer | build | Implement bounded AI telemetry: traces, prompt metadata, cost and token accounting, and eval signals. | [AGENT.md](../roster/engineering/ai-observability-implementer/AGENT.md) |
+| eval-dataset-implementer | build | Maintain bounded synthetic eval datasets, rubrics, fixtures, and regression baselines. | [AGENT.md](../roster/engineering/eval-dataset-implementer/AGENT.md) |
+| guardrail-policy-implementer | build | Implement approved safety filters, policy checks, refusals, and regression harnesses. | [AGENT.md](../roster/engineering/guardrail-policy-implementer/AGENT.md) |
+| embedding-index-implementer | build | Implement bounded embedding jobs, index refreshes, metadata, lineage, and retrieval validation. | [AGENT.md](../roster/engineering/embedding-index-implementer/AGENT.md) |
+| linux-systems-implementer | build | Implement bounded Linux integration: systemd units, packages, permissions, sysctls, and bootstrap scripts. | [AGENT.md](../roster/engineering/linux-systems-implementer/AGENT.md) |
+| kernel-module-implementer | build | Implement bounded kernel-module or driver changes, including DKMS packaging and smoke tests. | [AGENT.md](../roster/engineering/kernel-module-implementer/AGENT.md) |
+| ebpf-implementer | build | Implement bounded eBPF probes, loaders, filters, and verifier-oriented tests. | [AGENT.md](../roster/engineering/ebpf-implementer/AGENT.md) |
+| device-driver-implementer | build | Implement bounded device-driver integration, udev rules, permissions, discovery, and test harnesses. | [AGENT.md](../roster/engineering/device-driver-implementer/AGENT.md) |
+| firmware-implementer | build | Implement bounded firmware and board artifacts, initialization, and hardware smoke tests. | [AGENT.md](../roster/engineering/firmware-implementer/AGENT.md) |
+| embedded-c-implementer | build | Implement bounded embedded C for MCUs, HALs, and peripherals, with hardware tests. | [AGENT.md](../roster/engineering/embedded-c-implementer/AGENT.md) |
+| rtos-integration-implementer | build | Implement bounded RTOS task and scheduling artifacts, with deterministic timing tests. | [AGENT.md](../roster/engineering/rtos-integration-implementer/AGENT.md) |
+| network-config-implementer | build | Implement bounded network configuration and validation artifacts: VLANs, routes, DNS, DHCP, and interfaces. | [AGENT.md](../roster/engineering/network-config-implementer/AGENT.md) |
+| kubernetes-networking-implementer | build | Implement bounded Kubernetes networking artifacts: CNI, NetworkPolicy, ingress, mesh, and DNS. | [AGENT.md](../roster/engineering/kubernetes-networking-implementer/AGENT.md) |
+| bgp-routing-implementer | build | Implement bounded BGP and route-policy artifacts, with lab validation and route-leak prevention. | [AGENT.md](../roster/engineering/bgp-routing-implementer/AGENT.md) |
+| network-observability-implementer | build | Implement bounded network telemetry: flow logs, latency probes, synthetic checks, and dashboards. | [AGENT.md](../roster/engineering/network-observability-implementer/AGENT.md) |
+| network-security-policy-implementer | build | Implement approved network-security policy artifacts: firewalls, ACLs, segmentation, and allowlists. | [AGENT.md](../roster/engineering/network-security-policy-implementer/AGENT.md) |
+| protocol-integration-implementer | build | Implement bounded protocol adapters, parsers, framing, and compatibility tests. | [AGENT.md](../roster/engineering/protocol-integration-implementer/AGENT.md) |
+| sonicos-config-implementer | build | Prepare bounded SonicOS configuration, API, diff, rollback, and lab-validation artifacts. | [AGENT.md](../roster/engineering/sonicos-config-implementer/AGENT.md) |
+| embedded-linux-platform-implementer | build | Implement bounded embedded-Linux platform artifacts: Yocto/Buildroot builds, BSPs, bootloaders, and device trees. | [AGENT.md](../roster/engineering/embedded-linux-platform-implementer/AGENT.md) |
+| precision-timing-implementer | build | Implement bounded timing configuration, telemetry, calibration scripts, and test fixtures. | [AGENT.md](../roster/engineering/precision-timing-implementer/AGENT.md) |
+| network-management-automation-implementer | build | Implement bounded modeled-network automation: YANG, NETCONF, RESTCONF, and gNMI artifacts. | [AGENT.md](../roster/engineering/network-management-automation-implementer/AGENT.md) |
+| ansible-automation-implementer | build | Implement bounded Ansible playbooks, roles, and inventories, preserving check-mode and idempotence. | [AGENT.md](../roster/engineering/ansible-automation-implementer/AGENT.md) |
+| bare-metal-provisioning-implementer | build | Implement bounded bare-metal provisioning artifacts: Redfish, BMC, PXE, and UEFI workflows. | [AGENT.md](../roster/engineering/bare-metal-provisioning-implementer/AGENT.md) |
+| kubernetes-operator-implementer | build | Implement bounded Kubernetes operator artifacts: CRDs, controllers, reconciliation, and upgrade tests. | [AGENT.md](../roster/engineering/kubernetes-operator-implementer/AGENT.md) |
+| distributed-storage-implementer | build | Implement bounded distributed-storage artifacts: Ceph and Rook pools, OSDs, CRUSH rules, and storage classes. | [AGENT.md](../roster/engineering/distributed-storage-implementer/AGENT.md) |
+| gitops-delivery-implementer | build | Implement bounded GitOps delivery artifacts: Argo CD/Flux applications, sync waves, health, and drift checks. | [AGENT.md](../roster/engineering/gitops-delivery-implementer/AGENT.md) |
+| javascript-maintenance-implementer | build | Maintain bounded established JavaScript where TypeScript is impractical. | [AGENT.md](../roster/engineering/javascript-maintenance-implementer/AGENT.md) |
+| sql-query-implementer | build | Author bounded SQL, query changes, and migration-adjacent scripts. | [AGENT.md](../roster/engineering/sql-query-implementer/AGENT.md) |
+| shell-automation-implementer | build | Maintain bounded shell scripts, bootstrap commands, local automation, and CI snippets. | [AGENT.md](../roster/engineering/shell-automation-implementer/AGENT.md) |
+| css-layout-implementer | build | Implement bounded CSS Modules, responsive layout, token consumption, and rendering fixes. | [AGENT.md](../roster/engineering/css-layout-implementer/AGENT.md) |
+| frontend-accessibility-remediator | build | Apply bounded accessibility fixes identified by `accessibility-reviewer`. | [AGENT.md](../roster/engineering/frontend-accessibility-remediator/AGENT.md) |
+| data-transformation-implementer | build | Implement bounded ETL/ELT and batch data movement. | [AGENT.md](../roster/engineering/data-transformation-implementer/AGENT.md) |
+| retrieval-pipeline-implementer | build | Implement bounded retrieval, chunking, prompt assembly, citations, and evaluation plumbing. | [AGENT.md](../roster/engineering/retrieval-pipeline-implementer/AGENT.md) |
+| prompt-artifact-implementer | build | Edit bounded prompt artifacts, prompt tests, and prompt-version records against an approved evaluation baseline. | [AGENT.md](../roster/engineering/prompt-artifact-implementer/AGENT.md) |
+| talos-config-implementer | build | Implement bounded Talos configuration and declarative validation. | [AGENT.md](../roster/engineering/talos-config-implementer/AGENT.md) |
+| compose-stack-implementer | build | Implement bounded disposable Docker/Podman Compose stacks. | [AGENT.md](../roster/engineering/compose-stack-implementer/AGENT.md) |
+| proxmox-opentofu-implementer | build | Implement bounded Proxmox OpenTofu resources and validation. | [AGENT.md](../roster/engineering/proxmox-opentofu-implementer/AGENT.md) |
+| kyverno-policy-implementer | build | Implement bounded Kyverno policies, tests, and approved exceptions. | [AGENT.md](../roster/engineering/kyverno-policy-implementer/AGENT.md) |
+| git-operations-implementer | build | Perform explicitly authorized bounded branch, rebase, conflict-resolution, and history-repair work. | [AGENT.md](../roster/engineering/git-operations-implementer/AGENT.md) |
+| release-automation-implementer | build | Implement bounded release manifests, checksums, SBOM/provenance scripts, and artifact assembly. | [AGENT.md](../roster/engineering/release-automation-implementer/AGENT.md) |
+| dependency-remediation-implementer | build | Apply bounded approved dependency and lockfile remediation. | [AGENT.md](../roster/engineering/dependency-remediation-implementer/AGENT.md) |
 
 ## Verification and review
 
@@ -85,6 +155,17 @@ production mutation.
 | end-user-tester | verify | Evaluate whether users can safely complete intended workflows. | [AGENT.md](../roster/testing/end-user-tester/AGENT.md) |
 | performance-testing-engineer | verify | Validate throughput, latency, and capacity assumptions against a candidate build. | [AGENT.md](../roster/testing/performance-testing-engineer/AGENT.md) |
 | chaos-resilience-engineer | verify | Inject controlled faults in disposable environments to verify RTO/RPO and alerting claims. | [AGENT.md](../roster/testing/chaos-resilience-engineer/AGENT.md) |
+| go-test-implementer | verify | Implement bounded Go unit, integration, race, and Godog tests. | [AGENT.md](../roster/testing/go-test-implementer/AGENT.md) |
+| python-test-implementer | verify | Implement bounded Python `unittest` coverage, fixtures, parser tests, and CLI regressions. | [AGENT.md](../roster/testing/python-test-implementer/AGENT.md) |
+| typescript-test-implementer | verify | Implement bounded Vitest and TypeScript test coverage for frontend and tooling packages. | [AGENT.md](../roster/testing/typescript-test-implementer/AGENT.md) |
+| migration-test-implementer | verify | Implement disposable database migration up, down, rollback, and compatibility tests. | [AGENT.md](../roster/testing/migration-test-implementer/AGENT.md) |
+| hardware-test-implementer | verify | Implement bounded hardware-in-loop tests, fixture scripts, serial or JTAG diagnostics, and regression evidence. | [AGENT.md](../roster/testing/hardware-test-implementer/AGENT.md) |
+| protocol-fuzzing-implementer | verify | Implement bounded protocol fuzz targets, corpora, sanitizer configurations, crash minimization, and regression fixtures. | [AGENT.md](../roster/testing/protocol-fuzzing-implementer/AGENT.md) |
+| interoperability-test-implementer | verify | Implement bounded cross-vendor compatibility, conformance, negative, failover, and version tests. | [AGENT.md](../roster/testing/interoperability-test-implementer/AGENT.md) |
+| browser-test-implementer | verify | Implement bounded Vitest, Testing Library, and Playwright coverage. | [AGENT.md](../roster/testing/browser-test-implementer/AGENT.md) |
+| eval-harness-implementer | verify | Implement bounded model and prompt evaluation datasets, harnesses, scoring, and regressions. | [AGENT.md](../roster/testing/eval-harness-implementer/AGENT.md) |
+| gherkin-test-implementer | verify | Author bounded Gherkin features and scenario outlines. | [AGENT.md](../roster/testing/gherkin-test-implementer/AGENT.md) |
+| example-fixture-implementer | verify | Maintain bounded sample projects, fixtures, golden corpus data, and executable examples. | [AGENT.md](../roster/testing/example-fixture-implementer/AGENT.md) |
 | code-reviewer | review | Independently assess application correctness, security, maintainability, and tests. | [AGENT.md](../roster/review/code-reviewer/AGENT.md) |
 | accessibility-reviewer | review | Independently verify browser-facing changes against the accessibility target. | [AGENT.md](../roster/review/accessibility-reviewer/AGENT.md) |
 | infrastructure-reviewer | review | Independently assess infrastructure security, correctness, resilience, and impact. | [AGENT.md](../roster/review/infrastructure-reviewer/AGENT.md) |
@@ -103,6 +184,8 @@ architecture or approval authority.
 | --- | --- | --- | --- |
 | technical-writer | document | Create accurate, task-oriented documentation from approved sources. | [AGENT.md](../roster/documentation/technical-writer/AGENT.md) |
 | architecture-diagram-author | document | Create bounded source-backed Mermaid architecture, flow, sequence, dependency, and state diagrams without altering architecture. | [AGENT.md](../roster/documentation/architecture-diagram-author/AGENT.md) |
+| technical-documentation-implementer | document | Edit bounded procedural documentation, runbooks, examples, and indexes. | [AGENT.md](../roster/documentation/technical-documentation-implementer/AGENT.md) |
+| adr-writer | document | Draft bounded architecture decision records from approved decisions. | [AGENT.md](../roster/documentation/adr-writer/AGENT.md) |
 | evidence-curator | evidence | Collect, normalize, index, protect, and retain delivery and compliance evidence. | [AGENT.md](../roster/documentation/evidence-curator/AGENT.md) |
 | knowledge-store-steward | knowledge | Operate the authorized, provenance-preserving agent knowledge store. | [AGENT.md](../roster/knowledge-store/AGENT.md) |
 | support-triage-agent | support | Classify user reports, protect sensitive data, and route actionable cases. | [AGENT.md](../roster/support/support-triage-agent/AGENT.md) |

@@ -317,6 +317,14 @@ class GeneratorIdentityTests(unittest.TestCase):
             self.assertEqual(before_routing, rendered[routing_path].encode("utf-8"))
 
     def test_check_passes_on_current_tree(self) -> None:
+        # The expected file count is derived from the same generate() call
+        # the CLI makes (it renders in memory and writes nothing), not
+        # hardcoded: this assertion was left asserting a role count three
+        # role-additions stale, which fails the build for a reason that has
+        # nothing to do with what the test is actually checking -- that
+        # --check reports the current tree as current, over the whole
+        # rendered set rather than a subset.
+        expected_file_count = len(grm.generate())
         generator = ROOT / "src" / "generate_role_metadata.py"
         result = subprocess.run(
             [sys.executable, str(generator), "--check"],
@@ -327,7 +335,7 @@ class GeneratorIdentityTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("175 role metadata files are current", result.stdout)
+        self.assertIn(f"{expected_file_count} role metadata files are current", result.stdout)
 
 
 class ProviderOrphanTests(unittest.TestCase):
@@ -828,6 +836,78 @@ class KnowledgeFocusSpliceTests(unittest.TestCase):
             path.write_text(spliced, encoding="utf-8")
             config = load_routing(path)
         self.assertEqual({"role-a": "updated focus"}, config["knowledge_focus"])
+
+
+class RoutingIdNamespaceTests(unittest.TestCase):
+    """`load_routing` pools context pack ids with route, risk rule, and team
+    recipe ids.
+
+    These live beside `test_spliced_result_passes_load_routing` above because
+    `load_routing` is exactly the validator this module's generator runs over
+    the routing.yaml content it is about to write (`_validate_routing_content`),
+    so what `load_routing` rejects is what the generator cannot emit.
+
+    The collision matters because a dispatch plan puts `matched_routes[].id`
+    and `context_packs[].id` in the same document: an id claimed by both is
+    ambiguous for any consumer keying on plan ids.
+    `schema_validate.validate_routing` checks each array only against itself
+    and cannot see the collision, so `load_routing` is the only guard.
+    """
+
+    def _load(self, extra: dict) -> object:
+        sys.path.insert(0, str(ROOT / "src"))
+        from routing import load_routing  # noqa: E402
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "routing.yaml"
+            path.write_text(_routing_text({"role-a": "role-a focus"}, extra), encoding="utf-8")
+            return load_routing(path)
+
+    def test_context_pack_id_colliding_with_a_route_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "duplicate context pack id: shared-id"):
+            self._load(
+                {
+                    "routes": [{"id": "shared-id", "keywords": ["alpha"]}],
+                    "context_packs": [
+                        {"id": "shared-id", "version": 1, "definition": "context-packs/x/CONTEXT.md"}
+                    ],
+                }
+            )
+
+    def test_context_pack_id_colliding_with_a_risk_rule_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "duplicate context pack id: shared-id"):
+            self._load(
+                {
+                    "risk_rules": [{"id": "shared-id", "keywords": ["alpha"]}],
+                    "context_packs": [
+                        {"id": "shared-id", "version": 1, "definition": "context-packs/x/CONTEXT.md"}
+                    ],
+                }
+            )
+
+    def test_context_pack_id_colliding_with_a_team_recipe_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "duplicate context pack id: shared-id"):
+            self._load(
+                {
+                    "team_recipes": [{"id": "shared-id"}],
+                    "context_packs": [
+                        {"id": "shared-id", "version": 1, "definition": "context-packs/x/CONTEXT.md"}
+                    ],
+                }
+            )
+
+    def test_distinct_context_pack_id_still_loads(self) -> None:
+        # The pooling must not reject the ordinary case: routes and packs with
+        # different ids coexist, which is what every real routing.yaml does.
+        config = self._load(
+            {
+                "routes": [{"id": "route-id", "keywords": ["alpha"]}],
+                "context_packs": [
+                    {"id": "pack-id", "version": 1, "definition": "context-packs/x/CONTEXT.md"}
+                ],
+            }
+        )
+        self.assertEqual(["pack-id"], [pack["id"] for pack in config["context_packs"]])
 
 
 if __name__ == "__main__":

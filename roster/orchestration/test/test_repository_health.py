@@ -23,7 +23,7 @@ REPOSITORY_ROOT = ROOT.parent
 # checked directly against the AGENT.md files on disk below, so a role
 # add/remove without updating this constant fails immediately instead of
 # leaving the other assertions below silently pinned to a stale number.
-EXPECTED_ROLE_COUNT = 86
+EXPECTED_ROLE_COUNT = 159
 
 # This repository's register-owned Agentic SDLC provider bundle. Copied
 # verbatim into the plugin package by `cadre generate-plugin`; the pip/pipx

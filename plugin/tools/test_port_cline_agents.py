@@ -239,7 +239,7 @@ class RealRepoRegressionTests(unittest.TestCase):
             shutil.copytree(generated_package() / "agents", root / "agents")
 
             ported = p.port_agents(root)
-            self.assertEqual(len(ported), 86)
+            self.assertEqual(len(ported), 159)
             self._assert_mirror_matches_committed("agents", ported, root / "cline-agents" / "agents")
 
     def test_skills_reproduce_committed_content_exactly(self) -> None:
@@ -349,7 +349,7 @@ class RealRepoRegressionTests(unittest.TestCase):
                 text=True,
             )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Ported 86 agent(s) and 8 skill(s)", result.stdout)
+        self.assertIn("Ported 159 agent(s) and 8 skill(s)", result.stdout)
 
     def test_the_suite_leaves_the_committed_mirror_untouched(self) -> None:
         # The property the fix above restores, asserted directly rather than

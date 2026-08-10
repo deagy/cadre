@@ -4,9 +4,9 @@
   "title": "Local Agent Selection Plan",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "task_id", "dispatch_fingerprint", "generated_at", "status", "workflow", "inputs", "matched_routes", "matched_risks", "agents", "dispatch_disposition", "teams", "lifecycle_tracking", "required_quality_gates", "ignored_quality_gates", "human_gates", "knowledge_context"],
+  "required": ["schema_version", "task_id", "dispatch_fingerprint", "generated_at", "status", "workflow", "inputs", "matched_routes", "matched_risks", "context_packs", "agents", "dispatch_disposition", "teams", "lifecycle_tracking", "required_quality_gates", "ignored_quality_gates", "human_gates", "knowledge_context"],
   "properties": {
-    "schema_version": { "const": 4 },
+    "schema_version": { "const": 5 },
     "task_id": { "$ref": "#/$defs/nonempty" },
     "dispatch_fingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "generated_at": { "type": "string", "format": "date-time" },
@@ -33,6 +33,21 @@
     "matched_risks": {
       "description": "Risk rules that matched, in the same shape as matched_routes.",
       "$ref": "#/$defs/idWithReasonsArray"
+    },
+    "context_packs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "version", "definition", "classification", "content_hash"],
+        "properties": {
+          "id": { "$ref": "#/$defs/nonempty" },
+          "version": { "type": "integer", "minimum": 1 },
+          "definition": { "$ref": "#/$defs/nonempty" },
+          "classification": { "enum": ["public", "internal", "confidential", "restricted"] },
+          "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+        }
+      }
     },
     "agents": {
       "type": "object",

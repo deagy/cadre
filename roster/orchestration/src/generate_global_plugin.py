@@ -1188,6 +1188,7 @@ def generate_suite_copy(
             "roster/catalog.yaml",
             "roster/catalog.schema.json",
             "roster/catalog-order.txt",
+            "roster/context-pack-order.txt",
             "roster/_catalog_header.yaml.tmpl",
             "roster/runner-capabilities.json",
             "roster/runner-capabilities.schema.json",
@@ -1196,6 +1197,8 @@ def generate_suite_copy(
             "roster/README.md",
             "roster/RUNBOOK.md",
         }:
+            selected.append(relative)
+        elif relative.startswith("roster/context-packs/"):
             selected.append(relative)
         elif relative.startswith(("roster/shared/", "roster/workflows/")):
             selected.append(relative)

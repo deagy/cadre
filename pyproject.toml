@@ -97,6 +97,24 @@ packages = ["cadre_cli"]
 "roster/testing" = "cadre_cli/_vendor/roster/testing"
 "roster/workflows" = "cadre_cli/_vendor/roster/workflows"
 
+# Non-authoring vendor/platform context packs. These are a *runtime* resource,
+# not a build-time one: routing.yaml's context_packs rules name a `definition`
+# path under roster/context-packs/, and build_dispatch_plan.py's
+# _build_context_packs() opens each matched pack to hash its exact bytes,
+# raising "Context pack definition is missing" when it cannot. That is a hard
+# failure of the whole `cadre select` invocation, not a degraded plan -- so
+# without these vendored, any task whose text hits a pack keyword (`fpga`,
+# `redfish`, `bmc`, `ceph`, `yang`, `gnmi`, `qrng`, `sonicwall`, `root of
+# trust`, ...) aborts on an installed distribution while the same task works
+# from a checkout. context-pack-order.txt is the packaging list consumed by
+# generate_global_plugin.py, vendored alongside for the same reason
+# catalog-order.txt is below: `cadre generate-plugin` is not an
+# installed-must-work subcommand, but the file is the pack inventory and
+# belongs with the packs it enumerates rather than being resolvable only from
+# a checkout.
+"roster/context-packs" = "cadre_cli/_vendor/roster/context-packs"
+"roster/context-pack-order.txt" = "cadre_cli/_vendor/roster/context-pack-order.txt"
+
 "roster/knowledge-store/AGENT.md" = "cadre_cli/_vendor/roster/knowledge-store/AGENT.md"
 "roster/knowledge-store/README.md" = "cadre_cli/_vendor/roster/knowledge-store/README.md"
 "roster/knowledge-store/SECURITY.md" = "cadre_cli/_vendor/roster/knowledge-store/SECURITY.md"

@@ -42,7 +42,7 @@ const REPO_ROOT = join(TEST_DIR, "..");
 // directory since the Cline workspaces moved out of plugin/.
 const PACKAGED_PLUGIN_ROOT = resolve(REPO_ROOT, "..", "..", "plugin");
 const KNOWLEDGE_STORE_CLI = join(PACKAGED_PLUGIN_ROOT, "suite", "roster", "knowledge-store", "src", "cli.py");
-const SOURCE_ROLE_COUNT = 86;
+const SOURCE_ROLE_COUNT = 159;
 
 const READ_ONLY_SAMPLE = [
   "security-reviewer",
@@ -167,7 +167,7 @@ describe("cline-agents plugin manifest", () => {
 });
 
 describe("preset discovery", () => {
-  it("loads exactly 86 bundled presets with unique names", () => {
+  it("loads exactly 159 bundled presets with unique names", () => {
     const defs = readAgentDefinitions(REPO_ROOT);
     const bundled = defs.filter((d) => d.source === "bundled");
     expect(bundled).toHaveLength(SOURCE_ROLE_COUNT);
@@ -217,7 +217,7 @@ describe("preset discovery", () => {
     }
   });
 
-  it("surfaces all 86 bundled presets by name via list_agent_presets", async () => {
+  it("surfaces all 159 bundled presets by name via list_agent_presets", async () => {
     const tools = await registerTools(REPO_ROOT);
     const tool = findTool(tools, "list_agent_presets");
     const result = (await tool.execute({}, FAKE_TOOL_CTX)) as {

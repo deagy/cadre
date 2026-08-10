@@ -9,6 +9,15 @@
       ],
       "definition": "roles/review/accessibility-reviewer/AGENT.md"
     },
+    "adr-writer": {
+      "phase": "document",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/documentation/adr-writer/AGENT.md"
+    },
     "agent-performance-evaluator": {
       "phase": "operations",
       "kind": "author",
@@ -27,6 +36,15 @@
       ],
       "definition": "roles/operations/agent-version-control/AGENT.md"
     },
+    "agent-workflow-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/agent-workflow-implementer/AGENT.md"
+    },
     "ai-engineer": {
       "phase": "build",
       "kind": "author",
@@ -35,6 +53,24 @@
         "dispatch"
       ],
       "definition": "roles/engineering/ai-engineer/AGENT.md"
+    },
+    "ai-observability-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/ai-observability-implementer/AGENT.md"
+    },
+    "ansible-automation-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/ansible-automation-implementer/AGENT.md"
     },
     "api-contract-engineer": {
       "phase": "design",
@@ -98,6 +134,24 @@
       ],
       "definition": "roles/engineering/backend-engineer/AGENT.md"
     },
+    "bare-metal-provisioning-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/bare-metal-provisioning-implementer/AGENT.md"
+    },
+    "bgp-routing-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/bgp-routing-implementer/AGENT.md"
+    },
     "black-box-tester": {
       "phase": "verify",
       "kind": "author",
@@ -106,6 +160,24 @@
         "dispatch"
       ],
       "definition": "roles/testing/black-box-tester/AGENT.md"
+    },
+    "browser-test-implementer": {
+      "phase": "verify",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/testing/browser-test-implementer/AGENT.md"
+    },
+    "c-systems-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/c-systems-implementer/AGENT.md"
     },
     "chaos-resilience-engineer": {
       "phase": "verify",
@@ -150,6 +222,15 @@
       ],
       "definition": "roles/architecture/cloud-architect/AGENT.md"
     },
+    "cmake-build-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/cmake-build-implementer/AGENT.md"
+    },
     "code-reviewer": {
       "phase": "review",
       "kind": "reviewer",
@@ -166,6 +247,15 @@
       ],
       "definition": "roles/review/compliance-reviewer/AGENT.md"
     },
+    "compose-stack-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/compose-stack-implementer/AGENT.md"
+    },
     "cost-capacity-planner": {
       "phase": "planning",
       "kind": "author",
@@ -174,6 +264,15 @@
         "dispatch"
       ],
       "definition": "roles/operations/cost-capacity-planner/AGENT.md"
+    },
+    "cpp-systems-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/cpp-systems-implementer/AGENT.md"
     },
     "cryptographic-assurance-engineer": {
       "phase": "security",
@@ -184,6 +283,15 @@
       ],
       "definition": "roles/security/cryptographic-assurance-engineer/AGENT.md"
     },
+    "css-layout-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/css-layout-implementer/AGENT.md"
+    },
     "data-governance-engineer": {
       "phase": "design",
       "kind": "author",
@@ -192,6 +300,15 @@
         "dispatch"
       ],
       "definition": "roles/data/data-governance-engineer/AGENT.md"
+    },
+    "data-transformation-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/data-transformation-implementer/AGENT.md"
     },
     "database-reliability-engineer": {
       "phase": "operations",
@@ -238,6 +355,15 @@
       ],
       "definition": "roles/planning/delivery-sequencer/AGENT.md"
     },
+    "dependency-remediation-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/dependency-remediation-implementer/AGENT.md"
+    },
     "deployment-realist": {
       "phase": "operations",
       "kind": "author",
@@ -247,6 +373,24 @@
       ],
       "definition": "roles/operations/deployment-realist/AGENT.md"
     },
+    "device-driver-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/device-driver-implementer/AGENT.md"
+    },
+    "distributed-storage-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/distributed-storage-implementer/AGENT.md"
+    },
     "doctrine-conformance": {
       "phase": "review",
       "kind": "reviewer",
@@ -254,6 +398,51 @@
         "reviewer"
       ],
       "definition": "roles/review/doctrine-conformance/AGENT.md"
+    },
+    "ebpf-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/ebpf-implementer/AGENT.md"
+    },
+    "edge-cloud-integration-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/edge-cloud-integration-implementer/AGENT.md"
+    },
+    "embedded-c-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/embedded-c-implementer/AGENT.md"
+    },
+    "embedded-linux-platform-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/embedded-linux-platform-implementer/AGENT.md"
+    },
+    "embedding-index-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/embedding-index-implementer/AGENT.md"
     },
     "end-user-tester": {
       "phase": "verify",
@@ -282,6 +471,24 @@
       ],
       "definition": "roles/support/escalation-manager/AGENT.md"
     },
+    "eval-dataset-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/eval-dataset-implementer/AGENT.md"
+    },
+    "eval-harness-implementer": {
+      "phase": "verify",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/testing/eval-harness-implementer/AGENT.md"
+    },
     "evidence-curator": {
       "phase": "evidence",
       "kind": "specialist",
@@ -290,6 +497,15 @@
         "dispatch"
       ],
       "definition": "roles/documentation/evidence-curator/AGENT.md"
+    },
+    "example-fixture-implementer": {
+      "phase": "verify",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/testing/example-fixture-implementer/AGENT.md"
     },
     "falsification-agent": {
       "phase": "verify",
@@ -309,6 +525,15 @@
       ],
       "definition": "roles/operations/finops-engineer/AGENT.md"
     },
+    "firmware-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/firmware-implementer/AGENT.md"
+    },
     "first-principles-challenger": {
       "phase": "design",
       "kind": "author",
@@ -318,6 +543,15 @@
       ],
       "definition": "roles/architecture/first-principles-challenger/AGENT.md"
     },
+    "frontend-accessibility-remediator": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/frontend-accessibility-remediator/AGENT.md"
+    },
     "frontend-engineer": {
       "phase": "build",
       "kind": "author",
@@ -326,6 +560,24 @@
         "dispatch"
       ],
       "definition": "roles/engineering/frontend-engineer/AGENT.md"
+    },
+    "gherkin-test-implementer": {
+      "phase": "verify",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/testing/gherkin-test-implementer/AGENT.md"
+    },
+    "git-operations-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/git-operations-implementer/AGENT.md"
     },
     "github-actions-implementer": {
       "phase": "build",
@@ -345,6 +597,15 @@
       ],
       "definition": "roles/engineering/gitlab-ci-implementer/AGENT.md"
     },
+    "gitops-delivery-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/gitops-delivery-implementer/AGENT.md"
+    },
     "go-service-implementer": {
       "phase": "build",
       "kind": "author",
@@ -353,6 +614,15 @@
         "dispatch"
       ],
       "definition": "roles/engineering/go-service-implementer/AGENT.md"
+    },
+    "go-test-implementer": {
+      "phase": "verify",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/testing/go-test-implementer/AGENT.md"
     },
     "governance-lead-aide": {
       "phase": "authority",
@@ -372,6 +642,15 @@
       ],
       "definition": "roles/governance/governance-planner/AGENT.md"
     },
+    "guardrail-policy-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/guardrail-policy-implementer/AGENT.md"
+    },
     "halt-authority": {
       "phase": "review",
       "kind": "reviewer",
@@ -379,6 +658,15 @@
         "reviewer"
       ],
       "definition": "roles/review/halt-authority/AGENT.md"
+    },
+    "hardware-test-implementer": {
+      "phase": "verify",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/testing/hardware-test-implementer/AGENT.md"
     },
     "helm-chart-implementer": {
       "phase": "build",
@@ -397,6 +685,15 @@
         "dispatch"
       ],
       "definition": "roles/support/incident-commander/AGENT.md"
+    },
+    "inference-gateway-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/inference-gateway-implementer/AGENT.md"
     },
     "infrastructure-provisioner": {
       "phase": "build",
@@ -424,6 +721,15 @@
       ],
       "definition": "roles/architecture/interaction-designer/AGENT.md"
     },
+    "interoperability-test-implementer": {
+      "phase": "verify",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/testing/interoperability-test-implementer/AGENT.md"
+    },
     "ip-provenance-agent": {
       "phase": "evidence",
       "kind": "author",
@@ -432,6 +738,24 @@
         "dispatch"
       ],
       "definition": "roles/documentation/ip-provenance-agent/AGENT.md"
+    },
+    "javascript-maintenance-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/javascript-maintenance-implementer/AGENT.md"
+    },
+    "kernel-module-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/kernel-module-implementer/AGENT.md"
     },
     "knowledge-store-steward": {
       "phase": "knowledge",
@@ -450,6 +774,105 @@
         "dispatch"
       ],
       "definition": "roles/engineering/kubernetes-manifest-implementer/AGENT.md"
+    },
+    "kubernetes-networking-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/kubernetes-networking-implementer/AGENT.md"
+    },
+    "kubernetes-operator-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/kubernetes-operator-implementer/AGENT.md"
+    },
+    "kyverno-policy-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/kyverno-policy-implementer/AGENT.md"
+    },
+    "linux-systems-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/linux-systems-implementer/AGENT.md"
+    },
+    "mcp-server-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/mcp-server-implementer/AGENT.md"
+    },
+    "migration-test-implementer": {
+      "phase": "verify",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/testing/migration-test-implementer/AGENT.md"
+    },
+    "model-routing-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/model-routing-implementer/AGENT.md"
+    },
+    "network-config-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/network-config-implementer/AGENT.md"
+    },
+    "network-management-automation-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/network-management-automation-implementer/AGENT.md"
+    },
+    "network-observability-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/network-observability-implementer/AGENT.md"
+    },
+    "network-security-policy-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/network-security-policy-implementer/AGENT.md"
     },
     "node-typescript-implementer": {
       "phase": "build",
@@ -503,6 +926,24 @@
       ],
       "definition": "roles/review/pipeline-security-reviewer/AGENT.md"
     },
+    "pkcs11-hsm-integration-implementer": {
+      "phase": "security",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/security/pkcs11-hsm-integration-implementer/AGENT.md"
+    },
+    "pki-certificate-lifecycle-implementer": {
+      "phase": "security",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/security/pki-certificate-lifecycle-implementer/AGENT.md"
+    },
     "policy-as-code-engineer": {
       "phase": "security",
       "kind": "author",
@@ -520,6 +961,24 @@
         "dispatch"
       ],
       "definition": "roles/engineering/postgres-query-implementer/AGENT.md"
+    },
+    "pqc-integration-implementer": {
+      "phase": "security",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/security/pqc-integration-implementer/AGENT.md"
+    },
+    "precision-timing-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/precision-timing-implementer/AGENT.md"
     },
     "premortem": {
       "phase": "planning",
@@ -548,6 +1007,42 @@
       ],
       "definition": "roles/authority/product-owner-aide/AGENT.md"
     },
+    "prompt-artifact-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/prompt-artifact-implementer/AGENT.md"
+    },
+    "protocol-fuzzing-implementer": {
+      "phase": "verify",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/testing/protocol-fuzzing-implementer/AGENT.md"
+    },
+    "protocol-integration-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/protocol-integration-implementer/AGENT.md"
+    },
+    "proxmox-opentofu-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/proxmox-opentofu-implementer/AGENT.md"
+    },
     "python-automation-implementer": {
       "phase": "build",
       "kind": "author",
@@ -557,6 +1052,33 @@
       ],
       "definition": "roles/engineering/python-automation-implementer/AGENT.md"
     },
+    "python-test-implementer": {
+      "phase": "verify",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/testing/python-test-implementer/AGENT.md"
+    },
+    "qkd-qkms-integration-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/qkd-qkms-integration-implementer/AGENT.md"
+    },
+    "quantum-network-integration-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/quantum-network-integration-implementer/AGENT.md"
+    },
     "quantum-timing-assurance-engineer": {
       "phase": "security",
       "kind": "author",
@@ -565,6 +1087,15 @@
         "dispatch"
       ],
       "definition": "roles/security/quantum-timing-assurance-engineer/AGENT.md"
+    },
+    "rbac-manifest-implementer": {
+      "phase": "security",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/security/rbac-manifest-implementer/AGENT.md"
     },
     "react-component-implementer": {
       "phase": "build",
@@ -592,6 +1123,15 @@
         "dispatch"
       ],
       "definition": "roles/authority/release-authority-aide/AGENT.md"
+    },
+    "release-automation-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/release-automation-implementer/AGENT.md"
     },
     "release-engineer": {
       "phase": "release",
@@ -629,6 +1169,24 @@
       ],
       "definition": "roles/operations/retention-and-deletion-executor/AGENT.md"
     },
+    "retrieval-pipeline-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/retrieval-pipeline-implementer/AGENT.md"
+    },
+    "rtos-integration-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/rtos-integration-implementer/AGENT.md"
+    },
     "scope-boundary": {
       "phase": "planning",
       "kind": "author",
@@ -638,6 +1196,15 @@
       ],
       "definition": "roles/planning/scope-boundary/AGENT.md"
     },
+    "secret-hygiene-implementer": {
+      "phase": "security",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/security/secret-hygiene-implementer/AGENT.md"
+    },
     "secrets-identity-engineer": {
       "phase": "security",
       "kind": "author",
@@ -646,6 +1213,24 @@
         "dispatch"
       ],
       "definition": "roles/security/secrets-identity-engineer/AGENT.md"
+    },
+    "secure-boot-implementer": {
+      "phase": "security",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/security/secure-boot-implementer/AGENT.md"
+    },
+    "secure-channel-integration-implementer": {
+      "phase": "security",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/security/secure-channel-integration-implementer/AGENT.md"
     },
     "security-lead-aide": {
       "phase": "authority",
@@ -682,6 +1267,42 @@
       ],
       "definition": "roles/authority/service-owner-aide/AGENT.md"
     },
+    "shell-automation-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/shell-automation-implementer/AGENT.md"
+    },
+    "sonicos-config-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/sonicos-config-implementer/AGENT.md"
+    },
+    "sql-query-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/sql-query-implementer/AGENT.md"
+    },
+    "starlingx-config-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/starlingx-config-implementer/AGENT.md"
+    },
     "subtraction-agent": {
       "phase": "review",
       "kind": "reviewer",
@@ -689,6 +1310,15 @@
         "reviewer"
       ],
       "definition": "roles/review/subtraction-agent/AGENT.md"
+    },
+    "supply-chain-remediation-implementer": {
+      "phase": "security",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/security/supply-chain-remediation-implementer/AGENT.md"
     },
     "supply-chain-security-reviewer": {
       "phase": "review",
@@ -716,6 +1346,24 @@
       ],
       "definition": "roles/authority/system-architect-aide/AGENT.md"
     },
+    "talos-config-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/talos-config-implementer/AGENT.md"
+    },
+    "technical-documentation-implementer": {
+      "phase": "document",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/documentation/technical-documentation-implementer/AGENT.md"
+    },
     "technical-writer": {
       "phase": "document",
       "kind": "author",
@@ -741,6 +1389,15 @@
         "dispatch"
       ],
       "definition": "roles/architecture/threat-modeler/AGENT.md"
+    },
+    "typescript-test-implementer": {
+      "phase": "verify",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/testing/typescript-test-implementer/AGENT.md"
     },
     "vendor-register-steward": {
       "phase": "operations",
