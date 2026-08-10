@@ -55,7 +55,7 @@ comment).
 {
   "schema_version": 5,
   "task_id": "GOLDEN-CROSS-STACK-1",
-  "generated_at": "2026-08-10T18:33:59.212Z",
+  "generated_at": "2026-08-10T18:57:46.976Z",
   "status": "ready",
   "workflow": "new-service",
   "inputs": {
@@ -433,12 +433,10 @@ comment).
     ]
   },
   "provenance": {
-    "catalog_content_hash": "sha256:d96ae366b128b6502e39a6514dd4ce06f6ef46607439dfc1923a9b7aaf979d8d",
-    "routing_content_hash": "sha256:fb577d861211bc6782efa4adad191222e3c34ad2c8c2474d74d0b8ad93fa7ba3",
-    "git_commit_sha": "1123de4117e4ba5a2e657998ba941c71737db07d",
-    "git_dirty_paths": [
-      "orchestration/routing.yaml"
-    ],
+    "catalog_content_hash": "sha256:6782e141a789a569cd16c7d029aa9346e09dead6d501a0b913cf83ed0d1a57b5",
+    "routing_content_hash": "sha256:0cc2e34802a9edec336d950d5f98cb2a0e98d8230075a6366e523cf76815c13a",
+    "git_commit_sha": "d17c47c25658ac9d86ddd17a04aa2d46e097bd1b",
+    "git_dirty_paths": [],
     "agentic_sdlc_contract_version": 2
   },
   "dispatch_fingerprint": "sha256:572e7aab4cc97050c75f08a59530fc19290f809793e13c3fe23e593dda5249bf"
