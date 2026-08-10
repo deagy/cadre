@@ -38,7 +38,21 @@
     "corresponding fixture(s) in the same diff, and",
     "test_corpus_covers_every_required_route_category in",
     "test_selection_golden_corpus.py enforces that every route id currently",
-    "in routing.yaml is represented in this file's matched_routes."
+    "in routing.yaml is represented in this file's matched_routes.",
+    "",
+    "42 fixtures changed their expected 'workflow' in the #210 change that",
+    "gave every route in routing.yaml an explicit 'workflow_shape'. Before",
+    "it, _select_workflow()'s final stage tested a hardcoded set of four",
+    "route ids, so every other route -- all 86 '*-execution' routes among",
+    "them -- contributed no shape and fell through to 'unclassified' by",
+    "omission rather than by judgment. Each changed expectation carries its",
+    "own one-sentence justification in that fixture's 'description', under",
+    "the prefix 'Workflow shape:'; none was bulk-rewritten to make the suite",
+    "pass. 'unclassified' is still the expectation for 74 fixtures, which is",
+    "the point: a route that claims no delivery shape (advisory, assessment,",
+    "review, governance, support, documentation, evidence, and the",
+    "security-, verify-, and operations-phase execution routes) now declares",
+    "'unclassified' deliberately."
   ],
   "cases": [
     {
@@ -1952,7 +1966,7 @@
     },
     {
       "id": "AI-FEATURE-1",
-      "description": "AI feature with an eval harness; retains AI accountability and selects the bounded evaluation implementer.",
+      "description": "AI feature with an eval harness; retains AI accountability and selects the bounded evaluation implementer. Workflow shape: the ai-feature route declares new-service because it delivers product AI-feature code, the same design-and-delivery shape the frontend and backend routes already carry.",
       "task": "Select an llm provider and build an eval harness for the summarization feature",
       "changed_files": [],
       "classification": "internal",
@@ -1978,7 +1992,7 @@
           "ai-feature",
           "eval-harness-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
@@ -2566,7 +2580,7 @@
     },
     {
       "id": "NODE-TYPESCRIPT-EXECUTION-1",
-      "description": "Non-React Node/TypeScript tooling selects the narrow executor under backend-engineer accountability. The broad frontend route no longer co-matches: 'typescript' needs a browser/UI corroborator, so a Node build script does not draw frontend-engineer, accessibility-reviewer, or interaction-designer. Workflow is 'unclassified' because no execution route contributes a workflow shape -- see the frontend-narrowing commit.",
+      "description": "Non-React Node/TypeScript tooling selects the narrow executor under backend-engineer accountability. The broad frontend route no longer co-matches: 'typescript' needs a browser/UI corroborator, so a Node build script does not draw frontend-engineer, accessibility-reviewer, or interaction-designer. Workflow shape: implementing a Node/TypeScript utility is application-code delivery, and node-typescript-execution now declares new-service itself (#210) rather than borrowing a shape from the frontend route that used to co-match it.",
       "task": "Implement Node TypeScript utility",
       "changed_files": [
         "tools/build.mts"
@@ -2590,7 +2604,7 @@
         "matched_routes": [
           "node-typescript-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
@@ -2726,7 +2740,7 @@
     },
     {
       "id": "CSS-LAYOUT-EXECUTION-1",
-      "description": "CSS layout work selects the narrow implementer with frontend accountability and accessibility review.",
+      "description": "CSS layout work selects the narrow implementer with frontend accountability and accessibility review. Workflow shape: CSS Modules layout work is frontend application code, which the frontend route already labels new-service for changes of exactly this kind.",
       "task": "css layout",
       "changed_files": [],
       "classification": "internal",
@@ -2746,12 +2760,12 @@
         "matched_routes": [
           "css-layout-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "DATA-TRANSFORMATION-EXECUTION-1",
-      "description": "Data transformation keeps backend and data-governance accountability alongside its bounded executor.",
+      "description": "Data transformation keeps backend and data-governance accountability alongside its bounded executor. Workflow shape: ETL/ELT transformation code is delivered service code under backend accountability.",
       "task": "data transformation",
       "changed_files": [],
       "classification": "internal",
@@ -2772,7 +2786,7 @@
         "matched_routes": [
           "data-transformation-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
@@ -2856,7 +2870,7 @@
     },
     {
       "id": "JAVASCRIPT-MAINTENANCE-EXECUTION-1",
-      "description": "Bare 'javascript maintenance' is ambiguous between browser and Node work, so it no longer draws the browser-facing reviewers by keyword alone. Naming a browser surface (or touching frontend/web/ui paths) re-selects the frontend route and its accessibility review.",
+      "description": "Bare 'javascript maintenance' is ambiguous between browser and Node work, so it no longer draws the browser-facing reviewers by keyword alone. Naming a browser surface (or touching frontend/web/ui paths) re-selects the frontend route and its accessibility review. Workflow shape: maintaining application JavaScript is a change to delivered application code -- FRONTEND-1 ('Update the React navigation for keyboard accessibility') already carries new-service for equally maintenance-shaped work.",
       "task": "javascript maintenance",
       "changed_files": [],
       "classification": "internal",
@@ -2876,7 +2890,7 @@
         "matched_routes": [
           "javascript-maintenance-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
@@ -2906,7 +2920,7 @@
     },
     {
       "id": "PROMPT-ARTIFACT-EXECUTION-1",
-      "description": "Prompt artifact work remains under AI-engineer accountability and the existing AI review envelope.",
+      "description": "Prompt artifact work remains under AI-engineer accountability and the existing AI review envelope. Workflow shape: versioned prompt artifacts are product AI-feature deliverables, and the co-matched ai-feature route declares the same shape.",
       "task": "prompt artifact",
       "changed_files": [],
       "classification": "internal",
@@ -2930,7 +2944,7 @@
           "ai-feature",
           "prompt-artifact-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
@@ -2961,7 +2975,7 @@
     },
     {
       "id": "RELEASE-AUTOMATION-EXECUTION-1",
-      "description": "Release automation remains led by release-engineer with supply-chain review.",
+      "description": "Release automation remains led by release-engineer with supply-chain review. Workflow shape: release manifests, checksums, and SBOM/provenance assembly are delivery-automation artifacts under release-engineer accountability, which is pipeline-change.md's subject (artifact flow, environments, promotion).",
       "task": "artifact assembly",
       "changed_files": [],
       "classification": "internal",
@@ -2980,12 +2994,12 @@
         "matched_routes": [
           "release-automation-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "pipeline-change"
       }
     },
     {
       "id": "RETRIEVAL-PIPELINE-EXECUTION-1",
-      "description": "Retrieval pipeline execution retains the knowledge-store route while adding AI accountability.",
+      "description": "Retrieval pipeline execution retains the knowledge-store route while adding AI accountability. Workflow shape: retrieval-pipeline code is service delivery; the co-matched knowledge-store route declares no shape of its own, and this is not knowledge ingestion, which the earlier knowledge-ingestion precedence rule correctly declined.",
       "task": "retrieval chunking",
       "changed_files": [],
       "classification": "internal",
@@ -3008,12 +3022,12 @@
           "retrieval-pipeline-execution",
           "knowledge-store"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "SHELL-AUTOMATION-EXECUTION-1",
-      "description": "Shell automation remains under application accountability and independent code/test review.",
+      "description": "Shell automation remains under application accountability and independent code/test review. Workflow shape: shell automation scripts are delivered code artifacts under application-engineer accountability.",
       "task": "shell automation",
       "changed_files": [],
       "classification": "internal",
@@ -3033,12 +3047,12 @@
         "matched_routes": [
           "shell-automation-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "SQL-QUERY-EXECUTION-1",
-      "description": "Generic SQL query implementation retains backend and database-reliability accountability.",
+      "description": "Generic SQL query implementation retains backend and database-reliability accountability. Workflow shape: bounded SQL and query implementation is backend delivery work.",
       "task": "sql query",
       "changed_files": [],
       "classification": "internal",
@@ -3059,7 +3073,7 @@
         "matched_routes": [
           "sql-query-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
@@ -3116,7 +3130,7 @@
     },
     {
       "id": "EVAL-HARNESS-EXECUTION-1",
-      "description": "Evaluation harness work retains AI and test accountability with AI-route security review.",
+      "description": "Evaluation harness work retains AI and test accountability with AI-route security review. Workflow shape: the plan matched the ai-feature build route alongside the harness executor, so it covers product AI-feature delivery; the harness route itself declares no shape.",
       "task": "eval harness",
       "changed_files": [],
       "classification": "internal",
@@ -3140,7 +3154,7 @@
           "ai-feature",
           "eval-harness-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
@@ -3194,7 +3208,7 @@
     },
     {
       "id": "AGENT_WORKFLOW_EXECUTION_GOLDEN_1",
-      "description": "Narrow agent-workflow-execution route regression fixture.",
+      "description": "Narrow agent-workflow-execution route regression fixture. Workflow shape: agent orchestration flows, handoff contracts, and routing glue are delivered application code in the consuming project.",
       "task": "Implement agent workflow implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3215,7 +3229,7 @@
         "matched_routes": [
           "agent-workflow-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
@@ -3250,7 +3264,7 @@
     },
     {
       "id": "ANSIBLE_AUTOMATION_EXECUTION_GOLDEN_1",
-      "description": "Narrow ansible-automation-execution route regression fixture.",
+      "description": "Narrow ansible-automation-execution route regression fixture. Workflow shape: Ansible playbooks, roles, and inventories are declarative host configuration under infrastructure-provisioner accountability.",
       "task": "Implement ansible automation implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3271,12 +3285,12 @@
         "matched_routes": [
           "ansible-automation-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "infrastructure-change"
       }
     },
     {
       "id": "BARE_METAL_PROVISIONING_EXECUTION_GOLDEN_1",
-      "description": "Narrow bare-metal-provisioning-execution route regression fixture.",
+      "description": "Narrow bare-metal-provisioning-execution route regression fixture. Workflow shape: Redfish/PXE/UEFI provisioning artifacts provision physical compute, which is infrastructure-change.md's opening 'classify scope, environment, blast radius' step verbatim.",
       "task": "Implement bare metal provisioning implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3297,12 +3311,12 @@
         "matched_routes": [
           "bare-metal-provisioning-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "infrastructure-change"
       }
     },
     {
       "id": "BGP_ROUTING_EXECUTION_GOLDEN_1",
-      "description": "Narrow bgp-routing-execution route regression fixture.",
+      "description": "Narrow bgp-routing-execution route regression fixture. Workflow shape: BGP and route-policy artifacts configure network infrastructure under infrastructure-provisioner accountability.",
       "task": "Implement bgp routing implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3323,12 +3337,12 @@
         "matched_routes": [
           "bgp-routing-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "infrastructure-change"
       }
     },
     {
       "id": "C_SYSTEMS_EXECUTION_GOLDEN_1",
-      "description": "Narrow c-systems-execution route regression fixture.",
+      "description": "Narrow c-systems-execution route regression fixture. Workflow shape: C systems code is delivered application/library code.",
       "task": "Implement c systems implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3350,12 +3364,12 @@
         "matched_routes": [
           "c-systems-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "CMAKE_BUILD_EXECUTION_GOLDEN_1",
-      "description": "Narrow cmake-build-execution route regression fixture.",
+      "description": "Narrow cmake-build-execution route regression fixture. Workflow shape: a project's own CMake build system ships with the application it builds, so it is application delivery rather than a CI/CD pipeline definition.",
       "task": "Implement cmake build implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3377,12 +3391,12 @@
         "matched_routes": [
           "cmake-build-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "CPP_SYSTEMS_EXECUTION_GOLDEN_1",
-      "description": "Narrow cpp-systems-execution route regression fixture.",
+      "description": "Narrow cpp-systems-execution route regression fixture. Workflow shape: C++ systems code is delivered application/library code.",
       "task": "Implement cpp systems implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3404,12 +3418,12 @@
         "matched_routes": [
           "cpp-systems-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "DEVICE_DRIVER_EXECUTION_GOLDEN_1",
-      "description": "Narrow device-driver-execution route regression fixture.",
+      "description": "Narrow device-driver-execution route regression fixture. Workflow shape: device-driver integration code and its test harnesses are delivered code artifacts.",
       "task": "Implement device driver implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3431,12 +3445,12 @@
         "matched_routes": [
           "device-driver-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "DISTRIBUTED_STORAGE_EXECUTION_GOLDEN_1",
-      "description": "Narrow distributed-storage-execution route regression fixture.",
+      "description": "Narrow distributed-storage-execution route regression fixture. Workflow shape: Ceph/Rook pools, OSDs, and storage classes are cluster storage infrastructure under infrastructure-provisioner accountability.",
       "task": "Implement distributed storage implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3457,12 +3471,12 @@
         "matched_routes": [
           "distributed-storage-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "infrastructure-change"
       }
     },
     {
       "id": "EBPF_EXECUTION_GOLDEN_1",
-      "description": "Narrow ebpf-execution route regression fixture.",
+      "description": "Narrow ebpf-execution route regression fixture. Workflow shape: eBPF probes, maps, and loaders are delivered code artifacts.",
       "task": "Implement ebpf implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3484,12 +3498,12 @@
         "matched_routes": [
           "ebpf-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "EDGE_CLOUD_INTEGRATION_EXECUTION_GOLDEN_1",
-      "description": "Narrow edge-cloud-integration-execution route regression fixture.",
+      "description": "Narrow edge-cloud-integration-execution route regression fixture. Workflow shape: edge-cloud configuration glue is platform configuration under infrastructure-provisioner or cloud-architect accountability.",
       "task": "Implement edge cloud integration implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3510,12 +3524,12 @@
         "matched_routes": [
           "edge-cloud-integration-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "infrastructure-change"
       }
     },
     {
       "id": "EMBEDDED_C_EXECUTION_GOLDEN_1",
-      "description": "Narrow embedded-c-execution route regression fixture.",
+      "description": "Narrow embedded-c-execution route regression fixture. Workflow shape: embedded C is delivered application code, accountable to c-systems-implementer or backend-engineer rather than to infrastructure.",
       "task": "Implement embedded c implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3537,12 +3551,12 @@
         "matched_routes": [
           "embedded-c-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "EMBEDDED_LINUX_PLATFORM_EXECUTION_GOLDEN_1",
-      "description": "Narrow embedded-linux-platform-execution route regression fixture.",
+      "description": "Narrow embedded-linux-platform-execution route regression fixture. Workflow shape: Yocto/Buildroot BSPs, bootloaders, and device trees are platform images under infrastructure-provisioner accountability, not application code.",
       "task": "Implement embedded linux platform implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3563,12 +3577,12 @@
         "matched_routes": [
           "embedded-linux-platform-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "infrastructure-change"
       }
     },
     {
       "id": "EMBEDDING_INDEX_EXECUTION_GOLDEN_1",
-      "description": "Narrow embedding-index-execution route regression fixture.",
+      "description": "Narrow embedding-index-execution route regression fixture. Workflow shape: embedding jobs and index refreshes are delivered service code; the co-matched database-reliability and knowledge-store routes declare no shape of their own.",
       "task": "Implement embedding index implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3597,12 +3611,12 @@
           "embedding-index-execution",
           "knowledge-store"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "EVAL_DATASET_EXECUTION_GOLDEN_1",
-      "description": "Narrow eval-dataset-execution route regression fixture.",
+      "description": "Narrow eval-dataset-execution route regression fixture. Workflow shape: the plan matched the ai-feature build route, so it covers product AI-feature delivery; the eval-dataset route itself declares no shape, because test-data authoring has no recognized workflow of its own.",
       "task": "Implement eval dataset implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3628,12 +3642,12 @@
           "ai-feature",
           "eval-dataset-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "FIRMWARE_EXECUTION_GOLDEN_1",
-      "description": "Narrow firmware-execution route regression fixture.",
+      "description": "Narrow firmware-execution route regression fixture. Workflow shape: firmware and board artifacts are delivered code, accountable to engineering rather than to infrastructure provisioning.",
       "task": "Implement firmware implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3655,12 +3669,12 @@
         "matched_routes": [
           "firmware-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "GITOPS_DELIVERY_EXECUTION_GOLDEN_1",
-      "description": "Narrow gitops-delivery-execution route regression fixture.",
+      "description": "Narrow gitops-delivery-execution route regression fixture. Workflow shape: Argo CD/Flux applications and sync waves govern promotion, environment approval, and rollback -- pipeline-change.md's subject -- rather than provisioning the platform itself.",
       "task": "Implement gitops delivery implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3681,12 +3695,12 @@
         "matched_routes": [
           "gitops-delivery-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "pipeline-change"
       }
     },
     {
       "id": "GUARDRAIL_POLICY_EXECUTION_GOLDEN_1",
-      "description": "Narrow guardrail-policy-execution route regression fixture.",
+      "description": "Narrow guardrail-policy-execution route regression fixture. Workflow shape: safety filters, refusals, and regression harnesses are product AI code under ai-engineer accountability, not admission-control policy infrastructure.",
       "task": "Implement guardrail policy implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3707,12 +3721,12 @@
         "matched_routes": [
           "guardrail-policy-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "INFERENCE_GATEWAY_EXECUTION_GOLDEN_1",
-      "description": "Narrow inference-gateway-execution route regression fixture.",
+      "description": "Narrow inference-gateway-execution route regression fixture. Workflow shape: model API adapters, streaming, retries, and budgets are delivered service code; the co-matched ai-feature route declares the same shape.",
       "task": "Implement inference gateway implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3738,12 +3752,12 @@
           "ai-feature",
           "inference-gateway-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "KERNEL_MODULE_EXECUTION_GOLDEN_1",
-      "description": "Narrow kernel-module-execution route regression fixture.",
+      "description": "Narrow kernel-module-execution route regression fixture. Workflow shape: kernel modules and drivers are delivered code under backend-engineer accountability.",
       "task": "Implement kernel module implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3765,7 +3779,7 @@
         "matched_routes": [
           "kernel-module-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
@@ -3797,7 +3811,7 @@
     },
     {
       "id": "KUBERNETES_OPERATOR_EXECUTION_GOLDEN_1",
-      "description": "Narrow kubernetes-operator-execution route regression fixture.",
+      "description": "Narrow kubernetes-operator-execution route regression fixture. Workflow shape: the plan matched both the infrastructure route (infrastructure-change) and the operator implementer (new-service, since a controller is a Go service), and a plan mixing narrow shapes is generic design-and-delivery work -- the same rule that already sent infrastructure+backend to new-service.",
       "task": "Implement kubernetes operator implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3819,12 +3833,12 @@
           "infrastructure",
           "kubernetes-operator-execution"
         ],
-        "workflow": "infrastructure-change"
+        "workflow": "new-service"
       }
     },
     {
       "id": "LINUX_SYSTEMS_EXECUTION_GOLDEN_1",
-      "description": "Narrow linux-systems-execution route regression fixture.",
+      "description": "Narrow linux-systems-execution route regression fixture. Workflow shape: systemd units, packages, sysctls, and filesystem layout are host configuration under infrastructure-provisioner accountability.",
       "task": "Implement linux systems implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3846,12 +3860,12 @@
         "matched_routes": [
           "linux-systems-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "infrastructure-change"
       }
     },
     {
       "id": "MCP_SERVER_EXECUTION_GOLDEN_1",
-      "description": "Narrow mcp-server-execution route regression fixture.",
+      "description": "Narrow mcp-server-execution route regression fixture. Workflow shape: an MCP server with its tools, schemas, and permission boundaries is a delivered service.",
       "task": "Implement mcp server implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3873,7 +3887,7 @@
         "matched_routes": [
           "mcp-server-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
@@ -3907,7 +3921,7 @@
     },
     {
       "id": "MODEL_ROUTING_EXECUTION_GOLDEN_1",
-      "description": "Narrow model-routing-execution route regression fixture.",
+      "description": "Narrow model-routing-execution route regression fixture. Workflow shape: model/provider routing, fallback behavior, and fail-closed tests are delivered service code under ai-engineer accountability.",
       "task": "Implement model routing implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3928,12 +3942,12 @@
         "matched_routes": [
           "model-routing-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "NETWORK_CONFIG_EXECUTION_GOLDEN_1",
-      "description": "Narrow network-config-execution route regression fixture.",
+      "description": "Narrow network-config-execution route regression fixture. Workflow shape: VLANs, routes, DNS/DHCP, and interface configuration are network infrastructure under infrastructure-provisioner accountability.",
       "task": "Implement network config implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3954,12 +3968,12 @@
         "matched_routes": [
           "network-config-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "infrastructure-change"
       }
     },
     {
       "id": "NETWORK_MANAGEMENT_AUTOMATION_EXECUTION_GOLDEN_1",
-      "description": "Narrow network-management-automation-execution route regression fixture.",
+      "description": "Narrow network-management-automation-execution route regression fixture. Workflow shape: YANG/NETCONF/gNMI modeled-network automation configures network infrastructure under infrastructure-provisioner accountability.",
       "task": "Implement network management automation implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3980,7 +3994,7 @@
         "matched_routes": [
           "network-management-automation-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "infrastructure-change"
       }
     },
     {
@@ -4121,7 +4135,7 @@
     },
     {
       "id": "PRECISION_TIMING_EXECUTION_GOLDEN_1",
-      "description": "Narrow precision-timing-execution route regression fixture.",
+      "description": "Narrow precision-timing-execution route regression fixture. Workflow shape: PTP/SyncE/PHC configuration and calibration are host and network platform configuration under timing and infrastructure accountability.",
       "task": "Implement precision timing implementation",
       "changed_files": [],
       "classification": "internal",
@@ -4142,7 +4156,7 @@
         "matched_routes": [
           "precision-timing-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "infrastructure-change"
       }
     },
     {
@@ -4173,7 +4187,7 @@
     },
     {
       "id": "PROTOCOL_INTEGRATION_EXECUTION_GOLDEN_1",
-      "description": "Narrow protocol-integration-execution route regression fixture.",
+      "description": "Narrow protocol-integration-execution route regression fixture. Workflow shape: protocol adapters, parsers, and conformance fixtures are delivered service code under backend-engineer or api-contract-engineer accountability.",
       "task": "Implement protocol integration implementation",
       "changed_files": [],
       "classification": "internal",
@@ -4195,7 +4209,7 @@
         "matched_routes": [
           "protocol-integration-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
@@ -4286,7 +4300,7 @@
     },
     {
       "id": "RTOS_INTEGRATION_EXECUTION_GOLDEN_1",
-      "description": "RTOS task and scheduling work selects the narrow RTOS executor under application-engineer accountability, with independent test and code review retained.",
+      "description": "RTOS task and scheduling work selects the narrow RTOS executor under application-engineer accountability, with independent test and code review retained. Workflow shape: RTOS task and scheduling artifacts are delivered embedded code.",
       "task": "Implement an RTOS integration",
       "changed_files": [
         "rtos/tasks/watchdog.c"
@@ -4310,7 +4324,7 @@
         "matched_routes": [
           "rtos-integration-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
@@ -4395,7 +4409,7 @@
     },
     {
       "id": "SONICOS_CONFIG_EXECUTION_GOLDEN_1",
-      "description": "Narrow sonicos-config-execution route regression fixture.",
+      "description": "Narrow sonicos-config-execution route regression fixture. Workflow shape: SonicOS configuration, policies, NAT/VPN, and rollback artifacts configure network infrastructure under infrastructure-provisioner accountability.",
       "task": "Implement sonicos config implementation",
       "changed_files": [],
       "classification": "internal",
@@ -4416,12 +4430,12 @@
         "matched_routes": [
           "sonicos-config-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "infrastructure-change"
       }
     },
     {
       "id": "STARLINGX_CONFIG_EXECUTION_GOLDEN_1",
-      "description": "Narrow starlingx-config-execution route regression fixture.",
+      "description": "Narrow starlingx-config-execution route regression fixture. Workflow shape: StarlingX configuration, manifests, and Helm packages configure the edge platform under infrastructure-provisioner accountability.",
       "task": "Implement starlingx config implementation",
       "changed_files": [],
       "classification": "internal",
@@ -4442,7 +4456,7 @@
         "matched_routes": [
           "starlingx-config-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "infrastructure-change"
       }
     },
     {

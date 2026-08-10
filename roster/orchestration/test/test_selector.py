@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -20,7 +21,14 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import agentic_sdlc_contracts  # noqa: E402
 from build_dispatch_plan import build_dispatch_plan  # noqa: E402
-from routing import glob_to_regex, load_catalog, load_routing, match_rule  # noqa: E402
+from routing import (  # noqa: E402
+    WORKFLOW_SHAPES,
+    glob_to_regex,
+    load_catalog,
+    load_routing,
+    match_rule,
+    validate_routing_config,
+)
 from select_agents import (  # noqa: E402
     _origin_slug,
     discover_changed_files,
@@ -2391,6 +2399,100 @@ class SelectorTests(unittest.TestCase):
             self.assertRaisesRegex(RuntimeError, "timed out"),
         ):
             agentic_sdlc_contracts.try_lifecycle_contract()
+
+
+class WorkflowShapeDeclarationTests(unittest.TestCase):
+    """`workflow_shape` must be declared, not inherited by omission (#210).
+
+    _select_workflow()'s delivery-shape fallback used to test a hardcoded set
+    of four route ids, so every route outside it -- including all 86
+    `*-execution` routes -- contributed no shape and produced "unclassified"
+    by accident rather than by judgment. The field replaces that set; this
+    class is the guard that a *newly added* route cannot silently reacquire
+    the old behavior by leaving the field off.
+    """
+
+    def test_every_shipped_route_declares_a_workflow_shape(self) -> None:
+        undeclared = [route["id"] for route in CONFIG["routes"] if "workflow_shape" not in route]
+        self.assertEqual(
+            undeclared,
+            [],
+            "every route in routing.yaml must declare workflow_shape (one of "
+            f"{sorted(WORKFLOW_SHAPES)}); a route that claims no delivery shape "
+            'declares "unclassified" explicitly',
+        )
+
+    def test_declared_shapes_are_a_subset_of_the_plan_workflow_enum(self) -> None:
+        enum = set(
+            json.loads((ROOT / "selection.schema.json").read_text(encoding="utf-8"))["properties"][
+                "workflow"
+            ]["enum"]
+        )
+        self.assertTrue(WORKFLOW_SHAPES <= enum, sorted(WORKFLOW_SHAPES - enum))
+
+    def test_an_unknown_shape_is_rejected_rather_than_silently_ignored(self) -> None:
+        config = copy.deepcopy(CONFIG)
+        config["routes"][0]["workflow_shape"] = "new-servce"
+        with self.assertRaisesRegex(ValueError, "workflow_shape must be one of"):
+            validate_routing_config(config)
+
+    def test_an_overlay_route_without_the_field_still_loads(self) -> None:
+        # A project-local routing overlay written before the field existed
+        # must keep working; such a route contributes no shape, which is
+        # exactly what every route did before #210.
+        config = copy.deepcopy(CONFIG)
+        config["routes"][0].pop("workflow_shape")
+        self.assertIs(validate_routing_config(config), config)
+
+    def test_unclassified_stays_reachable_for_a_route_that_claims_no_shape(self) -> None:
+        result = plan(task="Run a premortem", changed_files=[])
+        self.assertEqual([route["id"] for route in result["matched_routes"]], ["premortem"])
+        self.assertEqual(result["workflow"], "unclassified")
+
+    def test_a_lone_execution_route_now_contributes_its_declared_shape(self) -> None:
+        # The #210 headline case: no broad route co-matches, so before the
+        # change this came back "unclassified".
+        result = plan(task="Implement Node TypeScript utility", changed_files=["tools/build.mts"])
+        self.assertEqual([route["id"] for route in result["matched_routes"]], ["node-typescript-execution"])
+        self.assertEqual(result["workflow"], "new-service")
+
+    def test_a_narrow_shape_wins_only_when_every_claiming_route_agrees(self) -> None:
+        # Reproduces the exclusivity the previous hardcoded pair encoded:
+        # infrastructure alone stays infrastructure-change; mixed with a
+        # new-service-shaped route it becomes generic delivery work.
+        infrastructure_only = plan(
+            task="Update the cluster configuration", changed_files=["infrastructure/cluster.tf"]
+        )
+        self.assertEqual(infrastructure_only["workflow"], "infrastructure-change")
+        mixed = plan(
+            task="Update the cluster configuration and the backend api",
+            changed_files=["infrastructure/cluster.tf", "backend/api.go"],
+        )
+        self.assertEqual(mixed["workflow"], "new-service")
+
+    def test_quality_gates_do_not_depend_on_the_declared_shape(self) -> None:
+        # `required_quality_gates` come from each route's own `quality_gates`
+        # (_build_quality_gates), never from `workflow`/`workflow_shape`.
+        # Mutating every route's declared shape must leave them untouched.
+        baseline = plan(task="Update the cluster configuration", changed_files=["infrastructure/cluster.tf"])
+        config = copy.deepcopy(CONFIG)
+        for route in config["routes"]:
+            route["workflow_shape"] = "new-service"
+        mutated = build_dispatch_plan(
+            validate_routing_config(config),
+            CATALOG,
+            {
+                "task": "Update the cluster configuration",
+                "changed_files": ["infrastructure/cluster.tf"],
+                "changed_file_source": "test",
+                "repository_root": str(AGENTS_ROOT.parent),
+                "source": "example/repository",
+            },
+        )
+        self.assertNotEqual(baseline["workflow"], mutated["workflow"])
+        self.assertEqual(baseline["required_quality_gates"], mutated["required_quality_gates"])
+        self.assertEqual(baseline["human_gates"], mutated["human_gates"])
+        self.assertEqual(baseline["agents"], mutated["agents"])
 
 
 if __name__ == "__main__":

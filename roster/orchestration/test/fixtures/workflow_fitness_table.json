@@ -34,7 +34,18 @@
     "doc. If a case below implies the closed enum is genuinely missing a",
     "shape, that is Proposal 08's territory, not this file's -- see the PR",
     "description for which cases (if any) that applies to.",
-    "No case is currently marked known_mismatch. Both that once were have been fixed in the code (#154, #157) rather than weakened here; add the flag for a future disagreement rather than bending a case to match current behavior."
+    "No case is currently marked known_mismatch. Both that once were have been fixed in the code (#154, #157) rather than weakened here; add the flag for a future disagreement rather than bending a case to match current behavior.",
+    "",
+    "Five cases were added with #210, which replaced _select_workflow()'s",
+    "hardcoded four-route-id delivery-shape test with an explicit per-route",
+    "'workflow_shape' in routing.yaml. They cover what that change made",
+    "expressible and what it must not swallow: a narrow execution route",
+    "contributing new-service on its own; execution routes contributing",
+    "infrastructure-change and pipeline-change rather than the new-service",
+    "their primary role's 'build' catalog phase would have implied; and two",
+    "execution routes that must stay unclassified (verify-phase test",
+    "authoring, security-phase control work), which is the failure mode the",
+    "issue's rejected naive fix would have produced."
   ],
   "cases": [
     {
@@ -243,6 +254,58 @@
       "task_id": "FITNESS-NEW-SERVICE-3",
       "expected_workflow": "new-service",
       "reasoning": "Same reasoning as WF-NEW-SERVICE-1, extended to confirm a multi-route build case (frontend+backend) still resolves to the single new-service shape rather than being treated as ambiguous. Task/files reused verbatim from selection_golden_corpus.json's CROSS-STACK-1."
+    },
+    {
+      "id": "WF-NEW-SERVICE-EXECUTION-ONLY-1",
+      "description": "a single narrow execution route, no broad route co-matching -> new-service",
+      "task": "Implement Node TypeScript utility",
+      "changed_files": [
+        "tools/build.mts"
+      ],
+      "classification": "internal",
+      "task_id": "FITNESS-NEW-SERVICE-EXECUTION-1",
+      "expected_workflow": "new-service",
+      "reasoning": "new-service.md: 'covers work that proceeds beyond intake into design and delivery. Use product-intake.md when the task only captures intent or baselines requirements.' Writing a Node/TypeScript build utility is delivery of application code -- it is past intake, it is not a defect fix, it provisions no infrastructure, and it defines no pipeline -- so of the twelve documented shapes only new-service describes it. Derived from new-service.md and the node-typescript-implementer role's own scope, not from _select_workflow(): this case is here specifically because the same input returned 'unclassified' before #210, when only four hardcoded route ids could contribute a shape. Task/files reused verbatim from selection_golden_corpus.json's NODE-TYPESCRIPT-EXECUTION-1 to guarantee the route match."
+    },
+    {
+      "id": "WF-INFRASTRUCTURE-CHANGE-EXECUTION-1",
+      "description": "a single narrow infrastructure-shaped execution route -> infrastructure-change",
+      "task": "Implement ansible automation implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "FITNESS-INFRASTRUCTURE-CHANGE-EXECUTION-1",
+      "expected_workflow": "infrastructure-change",
+      "reasoning": "infrastructure-change.md's shape is Classify -> Provision+Plan -> Infrastructure Reviewer -> gated approval -> Apply. Ansible playbooks, roles, and inventories are declarative host configuration applied to real machines, and the ansible-automation-implementer role is accountable to infrastructure-provisioner with an independent infrastructure review -- that is the same review and apply shape, not application delivery. Distinguishes the declared shape from the primary role's catalog phase, which is 'build' here: a phase-derived rule would have called this new-service. Task reused verbatim from selection_golden_corpus.json's ANSIBLE_AUTOMATION_EXECUTION_GOLDEN_1 to guarantee the route match in isolation."
+    },
+    {
+      "id": "WF-PIPELINE-CHANGE-EXECUTION-1",
+      "description": "a single narrow delivery-automation execution route -> pipeline-change",
+      "task": "Implement gitops delivery implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "FITNESS-PIPELINE-CHANGE-EXECUTION-1",
+      "expected_workflow": "pipeline-change",
+      "reasoning": "pipeline-change.md's step 1 names the artifacts it governs: 'the execution graph, trust boundaries, runner types, triggers, permissions, secret exposure, artifact flow, environments, and rollback behavior.' Argo CD/Flux applications and sync waves are exactly artifact flow, environments, and rollback behavior; the gitops-delivery-implementer role's own escalation list ('promotion, environment approval, production sync, rollback') is that same vocabulary. It configures how releases reach an environment, not what the platform is made of, so pipeline-change rather than infrastructure-change. Task reused verbatim from selection_golden_corpus.json's GITOPS_DELIVERY_EXECUTION_GOLDEN_1."
+    },
+    {
+      "id": "WF-UNCLASSIFIED-TEST-EXECUTION-1",
+      "description": "a verify-phase execution route claims no delivery shape -> unclassified",
+      "task": "Implement typescript test implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "FITNESS-UNCLASSIFIED-TEST-EXECUTION-1",
+      "expected_workflow": "unclassified",
+      "reasoning": "unclassified.md: emitted when the selector 'matched at least one route or risk rule... but the matched combination does not fit any of this repository's recognized workflow shapes,' and 'unclassified means a statement about workflow-shape recognition, not about the task's actual impact.' Authoring TypeScript tests is real delivery work, but none of the twelve roster/workflows/*.md shapes is test authoring: new-service.md places Verification inside a full G1-G10 intent-to-runtime lifecycle, which a standalone test-writing task is not, and runtime-assurance.md is about observing deployed behavior. This case exists to hold the line against the naive fix the issue rejected (any '*-execution' route implies new-service, measured at 68 golden failures); it is the one of #210's three named fixtures whose 'unclassified' was correct all along, and it is correct now for a stated reason rather than because no route could contribute a shape. If a test-authoring workflow doc is ever added, this is the case to revisit."
+    },
+    {
+      "id": "WF-UNCLASSIFIED-SECURITY-EXECUTION-1",
+      "description": "a security-phase execution route claims no delivery shape -> unclassified",
+      "task": "Implement secure boot implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "FITNESS-UNCLASSIFIED-SECURITY-EXECUTION-1",
+      "expected_workflow": "unclassified",
+      "reasoning": "Secure-boot work is governed by the security review and G5 authority that new-service.md lists as one stage among ten, not by the intent-to-runtime lifecycle as a whole, and no roster/workflows/*.md describes a security-control change end to end. unclassified.md's step 3 is the correct disposition for that: proceed on the plan's own required_quality_gates and human_gates, and propose a new shape if the combination recurs. Recorded so a later broadening of new-service to 'anything a build-capable role implements' has to argue with this case rather than pass silently."
     }
   ]
 }

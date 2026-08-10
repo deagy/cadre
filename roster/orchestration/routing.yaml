@@ -9,6 +9,7 @@
   "routes": [
     {
       "id": "product-intent",
+      "workflow_shape": "unclassified",
       "paths": ["product/intent/**", "docs/product-intent/**"],
       "keywords": ["product intent", "mission objective", "intent capture"],
       "primary": ["product-intent-agent"],
@@ -17,6 +18,7 @@
     },
     {
       "id": "requirements-baseline",
+      "workflow_shape": "unclassified",
       "paths": ["product/requirements/**", "docs/requirements-baseline/**"],
       "keywords": ["requirements decomposition", "requirements traceability", "test obligations"],
       "primary": ["requirements-agent"],
@@ -25,6 +27,7 @@
     },
     {
       "id": "delivery-sequencing",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["dependency map", "dependency mapping", "critical path", "sequencing", "sequence the work", "delivery order", "what blocks what"],
       "primary": ["delivery-sequencer"],
@@ -32,48 +35,56 @@
     },
     {
       "id": "premortem",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["premortem", "pre-mortem", "assume this failed"],
       "primary": ["premortem"]
     },
     {
       "id": "assumption-register",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["assumption register", "record an assumption", "track assumptions"],
       "primary": ["assumption-register"]
     },
     {
       "id": "scope-boundary-check",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["scope boundary check", "build boundary", "future-state capability", "in scope or out of scope"],
       "primary": ["scope-boundary"]
     },
     {
       "id": "approval-routing",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["approval routing", "who must approve", "authority matrix lookup"],
       "primary": ["approval-router"]
     },
     {
       "id": "halt-determination",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["halt determination", "stop the line", "emergency stop", "system halt"],
       "primary": ["halt-authority"]
     },
     {
       "id": "doctrine-conformance-check",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["doctrine conformance", "doctrinal language", "doctrine check"],
       "primary": ["doctrine-conformance"]
     },
     {
       "id": "architecture-authority-review",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["abstraction layer", "infrastructure boundary violation", "architecture authority review"],
       "primary": ["architecture-authority"]
     },
     {
       "id": "phase-gate-check",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["phase gate", "phase exit criteria", "phase transition"],
       "primary": ["phase-gate"],
@@ -81,24 +92,28 @@
     },
     {
       "id": "first-principles-challenge",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["first principles challenge", "first-principles challenge", "challenge this constraint"],
       "primary": ["first-principles-challenger"]
     },
     {
       "id": "subtraction-review",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["subtraction review", "what comes out", "argue for removal"],
       "primary": ["subtraction-agent"]
     },
     {
       "id": "falsification-test",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["falsification test", "disproving test", "falsify this claim"],
       "primary": ["falsification-agent"]
     },
     {
       "id": "red-team-assessment",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["red team assessment", "red team", "adversarial assessment"],
       "primary": ["red-team"],
@@ -106,18 +121,21 @@
     },
     {
       "id": "deployment-realism-review",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["deployment realism", "operate this at scale", "pilot readiness review"],
       "primary": ["deployment-realist"]
     },
     {
       "id": "classification-and-marking",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["classification and marking", "data classification gate", "artifact leaving the environment"],
       "primary": ["classification-and-marking-gate"]
     },
     {
       "id": "claim-conformance-check",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["claim conformance", "external claim review", "floor script review"],
       "primary": ["claim-conformance"],
@@ -125,42 +143,49 @@
     },
     {
       "id": "vendor-register-review",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["vendor register", "tooling register", "vendor and tooling assessment"],
       "primary": ["vendor-register-steward"]
     },
     {
       "id": "retention-deletion-execution",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["retention and deletion", "execute data deletion", "retention obligation"],
       "primary": ["retention-and-deletion-executor"]
     },
     {
       "id": "agent-performance-evaluation",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["agent performance evaluation", "evaluate agent output", "agent feedback loop"],
       "primary": ["agent-performance-evaluator"]
     },
     {
       "id": "agent-version-provenance",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["agent version control", "agent definition provenance", "which version of the agent"],
       "primary": ["agent-version-control"]
     },
     {
       "id": "ip-provenance-determination",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["ip provenance", "intellectual property provenance", "ip determination"],
       "primary": ["ip-provenance-agent"]
     },
     {
       "id": "decision-record-capture",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["decision record", "capture decision provenance", "record this decision"],
       "primary": ["decision-record"]
     },
     {
       "id": "governance-planning",
+      "workflow_shape": "unclassified",
       "paths": ["governance/impact/**", "governance/accreditation/**"],
       "keywords": ["governance impact", "data jurisdiction", "accreditation plan"],
       "primary": ["governance-planner"],
@@ -170,6 +195,7 @@
     },
     {
       "id": "data-governance",
+      "workflow_shape": "unclassified",
       "paths": ["governance/data/**", "data-governance/**", "platform/data/**"],
       "keywords": ["non-egress", "derived output", "data residency", "data lineage requirements"],
       "primary": ["data-governance-engineer"],
@@ -178,6 +204,7 @@
     },
     {
       "id": "cryptographic-assurance",
+      "workflow_shape": "unclassified",
       "paths": ["security/crypto-assurance/**", "crypto-assurance/**", "platform/crypto/**"],
       "keywords": ["crypto agility", "algorithm posture", "pqc", "qkms", "qkd", "qrng", "downgrade risk"],
       "primary": ["cryptographic-assurance-engineer"],
@@ -187,6 +214,7 @@
     },
     {
       "id": "quantum-timing-assurance",
+      "workflow_shape": "unclassified",
       "paths": ["security/quantum-timing/**", "quantum-timing/**", "platform/quantum/**", "platform/timing/**"],
       "keywords": ["entanglement fidelity", "timing stratum", "timing strata", "physical trust threshold", "physical measurement validity", "qkd", "quantum key distribution"],
       "primary": ["quantum-timing-assurance-engineer"],
@@ -196,6 +224,7 @@
     },
     {
       "id": "runtime-assurance",
+      "workflow_shape": "unclassified",
       "paths": ["runtime-assurance/**", "assurance/runtime/**"],
       "keywords": ["runtime conformance", "runtime assurance", "deployed behavior conformance", "production runtime observation", "observe production runtime"],
       "primary": ["observability-sre"],
@@ -205,6 +234,7 @@
     },
     {
       "id": "decommission",
+      "workflow_shape": "unclassified",
       "paths": ["decommission/**", "runbooks/decommission/**"],
       "keywords": ["decommission", "retire service", "service retirement", "sunset service", "tear down service"],
       "primary": ["decommission-engineer"],
@@ -213,6 +243,7 @@
     },
     {
       "id": "agent-suite-governance",
+      "workflow_shape": "unclassified",
       "paths": ["roster/catalog.yaml", "roster/**/AGENT.md", "roster/workflows/**", "roster/shared/**", "roster/orchestration/routing.yaml", "roster/orchestration/selection.schema.json", "roster/orchestration/handoff-contracts.md", "roster/orchestration/task-brief-template.md", "roster/orchestration/src/**", "roster/orchestration/test/**", ".agents/skills/**", "provider/**", "packaging/**", "cadre_cli/__init__.py", "cadre_cli/_version.py", "README.md", "AGENTS.md"],
       "keywords": ["review project", "review repository", "repo structure", "repository structure", "project structure", "agent suite", "agents skills structure", "agents, skills, structure", "review agents", "audit agents", "audit publishable skills", "publishable skills", "skill packaging", "workflow mapping", "orchestration quality", "catalog integrity", "routing coverage", "governance review"],
       "primary": ["application-engineer", "debugging-engineer"],
@@ -221,6 +252,7 @@
     },
     {
       "id": "orchestration",
+      "workflow_shape": "unclassified",
       "paths": ["roster/orchestration/routing.yaml", "roster/orchestration/selection.schema.json", "roster/orchestration/src/**", "roster/orchestration/test/**", ".agents/skills/run-agent-orchestration/**"],
       "keywords": ["agent orchestration", "agent selector", "agent routing", "dispatch plan"],
       "primary": ["application-engineer"],
@@ -228,6 +260,7 @@
     },
     {
       "id": "frontend",
+      "workflow_shape": "new-service",
       "paths": [
         "frontend/**",
         "web/**",
@@ -300,6 +333,7 @@
     },
     {
       "id": "visual-system",
+      "workflow_shape": "unclassified",
       "paths": ["design-system/**", "design-tokens/**", "**/tokens.json", "**/*.tokens.json", "**/*.stories.tsx", "**/theme/**"],
       "keywords": ["design system", "design token", "design tokens", "component library", "visual design", "visual system", "style guide", "typography scale", "color palette"],
       "primary": ["visual-designer"],
@@ -309,6 +343,7 @@
     },
     {
       "id": "ai-feature",
+      "workflow_shape": "new-service",
       "paths": ["**/prompts/**", "**/evals/**", "**/*.prompt", "**/*.prompt.*", "**/model/**/*.yaml"],
       "keywords": ["llm", "large language model", "prompt", "prompt engineering", "model selection", "eval", "evals", "eval harness", "fine-tune", "fine-tuning", "inference", "embedding model", "agentic feature", "retrieval augmented generation"],
       "primary": ["ai-engineer"],
@@ -318,6 +353,7 @@
     },
     {
       "id": "backend",
+      "workflow_shape": "new-service",
       "paths": ["backend/**", "services/**", "api/**", "**/*.go", "**/*.sql", "**/migrations/**"],
       "keywords": ["backend", "api", "service implementation", "datastore", "schema", "migration", "golang", "python", "postgres", "postgresql", "pgx", "database"],
       "primary": ["backend-engineer"],
@@ -326,6 +362,7 @@
     },
     {
       "id": "infrastructure",
+      "workflow_shape": "infrastructure-change",
       "paths": [
         "terraform/**",
         "infrastructure/**",
@@ -409,6 +446,7 @@
     },
     {
       "id": "pipeline",
+      "workflow_shape": "pipeline-change",
       "paths": [
         ".gitlab-ci.yml",
         ".gitlab/**",
@@ -477,6 +515,7 @@
     },
     {
       "id": "testing",
+      "workflow_shape": "unclassified",
       "paths": ["features/**", "**/*.feature", "**/*_test.go", "**/*.test.mjs", "**/*.test.ts", "**/*.spec.ts", "test/**", "tests/**"],
       "keywords": ["gherkin", "godog", "integration test", "regression test", "test coverage"],
       "primary": ["test-engineer"],
@@ -485,6 +524,7 @@
     },
     {
       "id": "code-review-request",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["review this pull request", "review this pr", "review this merge request", "code review", "pr review", "review these changes", "review my changes", "peer review this code"],
       "primary": ["code-reviewer"],
@@ -492,6 +532,7 @@
     },
     {
       "id": "debugging",
+      "workflow_shape": "unclassified",
       "paths": ["debug/**", "diagnostics/**", "repro/**", "roster/catalog.yaml", "roster/**/AGENT.md", ".agents/skills/agent-authoring/**", "**/fixtures/bugs/**", "**/regression/**"],
       "keywords": ["debug", "debugging", "bug", "root cause", "reproduce", "reproduction", "failing test", "failing command", "stack trace", "crash", "panic", "race condition", "flaky test", "test failure", "runtime failure", "tooling failure", "tune agent", "agent tune-up", "inspect agents", "agent issue", "agent definition", "agent prompt", "role defect", "routing issue", "selector regression", "misroute", "dispatch bug"],
       "primary": ["debugging-engineer"],
@@ -499,6 +540,7 @@
     },
     {
       "id": "black-box-testing",
+      "workflow_shape": "unclassified",
       "paths": ["**/black-box/**", "**/blackbox/**", "**/e2e/**", "**/playwright/**", "**/postman/**", "**/*.feature"],
       "keywords": ["black-box", "black box", "external behavior", "public api test", "opaque system", "end-to-end test", "e2e"],
       "primary": ["black-box-tester"],
@@ -506,6 +548,7 @@
     },
     {
       "id": "end-user-testing",
+      "workflow_shape": "unclassified",
       "paths": ["**/uat/**", "**/user-acceptance/**", "**/personas/**", "**/journeys/**", "**/usability/**"],
       "keywords": ["uat", "user acceptance", "end-user", "end user", "persona", "user journey", "usability", "user readiness"],
       "primary": ["end-user-tester"],
@@ -515,6 +558,7 @@
     },
     {
       "id": "performance-testing",
+      "workflow_shape": "unclassified",
       "paths": ["**/load-test/**", "**/performance-test/**", "**/perf/**", "**/benchmarks/**"],
       "keywords": ["load test", "performance test", "stress test", "benchmark", "throughput", "latency slo", "capacity validation"],
       "primary": ["performance-testing-engineer"],
@@ -524,6 +568,7 @@
     },
     {
       "id": "chaos-resilience",
+      "workflow_shape": "unclassified",
       "paths": ["**/chaos/**", "**/resilience-test/**", "**/game-day/**", "**/fault-injection/**"],
       "keywords": ["chaos engineering", "fault injection", "resilience test", "failure injection", "disaster recovery test", "game day", "rto validation", "rpo validation"],
       "primary": ["chaos-resilience-engineer"],
@@ -533,6 +578,7 @@
     },
     {
       "id": "support",
+      "workflow_shape": "unclassified",
       "paths": ["support/**", "docs/support/**", "**/runbooks/support/**", "**/incidents/**", "**/tickets/**"],
       "keywords": ["support", "triage", "user report", "customer report", "incident ticket", "reproduction steps", "workaround"],
       "primary": ["support-triage-agent"],
@@ -541,6 +587,7 @@
     },
     {
       "id": "incident-response",
+      "workflow_shape": "unclassified",
       "paths": ["incidents/**", "postmortems/**", "**/runbooks/incident/**", "**/incident-response/**"],
       "keywords": ["incident", "outage", "sev1", "sev2", "major incident", "postmortem", "rollback coordination", "war room"],
       "primary": ["incident-commander"],
@@ -549,6 +596,7 @@
     },
     {
       "id": "rollback",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["roll back", "revert the release", "back out the release"],
       "keyword_groups": [["rollback", "roll forward", "revert", "undo", "downgrade", "restore", "redeploy", "back out", "previous version", "prior build", "previous artifact", "last known-good"], ["release", "deployment", "deploy", "production", "rollout", "artifact"]],
@@ -558,6 +606,7 @@
     },
     {
       "id": "observability",
+      "workflow_shape": "unclassified",
       "paths": ["observability/**", "monitoring/**", "dashboards/**", "alerts/**", "prometheus/**", "grafana/**", "telemetry/**", "**/runbooks/operations/**"],
       "keywords": ["observability", "slo", "sli", "error budget", "alert", "dashboard", "metrics", "traces", "logs", "monitoring"],
       "primary": ["observability-sre"],
@@ -567,6 +616,7 @@
     },
     {
       "id": "secrets-identity",
+      "workflow_shape": "unclassified",
       "paths": ["secrets/**", "identity/**", "rbac/**", "iam/**", "oidc/**", "workload-identity/**", "**/serviceaccount*.yaml", "**/rolebinding*.yaml"],
       "keywords": ["secret", "credential", "key rotation", "workload identity", "rbac", "oidc", "service account", "access review", "gitlab variable"],
       "primary": ["secrets-identity-engineer"],
@@ -574,6 +624,7 @@
     },
     {
       "id": "database-reliability",
+      "workflow_shape": "unclassified",
       "paths": ["db/**", "database/**", "postgres/**", "**/migrations/**", "**/*.sql", "backup/**", "restore/**"],
       "keywords": ["postgresql ha", "pitr", "backup", "restore", "migration safety", "schema change", "data retention", "vacuum", "index", "lock"],
       "primary": ["database-reliability-engineer"],
@@ -581,6 +632,7 @@
     },
     {
       "id": "policy-as-code",
+      "workflow_shape": "unclassified",
       "paths": ["policy/**", "policies/**", "opa/**", "kyverno/**", "gatekeeper/**", "conftest/**", "admission/**"],
       "keywords": ["policy as code", "admission", "opa", "kyverno", "gatekeeper", "conftest", "network policy", "restricted security context"],
       "primary": ["policy-as-code-engineer"],
@@ -588,6 +640,7 @@
     },
     {
       "id": "supply-chain",
+      "workflow_shape": "unclassified",
       "paths": ["go.mod", "go.sum", "**/go.mod", "**/go.sum", "package.json", "package-lock.json", "**/package.json", "**/package-lock.json", "**/Dockerfile", "**/Containerfile", "**/sbom/**", "**/*.lock", "**/charts/Chart.yaml", "plugin/tools/test_cline_git_plugin_packaging.py"],
       "keywords": ["dependency", "sbom", "sboms", "provenance", "signing", "cosign", "slsa", "container image", "terraform provider", "helm dependency", "license"],
       "primary": ["supply-chain-security-reviewer"],
@@ -596,6 +649,7 @@
     },
     {
       "id": "packaging",
+      "workflow_shape": "unclassified",
       "paths": ["plugin/tools/**"],
       "keywords": ["plugin packaging", "plugin manifest health", "plugin packaging tool", "packaging guard", "plugin changelog entry", "plugin install script", "plugin version bump", "port cline agents", "cline port", "bootstrap_sdlc.py", "plugin distribution packaging"],
       "primary": ["application-engineer", "debugging-engineer"],
@@ -603,6 +657,7 @@
     },
     {
       "id": "cost-capacity",
+      "workflow_shape": "unclassified",
       "paths": ["capacity/**", "cost/**", "finops/**", "sizing/**", "**/values*.yaml"],
       "keywords": ["capacity", "sizing", "cost", "finops", "quota", "resource limits", "storage growth", "runner utilization", "headroom"],
       "primary": ["cost-capacity-planner"],
@@ -611,6 +666,7 @@
     },
     {
       "id": "cost-operations",
+      "workflow_shape": "unclassified",
       "paths": [],
       "keywords": ["cost drift", "cost anomaly", "spend anomaly", "budget alert", "quota exhaustion", "cost overrun", "usage drift"],
       "primary": ["finops-engineer"],
@@ -619,6 +675,7 @@
     },
     {
       "id": "api-contract",
+      "workflow_shape": "unclassified",
       "paths": ["contracts/**", "**/openapi.yaml", "**/openapi.yml", "**/*.proto", "**/schema.graphql"],
       "keywords": ["api contract", "schema contract", "api versioning", "breaking change", "contract compatibility", "openapi", "graphql schema", "proto schema", "api design", "schema design", "interface design", "endpoint design", "contract design"],
       "primary": ["api-contract-engineer"],
@@ -628,6 +685,7 @@
     },
     {
       "id": "documentation",
+      "workflow_shape": "unclassified",
       "paths": ["docs/**", "**/*.md", "**/adr/**"],
       "keywords": ["documentation", "runbook", "adr", "architecture decision", "operator guide"],
       "primary": ["technical-writer"],
@@ -635,6 +693,7 @@
     },
     {
       "id": "gitlab-evidence",
+      "workflow_shape": "unclassified",
       "paths": ["roster/orchestration/mcp/gitlab_*.py"],
       "keywords": ["gitlab issue", "gitlab subtask", "gitlab wiki", "review subtask"],
       "primary": ["application-engineer"],
@@ -642,6 +701,7 @@
     },
     {
       "id": "architecture-diagram-execution",
+      "workflow_shape": "unclassified",
       "paths": [
         "**/architecture/diagrams/**",
         "**/architecture/**/diagrams/**",
@@ -673,6 +733,7 @@
     },
     {
       "id": "python-automation-execution",
+      "workflow_shape": "new-service",
       "paths": [
         "automation/**/*.py",
         "scripts/**/*.py",
@@ -705,6 +766,7 @@
     },
     {
       "id": "go-service-execution",
+      "workflow_shape": "new-service",
       "paths": [
         "**/*.go"
       ],
@@ -766,6 +828,7 @@
     },
     {
       "id": "react-component-execution",
+      "workflow_shape": "new-service",
       "paths": [
         "**/components/**/*.tsx",
         "**/components/**/*.jsx",
@@ -798,6 +861,7 @@
     },
     {
       "id": "github-actions-execution",
+      "workflow_shape": "pipeline-change",
       "paths": [
         ".github/workflows/**",
         "**/.github/workflows/**",
@@ -845,6 +909,7 @@
     },
     {
       "id": "gitlab-ci-execution",
+      "workflow_shape": "pipeline-change",
       "paths": [
         ".gitlab-ci.yml",
         ".gitlab/**",
@@ -873,6 +938,7 @@
     },
     {
       "id": "opentofu-module-execution",
+      "workflow_shape": "infrastructure-change",
       "paths": [
         "**/*.tf",
         "**/*.tfvars"
@@ -934,6 +1000,7 @@
     },
     {
       "id": "helm-chart-execution",
+      "workflow_shape": "infrastructure-change",
       "paths": [
         "helm/**",
         "charts/**",
@@ -968,6 +1035,7 @@
     },
     {
       "id": "kubernetes-manifest-execution",
+      "workflow_shape": "infrastructure-change",
       "paths": [
         "kubernetes/**",
         "k8s/**"
@@ -1001,6 +1069,7 @@
     },
     {
       "id": "postgres-query-execution",
+      "workflow_shape": "new-service",
       "paths": [
         "postgres/queries/**",
         "**/postgres/**/*.sql",
@@ -1031,6 +1100,7 @@
     },
     {
       "id": "node-typescript-execution",
+      "workflow_shape": "new-service",
       "paths": [
         "tools/**/*.ts",
         "scripts/**/*.ts",
@@ -1077,6 +1147,7 @@
     },
     {
       "id": "selector-test-execution",
+      "workflow_shape": "unclassified",
       "paths": [
         "roster/orchestration/test/**"
       ],
@@ -1099,6 +1170,7 @@
     },
     {
       "id": "technical-documentation-execution",
+      "workflow_shape": "unclassified",
       "paths": [
         "docs/runbooks/**",
         "docs/guides/**",
@@ -1120,6 +1192,7 @@
     },
     {
       "id": "adr-writing-execution",
+      "workflow_shape": "unclassified",
       "paths": [
         "docs/adr/**",
         "docs/decisions/**"
@@ -1141,6 +1214,7 @@
     },
     {
       "id": "compose-stack-execution",
+      "workflow_shape": "infrastructure-change",
       "paths": [
         "compose/**",
         "docker-compose.yml",
@@ -1165,6 +1239,7 @@
     },
     {
       "id": "css-layout-execution",
+      "workflow_shape": "new-service",
       "paths": [
         "frontend/**/*.module.css",
         "frontend/**/*.module.scss",
@@ -1189,6 +1264,7 @@
     },
     {
       "id": "data-transformation-execution",
+      "workflow_shape": "new-service",
       "paths": [
         "etl/**",
         "data-transforms/**",
@@ -1214,6 +1290,7 @@
     },
     {
       "id": "dependency-remediation-execution",
+      "workflow_shape": "unclassified",
       "paths": [
         "dependencies/remediation/**",
         "security/dependency-remediation/**"
@@ -1236,6 +1313,7 @@
     },
     {
       "id": "frontend-accessibility-remediation-execution",
+      "workflow_shape": "new-service",
       "paths": [
         "frontend/accessibility/**",
         "frontend/a11y/**"
@@ -1257,6 +1335,7 @@
     },
     {
       "id": "git-operations-execution",
+      "workflow_shape": "unclassified",
       "paths": [
         "git-operations/**",
         "scripts/git-operations/**"
@@ -1279,6 +1358,7 @@
     },
     {
       "id": "javascript-maintenance-execution",
+      "workflow_shape": "new-service",
       "paths": [
         "frontend/legacy-js/**",
         "web/legacy-js/**"
@@ -1301,6 +1381,7 @@
     },
     {
       "id": "kyverno-policy-execution",
+      "workflow_shape": "unclassified",
       "paths": [
         "kyverno/**",
         "policies/kyverno/**"
@@ -1322,6 +1403,7 @@
     },
     {
       "id": "prompt-artifact-execution",
+      "workflow_shape": "new-service",
       "paths": [
         "prompts/**",
         "ai/prompts/**"
@@ -1343,6 +1425,7 @@
     },
     {
       "id": "proxmox-opentofu-execution",
+      "workflow_shape": "infrastructure-change",
       "paths": [
         "proxmox/**",
         "infrastructure/proxmox/**",
@@ -1365,6 +1448,7 @@
     },
     {
       "id": "release-automation-execution",
+      "workflow_shape": "pipeline-change",
       "paths": [
         "release/automation/**",
         "release/artifacts/**"
@@ -1387,6 +1471,7 @@
     },
     {
       "id": "retrieval-pipeline-execution",
+      "workflow_shape": "new-service",
       "paths": [
         "retrieval/**",
         "rag/**",
@@ -1410,6 +1495,7 @@
     },
     {
       "id": "shell-automation-execution",
+      "workflow_shape": "new-service",
       "paths": [
         "automation/shell/**",
         "scripts/automation/**",
@@ -1433,6 +1519,7 @@
     },
     {
       "id": "sql-query-execution",
+      "workflow_shape": "new-service",
       "paths": [
         "sql/queries/**",
         "database/queries/**",
@@ -1459,6 +1546,7 @@
     },
     {
       "id": "talos-config-execution",
+      "workflow_shape": "infrastructure-change",
       "paths": [
         "talos/**",
         "infrastructure/talos/**"
@@ -1480,6 +1568,7 @@
     },
     {
       "id": "browser-test-execution",
+      "workflow_shape": "unclassified",
       "paths": [
         "frontend/e2e/**",
         "frontend/browser-tests/**",
@@ -1503,6 +1592,7 @@
     },
     {
       "id": "eval-harness-execution",
+      "workflow_shape": "unclassified",
       "paths": [
         "evals/**",
         "ai/evals/**"
@@ -1525,6 +1615,7 @@
     },
     {
       "id": "example-fixture-execution",
+      "workflow_shape": "unclassified",
       "paths": [
         "examples/fixtures/**",
         "test-fixtures/**",
@@ -1548,6 +1639,7 @@
     },
     {
       "id": "gherkin-test-execution",
+      "workflow_shape": "unclassified",
       "paths": [
         "features/**",
         "gherkin/**",
@@ -1568,60 +1660,61 @@
         "test-engineer"
       ]
     },
-    {"id":"agent-workflow-execution","paths":["agents/workflows/**"],"keywords":["agent workflow implementation"],"primary":["agent-workflow-implementer"],"reviewers":["code-reviewer"],"support":["application-engineer"]},
-    {"id":"ai-observability-execution","paths":["ai/observability/**"],"keywords":["ai observability implementation"],"primary":["ai-observability-implementer"],"reviewers":["security-reviewer"],"support":["ai-engineer"]},
-    {"id":"ansible-automation-execution","paths":["ansible/**"],"keywords":["ansible automation implementation"],"primary":["ansible-automation-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"bare-metal-provisioning-execution","paths":["bare-metal/**"],"keywords":["bare metal provisioning implementation"],"primary":["bare-metal-provisioning-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"bgp-routing-execution","paths":["networking/bgp/**"],"keywords":["bgp routing implementation"],"primary":["bgp-routing-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"c-systems-execution","paths":["systems/c/**"],"keywords":["c systems implementation"],"primary":["c-systems-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
-    {"id":"cmake-build-execution","paths":["cmake/**"],"keywords":["cmake build implementation"],"primary":["cmake-build-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
-    {"id":"cpp-systems-execution","paths":["systems/cpp/**"],"keywords":["cpp systems implementation"],"primary":["cpp-systems-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
-    {"id":"device-driver-execution","paths":["drivers/**"],"keywords":["device driver implementation"],"primary":["device-driver-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
-    {"id":"distributed-storage-execution","paths":["storage/distributed/**"],"keywords":["distributed storage implementation"],"primary":["distributed-storage-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"ebpf-execution","paths":["ebpf/**"],"keywords":["ebpf implementation"],"primary":["ebpf-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
-    {"id":"edge-cloud-integration-execution","paths":["edge-cloud/**"],"keywords":["edge cloud integration implementation"],"primary":["edge-cloud-integration-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"embedded-c-execution","paths":["embedded/c/**"],"keywords":["embedded c implementation"],"primary":["embedded-c-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
-    {"id":"embedded-linux-platform-execution","paths":["embedded/linux/**"],"keywords":["embedded linux platform implementation"],"primary":["embedded-linux-platform-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"embedding-index-execution","paths":["ai/embeddings/**"],"keywords":["embedding index implementation"],"primary":["embedding-index-implementer"],"reviewers":["test-engineer"],"support":["ai-engineer"]},
-    {"id":"eval-dataset-execution","paths":["evals/datasets/**"],"keywords":["eval dataset implementation"],"primary":["eval-dataset-implementer"],"reviewers":["code-reviewer"],"support":["ai-engineer","test-engineer"]},
-    {"id":"firmware-execution","paths":["firmware/**"],"keywords":["firmware implementation"],"primary":["firmware-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
-    {"id":"gitops-delivery-execution","paths":["gitops/**"],"keywords":["gitops delivery implementation"],"primary":["gitops-delivery-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"guardrail-policy-execution","paths":["policies/guardrails/**"],"keywords":["guardrail policy implementation"],"primary":["guardrail-policy-implementer"],"reviewers":["security-reviewer"],"support":["policy-as-code-engineer"]},
-    {"id":"inference-gateway-execution","paths":["ai/inference-gateway/**"],"keywords":["inference gateway implementation"],"primary":["inference-gateway-implementer"],"reviewers":["security-reviewer"],"support":["ai-engineer"]},
-    {"id":"kernel-module-execution","paths":["kernel-modules/**"],"keywords":["kernel module implementation"],"primary":["kernel-module-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
-    {"id":"kubernetes-networking-execution","paths":["kubernetes/networking/**"],"keywords":["kubernetes networking implementation"],"primary":["kubernetes-networking-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"kubernetes-operator-execution","paths":["kubernetes/operators/**"],"keywords":["kubernetes operator implementation"],"primary":["kubernetes-operator-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"linux-systems-execution","paths":["systems/linux/**"],"keywords":["linux systems implementation"],"primary":["linux-systems-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
-    {"id":"mcp-server-execution","paths":["mcp/servers/**"],"keywords":["mcp server implementation"],"primary":["mcp-server-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
-    {"id":"migration-test-execution","paths":["database/migration-tests/**"],"keywords":["migration test implementation"],"primary":["migration-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer","database-reliability-engineer"]},
-    {"id":"model-routing-execution","paths":["ai/model-routing/**"],"keywords":["model routing implementation"],"primary":["model-routing-implementer"],"reviewers":["security-reviewer"],"support":["ai-engineer"]},
-    {"id":"network-config-execution","paths":["networking/config/**"],"keywords":["network config implementation"],"primary":["network-config-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"network-management-automation-execution","paths":["networking/automation/**"],"keywords":["network management automation implementation"],"primary":["network-management-automation-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"network-observability-execution","paths":["networking/observability/**"],"keywords":["network observability implementation"],"primary":["network-observability-implementer"],"reviewers":["infrastructure-reviewer"],"support":["observability-sre"]},
-    {"id":"network-security-policy-execution","paths":["networking/security-policy/**"],"keywords":["network security policy implementation"],"primary":["network-security-policy-implementer"],"reviewers":["security-reviewer"],"support":["policy-as-code-engineer"]},
-    {"id":"pkcs11-hsm-integration-execution","paths":["security/pkcs11/**"],"keywords":["pkcs11 hsm integration implementation"],"primary":["pkcs11-hsm-integration-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
-    {"id":"pki-certificate-lifecycle-execution","paths":["security/pki/**"],"keywords":["pki certificate lifecycle implementation"],"primary":["pki-certificate-lifecycle-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
-    {"id":"pqc-integration-execution","paths":["security/pqc/**"],"keywords":["pqc integration implementation"],"primary":["pqc-integration-implementer"],"reviewers":["security-reviewer"],"support":["cryptographic-assurance-engineer"]},
-    {"id":"precision-timing-execution","paths":["timing/**"],"keywords":["precision timing implementation"],"primary":["precision-timing-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"protocol-fuzzing-execution","paths":["fuzz/protocols/**"],"keywords":["protocol fuzzing implementation"],"primary":["protocol-fuzzing-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
-    {"id":"protocol-integration-execution","paths":["protocols/integration/**"],"keywords":["protocol integration implementation"],"primary":["protocol-integration-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
-    {"id":"qkd-qkms-integration-execution","paths":["quantum/qkd-qkms/**"],"keywords":["qkd qkms integration implementation"],"primary":["qkd-qkms-integration-implementer"],"reviewers":["security-reviewer"],"support":["cryptographic-assurance-engineer"]},
-    {"id":"quantum-network-integration-execution","paths":["quantum/network/**"],"keywords":["quantum network integration implementation"],"primary":["quantum-network-integration-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"rbac-manifest-execution","paths":["security/rbac/**"],"keywords":["rbac manifest implementation"],"primary":["rbac-manifest-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
-    {"id":"rtos-integration-execution","paths":["rtos/**","embedded/rtos/**","firmware/rtos/**"],"keywords":["rtos integration implementation","rtos task implementation","rtos scheduling implementation"],"primary":["rtos-integration-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
-    {"id":"secret-hygiene-execution","paths":["security/secret-hygiene/**"],"keywords":["secret hygiene implementation"],"primary":["secret-hygiene-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
-    {"id":"secure-boot-execution","paths":["security/secure-boot/**"],"keywords":["secure boot implementation"],"primary":["secure-boot-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
-    {"id":"secure-channel-integration-execution","paths":["security/secure-channels/**"],"keywords":["secure channel integration implementation"],"primary":["secure-channel-integration-implementer"],"reviewers":["security-reviewer"],"support":["cryptographic-assurance-engineer"]},
-    {"id":"sonicos-config-execution","paths":["networking/sonicos/**"],"keywords":["sonicos config implementation"],"primary":["sonicos-config-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"starlingx-config-execution","paths":["starlingx/**"],"keywords":["starlingx config implementation"],"primary":["starlingx-config-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"supply-chain-remediation-execution","paths":["security/supply-chain-remediation/**"],"keywords":["supply chain remediation implementation"],"primary":["supply-chain-remediation-implementer"],"reviewers":["supply-chain-security-reviewer"],"support":["application-engineer"]},
-    {"id":"go-test-execution","paths":["tests/go/**"],"keywords":["go test implementation"],"primary":["go-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
-    {"id":"hardware-test-execution","paths":["tests/hardware/**"],"keywords":["hardware test implementation"],"primary":["hardware-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
-    {"id":"interoperability-test-execution","paths":["tests/interoperability/**"],"keywords":["interoperability test implementation"],"primary":["interoperability-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
-    {"id":"python-test-execution","paths":["tests/python/**"],"keywords":["python test implementation"],"primary":["python-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
-    {"id":"typescript-test-execution","paths":["tests/typescript/**"],"keywords":["typescript test implementation"],"primary":["typescript-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
+    {"id":"agent-workflow-execution","workflow_shape":"new-service","paths":["agents/workflows/**"],"keywords":["agent workflow implementation"],"primary":["agent-workflow-implementer"],"reviewers":["code-reviewer"],"support":["application-engineer"]},
+    {"id":"ai-observability-execution","workflow_shape":"unclassified","paths":["ai/observability/**"],"keywords":["ai observability implementation"],"primary":["ai-observability-implementer"],"reviewers":["security-reviewer"],"support":["ai-engineer"]},
+    {"id":"ansible-automation-execution","workflow_shape":"infrastructure-change","paths":["ansible/**"],"keywords":["ansible automation implementation"],"primary":["ansible-automation-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"bare-metal-provisioning-execution","workflow_shape":"infrastructure-change","paths":["bare-metal/**"],"keywords":["bare metal provisioning implementation"],"primary":["bare-metal-provisioning-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"bgp-routing-execution","workflow_shape":"infrastructure-change","paths":["networking/bgp/**"],"keywords":["bgp routing implementation"],"primary":["bgp-routing-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"c-systems-execution","workflow_shape":"new-service","paths":["systems/c/**"],"keywords":["c systems implementation"],"primary":["c-systems-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
+    {"id":"cmake-build-execution","workflow_shape":"new-service","paths":["cmake/**"],"keywords":["cmake build implementation"],"primary":["cmake-build-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
+    {"id":"cpp-systems-execution","workflow_shape":"new-service","paths":["systems/cpp/**"],"keywords":["cpp systems implementation"],"primary":["cpp-systems-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
+    {"id":"device-driver-execution","workflow_shape":"new-service","paths":["drivers/**"],"keywords":["device driver implementation"],"primary":["device-driver-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
+    {"id":"distributed-storage-execution","workflow_shape":"infrastructure-change","paths":["storage/distributed/**"],"keywords":["distributed storage implementation"],"primary":["distributed-storage-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"ebpf-execution","workflow_shape":"new-service","paths":["ebpf/**"],"keywords":["ebpf implementation"],"primary":["ebpf-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
+    {"id":"edge-cloud-integration-execution","workflow_shape":"infrastructure-change","paths":["edge-cloud/**"],"keywords":["edge cloud integration implementation"],"primary":["edge-cloud-integration-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"embedded-c-execution","workflow_shape":"new-service","paths":["embedded/c/**"],"keywords":["embedded c implementation"],"primary":["embedded-c-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
+    {"id":"embedded-linux-platform-execution","workflow_shape":"infrastructure-change","paths":["embedded/linux/**"],"keywords":["embedded linux platform implementation"],"primary":["embedded-linux-platform-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"embedding-index-execution","workflow_shape":"new-service","paths":["ai/embeddings/**"],"keywords":["embedding index implementation"],"primary":["embedding-index-implementer"],"reviewers":["test-engineer"],"support":["ai-engineer"]},
+    {"id":"eval-dataset-execution","workflow_shape":"unclassified","paths":["evals/datasets/**"],"keywords":["eval dataset implementation"],"primary":["eval-dataset-implementer"],"reviewers":["code-reviewer"],"support":["ai-engineer","test-engineer"]},
+    {"id":"firmware-execution","workflow_shape":"new-service","paths":["firmware/**"],"keywords":["firmware implementation"],"primary":["firmware-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
+    {"id":"gitops-delivery-execution","workflow_shape":"pipeline-change","paths":["gitops/**"],"keywords":["gitops delivery implementation"],"primary":["gitops-delivery-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"guardrail-policy-execution","workflow_shape":"new-service","paths":["policies/guardrails/**"],"keywords":["guardrail policy implementation"],"primary":["guardrail-policy-implementer"],"reviewers":["security-reviewer"],"support":["policy-as-code-engineer"]},
+    {"id":"inference-gateway-execution","workflow_shape":"new-service","paths":["ai/inference-gateway/**"],"keywords":["inference gateway implementation"],"primary":["inference-gateway-implementer"],"reviewers":["security-reviewer"],"support":["ai-engineer"]},
+    {"id":"kernel-module-execution","workflow_shape":"new-service","paths":["kernel-modules/**"],"keywords":["kernel module implementation"],"primary":["kernel-module-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
+    {"id":"kubernetes-networking-execution","workflow_shape":"infrastructure-change","paths":["kubernetes/networking/**"],"keywords":["kubernetes networking implementation"],"primary":["kubernetes-networking-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"kubernetes-operator-execution","workflow_shape":"new-service","paths":["kubernetes/operators/**"],"keywords":["kubernetes operator implementation"],"primary":["kubernetes-operator-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"linux-systems-execution","workflow_shape":"infrastructure-change","paths":["systems/linux/**"],"keywords":["linux systems implementation"],"primary":["linux-systems-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
+    {"id":"mcp-server-execution","workflow_shape":"new-service","paths":["mcp/servers/**"],"keywords":["mcp server implementation"],"primary":["mcp-server-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
+    {"id":"migration-test-execution","workflow_shape":"unclassified","paths":["database/migration-tests/**"],"keywords":["migration test implementation"],"primary":["migration-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer","database-reliability-engineer"]},
+    {"id":"model-routing-execution","workflow_shape":"new-service","paths":["ai/model-routing/**"],"keywords":["model routing implementation"],"primary":["model-routing-implementer"],"reviewers":["security-reviewer"],"support":["ai-engineer"]},
+    {"id":"network-config-execution","workflow_shape":"infrastructure-change","paths":["networking/config/**"],"keywords":["network config implementation"],"primary":["network-config-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"network-management-automation-execution","workflow_shape":"infrastructure-change","paths":["networking/automation/**"],"keywords":["network management automation implementation"],"primary":["network-management-automation-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"network-observability-execution","workflow_shape":"unclassified","paths":["networking/observability/**"],"keywords":["network observability implementation"],"primary":["network-observability-implementer"],"reviewers":["infrastructure-reviewer"],"support":["observability-sre"]},
+    {"id":"network-security-policy-execution","workflow_shape":"unclassified","paths":["networking/security-policy/**"],"keywords":["network security policy implementation"],"primary":["network-security-policy-implementer"],"reviewers":["security-reviewer"],"support":["policy-as-code-engineer"]},
+    {"id":"pkcs11-hsm-integration-execution","workflow_shape":"unclassified","paths":["security/pkcs11/**"],"keywords":["pkcs11 hsm integration implementation"],"primary":["pkcs11-hsm-integration-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
+    {"id":"pki-certificate-lifecycle-execution","workflow_shape":"unclassified","paths":["security/pki/**"],"keywords":["pki certificate lifecycle implementation"],"primary":["pki-certificate-lifecycle-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
+    {"id":"pqc-integration-execution","workflow_shape":"unclassified","paths":["security/pqc/**"],"keywords":["pqc integration implementation"],"primary":["pqc-integration-implementer"],"reviewers":["security-reviewer"],"support":["cryptographic-assurance-engineer"]},
+    {"id":"precision-timing-execution","workflow_shape":"infrastructure-change","paths":["timing/**"],"keywords":["precision timing implementation"],"primary":["precision-timing-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"protocol-fuzzing-execution","workflow_shape":"unclassified","paths":["fuzz/protocols/**"],"keywords":["protocol fuzzing implementation"],"primary":["protocol-fuzzing-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
+    {"id":"protocol-integration-execution","workflow_shape":"new-service","paths":["protocols/integration/**"],"keywords":["protocol integration implementation"],"primary":["protocol-integration-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
+    {"id":"qkd-qkms-integration-execution","workflow_shape":"unclassified","paths":["quantum/qkd-qkms/**"],"keywords":["qkd qkms integration implementation"],"primary":["qkd-qkms-integration-implementer"],"reviewers":["security-reviewer"],"support":["cryptographic-assurance-engineer"]},
+    {"id":"quantum-network-integration-execution","workflow_shape":"unclassified","paths":["quantum/network/**"],"keywords":["quantum network integration implementation"],"primary":["quantum-network-integration-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"rbac-manifest-execution","workflow_shape":"unclassified","paths":["security/rbac/**"],"keywords":["rbac manifest implementation"],"primary":["rbac-manifest-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
+    {"id":"rtos-integration-execution","workflow_shape":"new-service","paths":["rtos/**","embedded/rtos/**","firmware/rtos/**"],"keywords":["rtos integration implementation","rtos task implementation","rtos scheduling implementation"],"primary":["rtos-integration-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["application-engineer"]},
+    {"id":"secret-hygiene-execution","workflow_shape":"unclassified","paths":["security/secret-hygiene/**"],"keywords":["secret hygiene implementation"],"primary":["secret-hygiene-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
+    {"id":"secure-boot-execution","workflow_shape":"unclassified","paths":["security/secure-boot/**"],"keywords":["secure boot implementation"],"primary":["secure-boot-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
+    {"id":"secure-channel-integration-execution","workflow_shape":"unclassified","paths":["security/secure-channels/**"],"keywords":["secure channel integration implementation"],"primary":["secure-channel-integration-implementer"],"reviewers":["security-reviewer"],"support":["cryptographic-assurance-engineer"]},
+    {"id":"sonicos-config-execution","workflow_shape":"infrastructure-change","paths":["networking/sonicos/**"],"keywords":["sonicos config implementation"],"primary":["sonicos-config-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"starlingx-config-execution","workflow_shape":"infrastructure-change","paths":["starlingx/**"],"keywords":["starlingx config implementation"],"primary":["starlingx-config-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"supply-chain-remediation-execution","workflow_shape":"unclassified","paths":["security/supply-chain-remediation/**"],"keywords":["supply chain remediation implementation"],"primary":["supply-chain-remediation-implementer"],"reviewers":["supply-chain-security-reviewer"],"support":["application-engineer"]},
+    {"id":"go-test-execution","workflow_shape":"unclassified","paths":["tests/go/**"],"keywords":["go test implementation"],"primary":["go-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
+    {"id":"hardware-test-execution","workflow_shape":"unclassified","paths":["tests/hardware/**"],"keywords":["hardware test implementation"],"primary":["hardware-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
+    {"id":"interoperability-test-execution","workflow_shape":"unclassified","paths":["tests/interoperability/**"],"keywords":["interoperability test implementation"],"primary":["interoperability-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
+    {"id":"python-test-execution","workflow_shape":"unclassified","paths":["tests/python/**"],"keywords":["python test implementation"],"primary":["python-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
+    {"id":"typescript-test-execution","workflow_shape":"unclassified","paths":["tests/typescript/**"],"keywords":["typescript test implementation"],"primary":["typescript-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
     {
       "id": "knowledge-store",
+      "workflow_shape": "unclassified",
       "paths": ["roster/knowledge-store/**", "roster/shared/knowledge-use-policy.md", "roster/orchestration/knowledge-retrieval-policy.yaml"],
       "keywords": ["knowledge store", "chat history", "embedding", "vector search", "retrieval", "rag"],
       "keyword_groups": [
@@ -1633,6 +1726,7 @@
     },
     {
       "id": "architecture-design",
+      "workflow_shape": "unclassified",
       "paths": ["**/architecture/**"],
       "exclude_paths": ["roster/**"],
       "keywords": ["design the architecture", "system design", "architecture proposal", "platform topology design", "failure domain design", "new service design", "component design", "service boundary design", "new system design", "greenfield architecture", "service topology design"],
