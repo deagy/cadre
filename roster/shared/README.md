@@ -112,15 +112,28 @@ A role whose capability is not in `WRITE_CAPABLE_TIERS` receives the file's
 preamble (everything above its first `## ` heading — where the applicability
 header lives) plus the named sections, in file order. Every other role
 receives the file byte for byte. Today the only entry is
-`workspace-isolation.md` → `Never mutate a working tree you did not create`,
-which trims roughly 240 lines from every read-only role's wrapper on both
-runners.
+`workspace-isolation.md`, whose four universally binding sections are
+`Never mutate a working tree you did not create`,
+`The security-relevant-resolver rule`,
+`Never remove or prune a worktree yourself`, and
+`No runner names as behavioral conditions`.
 
-It fails closed. A renamed or removed heading raises `PolicyExcerptError`
-and breaks the build rather than shipping a reviewer wrapper with no
-never-mutate rule; an empty section tuple raises too, so the mechanism cannot
-be used to drop a whole file. `plugin/tools/test_workspace_isolation_excerpt.py`
-guards the committed output on both runners.
+**Membership is not "can this role write files."** A read-only role still
+*creates* worktrees — the never-mutate section tells it to make a `--detach`
+inspection worktree rather than check out a ref in someone else's tree — so
+every rule about a worktree a role creates, removes, or resolves
+configuration from inside binds it too. Scoping by "has edits to isolate"
+alone once de-bound the never-remove-or-prune rule from exactly the roles
+the excerpt instructs to create a worktree.
+
+It fails closed, raising `PolicyExcerptError` on: a renamed or removed
+heading; a named section with an empty body; a preamble that does not
+enumerate every universally binding section (so the file's own header and
+this dict cannot drift apart); an unbalanced code fence; an empty section
+tuple (the mechanism therefore cannot be used to drop a whole file); and, at
+import, a key absent from `SHARED_POLICIES`. Section *content* is not
+checked here — `plugin/tools/test_workspace_isolation_excerpt.py` asserts
+specific rule prose survives into the committed wrappers on both runners.
 
 **Do not grow this into a general policy-envelope generator.**
 `docs/investigations/policy-envelope-ceiling-2026-08.md` measured the general

@@ -1119,10 +1119,18 @@ Every write-capable role follows `roster/shared/workspace-isolation.md`,
 which defaults to creating a `git worktree` under
 `<repository_root>/.worktrees/<task-id>/<role-id>/` before editing, rather
 than editing the caller's main working tree directly (advisory prompt
-policy, not mechanically enforced — see that file). Agents are explicitly
-instructed never to remove or prune their own worktree (`destructive_action:
-human_approval`), so this is operator-run cleanup, not something a task's
-dispatched role does for you.
+policy, not mechanically enforced — see that file). Read-only roles create
+worktrees too, just not for edits: the never-mutate rule tells them to make
+a `--detach` inspection worktree rather than check out a ref in a tree they
+did not create.
+
+Every role, at every capability tier, is explicitly instructed never to
+remove or prune a worktree (`destructive_action: human_approval`) — that
+instruction is one of the four sections of `workspace-isolation.md` that
+survive into a read-only role's generated wrapper, precisely because the
+roles told to create an inspection worktree are the ones most likely to
+tidy it up afterwards. So this is operator-run cleanup, not something a
+task's dispatched role does for you, whichever role it was.
 
 ```sh
 # List every worktree registered against this repository, including path,

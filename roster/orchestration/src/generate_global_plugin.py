@@ -484,21 +484,44 @@ TIER_SCOPED_POLICIES: dict[str, frozenset[str]] = {}
 # only when it states its own tier applicability rule in its own text, so the
 # excerpt encodes the file's stated rule rather than a judgment call about
 # what some role might need.
+# The membership rule is NOT "can this role write files" (deagy/cadre#211
+# review). A read-only role still *creates* worktrees -- the never-mutate
+# section instructs it to make a `--detach` inspection worktree rather than
+# checking out a ref in someone else's tree -- so every rule about a worktree
+# a role creates, removes, or resolves configuration from inside binds it
+# too. Scoping by "has edits to isolate" alone once de-bound the
+# never-remove-or-prune rule from exactly the roles the excerpt tells to
+# create a worktree, which is how a reviewer ends up tidying up with
+# `git worktree prune` and deregistering a teammate's tree.
 UNIVERSAL_POLICY_SECTIONS: dict[str, tuple[str, ...]] = {
     "roster/shared/workspace-isolation.md": (
         "Never mutate a working tree you did not create",
+        "The security-relevant-resolver rule",
+        "Never remove or prune a worktree yourself",
+        "No runner names as behavioral conditions",
     ),
 }
 
 
 class PolicyExcerptError(ValueError):
     """Raised when a UNIVERSAL_POLICY_SECTIONS file cannot be excerpted as
-    declared -- a named `## ` heading is missing, or the file has no
-    preamble to carry its applicability header.
+    declared.
 
     Fails the build closed on purpose: the alternative is silently shipping
     a read-only wrapper whose universally binding rule was renamed out from
     under it, which looks like nothing happened.
+
+    What this raises on: a named `## ` heading missing; a named section whose
+    body is empty; a file with no preamble to carry its applicability header;
+    a preamble that does not name every universally binding section (so the
+    header and this dict cannot drift apart); an unbalanced code fence; and
+    an empty section tuple.
+
+    What it does NOT check, so do not read it as total protection: the
+    *content* of a kept section. A section gutted to a stub sentence still
+    excerpts cleanly here. `plugin/tools/test_workspace_isolation_excerpt.py`
+    asserts specific rule prose survives into the committed wrappers; that is
+    where body-level protection actually lives.
     """
 
 
@@ -507,19 +530,32 @@ def split_policy_sections(body: str) -> tuple[str, list[tuple[str, str]]]:
 
     Sections break on level-2 (`## `) headings only, and headings inside
     fenced code blocks are ignored -- these files contain shell samples.
+    Both ``` and ~~~ fences count; an unbalanced fence raises rather than
+    silently swallowing every heading after it (which would truncate the
+    excerpt with no other signal).
     """
     preamble: list[str] = []
     sections: list[tuple[str, list[str]]] = []
     in_fence = False
+    fence_marker = ""
     for line in body.splitlines():
-        if line.lstrip().startswith("```"):
-            in_fence = not in_fence
+        stripped = line.lstrip()
+        for marker in ("```", "~~~"):
+            if stripped.startswith(marker) and (not in_fence or fence_marker == marker):
+                in_fence = not in_fence
+                fence_marker = marker if in_fence else ""
+                break
         if not in_fence and line.startswith("## "):
             sections.append((line[3:].strip(), [line]))
         elif sections:
             sections[-1][1].append(line)
         else:
             preamble.append(line)
+    if in_fence:
+        raise PolicyExcerptError(
+            f"unbalanced {fence_marker!r} code fence: every heading after it would be "
+            "swallowed into the preceding section, silently truncating the excerpt"
+        )
     return (
         "\n".join(preamble).strip(),
         [(heading, "\n".join(lines).strip()) for heading, lines in sections],
@@ -552,9 +588,41 @@ def excerpt_universal_sections(relative: str, body: str) -> str:
             f"{', '.join(repr(heading) for heading in headings)}. A heading listed in "
             "UNIVERSAL_POLICY_SECTIONS was renamed or removed -- update both together."
         )
-    kept = [preamble] + [text for heading, text in sections if heading in set(required)]
-    return "\n\n".join(kept)
+    # The file's own applicability header must enumerate the same sections
+    # this dict names, so a reader of either can check it against the other.
+    # Without this, the header can say "every other section is write-capable
+    # only" while the dict quietly keeps four -- the drift the #211 review
+    # caught by hand.
+    unlisted = [heading for heading in required if heading not in preamble]
+    if unlisted:
+        raise PolicyExcerptError(
+            f"{relative}: the applicability header does not name "
+            f"{', '.join(repr(heading) for heading in unlisted)}. A section that binds "
+            "every tier must be enumerated in the preamble as well as in "
+            "UNIVERSAL_POLICY_SECTIONS, so the two cannot drift apart."
+        )
+    kept = []
+    for heading, text in sections:
+        if heading not in set(required):
+            continue
+        if not text.partition("\n")[2].strip():
+            raise PolicyExcerptError(
+                f"{relative}: universally binding section {heading!r} has an empty body; "
+                "the excerpt would ship the heading alone"
+            )
+        kept.append(text)
+    return "\n\n".join([preamble, *kept])
 
+
+_unreachable_excerpts = sorted(set(UNIVERSAL_POLICY_SECTIONS) - set(SHARED_POLICIES))
+if _unreachable_excerpts:
+    # A key naming a file no wrapper embeds is dead configuration that reads
+    # as protection. Fail at import rather than let it sit there looking
+    # load-bearing.
+    raise PolicyExcerptError(
+        "UNIVERSAL_POLICY_SECTIONS names file(s) absent from SHARED_POLICIES, so the "
+        f"excerpt would never be applied: {', '.join(_unreachable_excerpts)}"
+    )
 
 GENERATED_MARKER = "<!-- GENERATED FILE: edit the canonical source and regenerate; do not edit this copy. -->"
 GENERATED_TOP_LEVEL = {

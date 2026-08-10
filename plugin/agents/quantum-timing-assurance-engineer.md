@@ -689,20 +689,33 @@ only controls how much surrounding prose accompanies it.
 
 # Workspace Isolation
 
-**"Never mutate a working tree you did not create" (the section immediately
-below) applies to every role, every tier, no exceptions.** Read it before
-running any `git` command that is not purely a query -- including when the
-rest of this policy does not apply to you.
+**These four sections bind every role, every tier, no exceptions**, and they
+are the four this file opens with:
 
-**Applies to:** every *other* section here -- the worktree-isolation steps
-(Steps 0-2) and the end-of-task result block -- binds only write-capable
-capability tiers (any tier whose `sandbox_mode` in
+- Never mutate a working tree you did not create
+- The security-relevant-resolver rule
+- Never remove or prune a worktree yourself
+- No runner names as behavioral conditions
+
+Read the first before running any `git` command that is not purely a query.
+
+**Applies to:** everything from `Isolating your own edits (write-capable
+tiers)` onward -- the worktree-isolation steps (Steps 0-2), the dirty-scope
+guard, the teams rule, escalation, and the end-of-task result block -- binds
+write-capable capability tiers only (any tier whose `sandbox_mode` in
 `roster/runner-capabilities.json` is not `read-only` -- currently
 `document_author`, `code_author`, `test_author`, and `environment_operator`;
 see `generate_global_plugin.py`'s `WRITE_CAPABLE_TIERS`). A read-only role
-has no edits to isolate, so those sections do not apply to it, and a
-read-only role's generated wrapper embeds only the universally binding part
-of this file: this header plus the section immediately below.
+has no edits to isolate, so those sections do not apply to it, and its
+generated wrapper carries this header plus the four sections above and
+nothing else.
+
+**The scoping line to keep straight, because it is not "can this role write
+files":** a read-only role still *creates* worktrees -- for inspection, as
+the never-mutate section below instructs it to. So every rule about a
+worktree a role creates, removes, or resolves configuration from inside
+stays universal. Only the decision about where your *edits* land is
+write-capable-only.
 
 `cadre resolve-shared workspace-isolation.md` returns this file in full on
 request regardless of the caller's tier -- shared policy resolution is
@@ -788,6 +801,74 @@ prominently in your result**, including the exact command and what state
 preceded it. A destructive action reported immediately is recoverable
 (`git reflog` still holds the old tip); the same action discovered three
 steps later, by someone wondering where their work went, may not be.
+
+## The security-relevant-resolver rule
+
+Some project state a resolver depends on is deliberately not tracked by
+git, so it is **absent** in a freshly created worktree even though it exists
+in the main tree. This applies to any worktree you create, including an
+inspection worktree created purely to read a revision. If a resolver whose
+result is security-relevant would resolve differently from inside it,
+**degrade or block -- never resolve silently as if nothing changed.**
+
+The concrete case to know: `.agents/knowledge-store/config.json` is
+git-ignored by design (it is untracked, project-local configuration -- see
+`roster/shared/README.md`'s "three things that live under `.agents/`"
+table). `find_project_local_config()`
+(`roster/knowledge-store/src/config.py`) walks upward from the current
+working directory looking for that file, and **stops at the first directory
+containing `.git`** -- which in a linked worktree is the worktree's own
+`.git` file (pointing at the shared administrative directory), not the main
+checkout's tree. That walk-and-stop boundary means the search never crosses
+into the main working tree to find a config file that does exist there, and
+falls through to the machine-global shared store instead
+(`KNOWLEDGE_STORE_HOME`, defaulting to `~/.agents/knowledge-store/`). A
+project that relies on its own project-local store for tenant/classification
+partitioning (see `roster/knowledge-store/SECURITY.md`) would silently and
+invisibly lose that partitioning the moment retrieval runs from inside a
+fresh worktree instead of the main tree.
+
+Knowledge retrieval is squarely a read-only role's work, so this is not a
+write-capable concern: create an inspection worktree, run a retrieval from
+inside it, and you have quietly widened the store you are reading from.
+
+When you detect this condition -- a security-relevant resolver whose config
+file is untracked and therefore absent from a worktree you just created --
+do not proceed as if the global store is an equivalent substitute.
+Explicitly degrade (treat retrieval as unavailable and say so) or block
+(raise it as a blocking question) rather than resolving to the broader,
+differently-scoped store without comment. This applies to any future
+resolver with the same shape (untracked project-local file, walk-to-`.git`
+boundary, security- or classification-relevant result), not only this one.
+
+## Never remove or prune a worktree yourself
+
+Never run `git worktree remove` or `git worktree prune` (or delete a
+worktree directory directly) as part of your own task. This covers every
+worktree, including an inspection worktree you created yourself and are
+finished with: tidying up afterwards is exactly the reasoning to refuse,
+because `git worktree prune` is not scoped to your worktree -- it
+deregisters any worktree git currently considers unreachable, which can
+include a teammate's in-progress tree on a mounted or momentarily
+unavailable path.
+
+A worktree that holds work *is* the deliverable location until a human or
+the dispatching process decides otherwise, and removing worktree
+registrations is a destructive git-metadata operation
+(`destructive_action: human_approval` in `agent-autonomy.yaml`). Leave
+cleanup to the operator; see `roster/RUNBOOK.md`'s worktree-operations
+section. If a leftover inspection worktree is untidy, say so in your result
+and let the operator remove it.
+
+## No runner names as behavioral conditions
+
+Every decision in this file is determined by running `git` commands and
+reading resolved policy -- never by which coding-agent runner you are. Do
+not branch your behavior on "if I am Claude Code" / "if I am Codex" / "if I
+am Cline" or any other runner name. What tells you which situation you are
+in is command output (`git rev-parse`, `git status`) and resolved policy
+(`agent-autonomy.yaml`); the runner identity is never itself a condition
+here.
 
 ## Isolating your own edits (write-capable tiers)
 
@@ -913,40 +994,6 @@ example, another in-progress teammate's edit under disjoint ownership) does
 not by itself block isolation; a dirty file your task needs to build on
 does.
 
-## The security-relevant-resolver rule
-
-Some project state a resolver depends on is deliberately not tracked by
-git, so it is **absent** in a freshly created worktree even though it exists
-in the main tree. If a resolver whose result is security-relevant would
-resolve differently once you isolate, **degrade or block -- never resolve
-silently as if nothing changed.**
-
-The concrete case to know: `.agents/knowledge-store/config.json` is
-git-ignored by design (it is untracked, project-local configuration -- see
-`roster/shared/README.md`'s "three things that live under `.agents/`"
-table). `find_project_local_config()`
-(`roster/knowledge-store/src/config.py`) walks upward from the current
-working directory looking for that file, and **stops at the first directory
-containing `.git`** -- which in a linked worktree is the worktree's own
-`.git` file (pointing at the shared administrative directory), not the main
-checkout's tree. That walk-and-stop boundary means the search never crosses
-into the main working tree to find a config file that does exist there, and
-falls through to the machine-global shared store instead
-(`KNOWLEDGE_STORE_HOME`, defaulting to `~/.agents/knowledge-store/`). A
-project that relies on its own project-local store for tenant/classification
-partitioning (see `roster/knowledge-store/SECURITY.md`) would silently and
-invisibly lose that partitioning the moment retrieval runs from inside a
-fresh worktree instead of the main tree.
-
-When you detect this condition -- a security-relevant resolver whose config
-file is untracked and therefore absent from a worktree you just created --
-do not proceed as if the global store is an equivalent substitute.
-Explicitly degrade (treat retrieval as unavailable and say so) or block
-(raise it as a blocking question) rather than resolving to the broader,
-differently-scoped store without comment. This applies to any future
-resolver with the same shape (untracked project-local file, walk-to-`.git`
-boundary, security- or classification-relevant result), not only this one.
-
 ## Teams: one shared worktree per team, not one per teammate
 
 When a task dispatches multiple agents together (an Agent Team or an
@@ -964,25 +1011,6 @@ teammate:
   touching the same file inside one shared tree, visible in `git status`
   and in review) for silent divergence across N unmerged branches that no
   one is positioned to reconcile.
-
-## Never remove or prune a worktree yourself
-
-Never run `git worktree remove` or `git worktree prune` (or delete a
-worktree directory directly) as part of your own task. The worktree you
-created *is* the deliverable location until a human or the dispatching
-process decides otherwise, and removing worktree registrations is a
-destructive git-metadata operation (`destructive_action: human_approval` in
-`agent-autonomy.yaml`). Leave cleanup to the operator; see
-`roster/RUNBOOK.md`'s worktree-operations section.
-
-## No runner names as behavioral conditions
-
-Everything above is determined by running `git` commands and reading
-resolved policy -- never by which coding-agent runner you are. Do not branch
-your behavior on "if I am Claude Code" / "if I am Codex" / "if I am Cline"
-or any other runner name. Detection (Step 0's `git rev-parse` comparison,
-Step 1's `git status`/`agent-autonomy.yaml` checks) is what tells you which
-situation you are in; the runner identity is never itself a condition here.
 
 ## Escalating
 

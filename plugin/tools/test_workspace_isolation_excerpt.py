@@ -37,8 +37,15 @@ POLICY_PATH = REPO_ROOT / POLICY_RELATIVE
 POLICY_MARKER = f"# Shared policy: {POLICY_RELATIVE}"
 
 # Text that appears only in the sections the file's own header scopes to
-# write-capable tiers. Prose, not headings, so a heading rename cannot make
-# these vacuously pass.
+# write-capable tiers.
+#
+# Four of these ARE headings, so renaming one makes its `assertNotIn` pass
+# vacuously -- they are a readable index of what must not leak, not the
+# protection. The protection is
+# `test_read_only_wrappers_embed_exactly_the_declared_excerpt`, which pins
+# the embedded text to the generator's own output character for character,
+# so any section not in UNIVERSAL_POLICY_SECTIONS is excluded by
+# construction whatever it is called.
 WRITE_CAPABLE_ONLY_PHRASES = (
     "## Step 0 -- Already isolated?",
     "## Step 1 -- Can I isolate?",
@@ -48,12 +55,25 @@ WRITE_CAPABLE_ONLY_PHRASES = (
     "mode: worktree | inherited-worktree | in-place",
 )
 
-# Text from the section that binds every tier, at every capability.
+# Body prose from each section that binds every tier, at every capability.
+# One heading per section for readability, plus prose that a heading rename
+# cannot vacuously satisfy.
+#
+# The three sections after the first were added by the #211 review: a
+# read-only role creates inspection worktrees, so the rules about removing
+# one, resolving security-relevant config from inside one, and not branching
+# on runner identity bind it too.
 UNIVERSAL_PHRASES = (
     "## Never mutate a working tree you did not create",
     "Never run a `git` command that discards uncommitted work or moves a branch",
     "`git stash` in any form",
     "Applies to every role and every capability tier",
+    "## The security-relevant-resolver rule",
+    "falls through to the machine-global shared store instead",
+    "## Never remove or prune a worktree yourself",
+    "Never run `git worktree remove` or `git worktree prune`",
+    "## No runner names as behavioral conditions",
+    "never by which coding-agent runner you are",
 )
 
 
@@ -183,14 +203,27 @@ class WorkspaceIsolationExcerptTestCase(unittest.TestCase):
         self.assertIn("## not a heading", preamble)
         self.assertEqual(["Real"], [heading for heading, _ in sections])
 
-    def test_excerpt_is_materially_smaller_than_the_full_file(self) -> None:
-        """Guards the point of the change: if a future edit moves the bulk of
-        the write-capable content above the first heading it lands in the
-        preamble, every read-only wrapper silently regrows, and nothing else
-        here would notice.
+    def test_preamble_does_not_absorb_the_write_capable_content(self) -> None:
+        """Guards the point of the change: the preamble is kept verbatim for
+        every tier, so if a future edit moves write-capable-only bulk above
+        the first `## ` heading it lands in every read-only wrapper, and
+        nothing else here would notice.
+
+        This targets the preamble rather than the excerpt's total size. The
+        excerpt's size is a function of how many sections legitimately bind
+        every tier -- four today, after the #211 review found that scoping by
+        "has edits to isolate" had de-bound three sections that bind a
+        read-only role which creates an inspection worktree. A total-size
+        ratio would fight that correction instead of guarding it.
         """
+        preamble, _ = generator.split_policy_sections(self.body)
+        self.assertLess(
+            len(preamble.splitlines()),
+            len(self.body.splitlines()) / 4,
+            "the applicability header has grown into a substantial share of the file",
+        )
         excerpt = generator.excerpt_universal_sections(POLICY_RELATIVE, self.body)
-        self.assertLess(len(excerpt.splitlines()), len(self.body.splitlines()) / 2)
+        self.assertLess(len(excerpt.splitlines()), len(self.body.splitlines()))
 
 
 if __name__ == "__main__":
