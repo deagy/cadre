@@ -832,7 +832,7 @@ A namespaced `.toml` wrapper alone only lets a human or a project-local override
 
 The plugin is self-contained: generated wrappers embed role and shared-policy
 instructions, while skills and runtime files are packaged under `skills/` and
-`suite/`. Regenerate it in place with `cadre generate-plugin --output plugin`
+`suite/`. Regenerate it in place with `./bin/cadre generate-plugin --output plugin`
 after role, policy, workflow, runtime, or skill changes, and commit the
 result in the same pull request; `.github/workflows/validate.yml`'s
 `generated-content` job fails the build on drift (`--check`).
@@ -849,7 +849,13 @@ compares against content derived from the same stale `catalog.yaml`, so the
 two agree and the guard stays quiet. Running the steps in order is the only
 thing that prevents this.
 
-`cadre generate-plugin` does **not** regenerate the Cline mirror. Porting the
+These are spelled `./bin/cadre` rather than the bare `cadre` used elsewhere in
+this runbook. A bare `cadre` can resolve to a globally installed plugin build
+of a different version that does not recognise these subcommands -- which, for
+regeneration specifically, means silently committing output built by the wrong
+generator. Elsewhere the stakes are lower and bare `cadre` is fine.
+
+`./bin/cadre generate-plugin` does **not** regenerate the Cline mirror. Porting the
 74 role presets and 8 skills into `cline-plugins/cline-agents/` is a separate
 command that must run *after* `generate-plugin`, because it reads the freshly
 written `plugin/` tree:
@@ -900,20 +906,20 @@ documents describing the plugin directory itself — they are never regenerated
 and need manual upkeep.
 
 Editing `roster/authority/aides.yaml` or `roster/authority/_template.md.tmpl`
-requires an extra step first: run `cadre generate-authority-aides` to
+requires an extra step first: run `./bin/cadre generate-authority-aides` to
 regenerate the 8 `roster/authority/*-aide/AGENT.md` files, *then*
-`cadre generate-role-metadata` so `provider/` picks them up.
-`cadre generate-authority-aides --check` is the CI drift-guard equivalent
-for this table, parallel to `cadre generate-plugin --check --output` for the
+`./bin/cadre generate-role-metadata` so `provider/` picks them up.
+`./bin/cadre generate-authority-aides --check` is the CI drift-guard equivalent
+for this table, parallel to `./bin/cadre generate-plugin --check --output` for the
 package as a whole.
 
 Every role's `AGENT.md` carries `---`-delimited frontmatter (see §2 above),
 so editing a role's `AGENT.md` requires the same kind of extra step: run
-`cadre generate-role-metadata` to regenerate `roster/catalog.yaml` and
+`./bin/cadre generate-role-metadata` to regenerate `roster/catalog.yaml` and
 `roster/orchestration/routing.yaml`'s `knowledge_focus` block from the
 frontmatter and the generated half of `provider/`. `cadre
 generate-role-metadata --check` is the CI drift-guard equivalent. The
-packaged plugin then picks the change up when `cadre generate-plugin --output plugin`
+packaged plugin then picks the change up when `./bin/cadre generate-plugin --output plugin`
 is re-run and committed, as described above.
 
 ## 17a. Unified operator settings (`roster/shared/src/settings.py`)
