@@ -52,12 +52,14 @@ import time (CONFIG["routes"]), rather than a hardcoded literal list, so a
 routing.yaml edit that adds or removes a route category is itself a failure
 here (an added route needs a new fixture; a removed route needs the
 corresponding fixture(s) pruned) instead of the assertion silently going
-stale. As of the review that added this docstring note the corpus covers
-all 33 route categories (see the fixtures file's _comment block for the
-full enumeration and the rationale for cases where two routes' paths or
-keywords genuinely overlap), matching B-FR-5's "initial corpus covers every
-existing route category" requirement. The same test also requires the
-'production' and 'destructive' risk_rules to each be pinned by a fixture
+stale. The corpus covers every route category currently in routing.yaml's
+routes[] array (see the fixtures file's _comment block for the rationale for
+cases where two routes' paths or keywords genuinely overlap), matching
+B-FR-5's "initial corpus covers every existing route category" requirement.
+The route id count is not hardcoded here or in the fixtures file's own
+comment because it drifts every time a route is added, removed, or renamed
+-- routing.yaml's routes[] array is the live list. The same test also
+requires the 'production' and 'destructive' risk_rules to each be pinned by a fixture
 independently (they have distinct keyword_groups, human_gate, and
 reviewers in routing.yaml; one triggering does not excuse the other from
 also being exercised).

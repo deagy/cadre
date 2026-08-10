@@ -390,11 +390,18 @@
     },
     {
       "id": "supply-chain",
-      "paths": ["go.mod", "go.sum", "**/go.mod", "**/go.sum", "package.json", "package-lock.json", "**/package.json", "**/package-lock.json", "**/Dockerfile", "**/Containerfile", "**/sbom/**", "**/*.lock", "**/charts/Chart.yaml"],
+      "paths": ["go.mod", "go.sum", "**/go.mod", "**/go.sum", "package.json", "package-lock.json", "**/package.json", "**/package-lock.json", "**/Dockerfile", "**/Containerfile", "**/sbom/**", "**/*.lock", "**/charts/Chart.yaml", "plugin/tools/test_cline_git_plugin_packaging.py"],
       "keywords": ["dependency", "sbom", "sboms", "provenance", "signing", "cosign", "slsa", "container image", "terraform provider", "helm dependency", "license"],
       "primary": ["supply-chain-security-reviewer"],
       "reviewers": ["security-reviewer"],
       "support": ["release-engineer"]
+    },
+    {
+      "id": "packaging",
+      "paths": ["plugin/tools/**"],
+      "keywords": ["plugin packaging", "plugin manifest health", "plugin packaging tool", "packaging guard", "plugin changelog entry", "plugin install script", "plugin version bump", "port cline agents", "cline port", "bootstrap_sdlc.py", "plugin distribution packaging"],
+      "primary": ["application-engineer", "debugging-engineer"],
+      "reviewers": ["test-engineer", "code-reviewer"]
     },
     {
       "id": "cost-capacity",

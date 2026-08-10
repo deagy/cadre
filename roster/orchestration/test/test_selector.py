@@ -1173,6 +1173,311 @@ class SelectorTests(unittest.TestCase):
         self.assertIn("security-reviewer", result["agents"]["reviewers"])
         self.assertIn("release-engineer", result["agents"]["support"])
 
+    def test_lockfile_guard_test_matches_supply_chain_by_path_alone(self) -> None:
+        # #189 regression: plugin/tools/test_cline_git_plugin_packaging.py is
+        # the sole check tying the root lockfile to cline-plugins/, so it
+        # must route to supply-chain by path regardless of task wording --
+        # before the fix this depended entirely on whether the task text
+        # happened to contain a supply-chain keyword like "dependency".
+        result = plan(
+            task="Adjust the Cline git plugin packaging checker's tolerance",
+            changed_files=["plugin/tools/test_cline_git_plugin_packaging.py"],
+            classification="internal",
+            task_id="PKG-189-1",
+        )
+        route_ids = {match["id"] for match in result["matched_routes"]}
+        self.assertIn("supply-chain", route_ids)
+        self.assertIn("packaging", route_ids)
+        self.assertIn("supply-chain-security-reviewer", result["agents"]["primary"])
+        self.assertIn("security-reviewer", result["agents"]["reviewers"])
+
+    def test_other_plugin_tools_file_routes_to_packaging_not_security_reviewers(self) -> None:
+        # An ordinary plugin/tools/ file (not the lockfile guard) gets
+        # application-engineer/debugging-engineer, not a security reviewer
+        # chain -- the single-file supply-chain addition must not leak.
+        result = plan(
+            task="Tighten the plugin manifest health guard's field checks",
+            changed_files=["plugin/tools/test_manifest_health.py"],
+            classification="internal",
+            task_id="PKG-189-2",
+        )
+        route_ids = {match["id"] for match in result["matched_routes"]}
+        self.assertEqual(route_ids, {"packaging"})
+        self.assertEqual(
+            result["agents"]["primary"], ["application-engineer", "debugging-engineer"]
+        )
+        self.assertNotIn("supply-chain-security-reviewer", result["agents"]["primary"])
+        self.assertNotIn("security-reviewer", result["agents"]["reviewers"])
+
+    def test_root_pyproject_toml_alone_does_not_route_to_packaging(self) -> None:
+        # #189 review finding 2 (code-reviewer, MEDIUM): routing.yaml ships as
+        # the BASE ruleset to every consuming project (routing_overlay.py only
+        # lets a consumer widen a base route, never narrow it), and root
+        # pyproject.toml is a generic file present in arbitrary downstream
+        # Python projects. Claiming it under a route named "packaging" whose
+        # keywords are about this repo's own Cline ports and plugin manifests
+        # is wrong for every consumer, so pyproject.toml was removed from the
+        # route's paths. A pyproject.toml-only change with no packaging
+        # keyword in the task text now falls through to needs-triage.
+        result = plan(
+            task="Look at pyproject.toml",
+            changed_files=["pyproject.toml"],
+            classification="internal",
+            task_id="PKG-189-3",
+        )
+        route_ids = {match["id"] for match in result["matched_routes"]}
+        self.assertNotIn("packaging", route_ids)
+        self.assertEqual(result["status"], "needs-triage")
+
+    def test_plugin_tools_file_never_matches_supply_chain_glob_wide(self) -> None:
+        # Negative: proves decision 2 added exactly one file to supply-chain's
+        # paths, not the whole plugin/tools/** glob.
+        result = plan(
+            task="Harden the workspace mutation guard's detection logic",
+            changed_files=["plugin/tools/test_guard_workspace_mutation.py"],
+            classification="internal",
+            task_id="PKG-189-4",
+        )
+        route_ids = {match["id"] for match in result["matched_routes"]}
+        self.assertNotIn("supply-chain", route_ids)
+
+    def test_no_plugin_tools_file_matches_agent_suite_governance_by_path(self) -> None:
+        for relative_path in (
+            "plugin/tools/test_cline_git_plugin_packaging.py",
+            "plugin/tools/test_manifest_health.py",
+            "plugin/tools/port_cline_agents.py",
+            "plugin/tools/test_guard_workspace_mutation.py",
+        ):
+            with self.subTest(path=relative_path):
+                result = plan(
+                    task="Adjust a plugin/tools/ script",
+                    changed_files=[relative_path],
+                    classification="internal",
+                    task_id="PKG-189-5",
+                )
+                route_ids = {match["id"] for match in result["matched_routes"]}
+                self.assertNotIn("agent-suite-governance", route_ids)
+
+    def test_packaging_route_readme_routes_only_through_agent_suite_governance(self) -> None:
+        # #189 re-review finding 1 (code-reviewer, MEDIUM; revision 2): the new
+        # packaging route no longer carries packaging/** at all -- a copy of
+        # agent-suite-governance's pre-existing imprecise glob was not a
+        # license to duplicate that imprecision onto a second route and
+        # double its blast radius, and routing.yaml is a base ruleset a
+        # consumer can only widen, never narrow. packaging/plugin-README.md
+        # therefore keeps exactly the routing it had before this change --
+        # agent-suite-governance only -- and the packaging route (now scoped
+        # to plugin/tools/** only) must not also match it.
+        result = plan(
+            task="Reword the plugin README's install instructions",
+            changed_files=["packaging/plugin-README.md"],
+            classification="internal",
+            task_id="PKG-189-6",
+        )
+        route_ids = {match["id"] for match in result["matched_routes"]}
+        self.assertIn("agent-suite-governance", route_ids)
+        self.assertNotIn("packaging", route_ids)
+        # agent-suite-governance's own primary/reviewers are byte-identical
+        # to the packaging route's, so the removal is a routing-visibility
+        # change only -- staffing for this file is unaffected.
+        self.assertEqual(
+            result["agents"]["primary"],
+            ["application-engineer", "debugging-engineer", "technical-writer"],
+        )
+        self.assertEqual(
+            result["agents"]["reviewers"], ["test-engineer", "code-reviewer"]
+        )
+
+    def test_packaging_keywords_do_not_leak_onto_adjacent_tasks(self) -> None:
+        # Negative: realistic adjacent tasks (docs change, dependency bump,
+        # roster/catalog change) must not pick up the new packaging route
+        # via its keywords.
+        adjacent = [
+            ("Update the operator guide for the new runbook section", ["docs/runbook.md"]),
+            ("Bump the pinned linter dependency version", ["go.mod"]),
+            ("Add a new specialist role to the roster", ["roster/catalog.yaml"]),
+        ]
+        for task_text, files in adjacent:
+            with self.subTest(task=task_text):
+                result = plan(
+                    task=task_text,
+                    changed_files=files,
+                    classification="internal",
+                    task_id="PKG-189-7",
+                )
+                route_ids = {match["id"] for match in result["matched_routes"]}
+                self.assertNotIn("packaging", route_ids)
+
+    def test_packaging_keywords_do_not_leak_reported_high_finding_repros(self) -> None:
+        # #189 review finding 1 (test-engineer, HIGH, request-changes):
+        # reproduces all four reported leaks verbatim. Before the fix, the
+        # route's own generic keyword strings ("version bump", "changelog
+        # entry", "install script", "bootstrap sdlc") fired live through
+        # build_dispatch_plan() on tasks with no plugin/tools or packaging/
+        # file involved, dragging application-engineer/debugging-engineer
+        # (plus test-engineer/code-reviewer) onto unrelated infra/docs work.
+        # The narrowed keywords ("plugin version bump", "plugin changelog
+        # entry", "plugin install script", "bootstrap_sdlc.py") must not
+        # match any of these task strings.
+        leak_repros = [
+            (
+                "Do a version bump of the terraform provider pin",
+                ["infra/main.tf"],
+            ),
+            (
+                "Add a changelog entry for the new API endpoint",
+                ["docs/CHANGELOG.md"],
+            ),
+            (
+                "Write an install script for the onboarding docs",
+                ["docs/onboarding.md"],
+            ),
+            (
+                "Bootstrap SDLC gates for the new project",
+                ["docs/onboarding.md"],
+            ),
+        ]
+        for task_text, files in leak_repros:
+            with self.subTest(task=task_text):
+                result = plan(
+                    task=task_text,
+                    changed_files=files,
+                    classification="internal",
+                    task_id="PKG-189-8",
+                )
+                route_ids = {match["id"] for match in result["matched_routes"]}
+                self.assertNotIn("packaging", route_ids)
+                self.assertNotIn("application-engineer", result["agents"]["primary"])
+                self.assertNotIn("debugging-engineer", result["agents"]["primary"])
+
+    def test_every_packaging_keyword_is_audited_against_generic_phrasing(self) -> None:
+        # #189 review finding 1 (test-engineer, HIGH): "re-audit ALL eleven
+        # keywords the same way, not just the four named. Any keyword that is
+        # a generic English phrase is suspect." For each of the packaging
+        # route's own keyword strings, this pairs it with a realistic
+        # adjacent-domain task built from the SAME underlying words/theme but
+        # NOT the exact narrowed phrase (mirroring the four originally
+        # reported leaks: e.g. "version bump" leaked on a Terraform pin task,
+        # so "plugin version bump" is checked against an unrelated
+        # application-release "version bump" sentence that lacks the word
+        # "plugin"). Each sentence is asserted to NOT contain the keyword's
+        # exact substring (otherwise the assertion below would be
+        # tautological) and to NOT trigger the packaging route.
+        #
+        # "cline port" was restored in the #189 re-review (finding 2, found
+        # independently by both test-engineer and code-reviewer): it is not
+        # redundant with "port cline agents" because _keyword_matches does
+        # literal, ordered, whole-word substring matching with no
+        # synonym/word-order handling -- "cline port" is not a substring of
+        # "port cline agents", and dropping it left a real task wording
+        # ("Do the cline port for the security agents") unstaffed.
+        packaging_route = next(
+            route for route in CONFIG["routes"] if route["id"] == "packaging"
+        )
+        adjacent_sentences = {
+            "plugin packaging": "The Chrome plugin has a packaging step before publishing to the store",
+            "plugin manifest health": "Update the plugin manifest for the browser extension",
+            "plugin packaging tool": "We need a new packaging tool for our npm library",
+            "packaging guard": "Add a guard rail around packaging the release",
+            "plugin changelog entry": "Add a changelog entry for the new API endpoint",
+            "plugin install script": "Write an install script for the onboarding docs",
+            "plugin version bump": "Announce the next application version bump in the release notes",
+            "port cline agents": "Configure the port for cline agents in dev",
+            "cline port": "Reconfigure the cline extension's local network port for development",
+            "bootstrap_sdlc.py": "Bootstrap SDLC gates for the new project",
+            "plugin distribution packaging": "The npm distribution packaging pipeline needs a fix",
+        }
+        self.assertEqual(
+            set(adjacent_sentences), set(packaging_route["keywords"]),
+            "every packaging keyword must have an audited adjacent-domain sentence "
+            "(and vice versa) so a keyword addition/removal cannot silently skip this audit",
+        )
+        for keyword, task_text in adjacent_sentences.items():
+            with self.subTest(keyword=keyword):
+                normalized = re.sub(r"\s+", " ", task_text.lower())
+                self.assertNotIn(
+                    re.sub(r"\s+", " ", keyword.lower()),
+                    normalized,
+                    f"audit sentence for {keyword!r} accidentally contains the exact "
+                    "keyword phrase, making the negative assertion below tautological",
+                )
+                result = plan(
+                    task=task_text,
+                    changed_files=["unrelated/file.xyz"],
+                    classification="internal",
+                    task_id="PKG-189-9",
+                )
+                route_ids = {match["id"] for match in result["matched_routes"]}
+                self.assertNotIn(
+                    "packaging",
+                    route_ids,
+                    f"keyword {keyword!r} is too generic: it fired (or a same-theme "
+                    f"variant fires) on an out-of-route sentence: {task_text!r}",
+                )
+
+    def test_cline_port_keyword_covers_wording_that_port_cline_agents_misses(self) -> None:
+        # #189 re-review finding 2 (MEDIUM, found independently by both
+        # test-engineer and code-reviewer): "cline port" was dropped in
+        # revision 2 as "redundant with 'port cline agents'". It is not --
+        # _keyword_matches does literal, ordered, whole-word substring
+        # matching with no synonym/word-order handling, so "cline port" is
+        # not a substring of "port cline agents". Restored; this pins the
+        # exact live repro from the review (a task on a frontend-shaped file
+        # with no plugin/tools or packaging content) so a future edit cannot
+        # silently drop the keyword again without a test failing.
+        result = plan(
+            task="Do the cline port for the security agents",
+            changed_files=["cline-plugins/cline-agents/index.ts"],
+            classification="internal",
+            task_id="PKG-189-10",
+        )
+        route_ids = {match["id"] for match in result["matched_routes"]}
+        self.assertIn("packaging", route_ids)
+        self.assertIn("application-engineer", result["agents"]["primary"])
+        self.assertIn("debugging-engineer", result["agents"]["primary"])
+        self.assertIn("test-engineer", result["agents"]["reviewers"])
+        self.assertIn("code-reviewer", result["agents"]["reviewers"])
+
+    def test_bootstrap_sdlc_keyword_matches_embedded_in_a_longer_token(self) -> None:
+        # #189 re-review finding 3 (LOW, code-reviewer by reading, reproduced
+        # live by test-engineer): bootstrap_sdlc.py is the only
+        # underscore-containing keyword in routing.yaml, and
+        # _keyword_matches's boundary class ([a-z0-9-]) excludes hyphens but
+        # not underscores or dots -- so it fires embedded in a longer token.
+        # This is a documented, accepted quirk of this one keyword (see the
+        # _keyword_matches docstring), pinned here rather than left as an
+        # undocumented accident. _keyword_matches itself is deliberately
+        # unchanged: its boundary class is global matcher semantics shared by
+        # ~90 keyword arrays, far outside this change's blast radius.
+        leak_repros = [
+            (
+                "Review the archived legacy_bootstrap_sdlc.py_old script for removal",
+                "docs/legacy_bootstrap_sdlc.py_old",
+            ),
+            (
+                "Rename my_bootstrap_sdlc.py_v2 helper during cleanup",
+                "scripts/my_bootstrap_sdlc.py_v2",
+            ),
+        ]
+        for task_text, changed_file in leak_repros:
+            with self.subTest(task=task_text):
+                result = plan(
+                    task=task_text,
+                    changed_files=[changed_file],
+                    classification="internal",
+                    task_id="PKG-189-11",
+                )
+                route_ids = {match["id"] for match in result["matched_routes"]}
+                self.assertIn(
+                    "packaging",
+                    route_ids,
+                    "bootstrap_sdlc.py is expected to match embedded in a longer "
+                    "token per _keyword_matches's documented underscore/dot gap; "
+                    "if this now fails, either the matcher's boundary class "
+                    "changed (out of scope for #189) or the keyword's shape "
+                    "changed and this test's premise is stale",
+                )
+
     def test_selects_incident_commander_for_major_incident(self) -> None:
         result = plan(
             task="Coordinate a SEV1 major incident and postmortem",
