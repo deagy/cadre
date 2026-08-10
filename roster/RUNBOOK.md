@@ -809,7 +809,7 @@ This plugin system currently applies to the Cline CLI, SDK, and Kanban only, not
 
 ## 17. Make this repository's own suite available system-wide
 
-Most projects want §16's `cadre sdlc init --profile secure-cloud` instead of this section — it's scoped to one project and generates static, project-owned wrappers rather than a live link back to this checkout. This section covers the narrower case: wanting this repository's 74 roles, 12 skills, and shared knowledge store reachable from *every* project directory unconditionally, since everything above otherwise requires your cwd to be inside this checkout.
+Most projects want §16's `cadre sdlc init --profile secure-cloud` instead of this section — it's scoped to one project and generates static, project-owned wrappers rather than a live link back to this checkout. This section covers the narrower case: wanting this repository's 86 roles, 12 skills, and shared knowledge store reachable from *every* project directory unconditionally, since everything above otherwise requires your cwd to be inside this checkout.
 
 **[`docs/INSTALL.md`](../docs/INSTALL.md) is the canonical install guide** for every runner (Claude Code, Codex, Cline, the one-command install script) and for the optional lifecycle plugins — this section is a pointer, not a second copy of it. In short, for Claude Code:
 
@@ -824,7 +824,7 @@ version comes from the plugin's own manifest, not the marketplace ref, so
 leave the ref unpinned and use `/plugin update` to move forward; see
 `docs/INSTALL.md` for pinning to a tag instead.
 
-Codex has no plugin-bundled-subagent mechanism, so its 71 namespaced `agents-<role>.toml` wrappers are staged under `provider/codex-agents/` rather than loaded from the plugin directly. The bootstrap step installs only those namespaced files and refuses unowned collisions; it leaves legacy bare global files untouched. Project-local bare role overrides remain preferred. See `docs/INSTALL.md`'s "Codex CLI" section; legacy bare global files can be removed manually after confirming they are unused. Claude Code's plugin-bundled `agents/*.md` wrappers need no such step.
+Codex has no plugin-bundled-subagent mechanism, so its 86 namespaced `agents-<role>.toml` wrappers are staged under `provider/codex-agents/` rather than loaded from the plugin directly. The bootstrap step installs only those namespaced files and refuses unowned collisions; it leaves legacy bare global files untouched. Project-local bare role overrides remain preferred. See `docs/INSTALL.md`'s "Codex CLI" section; legacy bare global files can be removed manually after confirming they are unused. Claude Code's plugin-bundled `agents/*.md` wrappers need no such step.
 
 A namespaced `.toml` wrapper alone only lets a human or a project-local override name the role directly; it does not fix how a running Codex *session* dispatches one of these roles as a subagent mid-task. That dispatch mechanic — and the MCP server that makes it work correctly — is documented in `.agents/skills/run-agent-orchestration/references/runner-adapters.md`'s "Codex CLI" section; see that file's "Register the MCP dispatch server" step before relying on Codex-hosted subagent dispatch.
 
@@ -856,7 +856,7 @@ regeneration specifically, means silently committing output built by the wrong
 generator. Elsewhere the stakes are lower and bare `cadre` is fine.
 
 `./bin/cadre generate-plugin` does **not** regenerate the Cline mirror. Porting the
-74 role presets and 8 skills into `cline-plugins/cline-agents/` is a separate
+86 role presets and 8 skills into `cline-plugins/cline-agents/` is a separate
 command that must run *after* `generate-plugin`, because it reads the freshly
 written `plugin/` tree:
 

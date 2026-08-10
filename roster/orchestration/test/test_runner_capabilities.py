@@ -341,7 +341,7 @@ class NarrativeContentUndisturbedTests(unittest.TestCase):
 
 class ClineScopeRespectedTests(unittest.TestCase):
     """AC-6: the manifest declares only capability facts actually backed by
-    shipped, drift-guarded artifacts in this repository (the 74 committed
+    shipped, drift-guarded artifacts in this repository (the 86 committed
     `cline-plugins/cline-agents/agents/*.md` presets and the `start_subagent`/
     `dispatch_selected_roles` MCP tools in `cline-plugins/cline-agents/
     index.ts`), and does not fabricate a `tools`/`sandbox_mode` grant --

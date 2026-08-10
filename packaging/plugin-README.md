@@ -1,7 +1,7 @@
 # Cadre plugin
 
 The installable Claude Code / Codex CLI / Cline distribution of **Cadre**:
-74 specialist roles, the suite skills, the orchestration runtime, the
+86 specialist roles, the suite skills, the orchestration runtime, the
 knowledge-store runtime, and the Agentic SDLC provider bundle. The package is
 self-contained — once installed it depends on no source checkout.
 

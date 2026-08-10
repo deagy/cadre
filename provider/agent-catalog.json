@@ -71,6 +71,15 @@
       ],
       "definition": "roles/review/architecture-authority/AGENT.md"
     },
+    "architecture-diagram-author": {
+      "phase": "document",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/documentation/architecture-diagram-author/AGENT.md"
+    },
     "assumption-register": {
       "phase": "planning",
       "kind": "author",
@@ -318,6 +327,33 @@
       ],
       "definition": "roles/engineering/frontend-engineer/AGENT.md"
     },
+    "github-actions-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/github-actions-implementer/AGENT.md"
+    },
+    "gitlab-ci-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/gitlab-ci-implementer/AGENT.md"
+    },
+    "go-service-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/go-service-implementer/AGENT.md"
+    },
     "governance-lead-aide": {
       "phase": "authority",
       "kind": "author",
@@ -343,6 +379,15 @@
         "reviewer"
       ],
       "definition": "roles/review/halt-authority/AGENT.md"
+    },
+    "helm-chart-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/helm-chart-implementer/AGENT.md"
     },
     "incident-commander": {
       "phase": "support",
@@ -397,6 +442,24 @@
       ],
       "definition": "roles/knowledge-store/AGENT.md"
     },
+    "kubernetes-manifest-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/kubernetes-manifest-implementer/AGENT.md"
+    },
+    "node-typescript-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/node-typescript-implementer/AGENT.md"
+    },
     "observability-sre": {
       "phase": "operations",
       "kind": "author",
@@ -405,6 +468,15 @@
         "dispatch"
       ],
       "definition": "roles/operations/observability-sre/AGENT.md"
+    },
+    "opentofu-module-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/opentofu-module-implementer/AGENT.md"
     },
     "performance-testing-engineer": {
       "phase": "verify",
@@ -440,6 +512,15 @@
       ],
       "definition": "roles/security/policy-as-code-engineer/AGENT.md"
     },
+    "postgres-query-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/postgres-query-implementer/AGENT.md"
+    },
     "premortem": {
       "phase": "planning",
       "kind": "author",
@@ -467,6 +548,15 @@
       ],
       "definition": "roles/authority/product-owner-aide/AGENT.md"
     },
+    "python-automation-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/python-automation-implementer/AGENT.md"
+    },
     "quantum-timing-assurance-engineer": {
       "phase": "security",
       "kind": "author",
@@ -475,6 +565,15 @@
         "dispatch"
       ],
       "definition": "roles/security/quantum-timing-assurance-engineer/AGENT.md"
+    },
+    "react-component-implementer": {
+      "phase": "build",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/engineering/react-component-implementer/AGENT.md"
     },
     "red-team": {
       "phase": "verify",
@@ -564,6 +663,15 @@
         "reviewer"
       ],
       "definition": "roles/review/security-reviewer/AGENT.md"
+    },
+    "selector-test-implementer": {
+      "phase": "verify",
+      "kind": "author",
+      "capabilities": [
+        "author",
+        "dispatch"
+      ],
+      "definition": "roles/testing/selector-test-implementer/AGENT.md"
     },
     "service-owner-aide": {
       "phase": "authority",

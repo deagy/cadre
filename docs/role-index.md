@@ -1,6 +1,6 @@
 # Role index
 
-This index is a human-readable view of the 74 roles in
+This index is a human-readable view of the 86 roles in
 [`roster/catalog.yaml`](../roster/catalog.yaml). The catalog and each linked
 `AGENT.md` remain authoritative.
 
@@ -46,6 +46,14 @@ tier, route, quality gate, human gate, ...), see the
 
 ## Engineering and delivery
 
+The small-context execution specialists below implement a bounded, approved
+slice under the applicable existing accountable role. They do not replace that
+role's responsibility for scope, design decisions, security posture, review
+coordination, or escalation; the routing plan retains the accountable role and
+the required independent reviewers. Like every artifact author, a specialist
+cannot approve its own output, accept risk, or authorize a persistent or
+production mutation.
+
 | Role | Phase | Purpose | Definition |
 | --- | --- | --- | --- |
 | application-engineer | build | Own routine changes to this suite's own tooling, catalog, and orchestration source (not a target project's application code). | [AGENT.md](../roster/engineering/application-engineer/AGENT.md) |
@@ -56,12 +64,23 @@ tier, route, quality gate, human gate, ...), see the
 | cicd-engineer | build | Build secure pipelines for tests, scans, artifacts, promotion, and rollback. | [AGENT.md](../roster/engineering/cicd-engineer/AGENT.md) |
 | debugging-engineer | build | Reproduce failures, identify root cause, and apply scoped authorized fixes. | [AGENT.md](../roster/engineering/debugging-engineer/AGENT.md) |
 | release-engineer | release | Coordinate artifact promotion and release execution after required gates. | [AGENT.md](../roster/engineering/release-engineer/AGENT.md) |
+| python-automation-implementer | build | Implement bounded Python tooling, automation, data transforms, and tests under accountable engineering. | [AGENT.md](../roster/engineering/python-automation-implementer/AGENT.md) |
+| go-service-implementer | build | Implement bounded Go services, CLIs, libraries, generators, and tests. | [AGENT.md](../roster/engineering/go-service-implementer/AGENT.md) |
+| react-component-implementer | build | Implement bounded React components, hooks, routing, state, and component tests. | [AGENT.md](../roster/engineering/react-component-implementer/AGENT.md) |
+| github-actions-implementer | build | Implement bounded GitHub Actions workflows and artifact/identity steps. | [AGENT.md](../roster/engineering/github-actions-implementer/AGENT.md) |
+| gitlab-ci-implementer | build | Implement bounded GitLab CI pipelines, runner/environment/artifact/promotion steps. | [AGENT.md](../roster/engineering/gitlab-ci-implementer/AGENT.md) |
+| opentofu-module-implementer | build | Implement bounded OpenTofu modules, variables, validations, and plans. | [AGENT.md](../roster/engineering/opentofu-module-implementer/AGENT.md) |
+| helm-chart-implementer | build | Implement bounded Helm charts, values schemas, render tests, hooks, and release notes. | [AGENT.md](../roster/engineering/helm-chart-implementer/AGENT.md) |
+| kubernetes-manifest-implementer | build | Implement bounded Kubernetes manifests, RBAC, and policy artifacts. | [AGENT.md](../roster/engineering/kubernetes-manifest-implementer/AGENT.md) |
+| postgres-query-implementer | build | Implement bounded PostgreSQL queries, indexes, migrations, fixtures, and pgx integration. | [AGENT.md](../roster/engineering/postgres-query-implementer/AGENT.md) |
+| node-typescript-implementer | build | Implement bounded non-React TypeScript/Node tools, SDKs, plugins, and typed tests. | [AGENT.md](../roster/engineering/node-typescript-implementer/AGENT.md) |
 
 ## Verification and review
 
 | Role | Phase | Purpose | Definition |
 | --- | --- | --- | --- |
 | test-engineer | verify | Design and execute risk-based application, infrastructure, pipeline, and resilience tests. | [AGENT.md](../roster/engineering/test-engineer/AGENT.md) |
+| selector-test-implementer | verify | Implement bounded Cadre selector, routing, golden-corpus, and generated-content regressions. | [AGENT.md](../roster/testing/selector-test-implementer/AGENT.md) |
 | black-box-tester | verify | Validate external behavior without implementation or privileged shortcuts. | [AGENT.md](../roster/testing/black-box-tester/AGENT.md) |
 | end-user-tester | verify | Evaluate whether users can safely complete intended workflows. | [AGENT.md](../roster/testing/end-user-tester/AGENT.md) |
 | performance-testing-engineer | verify | Validate throughput, latency, and capacity assumptions against a candidate build. | [AGENT.md](../roster/testing/performance-testing-engineer/AGENT.md) |
@@ -76,9 +95,14 @@ tier, route, quality gate, human gate, ...), see the
 
 ## Documentation, support, and knowledge
 
+`architecture-diagram-author` is likewise an execution specialist: it renders
+approved source material without changing the architecture, and does not hold
+architecture or approval authority.
+
 | Role | Phase | Purpose | Definition |
 | --- | --- | --- | --- |
 | technical-writer | document | Create accurate, task-oriented documentation from approved sources. | [AGENT.md](../roster/documentation/technical-writer/AGENT.md) |
+| architecture-diagram-author | document | Create bounded source-backed Mermaid architecture, flow, sequence, dependency, and state diagrams without altering architecture. | [AGENT.md](../roster/documentation/architecture-diagram-author/AGENT.md) |
 | evidence-curator | evidence | Collect, normalize, index, protect, and retain delivery and compliance evidence. | [AGENT.md](../roster/documentation/evidence-curator/AGENT.md) |
 | knowledge-store-steward | knowledge | Operate the authorized, provenance-preserving agent knowledge store. | [AGENT.md](../roster/knowledge-store/AGENT.md) |
 | support-triage-agent | support | Classify user reports, protect sensitive data, and route actionable cases. | [AGENT.md](../roster/support/support-triage-agent/AGENT.md) |

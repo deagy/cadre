@@ -327,7 +327,7 @@ class GeneratorIdentityTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("151 role metadata files are current", result.stdout)
+        self.assertIn("175 role metadata files are current", result.stdout)
 
 
 class ProviderOrphanTests(unittest.TestCase):

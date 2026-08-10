@@ -23,7 +23,7 @@ REPOSITORY_ROOT = ROOT.parent
 # checked directly against the AGENT.md files on disk below, so a role
 # add/remove without updating this constant fails immediately instead of
 # leaving the other assertions below silently pinned to a stale number.
-EXPECTED_ROLE_COUNT = 74
+EXPECTED_ROLE_COUNT = 86
 
 # This repository's register-owned Agentic SDLC provider bundle. Copied
 # verbatim into the plugin package by `cadre generate-plugin`; the pip/pipx
@@ -2078,7 +2078,15 @@ class RepositoryHealthTests(unittest.TestCase):
     # it too would just report every source finding twice under a different
     # path, with no independent signal -- and it would fail this task's own
     # "do not touch plugin/" boundary the moment someone tried to fix what it
-    # reported.
+    # reported. The two hand-authored distribution entrypoints below are the
+    # exception: they describe the catalog to plugin/Cline users but are not
+    # generated from roster, so they need an independent drift check without
+    # broadly scanning the generated plugin output.
+
+    ROLE_COUNT_HAND_AUTHORED_DISTRIBUTION_FILES = (
+        "plugin/AGENTS.md",
+        "cline-plugins/cline-agents/index.ts",
+    )
 
     # Rather than enumerate the sentence shapes docs currently use to state
     # a role count -- which only catches phrasings someone already thought
@@ -2119,6 +2127,11 @@ class RepositoryHealthTests(unittest.TestCase):
         # allowance in test_sample_references_are_limited_to_allowed_archives.
         "roster/orchestration/runs/",
         "roster/orchestration/examples/",
+        # Dated investigation records. Their counts are evidence about what
+        # was measured on a given date, not claims about the present, so
+        # forcing them to track the live catalog destroys the finding rather
+        # than keeping it current. Same rationale as docs/proposals/.
+        "docs/investigations/",
     )
 
     # docs/capability-index.md states a dozen per-tier subset counts, each on
@@ -2144,7 +2157,8 @@ class RepositoryHealthTests(unittest.TestCase):
         # words so partitives ("2 of the four roles") are not read as a claim
         # that there are two roles.
         pattern = re.compile(
-            r"\b(\d[\d,]*)(?:\s+(?!of\b)[A-Za-z][\w-]*){0,4}\s+(?:roles\b|role definitions?\b)"
+            r"\b(\d[\d,]*)(?:\s+(?!of\b)[A-Za-z][\w-]*){0,4}\s+"
+            r"(?:roles\b|role definitions?\b|role presets\b)"
         )
         # Markdown emphasis and code spans sit between the number and the
         # noun ("**74** roles", "`74` roles") and would otherwise break the
@@ -2154,10 +2168,12 @@ class RepositoryHealthTests(unittest.TestCase):
         markup = str.maketrans({"*": " ", "`": " ", "_": " "})
         offenders: list[str] = []
         scanned_claims = 0
-        for relative_path in _tracked_files():
+        tracked_prose = [
+            path for path in _tracked_files()
+            if path.endswith(".md") and not path.replace("\\", "/").startswith("plugin/")
+        ]
+        for relative_path in [*tracked_prose, *self.ROLE_COUNT_HAND_AUTHORED_DISTRIBUTION_FILES]:
             normalized = relative_path.replace("\\", "/")
-            if not normalized.endswith(".md") or normalized.startswith("plugin/"):
-                continue
             if normalized.startswith(self.ROLE_COUNT_HISTORICAL_PREFIXES):
                 continue
             path = REPOSITORY_ROOT / normalized
