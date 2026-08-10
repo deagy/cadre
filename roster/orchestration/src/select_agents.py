@@ -27,7 +27,8 @@ if str(_SHARED_SRC_DIR) not in sys.path:
 
 from build_dispatch_plan import build_dispatch_plan  # noqa: E402
 from route_near_miss import find_near_misses, format_near_misses_text  # noqa: E402
-from routing import load_catalog, load_routing  # noqa: E402
+from routing import load_catalog, validate_routing_config  # noqa: E402
+from routing_overlay import RoutingOverlayError, resolve_effective_routing  # noqa: E402
 from selection_telemetry import (  # noqa: E402
     include_task_enabled,
     is_enabled as telemetry_is_enabled,
@@ -201,7 +202,20 @@ def main(argv: list[str] | None = None) -> int:
     source = options.source or resolve_knowledge_source(repository_root)
     catalog_path = ROSTER_ROOT / "catalog.yaml"
     routing_path = ORCHESTRATION_ROOT / "routing.yaml"
-    config = load_routing(routing_path)
+    # A project-local `.agents/orchestration/routing-overlay.json` is merged
+    # into the base ruleset before selection, so the configuration the
+    # selector dispatches against is the same effective configuration the
+    # overlay validators check. Discovery walks up from the repository under
+    # selection, not from this checkout. With no overlay present this returns
+    # the base configuration unchanged.
+    try:
+        config, overlay_path = resolve_effective_routing(routing_path, start=repository_root)
+    except RoutingOverlayError as error:
+        raise SystemExit(f"routing overlay is invalid: {error}") from error
+    # resolve_effective_routing only round-trips through load_routing when an
+    # overlay merged, so validate unconditionally -- otherwise the no-overlay
+    # path would silently lose the base file's structural checks.
+    validate_routing_config(config)
     catalog = load_catalog(catalog_path)
     plan = build_dispatch_plan(
         config,
@@ -220,6 +234,7 @@ def main(argv: list[str] | None = None) -> int:
         require_sdlc=options.require_sdlc,
         catalog_path=catalog_path,
         routing_path=routing_path,
+        overlay_path=overlay_path,
     )
     if telemetry_is_enabled(options.record_telemetry):
         record_selection(

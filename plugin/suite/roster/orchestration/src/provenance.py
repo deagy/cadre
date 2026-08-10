@@ -18,15 +18,18 @@ This is deliberately a distinct, sibling concern to `dispatch_fingerprint`
   auditor who recomputes `sha256sum`/`git rev-parse HEAD` against a
   historical checkout, without needing to trust the generating process.
 
-Nothing here reads `roster/runner-capabilities.json` (idea #8) or resolves
-a project-local routing overlay (idea #6): per the requirements baseline's
-PB-FR-5, the manifest is not bound at all (its build-time influence is
-already transitively captured by hashing `catalog.yaml`); per PB-FR-4, the
-overlay fields are reserved in the schema but stay absent until a separate,
-currently unscoped integration change wires overlay resolution into the
-dispatch-plan call path (see requirements.md Gap G-2). Never fabricate a
-value for either -- omit the field entirely when there is no actual causal
-read path behind it.
+Nothing here reads `roster/runner-capabilities.json` (idea #8): per the
+requirements baseline's PB-FR-5, the manifest is not bound at all (its
+build-time influence is already transitively captured by hashing
+`catalog.yaml`).
+
+The PB-FR-4 overlay fields are now populated. Gap G-2 -- the missing
+integration that left them reserved-but-absent -- was closed by wiring
+`routing_overlay.resolve_effective_routing` into `select_agents.py`, so
+there is a real causal read path behind them: the selector genuinely
+dispatched against the merged configuration. They stay absent when no
+overlay was discovered. Never fabricate a value -- omit the field entirely
+when there is no actual causal read path behind it.
 """
 
 from __future__ import annotations
@@ -128,6 +131,7 @@ def build_provenance(
     catalog_path: Path,
     routing_path: Path,
     lifecycle_contract_version: int | None,
+    overlay_path: Path | None = None,
 ) -> dict[str, Any]:
     """Assemble the dispatch plan's `provenance` object.
 
@@ -143,6 +147,13 @@ def build_provenance(
         "catalog_content_hash": hash_file(catalog_path),
         "routing_content_hash": hash_file(routing_path),
     }
+    if overlay_path is not None:
+        # `routing_content_hash` stays the *base* file's hash: an auditor
+        # needs both halves to reproduce the merge, not a hash of a merged
+        # artifact that exists on no disk.
+        provenance["overlay_applied"] = True
+        provenance["overlay_path"] = str(overlay_path)
+        provenance["overlay_content_hash"] = hash_file(overlay_path)
     provenance.update(git_identity(catalog_path, routing_path))
     if lifecycle_contract_version is not None:
         provenance["agentic_sdlc_contract_version"] = lifecycle_contract_version
