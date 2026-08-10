@@ -127,14 +127,22 @@ def _resolve_workspace_package_key(
         and workspace_packages[top_level_key]["version"] in declared_pins
     ):
         top_level = workspace_packages[top_level_key]
+        # ``.get("integrity")`` rather than ``[...]``: a lockfile entry for a
+        # git- or ``file:``-sourced dependency legitimately has no integrity
+        # field, and a bare KeyError here would be the exact defect issue #186
+        # complained about on the root-side lookup three assertions below --
+        # reintroduced in the code fixing it. Missing compares as a distinct
+        # value, so a registry copy and a git copy read as disagreeing, which
+        # is the fail-closed direction.
+        identity = (top_level["version"], top_level.get("integrity"))
         disagreeing = [
             key
             for key in scoped_keys
             if (
                 workspace_packages[key]["version"],
-                workspace_packages[key]["integrity"],
+                workspace_packages[key].get("integrity"),
             )
-            != (top_level["version"], top_level["integrity"])
+            != identity
         ]
         if disagreeing:
             raise AssertionError(
@@ -261,6 +269,25 @@ class TestClineGitPluginPackaging(unittest.TestCase):
                     " different artifact. Same version, different tarball is a substitution,"
                     " not drift -- treat it as such.",
                 )
+
+    def test_a_sibling_without_an_integrity_field_is_not_a_crash(self) -> None:
+        """A git- or ``file:``-sourced entry has no integrity field.
+
+        Indexing it directly would raise a bare ``KeyError`` -- the same defect
+        #186 called out on the root-side lookup, reintroduced by the code that
+        fixed it. Missing integrity is treated as a distinct value, so a
+        registry copy and a non-registry copy read as disagreeing rather than
+        crashing or being waved through.
+        """
+        packages = {
+            "node_modules/zod": {"version": "4.4.3", "integrity": "sha512-ours"},
+            "cline-agents/node_modules/zod": {"version": "4.4.3"},
+        }
+        with self.assertRaises(AssertionError) as caught:
+            _resolve_workspace_package_key(
+                packages, "zod", {"cline": "4.4.3", "cline-agents": "4.4.3"}
+            )
+        self.assertIn("cline-agents/node_modules/zod", str(caught.exception))
 
     def test_hoisting_fallback_does_not_match_an_unrelated_transitive_dependant(
         self,
