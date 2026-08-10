@@ -121,6 +121,18 @@ def match_rule(rule: dict[str, Any], task_text: str, changed_files: list[str]) -
 def load_routing(file_path: Path) -> dict[str, Any]:
     with file_path.open("r", encoding="utf-8") as source:
         config = json.load(source)
+    return validate_routing_config(config)
+
+
+def validate_routing_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Assert routing's structural invariants on an already-parsed config.
+
+    Split out of `load_routing` so a configuration assembled in memory --
+    notably the effective config `routing_overlay.resolve_effective_routing`
+    returns after merging a project-local overlay -- passes exactly the same
+    checks as one read from disk, instead of a merged config reaching the
+    selector unvalidated.
+    """
     if (
         config.get("version") != 1
         or not isinstance(config.get("routes"), list)

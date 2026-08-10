@@ -448,6 +448,7 @@ def build_dispatch_plan(
     *,
     catalog_path: Path | None = None,
     routing_path: Path | None = None,
+    overlay_path: Path | None = None,
 ) -> dict[str, Any]:
     """Build a version 3 dispatch plan.
 
@@ -604,6 +605,7 @@ def build_dispatch_plan(
             lifecycle_contract_version=(
                 lifecycle_contract_version if lifecycle_tracking["status"] == "integrated" else None
             ),
+            overlay_path=overlay_path,
         )
     # "provenance" is excluded from the fingerprint's hashed payload for the
     # same reason "generated_at" is: it varies by generation-time

@@ -143,7 +143,13 @@ class ScopeEnforcementTests(unittest.TestCase):
         self.assertTrue(source)
 
         catalog = select_agents.load_catalog(select_agents.ROSTER_ROOT / "catalog.yaml")
-        config = select_agents.load_routing(select_agents.ORCHESTRATION_ROOT / "routing.yaml")
+        # Mirrors select_agents' own load path, which resolves a project-local
+        # routing overlay before dispatch (#202) rather than reading the base
+        # file directly. REPO_ROOT has no overlay, so this is the base config.
+        config, _overlay = select_agents.resolve_effective_routing(
+            select_agents.ORCHESTRATION_ROOT / "routing.yaml", start=REPO_ROOT
+        )
+        select_agents.validate_routing_config(config)
         plan = build_dispatch_plan.build_dispatch_plan(
             config,
             catalog,

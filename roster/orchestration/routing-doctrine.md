@@ -143,35 +143,35 @@ or a scoping error this document itself would recognize as a mistake).
 Re-deriving the same cost-asymmetry conclusion from the armchair is not that
 evidence.
 
-## A confirmed, related fact: the overlay does not run in the selection path
+## The overlay runs in the selection path
 
-`roster/orchestration/src/select_agents.py` hardcodes
-`routing_path = ORCHESTRATION_ROOT / "routing.yaml"` and calls `load_routing()`
-on it directly. Neither `select_agents.py` nor `build_dispatch_plan.py`
-imports or calls `routing_overlay.py` anywhere in the `cadre select` path.
-`routing_overlay.py` is consumed today only by `routing_health.py --routing
-<path>` and `schema_validate.py --routing <path>`, for CI-style validation of
-a *materialized* effective-configuration file a project builds separately
-(`roster/RUNBOOK.md`'s "Customize routing.yaml with a project-local overlay").
+`roster/orchestration/src/select_agents.py` resolves
+`.agents/orchestration/routing-overlay.json` through
+`routing_overlay.resolve_effective_routing()` before building a plan, so the
+configuration the selector dispatches against is the effective (merged) one,
+discovered by walking up from the repository under selection. With no
+overlay present the base configuration is used unchanged.
 
-This means a consumer's overlay has no effect on what `cadre select` actually
-returns today — "the consumer can widen but not narrow" describes the merge
-semantics of a file nothing in the live selection path reads. That makes
-getting each base route's own default right *more* important, not less:
-there is currently no live per-consumer opt-out mechanism at all, only the
-static file merge rule for anyone who separately materializes and consumes
-the merged file themselves.
+"the consumer can widen but not narrow" therefore describes live dispatch,
+not just a static file merge rule. The widen-only semantics are enforced at
+selection time: an overlay that narrows a base entry now fails the
+`cadre select` run outright rather than being silently ignored.
 
-**This is an open gap, confirmed as part of this change — not merely a
-documentation nit.** `roster/RUNBOOK.md` documents
-`.agents/orchestration/routing-overlay.json` as *the* project-local
-customization mechanism, with no caveat that it is disconnected from live
-dispatch. A consumer who reads that section and adds an overlay to widen or
-narrow their effective routing has every reason to believe it takes effect
-on their next `cadre select` run; it does not. Closing this disconnection is
-tracked by [#202](https://github.com/deagy/cadre/issues/202). This document
-does not resolve it — that remains an open implementation decision for a
-future change.
+Two consequences worth stating plainly:
+
+- **A consumer's overlay changes their reviewer routing.** Getting each base
+  route's own default right still matters — an overlay may only widen, so a
+  base route that over-claims cannot be narrowed away by a consumer — but
+  the mechanism a consumer is pointed at is no longer inert.
+- **An applied overlay is recorded in the plan.** `provenance` carries
+  `overlay_applied`, `overlay_path`, and `overlay_content_hash`, and
+  `routing_content_hash` continues to name the *base* file, so an auditor
+  has both halves needed to reproduce the merge. Those fields are absent
+  when no overlay was discovered.
+
+This closes [#202](https://github.com/deagy/cadre/issues/202), which
+recorded the disconnection between the documented mechanism and the live
+selection path.
 
 ## Where this leaves `pyproject.toml`
 
