@@ -39,20 +39,39 @@ def _read_json(*parts: str) -> dict:
     return json.loads((REPO_ROOT.joinpath(*parts)).read_text(encoding="utf-8"))
 
 
-def _workspace_runtime_dependencies() -> dict[str, dict[str, str]]:
+def _workspace_runtime_dependencies(
+    entrypoints: tuple[str, ...] = ENTRYPOINTS,
+) -> dict[str, dict[str, str]]:
     """Map each plugin-owned runtime package to {workspace: declared version}.
 
     Returning every declaration, rather than a collapsed name->version dict,
     lets the tests below report *which* workspace disagrees when two of them
     pin the same package differently.
+
+    `entrypoints` is a parameter only so the coupling below can be tested
+    against a synthetic layout; production callers use the module constant.
     """
     declarations: dict[str, dict[str, str]] = {}
-    for entrypoint in ENTRYPOINTS:
-        # Assumes each entrypoint sits directly under cline-plugins/<workspace>/;
-        # if one ever moves a level deeper, .parent.name resolves to the wrong
-        # directory and this raises FileNotFoundError from a missing
-        # cline-plugins/<that name>/package.json instead of naming the assumption.
+    for entrypoint in entrypoints:
+        # Each entrypoint is assumed to sit directly under
+        # cline-plugins/<workspace>/. If one ever moves a level deeper --
+        # cline-plugins/cline/dist/index.ts -- .parent.name resolves to "dist"
+        # and every lookup below silently targets the wrong workspace.
         workspace = Path(entrypoint).parent.name
+        manifest_path = REPO_ROOT / "cline-plugins" / workspace / "package.json"
+        if not manifest_path.is_file():
+            # Naming the assumption, rather than letting a FileNotFoundError
+            # point at a path nobody expected to exist (issue #134). The
+            # derivation is what broke; the missing file is only the symptom.
+            raise AssertionError(
+                f"entrypoint {entrypoint!r} implies workspace {workspace!r}, but"
+                f" cline-plugins/{workspace}/package.json does not exist."
+                " _workspace_runtime_dependencies derives the workspace name with"
+                " Path(entrypoint).parent.name, which assumes each entrypoint sits"
+                " directly under cline-plugins/<workspace>/. If this entrypoint moved"
+                " a level deeper, that assumption is what needs updating -- not this"
+                " manifest path."
+            )
         manifest = _read_json("cline-plugins", workspace, "package.json")
         for name, version in manifest.get("dependencies", {}).items():
             if name.startswith(HOST_SUPPLIED_SCOPE):
@@ -326,6 +345,32 @@ class TestClineGitPluginPackaging(unittest.TestCase):
             "the fallback must not match an unrelated transitive dependant's own"
             " nested pin just because the leaf package name matches",
         )
+
+    def test_a_deeper_entrypoint_names_the_derivation_it_breaks(self) -> None:
+        """Issue #134: the workspace name is derived from the directory layout.
+
+        `Path(entrypoint).parent.name` assumes each entrypoint sits directly
+        under ``cline-plugins/<workspace>/``. An entrypoint one level deeper
+        resolves to the wrong directory, and the resulting failure used to be a
+        ``FileNotFoundError`` naming a path nobody expected rather than the
+        assumption that produced it.
+        """
+        with self.assertRaises(AssertionError) as caught:
+            _workspace_runtime_dependencies(("./cline-plugins/cline/dist/index.ts",))
+        message = str(caught.exception)
+        self.assertIn("dist", message)
+        self.assertIn("Path(entrypoint).parent.name", message)
+        self.assertIn("directly under", message)
+
+    def test_the_real_entrypoints_still_resolve(self) -> None:
+        """The guard must not fire on the layout as it exists today."""
+        declarations = _workspace_runtime_dependencies()
+        self.assertTrue(declarations)
+        for workspaces in declarations.values():
+            for workspace in workspaces:
+                self.assertTrue(
+                    (REPO_ROOT / "cline-plugins" / workspace / "package.json").is_file()
+                )
 
     def test_a_valid_top_level_entry_does_not_hide_a_disagreeing_workspace_copy(
         self,
