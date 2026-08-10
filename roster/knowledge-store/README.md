@@ -148,11 +148,14 @@ The demo now has retention and deletion commands, added by issue #184. This corr
 earlier statement here that was already false once #181 shipped `delete-staged`, `deletion-evidence`,
 and the rest of the staged-record lifecycle commands listed above -- and it is now false in a second,
 larger way: `ingest` records a per-message retention window (`retention_until`, config's `retention`
-block, defaulting to 365 days for `internal`, 90 for `confidential`, indefinite for `public`, and
-refused outright for `restricted` unless `--retention-days` is passed explicitly). These day-counts
-are this demo's implementation-proposed, configurable defaults, not a ratified retention policy --
-`roster/shared/team-profile.yaml` still records concrete retention windows as an open Product
-Owner / Engineering Lead decision. `retention-report`
+block). Every shipped default is indefinite -- no window is recorded for `internal`,
+`confidential`, or `public` unless a caller passes `--retention-days` or a project configures
+one -- and `restricted` is refused outright unless `--retention-days` is passed explicitly.
+Indefinite is a deliberate placeholder, not a judgement that content should be kept forever:
+concrete windows are an open Product Owner / Engineering Lead decision recorded in
+`roster/shared/team-profile.yaml`, and shipping working day-counts ahead of it would let them
+become policy by default inertia. Until windows are configured, nothing ages out on its own and
+`retention-report` has nothing to report; deletion is entirely steward-initiated. `retention-report`
 lists expired content read-only, without deleting anything; and `delete-ingested` is the
 steward-only, evidenced capability that actually removes ingested messages and their chunks by
 `--scope {source|conversation|message}`, always requiring `--reason`, `--deleted-by`,

@@ -63,6 +63,35 @@ class RetentionWindowTests(unittest.TestCase):
         # confidential (90 days) expires sooner than internal (365 days).
         self.assertLess(confidential, internal)
 
+    def test_shipped_defaults_are_indefinite_pending_the_retention_decision(self) -> None:
+        """The *shipped* defaults record no window for any classification.
+
+        Distinct from `test_defaults_by_classification`, which exercises the
+        day-count mechanism with a fixture that configures real numbers. This
+        pins what the demo ships when nobody has configured anything: concrete
+        windows are an open Product Owner / Engineering Lead decision in
+        `roster/shared/team-profile.yaml`, and shipping working numbers ahead
+        of it would let them become policy by default inertia.
+
+        `restricted` is deliberately excluded from that placeholder: it still
+        refuses at ingest, so the one tier where "kept forever because nobody
+        decided" is least acceptable cannot reach that state by omission.
+        """
+        import config as config_module
+
+        defaults = config_module.DEFAULTS["retention"]
+        self.assertEqual(
+            {"internal": None, "confidential": None, "public": None},
+            defaults["default_days_by_classification"],
+            "shipped retention defaults are indefinite until the decision lands -- if real "
+            "windows were ratified, update team-profile.yaml and this test together",
+        )
+        self.assertTrue(
+            defaults["refuse_restricted_without_window"],
+            "restricted must keep refusing while the other windows are open",
+        )
+        self.assertNotIn("restricted", defaults["default_days_by_classification"])
+
     def test_restricted_refused_without_explicit_window(self) -> None:
         config = test_config(Path("unused.db"))
         with self.assertRaisesRegex(ValueError, "restricted content requires an explicit retention window"):
@@ -517,9 +546,16 @@ class CliWiringTests(unittest.TestCase):
         env_patch, cwd_patch = self._project_env()
         with env_patch, cwd_patch:
             run(["init"])
+            # Explicit window, because the shipped defaults are all indefinite
+            # until the retention decision lands (config.py's `retention`
+            # block): with no window recorded, nothing ever expires and this
+            # round trip would report nothing to act on. The window is
+            # incidental here -- what this test covers is the CLI wiring from
+            # report through dry-run, delete, and evidence.
             run([
                 "ingest", "--input", str(ROOT / "examples" / "chat-export.json"),
                 "--source", "proj-a", "--classification", "internal",
+                "--retention-days", "30",
             ])
             report = run(["retention-report", "--as-of", "2099-01-01T00:00:00.000Z"])
             self.assertGreater(report["expired_message_count"], 0)
