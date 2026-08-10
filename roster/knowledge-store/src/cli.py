@@ -12,6 +12,13 @@ from typing import Any
 from config import TIER_GLOBAL_FALLBACK, load_config
 from database import open_store, store_stats
 from finding_record import FindingError, build_record
+from ingested_deletion import SCOPES as INGESTED_DELETION_SCOPES
+from ingested_deletion import TRIGGERS as INGESTED_DELETION_TRIGGERS
+from ingested_deletion import IngestedDeletionError
+from ingested_deletion import delete_ingested
+from ingested_deletion import deletion_evidence as ingested_deletion_evidence
+from ingested_deletion import install_schema as install_ingested_deletion_schema
+from ingested_deletion import retention_report as build_retention_report
 from service import build_agent_context, ingest_file, search_store, stable_query_id
 from settings import SettingsError
 from staged_records import STATUS_VALUES as STAGED_STATUSES
@@ -49,6 +56,16 @@ def _parser() -> argparse.ArgumentParser:
     # _enforce_ingest_scope below (KS-FR-11).
     ingest.add_argument("--source")
     ingest.add_argument("--classification")
+    ingest.add_argument(
+        "--retention-days",
+        dest="retention_days",
+        type=int,
+        help=(
+            "override the classification's configured retention default. Required for "
+            "--classification restricted unless retention.refuse_restricted_without_window "
+            "is disabled in config -- restricted has no configured default on purpose."
+        ),
+    )
     add_config(ingest)
     search = subparsers.add_parser("search")
     search.add_argument("--query", required=True)
@@ -68,6 +85,37 @@ def _parser() -> argparse.ArgumentParser:
     add_config(context)
     stats = subparsers.add_parser("stats")
     add_config(stats)
+
+    # Retention/deletion of *ingested* content (issue #184) -- distinct from,
+    # and never to be confused with, delete-staged above. retention-report is
+    # read-only: it never deletes anything, only lists what a steward could
+    # act on with delete-ingested.
+    retention_report_parser = subparsers.add_parser("retention-report")
+    retention_report_parser.add_argument(
+        "--as-of", dest="as_of", help="ISO-8601 timestamp to evaluate expiry against (default: now)"
+    )
+    add_config(retention_report_parser)
+    delete_ingested_parser = subparsers.add_parser("delete-ingested")
+    delete_ingested_parser.add_argument("--scope", required=True, choices=INGESTED_DELETION_SCOPES)
+    delete_ingested_parser.add_argument("--id", required=True, dest="scope_key")
+    delete_ingested_parser.add_argument("--reason", required=True)
+    delete_ingested_parser.add_argument("--deleted-by", required=True, dest="deleted_by")
+    delete_ingested_parser.add_argument(
+        "--authorized-by",
+        required=True,
+        dest="authorized_by",
+        help="required for every scope and classification: an authorized human reversing ingestion",
+    )
+    delete_ingested_parser.add_argument("--trigger", required=True, choices=INGESTED_DELETION_TRIGGERS)
+    delete_ingested_parser.add_argument(
+        "--source",
+        help=(
+            "narrows the match to this source; required at the shared global-fallback config "
+            "tier, mirroring ingest's own --source requirement there"
+        ),
+    )
+    delete_ingested_parser.add_argument("--dry-run", dest="dry_run", action="store_true")
+    add_config(delete_ingested_parser)
 
     # Staged knowledge records. These operate on the staging table, not on
     # ingested content: `propose` stages a candidate, and only a steward's
@@ -444,6 +492,24 @@ def _enforce_ingest_scope(tier: str, options: dict[str, Any]) -> None:
     options["source"] = "chat-export"
 
 
+def _enforce_ingested_deletion_scope(tier: str, options: dict[str, Any]) -> None:
+    """Gate `delete-ingested` at the shared global-fallback tier only, mirroring `_enforce_ingest_scope`.
+
+    An explicit `--source` is required here regardless of `--scope`, not only
+    for `--scope source`: a shared store holding every project's ingested
+    content is exactly the setting where a steward deleting by conversation
+    or message id, without also naming the source, is most likely to be
+    correcting the wrong project's content by mistake.
+    """
+    if tier != TIER_GLOBAL_FALLBACK:
+        return
+    if not options.get("source"):
+        raise ValueError(
+            "A project scope is required to delete ingested content from the shared global "
+            "knowledge store: pass --source <project-identifier> identifying the source."
+        )
+
+
 def run(arguments: list[str] | None = None) -> dict[str, Any]:
     options = vars(_parser().parse_args(arguments))
     command = options.pop("command")
@@ -468,6 +534,45 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
             return build_agent_context(db, config, options.pop("query"), options)
         if command == "stats":
             return store_stats(db)
+        if command == "retention-report":
+            # Read-only, ungated at every tier -- like `stats`, it reports
+            # metadata (source, classification, retention_until, counts),
+            # never content, and deletes nothing.
+            return build_retention_report(db, as_of=options.pop("as_of", None))
+        if command == "delete-ingested":
+            _enforce_ingested_deletion_scope(tier, options)
+            install_ingested_deletion_schema(db)
+            try:
+                return delete_ingested(
+                    db,
+                    scope=options.pop("scope"),
+                    scope_key=options.pop("scope_key"),
+                    reason=options.pop("reason"),
+                    deleted_by=options.pop("deleted_by"),
+                    authorized_by=options.pop("authorized_by"),
+                    trigger=options.pop("trigger"),
+                    source=options.pop("source", None),
+                    dry_run=options.pop("dry_run", False),
+                )
+            except IngestedDeletionError as error:
+                raise ValueError(str(error)) from error
+        if command == "deletion-evidence":
+            # Merges both evidence tables: staged-record deletions
+            # (staged_store.py) and ingested-content deletions
+            # (ingested_deletion.py) are two distinct capabilities with two
+            # distinct schemas, so each entry carries "kind" to keep the
+            # distinction visible in the merged output rather than blurring
+            # it. Deliberately not tier-gated like the staged-only commands
+            # below: ingested content can be deleted from the shared
+            # global-fallback store (delete-ingested is reachable there with
+            # --source), so hiding its evidence at that tier would make
+            # legitimate deletions invisible to the steward who needs to see
+            # them.
+            install_schema(db)
+            install_ingested_deletion_schema(db)
+            staged_evidence = [{"kind": "staged", **row} for row in deletion_evidence(db)]
+            ingested_evidence = [{"kind": "ingested", **row} for row in ingested_deletion_evidence(db)]
+            return {"deletions": staged_evidence + ingested_evidence}
         if command in (
             "propose",
             "list-staged",
@@ -476,7 +581,6 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
             "export-staged",
             "disposition-staged",
             "delete-staged",
-            "deletion-evidence",
         ):
             _enforce_staging_scope(tier)
             # Installed here rather than inside open_store: the staging table
@@ -506,8 +610,6 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
                     deleted_by=options.pop("deleted_by"),
                     authorized_by=options.pop("authorized_by", None),
                 )
-            if command == "deletion-evidence":
-                return {"deletions": deletion_evidence(db)}
             if command == "disposition-staged":
                 return disposition_record(
                     db,

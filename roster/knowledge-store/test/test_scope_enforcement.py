@@ -11,9 +11,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sqlite3
 import sys
 import tempfile
 import unittest
+import uuid
 import yaml
 from pathlib import Path
 from unittest import mock
@@ -400,18 +402,27 @@ class ScopeEnforcementTests(unittest.TestCase):
             action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
         )
         commands = set(subparsers_action.choices.keys())
-        # AC-15 re-decided, 2026-08-09, when `delete-staged` was implemented.
+        # AC-15 re-decided a THIRD time, 2026-08-09, when `delete-ingested` and
+        # `retention-report` were implemented (issue #184).
         #
-        # AC-15's guarantee is about the lifecycle of *ingested content*: the
-        # store embeds no retention or deletion of material that has been
-        # normalised, chunked, embedded and made retrievable. That guarantee is
-        # unchanged, and SECURITY.md still states it.
+        # The first re-decision (2026-08-09, `delete-staged`, issue #181)
+        # established that AC-15's guarantee is specifically about the
+        # lifecycle of *ingested content* -- material that has been
+        # normalised, chunked, embedded and made retrievable -- not about
+        # every command whose name mentions deletion.
         #
-        # `delete-staged` removes a row from the staging table. A staged record
-        # has never been ingested -- it is a candidate awaiting a steward, not
-        # knowledge in the store -- so deleting one is not the capability AC-15
-        # withholds. Widening the forbidden-name list to let it through would
-        # have been the wrong move; the distinction is asserted instead.
+        # This second re-decision on the same date does something different
+        # in kind: `delete-ingested` and `retention-report` reach *ingested*
+        # content on purpose. That does not mean AC-15 was widened or
+        # weakened -- it means the guarantee AC-15 protects (no *automatic*,
+        # unaudited deletion; every deletion is steward-authorized, evidenced
+        # before it happens, and never a side effect of ingest/search/
+        # context/stats) now has a name and a command, replacing "the demo
+        # implements no such capability" with "the demo implements exactly
+        # this capability, deliberately and auditably". test_ac15b_* in this
+        # file assert the new guarantee structurally, the same way
+        # test_ac15_deletion_is_confined_to_staged_records (AC-15a, left
+        # verbatim below) asserts the older one.
         #
         # The exact set stays pinned so the next lifecycle command still forces
         # this decision rather than pattern-matching on the diff.
@@ -430,12 +441,15 @@ class ScopeEnforcementTests(unittest.TestCase):
                 "disposition-staged",
                 "delete-staged",
                 "deletion-evidence",
+                "delete-ingested",
+                "retention-report",
             },
             commands,
         )
-        # Unchanged and still load-bearing: no command operates on ingested
-        # content's lifecycle. `delete-staged` is a distinct name precisely so
-        # a bare `delete` cannot be mistaken for it.
+        # The bare-name tripwire is untouched and must still pass: neither
+        # new command is a bare "delete"/"retention"/"purge"/"expire" name, so
+        # a future accidental bare name still fails loudly rather than
+        # silently matching one of these.
         for forbidden in ("delete", "retention", "purge", "expire"):
             self.assertNotIn(forbidden, commands)
 
@@ -458,6 +472,288 @@ class ScopeEnforcementTests(unittest.TestCase):
                 "ingested content, which is the capability AC-15 withholds",
             )
         self.assertIn("staged_records", source)
+
+    # -- AC-15b: ingested-content deletion, deliberately, auditably ----------
+    #
+    # issue #184 adds the capability AC-15 previously withheld entirely: a
+    # steward-only, evidenced path that reaches `messages`/`chunks`
+    # (`ingested_deletion.delete_ingested`, via `delete-ingested`). These
+    # tests assert the new guarantee structurally, the same way AC-15a above
+    # asserts the older one: no *other* command path may reach that same
+    # capability as a side effect, the evidence table holds no content, and
+    # evidence never lags behind (or is fabricated by) an attempted delete.
+
+    def _store_with_one_message(self) -> tuple[sqlite3.Connection, Path]:
+        import database
+        import ingested_deletion
+        import service
+
+        database_path = self.directory / f"ac15b-{uuid.uuid4().hex}.db"
+        db = database.open_store(str(database_path))
+        self.addCleanup(db.close)
+        ingested_deletion.install_schema(db)
+        config = {
+            "database": str(database_path),
+            "embedding": {
+                "provider": "hashing", "model": "feature-hash-v1", "dimensions": 32,
+                "batch_size": 32, "base_url": None, "api_key_env": "UNUSED", "timeout_seconds": 5,
+            },
+            "chunking": {"max_characters": 2400, "overlap_characters": 240},
+            "ingestion": {"default_classification": "internal", "redact_secrets": True},
+            "retention": {
+                "default_days_by_classification": {"internal": 365, "confidential": 90, "public": None},
+                "refuse_restricted_without_window": True,
+            },
+        }
+        service.ingest_file(db, config, {
+            "input": str(ROOT / "examples" / "chat-export.json"),
+            "source": "proj-a",
+            "classification": "internal",
+        })
+        return db, database_path
+
+    def test_ac15b_ingested_deletion_is_never_a_side_effect(self) -> None:
+        """No ingest/search/context/stats/*-staged handler deletes or updates
+        `messages`/`chunks`, except `save_message`'s own chunk rebuild
+        (`database.py`, `DELETE FROM chunks WHERE message_id = ?`) -- which
+        clears one message's own chunks immediately before reinserting them
+        on re-ingestion, never removes the message row itself, and is not a
+        deletion capability. Only `ingested_deletion.delete_ingested` may.
+        """
+        import inspect
+        import re
+
+        import cli
+        import database
+        import service
+
+        mutation_pattern = re.compile(r"\b(DELETE|UPDATE)\b")
+        handler_functions = [
+            service.ingest_file,
+            service.search_store,
+            service.build_agent_context,
+            database.store_stats,
+            cli._propose,
+            cli._show_staged,
+            cli._import_staged,
+            cli._export_staged,
+            cli._check_staged_export,
+        ]
+        for function in handler_functions:
+            source = inspect.getsource(function)
+            matches = mutation_pattern.findall(source)
+            self.assertFalse(
+                matches,
+                f"{function.__qualname__} contains {matches} against messages/chunks -- "
+                "ingest/search/context/stats/staged handlers must never mutate ingested "
+                "content as a side effect; only ingested_deletion.delete_ingested may.",
+            )
+
+        save_message_source = inspect.getsource(database.save_message)
+        self.assertIn(
+            "DELETE FROM chunks WHERE message_id",
+            save_message_source,
+            "the one documented exception moved or was removed -- update this test's "
+            "allow-list comment if that was deliberate",
+        )
+
+        # Behavioural half: ingest once, then repeatedly call context and
+        # stats, and confirm the stored counts never move as a side effect.
+        env_patch, cwd_patch = self._project_local_env()
+        with env_patch, cwd_patch:
+            self._run(["init"])
+            self._run([
+                "ingest", "--input", str(ROOT / "examples" / "chat-export.json"),
+                "--classification", "internal",
+            ])
+            baseline = self._run(["stats"])
+            for task in ("REL-1", "REL-2"):
+                self._run([
+                    "context", "--agent", "release-engineer", "--task-id", task,
+                    "--query", "production release approval", "--classification", "internal",
+                ])
+            after = self._run(["stats"])
+            self.assertEqual(baseline["messages"], after["messages"])
+            self.assertEqual(baseline["chunks"], after["chunks"])
+
+    def test_ac15b_evidence_columns_exclude_content(self) -> None:
+        db, _ = self._store_with_one_message()
+        columns = {row["name"] for row in db.execute("PRAGMA table_info(ingested_content_deletions)")}
+        self.assertEqual(
+            {
+                "id", "scope", "scope_key", "source", "classification", "message_count",
+                "chunk_count", "content_digest", "message_digests_json", "embedding_provider",
+                "embedding_model", "trigger", "reason", "deleted_by", "authorized_by",
+                "ingestion_runs_redacted_json", "delete_status", "reclaim_status", "deleted_at",
+            },
+            columns,
+        )
+        for forbidden in ("content", "body", "title", "conversation_title", "embedding_json", "source_uri"):
+            self.assertNotIn(
+                forbidden,
+                columns,
+                f"ingested_content_deletions must never gain a {forbidden!r} column -- evidence "
+                "holds digests and counts, never the content it describes",
+            )
+
+    def _failing_connection(
+        self, database_path: Path, statement_prefix: str | tuple[str, ...]
+    ) -> sqlite3.Connection:
+        """Reopen `database_path` through a `sqlite3.Connection` subclass whose
+        `execute` raises for one or more statement shapes.
+
+        `sqlite3.Connection` is an immutable built-in type -- it accepts
+        neither an instance attribute override nor a `mock.patch.object`
+        class-level override of `execute`. Subclassing via SQLite's own
+        supported `factory=` extension point is the supported way to inject
+        a fault at this layer.
+        """
+        prefixes = (statement_prefix,) if isinstance(statement_prefix, str) else statement_prefix
+
+        class FailingConnection(sqlite3.Connection):
+            def execute(self, sql, *args, **kwargs):  # type: ignore[override]
+                if isinstance(sql, str) and sql.strip().startswith(prefixes):
+                    raise sqlite3.OperationalError(f"simulated failure: {sql.strip()[:60]}")
+                return super().execute(sql, *args, **kwargs)
+
+        failing_db = sqlite3.connect(database_path, factory=FailingConnection)
+        self.addCleanup(failing_db.close)
+        failing_db.row_factory = sqlite3.Row
+        failing_db.execute("PRAGMA foreign_keys = ON")
+        return failing_db
+
+    def test_ac15b_evidence_precedes_delete(self) -> None:
+        """Evidence exists, as delete_status='failed' (or 'attempted'), even
+        when the delete step fails afterward -- and the messages are NOT
+        removed, because delete_status='completed' is only ever set in the
+        same atomic transaction as the actual DELETE (see
+        `ingested_deletion.delete_ingested`'s docstring).
+        """
+        import ingested_deletion
+
+        db, database_path = self._store_with_one_message()
+        before = db.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        self.assertGreater(before, 0)
+        db.close()
+
+        failing_db = self._failing_connection(database_path, "DELETE FROM messages")
+
+        with self.assertRaises(sqlite3.OperationalError):
+            ingested_deletion.delete_ingested(
+                failing_db, scope="source", scope_key="proj-a", reason="incident cleanup",
+                deleted_by="steward-a", authorized_by="human-a", trigger="steward-decision",
+            )
+
+        evidence = ingested_deletion.deletion_evidence(failing_db)
+        self.assertEqual(1, len(evidence))
+        self.assertEqual("proj-a", evidence[0]["source"])
+        self.assertEqual("incident cleanup", evidence[0]["reason"])
+        self.assertEqual(before, evidence[0]["message_count"])
+        # The evidence row exists and records the attempt, but is explicitly
+        # NOT 'completed': the DELETE itself never ran (the failing
+        # connection raised before it could), so the best-effort follow-up
+        # UPDATE marks it 'failed'.
+        self.assertEqual("failed", evidence[0]["delete_status"])
+        # The messages themselves were NOT removed, because the delete step
+        # failed before the DELETE could run at all -- this is the property
+        # this test exists to prove.
+        remaining = failing_db.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        self.assertEqual(before, remaining)
+
+    def test_ac15b_evidence_update_failure_rolls_back_the_delete_too(self) -> None:
+        """Txn 2's atomicity, proven rather than assumed: an injected
+        failure of the evidence UPDATE (delete_status='completed') inside
+        txn 2 must roll back the DELETE FROM messages it was grouped with,
+        not just leave the marker un-set while content is actually gone.
+        """
+        import ingested_deletion
+
+        db, database_path = self._store_with_one_message()
+        before = db.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        self.assertGreater(before, 0)
+        db.close()
+
+        failing_db = self._failing_connection(
+            database_path, "UPDATE ingested_content_deletions SET delete_status = 'completed'"
+        )
+
+        with self.assertRaises(sqlite3.OperationalError):
+            ingested_deletion.delete_ingested(
+                failing_db, scope="source", scope_key="proj-a", reason="incident cleanup",
+                deleted_by="steward-a", authorized_by="human-a", trigger="steward-decision",
+            )
+
+        # The DELETE ran earlier in the SAME transaction as the failing
+        # UPDATE -- if txn 2 were not atomic, the messages would be gone
+        # here even though delete_status never reached 'completed'. They
+        # must NOT be gone: that mismatch is exactly what atomicity rules out.
+        remaining = failing_db.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        self.assertEqual(before, remaining, "the DELETE must have rolled back with the failed UPDATE")
+
+        evidence = ingested_deletion.deletion_evidence(failing_db)
+        self.assertEqual(1, len(evidence))
+        self.assertEqual("failed", evidence[0]["delete_status"])
+
+    def test_ac15b_double_failure_leaves_the_txn1_seed_value_not_completed(self) -> None:
+        """Pins txn 1's INSERT seed value, adversarially.
+
+        Nothing else in this file distinguishes an INSERT seeded
+        `delete_status='attempted'` from one seeded `delete_status='completed'`:
+        the success path re-sets 'completed' redundantly, and every other
+        failure test here triggers the except-handler's fallback
+        `UPDATE ... SET delete_status = 'failed'`, which masks a wrong seed by
+        overwriting it. This test fails BOTH the first statement inside txn 2
+        (`DELETE FROM messages`) AND the fallback failed-marker `UPDATE` --
+        the disk-full/crash-class double failure where neither the real
+        completion nor the best-effort failure marker can be written. Under
+        that double failure, the persisted evidence row must still read
+        whatever txn 1 originally seeded: if that seed were ever wrongly
+        'completed' instead of 'attempted', this is the one test that would
+        catch a steward being told content was removed when it was not.
+        """
+        import ingested_deletion
+
+        db, database_path = self._store_with_one_message()
+        before = db.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        self.assertGreater(before, 0)
+        db.close()
+
+        failing_db = self._failing_connection(
+            database_path,
+            (
+                "DELETE FROM messages",
+                "UPDATE ingested_content_deletions SET delete_status = 'failed'",
+            ),
+        )
+
+        with self.assertRaises(sqlite3.OperationalError):
+            ingested_deletion.delete_ingested(
+                failing_db, scope="source", scope_key="proj-a", reason="double failure",
+                deleted_by="steward-a", authorized_by="human-a", trigger="steward-decision",
+            )
+
+        evidence = ingested_deletion.deletion_evidence(failing_db)
+        self.assertEqual(1, len(evidence))
+        # Neither the real completion nor the fallback failure marker could
+        # be written, so this is exactly the txn 1 INSERT's seed value --
+        # pinned here to 'attempted', never 'completed'.
+        self.assertEqual("attempted", evidence[0]["delete_status"])
+        remaining = failing_db.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        self.assertEqual(before, remaining)
+
+    def test_ac15b_refusal_leaves_no_evidence(self) -> None:
+        import ingested_deletion
+
+        db, _ = self._store_with_one_message()
+        before = db.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        with self.assertRaises(ingested_deletion.IngestedDeletionError):
+            ingested_deletion.delete_ingested(
+                db, scope="source", scope_key="proj-a", reason="",  # empty reason: refused
+                deleted_by="steward-a", authorized_by="human-a", trigger="steward-decision",
+            )
+        self.assertEqual([], ingested_deletion.deletion_evidence(db))
+        remaining = db.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        self.assertEqual(before, remaining)
 
 
 if __name__ == "__main__":
