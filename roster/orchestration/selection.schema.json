@@ -39,11 +39,12 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "version", "definition", "content_hash"],
+        "required": ["id", "version", "definition", "classification", "content_hash"],
         "properties": {
           "id": { "$ref": "#/$defs/nonempty" },
           "version": { "type": "integer", "minimum": 1 },
           "definition": { "$ref": "#/$defs/nonempty" },
+          "classification": { "enum": ["public", "internal", "confidential", "restricted"] },
           "content_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
         }
       }

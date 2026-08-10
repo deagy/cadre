@@ -132,14 +132,48 @@ class RouteMatchReasonTests(unittest.TestCase):
         self.assertEqual(result["matched_routes"], [])
 
     def test_vendor_context_pack_is_bound_without_becoming_an_agent(self) -> None:
-        result = plan(task="Integrate Toshiba Q-KMS with our QKD gateway", changed_files=[])
+        # Every pack under roster/context-packs/ declares classification
+        # `internal`, so the task has to assert at least that much for the
+        # pack to be emitted at all (see the withholding tests below).
+        result = plan(
+            task="Integrate Toshiba Q-KMS with our QKD gateway",
+            changed_files=[],
+            classification="internal",
+        )
         packs = result["context_packs"]
         self.assertEqual([pack["id"] for pack in packs], ["toshiba-qkms-context"])
         self.assertEqual(packs[0]["version"], 1)
         self.assertEqual(packs[0]["definition"], "context-packs/toshiba-qkms-context/CONTEXT.md")
+        self.assertEqual(packs[0]["classification"], "internal")
         self.assertRegex(packs[0]["content_hash"], r"^sha256:[0-9a-f]{64}$")
         selected = {agent for group in result["agents"].values() for agent in group}
         self.assertNotIn("toshiba-qkms-context", selected)
+
+    def test_context_pack_is_withheld_from_a_lower_classification_task(self) -> None:
+        # An internal-classified pack must not ride along in a plan the caller
+        # asserted as public. What is withheld is the pack alone: routing and
+        # staffing must be identical to the internal-classified run, so a
+        # classification downgrade cannot silently change who gets dispatched.
+        arguments = {
+            "task": "Integrate Toshiba Q-KMS with our QKD gateway",
+            "changed_files": [],
+        }
+        public = plan(**arguments, classification="public")
+        internal = plan(**arguments, classification="internal")
+
+        self.assertEqual(public["context_packs"], [])
+        self.assertEqual([pack["id"] for pack in internal["context_packs"]], ["toshiba-qkms-context"])
+        self.assertEqual(
+            [match["id"] for match in public["matched_routes"]],
+            [match["id"] for match in internal["matched_routes"]],
+        )
+        self.assertEqual(public["agents"], internal["agents"])
+
+    def test_context_pack_is_withheld_when_no_classification_is_asserted(self) -> None:
+        # Fails closed exactly as _build_knowledge_context does: an unasserted
+        # classification is not treated as "public enough for internal packs".
+        result = plan(task="Integrate Toshiba Q-KMS with our QKD gateway", changed_files=[])
+        self.assertEqual(result["context_packs"], [])
 
     def test_reasons_are_deterministic_across_identical_calls(self) -> None:
         # Reasons ride inside the fingerprinted payload, so unstable ordering

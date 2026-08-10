@@ -162,7 +162,14 @@ def validate_routing_config(config: dict[str, Any]) -> dict[str, Any]:
     context_packs = config.get("context_packs", [])
     if not isinstance(context_packs, list):
         raise ValueError("routing.yaml context_packs must be a list")
-    context_ids: set[str] = set()
+    # Context pack ids live in the SAME namespace as route, risk rule, and
+    # team recipe ids -- not a private one. A dispatch plan puts
+    # `matched_routes[].id`, `matched_risks[].id`, and `context_packs[].id`
+    # side by side, so an id claimed by both a route and a pack is ambiguous
+    # for any consumer keying on plan ids. `schema_validate.validate_routing`
+    # checks each array only against itself, so pooling here is the only
+    # place the cross-array collision is caught.
+    claimed_ids = set(ids)
     for pack in context_packs:
         if not isinstance(pack, dict):
             raise ValueError("routing.yaml context_packs entries must be objects")
@@ -171,9 +178,9 @@ def validate_routing_config(config: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("routing.yaml context_packs entries require non-empty id and definition")
         if not isinstance(version, int) or isinstance(version, bool) or version < 1:
             raise ValueError(f"{pack_id} context pack version must be a positive integer")
-        if pack_id in context_ids:
+        if pack_id in claimed_ids:
             raise ValueError(f"duplicate context pack id: {pack_id}")
-        context_ids.add(pack_id)
+        claimed_ids.add(pack_id)
     for recipe in config.get("team_recipes", []):
         if recipe.get("type") == "dynamic":
             instances = recipe.get("instances", {})

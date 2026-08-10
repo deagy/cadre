@@ -2507,7 +2507,7 @@
     },
     {
       "id": "POSTGRES-QUERY-NEGATIVE-MYSQL-1",
-      "description": "MySQL query work in a generic db/queries path must retain the broad backend/database-reliability staffing but must not select the PostgreSQL-only executor.",
+      "description": "MySQL query work in a generic db/queries path must retain the broad backend/database-reliability staffing and route to the engine-agnostic sql-query executor, but must not select the PostgreSQL-only executor.",
       "task": "Implement a MySQL query",
       "changed_files": [
         "db/queries/users.sql"
@@ -2518,7 +2518,8 @@
       "expected": {
         "primary": [
           "backend-engineer",
-          "database-reliability-engineer"
+          "database-reliability-engineer",
+          "sql-query-implementer"
         ],
         "reviewers": [
           "test-engineer",
@@ -2532,7 +2533,8 @@
         ],
         "matched_routes": [
           "backend",
-          "database-reliability"
+          "database-reliability",
+          "sql-query-execution"
         ],
         "workflow": "new-service"
       }
@@ -4279,6 +4281,35 @@
         "matched_routes": [
           "secrets-identity",
           "rbac-manifest-execution"
+        ],
+        "workflow": "unclassified"
+      }
+    },
+    {
+      "id": "RTOS_INTEGRATION_EXECUTION_GOLDEN_1",
+      "description": "RTOS task and scheduling work selects the narrow RTOS executor under application-engineer accountability, with independent test and code review retained.",
+      "task": "Implement an RTOS integration",
+      "changed_files": [
+        "rtos/tasks/watchdog.c"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-RTOS-INTEGRATION-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "rtos-integration-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "rtos-integration-execution"
         ],
         "workflow": "unclassified"
       }

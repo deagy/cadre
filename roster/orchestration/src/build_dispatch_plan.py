@@ -13,8 +13,18 @@ from risk_classifier import apply_cross_stack, classify_risks
 from routing import _keyword_matches, match_context_packs, match_routes
 from agentic_sdlc_contracts import require_lifecycle_contract, try_lifecycle_contract
 from provenance import build_provenance
+from role_metadata import parse_frontmatter
 
-CLASSIFICATIONS = {"public", "internal", "confidential", "restricted"}
+# Ordered least- to most-sensitive. CLASSIFICATIONS is derived from it rather
+# than listed separately, so the membership set and the ordering can never
+# name different classifications. The ordering matches
+# roster/orchestration/mcp/dispatch_core.py's CLASSIFICATION_RANK, which
+# applies the same "may not exceed the asserted classification" containment
+# rule to a dispatched child; test_mcp_dispatch.py already asserts the two
+# modules' CLASSIFICATIONS sets are equal.
+CLASSIFICATION_ORDER = ("public", "internal", "confidential", "restricted")
+CLASSIFICATIONS = set(CLASSIFICATION_ORDER)
+CLASSIFICATION_RANK = {name: index for index, name in enumerate(CLASSIFICATION_ORDER)}
 MAXIMUM_KNOWLEDGE_TOP = 20
 KNOWLEDGE_STORE_ROOT = Path(__file__).resolve().parents[2] / "knowledge-store"
 ROSTER_ROOT = Path(__file__).resolve().parents[2]
@@ -441,8 +451,52 @@ def _validate_agents(groups: dict[str, list[str]], catalog: list[str]) -> None:
             raise ValueError(f"Routing selected an unknown agent: {agent}")
 
 
-def _build_context_packs(matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Bind selected non-authoring reference packs to their exact bytes."""
+def _pack_classification(definition: str, text: str) -> str:
+    """The classification a context pack declares in its own frontmatter.
+
+    Raises rather than defaulting: a pack with no frontmatter block, no
+    `classification` field, or an unrecognized value is a repository-integrity
+    defect, and guessing a value for it would be exactly the silent
+    fail-open this function exists to prevent.
+    """
+    parsed = parse_frontmatter(text)
+    if parsed is None:
+        raise ValueError(f"Context pack has no frontmatter block: {definition}")
+    declared = parsed[0].get("classification")
+    if declared not in CLASSIFICATIONS:
+        raise ValueError(
+            f"Context pack {definition} declares classification {declared!r}; "
+            f"must be one of {sorted(CLASSIFICATIONS)}"
+        )
+    return declared
+
+
+def _build_context_packs(
+    matches: list[dict[str, Any]], classification: str | None
+) -> list[dict[str, Any]]:
+    """Bind selected non-authoring reference packs to their exact bytes,
+    filtered by the task's asserted classification.
+
+    A pack declares its own classification in its frontmatter, and that
+    declaration is enforced here on the same containment rule
+    `dispatch_core.validate_classification` applies to a dispatched child:
+    material may not exceed the classification asserted for the work it is
+    being supplied to. So an `internal` pack is emitted for an `internal`,
+    `confidential`, or `restricted` task and withheld from a `public` one.
+
+    With no classification asserted at all this fails closed and emits
+    nothing, matching `_build_knowledge_context`'s `authorization-required`
+    disposition -- an unasserted classification is not a licence to hand back
+    internal-classified reference material, and the emitted plan would
+    otherwise name it with no signal of its sensitivity.
+
+    Definition existence and frontmatter validity are checked for every
+    matched pack before filtering, so those repository-integrity guards still
+    fire on a `public` or unclassified run rather than only when a pack
+    happens to survive the filter.
+    """
+    if classification is not None and classification not in CLASSIFICATIONS:
+        raise ValueError(f"Invalid classification: {classification}")
     packs = []
     for match in matches:
         rule = match["rule"]
@@ -450,12 +504,19 @@ def _build_context_packs(matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
         path = ROSTER_ROOT / definition
         if not path.is_file():
             raise ValueError(f"Context pack definition is missing: {definition}")
+        content = path.read_bytes()
+        pack_classification = _pack_classification(definition, content.decode("utf-8"))
+        if not classification:
+            continue
+        if CLASSIFICATION_RANK[pack_classification] > CLASSIFICATION_RANK[classification]:
+            continue
         packs.append(
             {
                 "id": rule["id"],
                 "version": rule["version"],
                 "definition": definition,
-                "content_hash": "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest(),
+                "classification": pack_classification,
+                "content_hash": "sha256:" + hashlib.sha256(content).hexdigest(),
             }
         )
     return packs
@@ -611,7 +672,9 @@ def build_dispatch_plan(
         },
         "matched_routes": [{"id": match["id"], "reasons": _reasons(match)} for match in matched_routes],
         "matched_risks": [{"id": match["id"], "reasons": _reasons(match)} for match in matched_risks],
-        "context_packs": _build_context_packs(matched_context_packs),
+        "context_packs": _build_context_packs(
+            matched_context_packs, input_data.get("classification")
+        ),
         "agents": groups,
         "dispatch_disposition": _build_dispatch_disposition(groups),
         "teams": teams,

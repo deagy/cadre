@@ -3,7 +3,7 @@
 This walks through one real, committed `cadre select` plan so a reader can see
 what the selector actually produces before running it themselves. The
 authoritative shape is [`roster/orchestration/selection.schema.json`](../roster/orchestration/selection.schema.json)
-(`schema_version: 4`); if this page and the schema ever disagree, the schema
+(`schema_version: 5`); if this page and the schema ever disagree, the schema
 wins.
 
 See the [glossary](terminology.md) for definitions of the terms used below
@@ -31,10 +31,11 @@ cadre select \
 
 ## The output
 
-`repository_root`, `generated_at`, `source_filter`, and `dispatch_fingerprint`
-are derived from the environment the selector runs in (working tree path,
-wall-clock time, the `deagy/cadre` origin remote of this checkout, and a hash
-over the rest of the plan, respectively) — expect different values in your own
+`repository_root`, `generated_at`, `source_filter`, `provenance`, and
+`dispatch_fingerprint` are derived from the environment the selector runs in
+(working tree path, wall-clock time, the `deagy/cadre` origin remote of this
+checkout, the checkout's commit and uncommitted paths, and a hash over the
+rest of the plan, respectively) — expect different values in your own
 checkout. `lifecycle_tracking.status` and `required_quality_gates[].reason`
 also depend on your environment: this capture shows
 `lifecycle_tracking.status: "integrated"` and gate-specific reasons because a
@@ -52,9 +53,9 @@ comment).
 
 ```json
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "task_id": "GOLDEN-CROSS-STACK-1",
-  "generated_at": "2026-07-29T19:29:03.748Z",
+  "generated_at": "2026-08-10T18:33:59.212Z",
   "status": "ready",
   "workflow": "new-service",
   "inputs": {
@@ -108,13 +109,28 @@ comment).
           }
         ]
       }
+    },
+    {
+      "id": "go-service-execution",
+      "reasons": {
+        "keywords": [],
+        "keyword_groups": [],
+        "paths": [
+          {
+            "pattern": "**/*.go",
+            "file": "services/upload/main.go"
+          }
+        ]
+      }
     }
   ],
   "matched_risks": [],
+  "context_packs": [],
   "agents": {
     "primary": [
       "frontend-engineer",
-      "backend-engineer"
+      "backend-engineer",
+      "go-service-implementer"
     ],
     "reviewers": [
       "test-engineer",
@@ -174,7 +190,8 @@ comment).
       "reason": "Architecture lifecycle gate (architecture phase).",
       "contributing_routes": [
         "frontend",
-        "backend"
+        "backend",
+        "go-service-execution"
       ]
     },
     {
@@ -182,7 +199,8 @@ comment).
       "required": true,
       "reason": "Governance and Data lifecycle gate (governance-data phase).",
       "contributing_routes": [
-        "backend"
+        "backend",
+        "go-service-execution"
       ]
     },
     {
@@ -191,7 +209,8 @@ comment).
       "reason": "Security and Crypto lifecycle gate (security-crypto phase).",
       "contributing_routes": [
         "frontend",
-        "backend"
+        "backend",
+        "go-service-execution"
       ]
     },
     {
@@ -200,7 +219,8 @@ comment).
       "reason": "Verification and Test lifecycle gate (verify phase).",
       "contributing_routes": [
         "frontend",
-        "backend"
+        "backend",
+        "go-service-execution"
       ]
     },
     {
@@ -209,7 +229,8 @@ comment).
       "reason": "Evidence lifecycle gate (evidence phase).",
       "contributing_routes": [
         "frontend",
-        "backend"
+        "backend",
+        "go-service-execution"
       ]
     }
   ],
@@ -302,6 +323,33 @@ comment).
         }
       },
       {
+        "agent": "go-service-implementer",
+        "query": "Task: Add a React upload form backed by a PostgreSQL API. Retrieve Go service patterns, safe concurrency, interfaces, tests, and approved library conventions.",
+        "invocation": {
+          "launcher": {
+            "runtime": "python",
+            "minimum_version": "3.10",
+            "resolution": "runner-probed"
+          },
+          "args": [
+            "/path/to/your/checkout/roster/knowledge-store/src/cli.py",
+            "context",
+            "--agent",
+            "go-service-implementer",
+            "--task-id",
+            "GOLDEN-CROSS-STACK-1",
+            "--query",
+            "Task: Add a React upload form backed by a PostgreSQL API. Retrieve Go service patterns, safe concurrency, interfaces, tests, and approved library conventions.",
+            "--classification",
+            "internal",
+            "--top",
+            "5",
+            "--source",
+            "deagy/cadre"
+          ]
+        }
+      },
+      {
         "agent": "test-engineer",
         "query": "Task: Add a React upload form backed by a PostgreSQL API. Retrieve Gherkin scenarios, regressions, failure cases, and quality history.",
         "invocation": {
@@ -384,7 +432,16 @@ comment).
       }
     ]
   },
-  "dispatch_fingerprint": "sha256:e78661f0f32d5b0212e6850f1182247133b4447ba26a650653586fcb356c1f07"
+  "provenance": {
+    "catalog_content_hash": "sha256:d96ae366b128b6502e39a6514dd4ce06f6ef46607439dfc1923a9b7aaf979d8d",
+    "routing_content_hash": "sha256:fb577d861211bc6782efa4adad191222e3c34ad2c8c2474d74d0b8ad93fa7ba3",
+    "git_commit_sha": "1123de4117e4ba5a2e657998ba941c71737db07d",
+    "git_dirty_paths": [
+      "orchestration/routing.yaml"
+    ],
+    "agentic_sdlc_contract_version": 2
+  },
+  "dispatch_fingerprint": "sha256:572e7aab4cc97050c75f08a59530fc19290f809793e13c3fe23e593dda5249bf"
 }
 ```
 
@@ -408,6 +465,11 @@ comment).
 - **`matched_risks`** — routing.yaml `risk_rules` (for example `production`
   or `destructive`) that matched, in the same `{id, reasons}` shape as
   `matched_routes`. Empty here because this task is neither.
+- **`context_packs`** — the non-authoring reference packs
+  ([`roster/context-packs/`](../roster/context-packs/)) selected alongside the
+  roles, each as an `id`/`version`/`definition`/`content_hash`. They supply
+  bounded vendor and platform context; they are never dispatched as agents and
+  never approve work. Empty here because no pack matched this task.
 - **`agents.primary` / `.reviewers` / `.support`** — the deduplicated role ids
   selected across all matched routes: who implements, who independently
   reviews, and who supports without owning the change.
@@ -442,8 +504,16 @@ comment).
   (`--source` scoped to this repository's origin remote, `--classification`
   matched to the task). `status: "planned"` means retrieval is proposed, not
   performed — `cadre select` never executes retrieval itself.
+- **`provenance`** — binds the plan to the exact inputs that produced it:
+  content hashes over `catalog.yaml` and the routing configuration, plus
+  best-effort `git_commit_sha` / `git_dirty_paths` for the checkout and, when
+  `lifecycle_tracking.status` is `"integrated"`, the lifecycle contract
+  version Cadre read. It is verifiable without trusting the process that
+  generated the plan, and is absent entirely when no on-disk catalog/routing
+  file backed the run.
 - **`dispatch_fingerprint`** — a `sha256:`-prefixed hash over the rest of the
-  plan, useful for detecting whether a plan changed between two runs.
+  plan (excluding `generated_at` and `provenance`), useful for detecting
+  whether a plan changed between two runs.
 
 The selector only produces this plan. It does not execute agents, retrieve
 knowledge, approve gates, deploy, mutate infrastructure, merge, or push

@@ -54,3 +54,47 @@ regexes = [
   '''glpat-FAKE-TEST-TOKEN-0000''',
   '''glpat-SUPER-SECRET-LEAKED-''',
 ]
+
+# `generic-api-key` fires on routing.yaml's `secrets-identity` route, where an
+# agent-id array puts a long hyphenated role id immediately after the literal
+# word `secrets`:
+#
+#   "primary":["secrets-identity-engineer","pkcs11-hsm-integration-implementer"]
+#
+# The rule's keyword proximity heuristic reads `secrets-identity-engineer` as
+# the assignment keyword and the role id after it as the assigned value. There
+# is no credential here -- both tokens are catalog role ids, and routing.yaml
+# has never held a secret of any kind. This recurs by construction: every
+# future role id routed alongside `secrets-identity-engineer` reproduces it.
+#
+# Scoped on the same three axes as the entry above -- rule ID, file path, and
+# matched text, combined with `condition = "AND"` so all three must hold.
+# Three deliberate scoping choices:
+#
+#   - `regexTarget = "match"` (not the default `secret`) so the allowlist is
+#     conditioned on the *adjacency* to `secrets-identity-engineer`, not on the
+#     role id alone. A role-id-shaped token anywhere else in these files is
+#     still scanned normally.
+#   - The trailing token is constrained to catalog role-id shape
+#     (lowercase alphanumerics in hyphen-separated segments, at least two
+#     segments) rather than a specific id, so it keeps holding as new
+#     `*-implementer`/`*-engineer` roles join that route without needing a
+#     config edit each time -- while excluding the mixed-case/underscore/
+#     base64/hex shapes real credentials take.
+#   - `paths` names both copies of the one file exhibiting this construct, not
+#     a directory: `plugin/suite/roster/orchestration/routing.yaml` is the
+#     generated mirror of `roster/orchestration/routing.yaml` and always
+#     carries the identical line. routing.yaml is NOT blanket-exempted -- every
+#     other rule still applies to it in full, and `generic-api-key` itself
+#     still applies to every line of it that is not this exact construct.
+[[allowlists]]
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = [
+  '''roster/orchestration/routing\.yaml''',
+  '''plugin/suite/roster/orchestration/routing\.yaml''',
+]
+regexTarget = "match"
+regexes = [
+  '''secrets-identity-engineer","[a-z0-9]+(?:-[a-z0-9]+)+"''',
+]
