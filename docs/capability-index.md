@@ -1,6 +1,6 @@
 # Capability index
 
-This page lists all 74 roles from [`roster/catalog.yaml`](../roster/catalog.yaml)
+This page lists all 86 roles from [`roster/catalog.yaml`](../roster/catalog.yaml)
 grouped by their `capability` and `phase` fields, so you can find every role
 in a given class of change authority (for example, every role that can only
 review, or every role that can operate a live environment) or every role
@@ -54,13 +54,14 @@ Reads and evaluates only; produces findings, decision packages, or approvals but
 | supply-chain-security-reviewer | review | [AGENT.md](../roster/review/supply-chain-security-reviewer/AGENT.md) |
 | system-architect-aide | authority | [AGENT.md](../roster/authority/system-architect-aide/AGENT.md) |
 
-### `document_author` (23 roles)
+### `document_author` (24 roles)
 
 Creates or edits documents, plans, and requirements (not application code).
 
 | Role | Phase | Definition |
 | --- | --- | --- |
 | agent-version-control | operations | [AGENT.md](../roster/operations/agent-version-control/AGENT.md) |
+| architecture-diagram-author | document | [AGENT.md](../roster/documentation/architecture-diagram-author/AGENT.md) |
 | api-contract-engineer | design | [AGENT.md](../roster/architecture/api-contract-engineer/AGENT.md) |
 | assumption-register | planning | [AGENT.md](../roster/planning/assumption-register/AGENT.md) |
 | cloud-architect | design | [AGENT.md](../roster/architecture/cloud-architect/AGENT.md) |
@@ -84,7 +85,7 @@ Creates or edits documents, plans, and requirements (not application code).
 | threat-modeler | design | [AGENT.md](../roster/architecture/threat-modeler/AGENT.md) |
 | vendor-register-steward | operations | [AGENT.md](../roster/operations/vendor-register-steward/AGENT.md) |
 
-### `code_author` (10 roles)
+### `code_author` (20 roles)
 
 Creates or edits application, infrastructure, pipeline, or policy-as-code source.
 
@@ -97,11 +98,21 @@ Creates or edits application, infrastructure, pipeline, or policy-as-code source
 | database-reliability-engineer | operations | [AGENT.md](../roster/data/database-reliability-engineer/AGENT.md) |
 | debugging-engineer | build | [AGENT.md](../roster/engineering/debugging-engineer/AGENT.md) |
 | frontend-engineer | build | [AGENT.md](../roster/engineering/frontend-engineer/AGENT.md) |
+| github-actions-implementer | build | [AGENT.md](../roster/engineering/github-actions-implementer/AGENT.md) |
+| gitlab-ci-implementer | build | [AGENT.md](../roster/engineering/gitlab-ci-implementer/AGENT.md) |
+| go-service-implementer | build | [AGENT.md](../roster/engineering/go-service-implementer/AGENT.md) |
+| helm-chart-implementer | build | [AGENT.md](../roster/engineering/helm-chart-implementer/AGENT.md) |
 | infrastructure-provisioner | build | [AGENT.md](../roster/engineering/infrastructure-provisioner/AGENT.md) |
+| kubernetes-manifest-implementer | build | [AGENT.md](../roster/engineering/kubernetes-manifest-implementer/AGENT.md) |
+| node-typescript-implementer | build | [AGENT.md](../roster/engineering/node-typescript-implementer/AGENT.md) |
+| opentofu-module-implementer | build | [AGENT.md](../roster/engineering/opentofu-module-implementer/AGENT.md) |
 | policy-as-code-engineer | security | [AGENT.md](../roster/security/policy-as-code-engineer/AGENT.md) |
+| postgres-query-implementer | build | [AGENT.md](../roster/engineering/postgres-query-implementer/AGENT.md) |
+| python-automation-implementer | build | [AGENT.md](../roster/engineering/python-automation-implementer/AGENT.md) |
+| react-component-implementer | build | [AGENT.md](../roster/engineering/react-component-implementer/AGENT.md) |
 | secrets-identity-engineer | security | [AGENT.md](../roster/security/secrets-identity-engineer/AGENT.md) |
 
-### `test_author` (5 roles)
+### `test_author` (6 roles)
 
 Creates or edits test artifacts and executes them against authorized non-production environments.
 
@@ -111,6 +122,7 @@ Creates or edits test artifacts and executes them against authorized non-product
 | end-user-tester | verify | [AGENT.md](../roster/testing/end-user-tester/AGENT.md) |
 | performance-testing-engineer | verify | [AGENT.md](../roster/testing/performance-testing-engineer/AGENT.md) |
 | red-team | verify | [AGENT.md](../roster/testing/red-team/AGENT.md) |
+| selector-test-implementer | verify | [AGENT.md](../roster/testing/selector-test-implementer/AGENT.md) |
 | test-engineer | verify | [AGENT.md](../roster/engineering/test-engineer/AGENT.md) |
 
 ### `environment_operator` (8 roles)
@@ -169,7 +181,7 @@ grouping instead.
 | quantum-timing-assurance-engineer | document_author | [AGENT.md](../roster/security/quantum-timing-assurance-engineer/AGENT.md) |
 | secrets-identity-engineer | code_author | [AGENT.md](../roster/security/secrets-identity-engineer/AGENT.md) |
 
-### `build` (7 roles)
+### `build` (17 roles)
 
 | Role | Capability | Definition |
 | --- | --- | --- |
@@ -179,9 +191,19 @@ grouping instead.
 | cicd-engineer | code_author | [AGENT.md](../roster/engineering/cicd-engineer/AGENT.md) |
 | debugging-engineer | code_author | [AGENT.md](../roster/engineering/debugging-engineer/AGENT.md) |
 | frontend-engineer | code_author | [AGENT.md](../roster/engineering/frontend-engineer/AGENT.md) |
+| github-actions-implementer | code_author | [AGENT.md](../roster/engineering/github-actions-implementer/AGENT.md) |
+| gitlab-ci-implementer | code_author | [AGENT.md](../roster/engineering/gitlab-ci-implementer/AGENT.md) |
+| go-service-implementer | code_author | [AGENT.md](../roster/engineering/go-service-implementer/AGENT.md) |
+| helm-chart-implementer | code_author | [AGENT.md](../roster/engineering/helm-chart-implementer/AGENT.md) |
 | infrastructure-provisioner | code_author | [AGENT.md](../roster/engineering/infrastructure-provisioner/AGENT.md) |
+| kubernetes-manifest-implementer | code_author | [AGENT.md](../roster/engineering/kubernetes-manifest-implementer/AGENT.md) |
+| node-typescript-implementer | code_author | [AGENT.md](../roster/engineering/node-typescript-implementer/AGENT.md) |
+| opentofu-module-implementer | code_author | [AGENT.md](../roster/engineering/opentofu-module-implementer/AGENT.md) |
+| postgres-query-implementer | code_author | [AGENT.md](../roster/engineering/postgres-query-implementer/AGENT.md) |
+| python-automation-implementer | code_author | [AGENT.md](../roster/engineering/python-automation-implementer/AGENT.md) |
+| react-component-implementer | code_author | [AGENT.md](../roster/engineering/react-component-implementer/AGENT.md) |
 
-### `verify` (7 roles)
+### `verify` (8 roles)
 
 | Role | Capability | Definition |
 | --- | --- | --- |
@@ -191,6 +213,7 @@ grouping instead.
 | falsification-agent | read_only | [AGENT.md](../roster/testing/falsification-agent/AGENT.md) |
 | performance-testing-engineer | test_author | [AGENT.md](../roster/testing/performance-testing-engineer/AGENT.md) |
 | red-team | test_author | [AGENT.md](../roster/testing/red-team/AGENT.md) |
+| selector-test-implementer | test_author | [AGENT.md](../roster/testing/selector-test-implementer/AGENT.md) |
 | test-engineer | test_author | [AGENT.md](../roster/engineering/test-engineer/AGENT.md) |
 
 ### `review` (12 roles)
@@ -241,11 +264,12 @@ grouping instead.
 | retention-and-deletion-executor | environment_operator | [AGENT.md](../roster/operations/retention-and-deletion-executor/AGENT.md) |
 | vendor-register-steward | document_author | [AGENT.md](../roster/operations/vendor-register-steward/AGENT.md) |
 
-### `document` (2 roles)
+### `document` (3 roles)
 
 | Role | Capability | Definition |
 | --- | --- | --- |
 | decision-record | document_author | [AGENT.md](../roster/documentation/decision-record/AGENT.md) |
+| architecture-diagram-author | document_author | [AGENT.md](../roster/documentation/architecture-diagram-author/AGENT.md) |
 | technical-writer | document_author | [AGENT.md](../roster/documentation/technical-writer/AGENT.md) |
 
 ### `evidence` (2 roles)

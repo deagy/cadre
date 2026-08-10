@@ -443,6 +443,103 @@
       "reviewers": ["test-engineer", "code-reviewer", "security-reviewer"]
     },
     {
+      "id": "architecture-diagram-execution",
+      "paths": ["**/architecture/diagrams/**", "**/architecture/**/diagrams/**", "**/architecture/**/*.drawio", "**/architecture/**/*.mmd"],
+      "keywords": ["architecture diagram", "system diagram", "c4 diagram", "mermaid diagram", "drawio diagram"],
+      "primary": ["cloud-architect", "architecture-diagram-author"],
+      "reviewers": ["threat-modeler"],
+      "quality_gates": ["G3"]
+    },
+    {
+      "id": "python-automation-execution",
+      "paths": ["automation/**/*.py", "scripts/**/*.py", "**/automation/**/*.py", "**/scripts/**/*.py"],
+      "keywords": ["python automation", "python script", "automation script", "python utility"],
+      "primary": ["backend-engineer", "python-automation-implementer"],
+      "reviewers": ["test-engineer", "code-reviewer"],
+      "quality_gates": ["G3", "G4", "G5", "G6", "G7"]
+    },
+    {
+      "id": "go-service-execution",
+      "paths": [],
+      "keywords": ["go service", "golang service", "go implementation"],
+      "primary": ["backend-engineer", "go-service-implementer"],
+      "reviewers": ["test-engineer", "code-reviewer"],
+      "quality_gates": ["G3", "G4", "G5", "G6", "G7"]
+    },
+    {
+      "id": "react-component-execution",
+      "paths": ["**/*.component.tsx", "**/*.component.jsx"],
+      "keywords": ["react component", "react ui component", "jsx component"],
+      "primary": ["frontend-engineer", "react-component-implementer"],
+      "reviewers": ["test-engineer", "code-reviewer", "accessibility-reviewer"],
+      "support": ["interaction-designer"],
+      "quality_gates": ["G3", "G5", "G6", "G7"]
+    },
+    {
+      "id": "github-actions-execution",
+      "paths": [".github/workflows/**", "**/.github/workflows/**", ".github/actions/**"],
+      "keywords": ["github actions", "github workflow", "github action"],
+      "primary": ["cicd-engineer", "github-actions-implementer"],
+      "reviewers": ["pipeline-security-reviewer"],
+      "quality_gates": ["G5", "G6", "G7", "G8"]
+    },
+    {
+      "id": "gitlab-ci-execution",
+      "paths": [".gitlab-ci.yml", ".gitlab/**", "**/.gitlab-ci.yml"],
+      "keywords": ["gitlab ci", "gitlab pipeline", "gitlab ci pipeline"],
+      "primary": ["cicd-engineer", "gitlab-ci-implementer"],
+      "reviewers": ["pipeline-security-reviewer"],
+      "quality_gates": ["G5", "G6", "G7", "G8"]
+    },
+    {
+      "id": "opentofu-module-execution",
+      "paths": [],
+      "keywords": ["opentofu module", "opentofu", "terraform module"],
+      "primary": ["infrastructure-provisioner", "opentofu-module-implementer"],
+      "reviewers": ["infrastructure-reviewer"],
+      "quality_gates": ["G3", "G4", "G5", "G6", "G7", "G8"]
+    },
+    {
+      "id": "helm-chart-execution",
+      "paths": ["helm/**", "charts/**", "**/charts/Chart.yaml"],
+      "keywords": ["helm chart", "helm values", "helm template"],
+      "primary": ["infrastructure-provisioner", "helm-chart-implementer"],
+      "reviewers": ["infrastructure-reviewer"],
+      "quality_gates": ["G3", "G4", "G5", "G6", "G7", "G8"]
+    },
+    {
+      "id": "kubernetes-manifest-execution",
+      "paths": ["kubernetes/**", "k8s/**"],
+      "keywords": ["kubernetes manifest", "kubernetes deployment manifest", "k8s manifest"],
+      "primary": ["infrastructure-provisioner", "kubernetes-manifest-implementer"],
+      "reviewers": ["infrastructure-reviewer"],
+      "quality_gates": ["G3", "G4", "G5", "G6", "G7", "G8"]
+    },
+    {
+      "id": "postgres-query-execution",
+      "paths": ["postgres/queries/**"],
+      "keywords": ["postgres query", "postgresql query", "pgx query"],
+      "primary": ["backend-engineer", "postgres-query-implementer"],
+      "reviewers": ["test-engineer", "code-reviewer"],
+      "quality_gates": ["G3", "G4", "G5", "G6", "G7"]
+    },
+    {
+      "id": "node-typescript-execution",
+      "paths": [],
+      "keywords": ["node typescript", "node.js typescript", "typescript node", "node implementation"],
+      "primary": ["frontend-engineer", "node-typescript-implementer"],
+      "reviewers": ["test-engineer", "code-reviewer", "accessibility-reviewer"],
+      "support": ["interaction-designer"],
+      "quality_gates": ["G3", "G5", "G6", "G7"]
+    },
+    {
+      "id": "selector-test-execution",
+      "paths": ["roster/orchestration/test/**", "roster/orchestration/src/routing.py", "roster/orchestration/src/build_dispatch_plan.py"],
+      "keywords": ["selector test", "agent selector test", "routing regression test", "dispatch plan test"],
+      "primary": ["application-engineer", "selector-test-implementer"],
+      "reviewers": ["test-engineer", "code-reviewer"]
+    },
+    {
       "id": "knowledge-store",
       "paths": ["roster/knowledge-store/**", "roster/shared/knowledge-use-policy.md", "roster/orchestration/knowledge-retrieval-policy.yaml"],
       "keywords": ["knowledge store", "chat history", "embedding", "vector search", "retrieval", "rag"],
@@ -750,6 +847,18 @@
     "quantum-timing-assurance-engineer": "QKD segment telemetry, entanglement fidelity data, timing source readings, strata tolerances, and physical-trust equipment specifications",
     "delivery-sequencer": "prior dependency maps, sequencing decisions, blocked-work history, and which dependencies previously proved wrong",
     "visual-designer": "prior visual-system decisions, design tokens, component inventory and variants, and component-library or styling-system evaluations",
-    "ai-engineer": "prior model and provider selections, prompt and agent designs, eval results and regressions, retrieval design decisions, and inference cost/latency history"
+    "ai-engineer": "prior model and provider selections, prompt and agent designs, eval results and regressions, retrieval design decisions, and inference cost/latency history",
+    "architecture-diagram-author": "approved architecture, API contracts, operational flows, and source-backed diagram conventions",
+    "react-component-implementer": "React components, accessible browser behavior, typed API boundaries, and component tests",
+    "node-typescript-implementer": "Node.js tooling, TypeScript contracts, package safety, and typed tests",
+    "go-service-implementer": "Go service patterns, safe concurrency, interfaces, tests, and approved library conventions",
+    "python-automation-implementer": "Python tooling conventions, automation patterns, tests, and safe CLI behavior",
+    "postgres-query-implementer": "PostgreSQL queries, indexes, migrations, pgx integration, and query safety",
+    "opentofu-module-implementer": "OpenTofu modules, variables, validation, plans, state safety, and provider conventions",
+    "helm-chart-implementer": "Helm charts, values schemas, rendered manifests, hooks, and release safety",
+    "kubernetes-manifest-implementer": "Kubernetes manifests, RBAC, policy, workload security, and dry-run validation",
+    "github-actions-implementer": "GitHub Actions workflows, permissions, OIDC, environments, artifacts, and immutable action pinning",
+    "gitlab-ci-implementer": "GitLab CI pipelines, runner trust, protected environments, artifacts, and promotion controls",
+    "selector-test-implementer": "Cadre selector behavior, routing, golden corpus fixtures, schema checks, and generated-content regressions"
   }
 }

@@ -128,7 +128,7 @@
     },
     {
       "id": "PIPELINE-1",
-      "description": "pipeline route; task/file reused verbatim from test_selector.py::test_cli_emits_a_valid_plan_for_explicit_files",
+      "description": "the exact .gitlab-ci.yml path is specific GitLab CI execution evidence, so the narrow implementer joins (rather than replaces) the accountable CICD role; task/file reused verbatim from test_selector.py::test_cli_emits_a_valid_plan_for_explicit_files",
       "task": "Change the GitLab pipeline runner configuration",
       "changed_files": [
         ".gitlab-ci.yml"
@@ -138,7 +138,8 @@
       "expect_needs_triage": false,
       "expected": {
         "primary": [
-          "cicd-engineer"
+          "cicd-engineer",
+          "gitlab-ci-implementer"
         ],
         "reviewers": [
           "pipeline-security-reviewer"
@@ -148,7 +149,8 @@
           "requirements-agent"
         ],
         "matched_routes": [
-          "pipeline"
+          "pipeline",
+          "gitlab-ci-execution"
         ],
         "workflow": "pipeline-change"
       }
@@ -2178,6 +2180,146 @@
         ],
         "workflow": "support-escalation"
       }
+    },
+    {
+      "id": "ARCHITECTURE-DIAGRAM-EXECUTION-1",
+      "description": "architecture-diagram execution route keeps cloud-architect accountable while selecting the specialist; the documentation and architecture-design overlap comes from the diagram's .mmd architecture path.",
+      "task": "Create an architecture diagram",
+      "changed_files": ["docs/architecture/diagrams/system.mmd"],
+      "classification": "internal",
+      "task_id": "GOLDEN-ARCHITECTURE-DIAGRAM-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {"primary": ["cloud-architect", "architecture-diagram-author", "technical-writer"], "reviewers": ["threat-modeler"], "support": ["product-intent-agent", "requirements-agent"], "matched_routes": ["documentation", "architecture-diagram-execution", "architecture-design"], "workflow": "new-service"}
+    },
+    {
+      "id": "PYTHON-AUTOMATION-EXECUTION-1",
+      "description": "Python automation execution retains backend-engineer accountability and excludes the Go-service specialist.",
+      "task": "Implement a Python automation script",
+      "changed_files": ["automation/report.py"],
+      "classification": "internal",
+      "task_id": "GOLDEN-PYTHON-AUTOMATION-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {"primary": ["backend-engineer", "python-automation-implementer"], "reviewers": ["test-engineer", "code-reviewer"], "support": ["product-intent-agent", "requirements-agent"], "matched_routes": ["backend", "python-automation-execution"], "workflow": "new-service"}
+    },
+    {
+      "id": "GO-SERVICE-EXECUTION-1",
+      "description": "Go service execution retains backend-engineer accountability and excludes the Python automation specialist.",
+      "task": "Implement a Go service",
+      "changed_files": ["services/payments/main.go"],
+      "classification": "internal",
+      "task_id": "GOLDEN-GO-SERVICE-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {"primary": ["backend-engineer", "go-service-implementer"], "reviewers": ["test-engineer", "code-reviewer"], "support": ["product-intent-agent", "requirements-agent"], "matched_routes": ["backend", "go-service-execution"], "workflow": "new-service"}
+    },
+    {
+      "id": "REACT-COMPONENT-EXECUTION-1",
+      "description": "React component execution retains frontend-engineer accountability and the existing accessibility review.",
+      "task": "Implement a React component",
+      "changed_files": ["frontend/src/SaveButton.tsx"],
+      "classification": "internal",
+      "task_id": "GOLDEN-REACT-COMPONENT-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {"primary": ["frontend-engineer", "react-component-implementer"], "reviewers": ["test-engineer", "code-reviewer", "accessibility-reviewer"], "support": ["product-intent-agent", "requirements-agent", "interaction-designer"], "matched_routes": ["frontend", "react-component-execution"], "workflow": "new-service"}
+    },
+    {
+      "id": "GITHUB-ACTIONS-EXECUTION-1",
+      "description": "GitHub Actions execution retains CICD accountability and does not select the GitLab CI specialist.",
+      "task": "Update GitHub Actions workflow",
+      "changed_files": [".github/workflows/test.yml"],
+      "classification": "internal",
+      "task_id": "GOLDEN-GITHUB-ACTIONS-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {"primary": ["cicd-engineer", "github-actions-implementer"], "reviewers": ["pipeline-security-reviewer"], "support": ["product-intent-agent", "requirements-agent"], "matched_routes": ["pipeline", "github-actions-execution"], "workflow": "pipeline-change"}
+    },
+    {
+      "id": "GITLAB-CI-EXECUTION-1",
+      "description": "GitLab CI execution retains CICD accountability and does not select the GitHub Actions specialist.",
+      "task": "Update GitLab CI pipeline",
+      "changed_files": [".gitlab-ci.yml"],
+      "classification": "internal",
+      "task_id": "GOLDEN-GITLAB-CI-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {"primary": ["cicd-engineer", "gitlab-ci-implementer"], "reviewers": ["pipeline-security-reviewer"], "support": ["product-intent-agent", "requirements-agent"], "matched_routes": ["pipeline", "gitlab-ci-execution"], "workflow": "pipeline-change"}
+    },
+    {
+      "id": "OPENTOFU-MODULE-EXECUTION-1",
+      "description": "OpenTofu module execution retains infrastructure-provisioner accountability and infrastructure review.",
+      "task": "Implement an OpenTofu module",
+      "changed_files": ["terraform/modules/network/main.tf"],
+      "classification": "internal",
+      "task_id": "GOLDEN-OPENTOFU-MODULE-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {"primary": ["infrastructure-provisioner", "opentofu-module-implementer"], "reviewers": ["infrastructure-reviewer"], "support": ["product-intent-agent", "requirements-agent"], "matched_routes": ["infrastructure", "opentofu-module-execution"], "workflow": "infrastructure-change"}
+    },
+    {
+      "id": "HELM-CHART-EXECUTION-1",
+      "description": "Helm chart execution retains infrastructure-provisioner accountability and infrastructure review.",
+      "task": "Implement a Helm chart",
+      "changed_files": ["charts/api/Chart.yaml"],
+      "classification": "internal",
+      "task_id": "GOLDEN-HELM-CHART-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {"primary": ["infrastructure-provisioner", "helm-chart-implementer"], "reviewers": ["infrastructure-reviewer"], "support": ["product-intent-agent", "requirements-agent"], "matched_routes": ["infrastructure", "helm-chart-execution"], "workflow": "infrastructure-change"}
+    },
+    {
+      "id": "KUBERNETES-MANIFEST-EXECUTION-1",
+      "description": "Kubernetes manifest execution retains infrastructure-provisioner accountability and infrastructure review.",
+      "task": "Implement a Kubernetes manifest",
+      "changed_files": ["kubernetes/api/deployment.yaml"],
+      "classification": "internal",
+      "task_id": "GOLDEN-KUBERNETES-MANIFEST-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {"primary": ["infrastructure-provisioner", "kubernetes-manifest-implementer"], "reviewers": ["infrastructure-reviewer"], "support": ["product-intent-agent", "requirements-agent"], "matched_routes": ["infrastructure", "kubernetes-manifest-execution"], "workflow": "infrastructure-change"}
+    },
+    {
+      "id": "POSTGRES-QUERY-EXECUTION-1",
+      "description": "PostgreSQL-specific task evidence selects the narrow query executor while retaining backend accountability and the database-reliability path; migration-risk support and reviewers remain intact.",
+      "task": "Implement a PostgreSQL query",
+      "changed_files": ["database/queries/list_users.sql"],
+      "classification": "internal",
+      "task_id": "GOLDEN-POSTGRES-QUERY-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {"primary": ["backend-engineer", "postgres-query-implementer", "database-reliability-engineer"], "reviewers": ["test-engineer", "code-reviewer", "infrastructure-reviewer"], "support": ["product-intent-agent", "requirements-agent", "release-engineer"], "matched_routes": ["backend", "database-reliability", "postgres-query-execution"], "workflow": "new-service"}
+    },
+    {
+      "id": "POSTGRES-QUERY-NEGATIVE-MYSQL-1",
+      "description": "MySQL query work in a generic db/queries path must retain the broad backend/database-reliability staffing but must not select the PostgreSQL-only executor.",
+      "task": "Implement a MySQL query",
+      "changed_files": ["db/queries/users.sql"],
+      "classification": "internal",
+      "task_id": "GOLDEN-POSTGRES-QUERY-NEGATIVE-MYSQL-1",
+      "expect_needs_triage": false,
+      "expected": {"primary": ["backend-engineer", "database-reliability-engineer"], "reviewers": ["test-engineer", "code-reviewer", "infrastructure-reviewer"], "support": ["product-intent-agent", "requirements-agent", "release-engineer"], "matched_routes": ["backend", "database-reliability"], "workflow": "new-service"}
+    },
+    {
+      "id": "KUBERNETES-MANIFEST-NEGATIVE-DOCS-1",
+      "description": "A generic documentation manifest path must not select the Kubernetes manifest executor; the path is not Kubernetes-specific evidence.",
+      "task": "Update documentation manifest example",
+      "changed_files": ["docs/manifests/example.json"],
+      "classification": "internal",
+      "task_id": "GOLDEN-KUBERNETES-MANIFEST-NEGATIVE-DOCS-1",
+      "expect_needs_triage": false,
+      "expected": {"primary": ["technical-writer"], "reviewers": [], "support": ["product-intent-agent", "requirements-agent"], "matched_routes": ["documentation"], "workflow": "unclassified"}
+    },
+    {
+      "id": "NODE-TYPESCRIPT-EXECUTION-1",
+      "description": "Node TypeScript execution retains frontend-engineer accountability and existing accessibility review.",
+      "task": "Implement Node TypeScript utility",
+      "changed_files": ["tools/build.mts"],
+      "classification": "internal",
+      "task_id": "GOLDEN-NODE-TYPESCRIPT-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {"primary": ["frontend-engineer", "node-typescript-implementer"], "reviewers": ["test-engineer", "code-reviewer", "accessibility-reviewer"], "support": ["product-intent-agent", "requirements-agent", "interaction-designer"], "matched_routes": ["frontend", "node-typescript-execution"], "workflow": "new-service"}
+    },
+    {
+      "id": "SELECTOR-TEST-EXECUTION-1",
+      "description": "Selector-test execution is additive to the existing agent-suite, orchestration, and testing routes; it retains their accountable primaries and independent code review.",
+      "task": "Add selector test coverage",
+      "changed_files": ["roster/orchestration/test/test_selector.py"],
+      "classification": "internal",
+      "task_id": "GOLDEN-SELECTOR-TEST-EXECUTION-1",
+      "expect_needs_triage": false,
+      "expected": {"primary": ["application-engineer", "debugging-engineer", "test-engineer", "selector-test-implementer"], "reviewers": ["code-reviewer"], "support": ["technical-writer"], "matched_routes": ["agent-suite-governance", "orchestration", "testing", "selector-test-execution"], "workflow": "agent-suite-maintenance"}
     },
     {
       "id": "ARCHITECTURE-NESTED-RECOVERED-1",

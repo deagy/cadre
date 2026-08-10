@@ -42,7 +42,7 @@ const REPO_ROOT = join(TEST_DIR, "..");
 // directory since the Cline workspaces moved out of plugin/.
 const PACKAGED_PLUGIN_ROOT = resolve(REPO_ROOT, "..", "..", "plugin");
 const KNOWLEDGE_STORE_CLI = join(PACKAGED_PLUGIN_ROOT, "suite", "roster", "knowledge-store", "src", "cli.py");
-const SOURCE_ROLE_COUNT = 74;
+const SOURCE_ROLE_COUNT = 86;
 
 const READ_ONLY_SAMPLE = [
   "security-reviewer",
@@ -167,7 +167,7 @@ describe("cline-agents plugin manifest", () => {
 });
 
 describe("preset discovery", () => {
-  it("loads exactly 74 bundled presets with unique names", () => {
+  it("loads exactly 86 bundled presets with unique names", () => {
     const defs = readAgentDefinitions(REPO_ROOT);
     const bundled = defs.filter((d) => d.source === "bundled");
     expect(bundled).toHaveLength(SOURCE_ROLE_COUNT);
@@ -217,7 +217,7 @@ describe("preset discovery", () => {
     }
   });
 
-  it("surfaces all 74 bundled presets by name via list_agent_presets", async () => {
+  it("surfaces all 86 bundled presets by name via list_agent_presets", async () => {
     const tools = await registerTools(REPO_ROOT);
     const tool = findTool(tools, "list_agent_presets");
     const result = (await tool.execute({}, FAKE_TOOL_CTX)) as {
@@ -1796,7 +1796,7 @@ describe("list_agent_presets / list_skills serialization safety", () => {
   // ESM live-binding semantics mean the spies are never invoked (verified
   // empirically: spying either function and calling the real
   // list_agent_presets tool.execute() through registerTools/findTool still
-  // returns the true 74-role result and records zero spy calls). vi.mock()
+  // returns the true 86-role result and records zero spy calls). vi.mock()
   // on "../index.ts" itself was also considered and rejected: it would
   // replace the very module under test, so it cannot verify anything about
   // the real execute() body. Short of restructuring index.ts to route these

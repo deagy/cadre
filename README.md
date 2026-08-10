@@ -54,7 +54,7 @@ Key areas:
 - [roster/testing/](roster/testing/) and [roster/support/](roster/support/) define black-box testing, end-user testing, support triage, and escalation roles.
 - [.agents/skills/](.agents/skills/) contains this repository's skills, packaged for Codex CLI directly and pointed to from `.claude/skills/` for Claude Code.
 - [`kernel/`](kernel/) owns the portable lifecycle kernel, initializer, validator, and lifecycle skills — a separately versioned, separately released pip distribution (see "Releasing" below), even though its source now lives in this repository. It was `deagy/agentic-sdlc` before the monorepo merge.
-- [`plugin/`](plugin/) packages this suite, its 74 roles, and the `secure-cloud` provider profile as installable Claude Code / Codex plugins, alongside the optional Agentic SDLC lifecycle-governance plugins. It was `deagy/cadre-lifecycle` before the monorepo merge.
+- [`plugin/`](plugin/) packages this suite, its 86 roles, and the `secure-cloud` provider profile as installable Claude Code / Codex plugins, alongside the optional Agentic SDLC lifecycle-governance plugins. It was `deagy/cadre-lifecycle` before the monorepo merge.
 - [`cline-plugins/`](cline-plugins/) holds the three Cline CLI plugins and the single npm workspace that backs them — the only Node code in this repository. It is deliberately *not* inside `plugin/`: an npm workspace root there made installing the Claude Code plugin run `npm install` and write 263 MB of Cline SDK dependencies into every user's plugin cache.
 
 The boundary is intentional: Agentic SDLC owns lifecycle state, schemas, gate
@@ -162,7 +162,7 @@ run `cadre sdlc init --root /path/to/target`.
 
 This defaults to the low-ceremony `quick` profile and generates subagent wrappers for both runners (`init --runner {codex,claude,both}`).
 
-If the target project actually uses this repository's own cloud stack (Proxmox, Talos, Kubernetes, Helm, OpenTofu, GitLab CI, PostgreSQL), use `--profile secure-cloud` instead of the default. This is the **recommended** way to get this repository's 74 roles into a project: scoped to that one project, generated once as static files the project owns from then on (no live link back to this checkout, so a later role edit here doesn't silently change that project's behavior):
+If the target project actually uses this repository's own cloud stack (Proxmox, Talos, Kubernetes, Helm, OpenTofu, GitLab CI, PostgreSQL), use `--profile secure-cloud` instead of the default. This is the **recommended** way to get this repository's 86 roles into a project: scoped to that one project, generated once as static files the project owns from then on (no live link back to this checkout, so a later role edit here doesn't silently change that project's behavior):
 
 ```sh
 cadre sdlc init --root /path/to/target --profile secure-cloud
@@ -204,7 +204,7 @@ Most projects want the per-project `--profile secure-cloud` path above instead
 of this section — it avoids forcing this repository's cloud-specific roles
 onto projects with a different stack, and each project's generated wrappers
 are static files it owns, not a live link back to this checkout. This section
-is for the narrower case of genuinely wanting all 74 roles, the 12 skills, and
+is for the narrower case of genuinely wanting all 86 roles, the 12 skills, and
 the knowledge store reachable from *every* project on the machine
 unconditionally.
 

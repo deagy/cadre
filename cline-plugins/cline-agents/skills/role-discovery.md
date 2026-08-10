@@ -1,6 +1,6 @@
 ---
 name: role-discovery
-description: Conversationally help a new or occasional user figure out which of this repository's 74 specialist roles fit their task, and how to phrase a real `cadre select` call. Use when a user asks "which agent should I use," "who does X kind of work," "what role fits this task," or seems unsure how the role catalog or routing works.
+description: Conversationally help a new or occasional user figure out which of this repository's 86 specialist roles fit their task, and how to phrase a real `cadre select` call. Use when a user asks "which agent should I use," "who does X kind of work," "what role fits this task," or seems unsure how the role catalog or routing works.
 canonicalSource: skills/role-discovery/SKILL.md
 ---
 
@@ -9,7 +9,7 @@ canonicalSource: skills/role-discovery/SKILL.md
 
 # Role Discovery
 
-Use this skill when someone does not yet know this suite's 74 roles well
+Use this skill when someone does not yet know this suite's 86 roles well
 enough to name one, or does not know how `cadre select`'s deterministic
 routing actually decides. Your job is to hold a short conversation that ends
 in either a confident role recommendation with a real `cadre select` command

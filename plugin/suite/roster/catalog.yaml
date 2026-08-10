@@ -168,6 +168,13 @@ agents:
     model: opus
     codex_model: gpt-5.6-sol
     reasoning_effort: high
+  architecture-diagram-author:
+    definition: documentation/architecture-diagram-author/AGENT.md
+    phase: document
+    capability: document_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
   application-engineer:
     definition: engineering/application-engineer/AGENT.md
     phase: build
@@ -189,6 +196,20 @@ agents:
     model: sonnet
     codex_model: gpt-5.6-terra
     reasoning_effort: medium
+  react-component-implementer:
+    definition: engineering/react-component-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  node-typescript-implementer:
+    definition: engineering/node-typescript-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
   backend-engineer:
     definition: engineering/backend-engineer/AGENT.md
     phase: build
@@ -196,6 +217,27 @@ agents:
     model: sonnet
     codex_model: gpt-5.6-terra
     reasoning_effort: medium
+  go-service-implementer:
+    definition: engineering/go-service-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  python-automation-implementer:
+    definition: engineering/python-automation-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  postgres-query-implementer:
+    definition: engineering/postgres-query-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
   ai-engineer:
     definition: engineering/ai-engineer/AGENT.md
     phase: build
@@ -210,6 +252,27 @@ agents:
     model: sonnet
     codex_model: gpt-5.6-terra
     reasoning_effort: medium
+  opentofu-module-implementer:
+    definition: engineering/opentofu-module-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  helm-chart-implementer:
+    definition: engineering/helm-chart-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  kubernetes-manifest-implementer:
+    definition: engineering/kubernetes-manifest-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
   cicd-engineer:
     definition: engineering/cicd-engineer/AGENT.md
     phase: build
@@ -217,6 +280,20 @@ agents:
     model: sonnet
     codex_model: gpt-5.6-terra
     reasoning_effort: medium
+  github-actions-implementer:
+    definition: engineering/github-actions-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  gitlab-ci-implementer:
+    definition: engineering/gitlab-ci-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
   debugging-engineer:
     definition: engineering/debugging-engineer/AGENT.md
     phase: build
@@ -231,6 +308,13 @@ agents:
     model: sonnet
     codex_model: gpt-5.6-terra
     reasoning_effort: medium
+  selector-test-implementer:
+    definition: testing/selector-test-implementer/AGENT.md
+    phase: verify
+    capability: test_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
   black-box-tester:
     definition: testing/black-box-tester/AGENT.md
     phase: verify

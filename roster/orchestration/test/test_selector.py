@@ -1623,12 +1623,31 @@ class SelectorTests(unittest.TestCase):
         self.assertIn("frontend-engineer", result["agents"]["primary"])
         self.assertIn("accessibility-reviewer", result["agents"]["reviewers"])
 
-    def test_github_actions_workflow_selects_the_same_agents_as_gitlab_ci(self) -> None:
+    def test_postgres_query_executor_requires_postgres_specific_evidence(self) -> None:
+        result = plan(
+            task="Implement a MySQL query",
+            changed_files=["db/queries/users.sql"],
+        )
+        self.assertIn("backend-engineer", result["agents"]["primary"])
+        self.assertIn("database-reliability-engineer", result["agents"]["primary"])
+        self.assertNotIn("postgres-query-implementer", result["agents"]["primary"])
+
+    def test_kubernetes_manifest_executor_requires_kubernetes_specific_evidence(self) -> None:
+        result = plan(
+            task="Update documentation manifest example",
+            changed_files=["docs/manifests/example.json"],
+        )
+        self.assertIn("technical-writer", result["agents"]["primary"])
+        self.assertNotIn("kubernetes-manifest-implementer", result["agents"]["primary"])
+
+    def test_forge_specific_workflows_keep_cicd_accountability_and_select_their_specialist(self) -> None:
         # Before the forge-neutrality repair the pipeline route carried only
         # GitLab paths, so a GitHub Actions change matched no build-shaped
         # route at all and was dispatched with no primary agent -- while the
         # identical task on .gitlab-ci.yml selected cicd-engineer. The two
-        # forges are both supported, so they must staff the same way.
+        # forges are both supported, so they retain the same accountable
+        # CICD role and independent review; their exact provider config paths
+        # are also sufficient evidence to select distinct narrow executors.
         github = plan(
             task="Update the release workflow to sign tags",
             changed_files=[".github/workflows/release.yml"],
@@ -1638,8 +1657,12 @@ class SelectorTests(unittest.TestCase):
             changed_files=[".gitlab-ci.yml"],
         )
         self.assertIn("cicd-engineer", github["agents"]["primary"])
+        self.assertIn("github-actions-implementer", github["agents"]["primary"])
+        self.assertIn("cicd-engineer", gitlab["agents"]["primary"])
+        self.assertIn("gitlab-ci-implementer", gitlab["agents"]["primary"])
+        self.assertNotIn("gitlab-ci-implementer", github["agents"]["primary"])
+        self.assertNotIn("github-actions-implementer", gitlab["agents"]["primary"])
         self.assertIn("pipeline-security-reviewer", github["agents"]["reviewers"])
-        self.assertEqual(github["agents"]["primary"], gitlab["agents"]["primary"])
         self.assertEqual(github["agents"]["reviewers"], gitlab["agents"]["reviewers"])
 
     def test_python_service_work_selects_the_backend_engineer(self) -> None:
