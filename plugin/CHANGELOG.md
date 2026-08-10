@@ -15,6 +15,20 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.16.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.16.0) - 2026-08-10
+
+### Added
+
+- **The package now ships 159 role wrappers, up from 86.** 85 new bounded execution specialists — one per narrow technology surface — alongside the existing accountable roles, which are unchanged. Twenty non-authoring vendor and platform context packs ship with them. What each role is and how selection reaches it is in the [register changelog](https://github.com/deagy/cadre/blob/main/CHANGELOG.md).
+
+### Changed
+
+- **The dispatch plan's `schema_version` goes 4 → 5, and `context_packs` is now required and always emitted.** **Required action:** if you validate `cadre select` output against a pinned copy of `selection.schema.json`, update that copy when you upgrade. The schema is closed (`additionalProperties: false`), so a v4 copy rejects every plan this version produces. Plans you have already archived as v4 stay valid v4 documents.
+
+- **A project-local routing overlay now takes effect.** `.agents/orchestration/routing-overlay.json` was documented as the way to customize routing without forking `routing.yaml`, but nothing in the selection path read it. It is now applied on every run. **Required action if you already have an overlay file:** it starts governing your dispatch on upgrade. The merge is widen-only — an existing file can add matching conditions but cannot remove a route, drop a reviewer, or narrow a gated risk rule — and an overlay that would narrow now fails the run rather than being ignored.
+
+- **`roster/context-packs/` is included in the pip/pipx distribution.** Without it, a task mentioning any pack keyword aborted `cadre select` in a pip install.
+
 ## [0.15.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.15.0) - 2026-08-10
 
 ### Changed
