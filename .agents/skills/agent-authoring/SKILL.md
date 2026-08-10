@@ -34,10 +34,15 @@ packaged, from `generate_global_plugin.py`'s `documentation_paths`:
 - everything under `docs/` recursively, **except `docs/kernel/`** (that documents the lifecycle kernel and the LangGraph engine, whose sibling directories the package does not ship -- copying it in would produce dangling links)
 - `AGENTS.md`, `CONTRIBUTING.md`, and `IDENTITY.md`
 
-Only **git-tracked** files are copied, from `git ls-files`. A new file that has
-not been `git add`ed is skipped silently by the copy and then read back by a
-later step, which fails with a bare `FileNotFoundError` naming the packaged
-path rather than the source one -- so stage new files before regenerating.
+Files selected out of the repository tree (`roster/`, `.agents/skills/`,
+`bin/`, `provider/`) are copied only when **git-tracked**, from `git ls-files`.
+A new file that has not been `git add`ed is skipped silently, so a packaged
+file edited to reference it ships pointing at something absent -- stage new
+files before regenerating. The documentation paths above (`AGENTS.md`,
+`CONTRIBUTING.md`, `IDENTITY.md`, `docs/`) are selected by a filesystem check
+instead, so an untracked one is copied *in*; there the risk is committing the
+packaged copy while leaving the source untracked. Staging first makes both
+branches behave the same. See `roster/RUNBOOK.md` §17 for the full sequence.
 
 The same applies to `.agents/skills/`: adding or editing a skill is a
 generated-content change, and a new skill also needs its

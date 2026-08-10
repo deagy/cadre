@@ -25,13 +25,9 @@ After changing `roster/catalog.yaml`, `roster/`, or `.agents/skills/`, regenerat
 python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin
 ```
 
-The order is load-bearing: `generate-plugin` copies `catalog.yaml` rather than deriving it, so it ships a stale catalog if `generate-role-metadata` has not run; and `port_cline_agents.py` reads the freshly written `plugin/` tree, so it must run last. `generate-plugin` never touches `cline-plugins/` — the Cline port is a genuinely separate command, and stopping before it leaves `cline-plugins/cline-agents/agents/<role>.md` diverged from its source.
+The order is load-bearing, `generate-plugin` never touches `cline-plugins/`, and this applies to code and to this file itself — `plugin/suite/` bundles `roster/` and `AGENTS.md`, so a new module under `roster/*/src/` is part of the packaged CLI. Then re-run both guards, whose coverage is not redundant: `roster/orchestration/test/test_repository_health.py` and `python3 -m unittest discover -s plugin/tools -p "test_*.py"`. Run lifecycle integration tests against the in-tree `kernel/`.
 
-This applies to code, not just role definitions: `plugin/suite/` bundles a copy of `roster/`, so a module added under `roster/*/src/` is part of the packaged CLI. It applies to this file too — `plugin/suite/AGENTS.md` is generated from this one. (Root `CLAUDE.md` is *not* bundled, and `plugin/AGENTS.md`/`plugin/CLAUDE.md` are hand-authored documents about `plugin/` itself, not copies of these.) Rather than memorising a list, run the commands whenever a change touches anything under `roster/`, `.agents/skills/`, or this file.
-
-Then re-run the guards: `roster/orchestration/test/test_repository_health.py` and `python3 -m unittest discover -s plugin/tools -p "test_*.py"` — their coverage overlaps, so run both rather than reasoning about which one owns a given failure. `.github/workflows/validate.yml` re-runs `generate-plugin --check` in its `generated-content` job and the Cline byte-for-byte comparison in its `plugin-tools` job, so drift cannot outlive a pull request. Run lifecycle integration tests against the in-tree `kernel/`.
-
-`roster/RUNBOOK.md` §17 is the canonical, worked-example version of this procedure; prefer extending it over restating it here.
+**`roster/RUNBOOK.md` §17 is the canonical version** — it explains why each step exists, why the order matters, what each guard catches, and the `git add` gotcha in both of its directions. Extend it there rather than restating it here.
 
 For Go services, use `gofmt`, `go tool goimports`, `go vet ./...`, `go test ./...`, `go test -race ./...`, and `go tool golangci-lint run ./...`. For React frontends, use the project-pinned package manager for install, test, typecheck, and build commands. Podman, PostgreSQL migrations, Helm, and OpenTofu remain disposable or validation-only unless a project has explicit production approval; follow the component README and never target a persistent environment without approval.
 

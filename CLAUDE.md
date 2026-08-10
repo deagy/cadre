@@ -62,13 +62,11 @@ python3 -m unittest discover -s plugin/tools -p "test_*.py"
 cadre select --task "..." --files a.tsx,b.go --task-id TASK-42 --classification internal
 ```
 
-**On that regeneration sequence.** The order is load-bearing, and each step has its own CI guard, so stopping early is the usual way to leave a PR red. `generate-authority-aides` applies only to `roster/authority/aides.yaml` / `_template.md.tmpl`, and must precede `generate-role-metadata` because it writes the 8 `*-aide/AGENT.md` files that step reads. `generate-plugin` copies `catalog.yaml` rather than deriving it, so it ships a stale catalog if `generate-role-metadata` has not run. `port_cline_agents.py` reads the freshly written `plugin/` tree and must run last; `generate-plugin` never touches `cline-plugins/` itself.
+**On that regeneration sequence.** The order is load-bearing and each step has its own CI guard, so stopping early is the usual way to leave a PR red. Two points that catch people out: `git add` new files *before* regenerating, and note that this file is **not** bundled while `AGENTS.md` is (`plugin/AGENTS.md` and `plugin/CLAUDE.md` are hand-authored documents about the plugin directory, never regenerated, so they need manual upkeep).
 
-**`git add` before regenerating.** The generator walks git-*tracked* files and skips untracked ones without warning. Adding a module under `roster/*/src/`, wiring an existing bundled file to import it, then regenerating before staging the new file produces a package whose CLI imports something the package does not contain — a `ModuleNotFoundError` surfacing in the `cline-agents` npm suite, far from the Python edit that caused it. There is an untracked-file guard for role `AGENT.md` files, but none for arbitrary sources, so this one is on you.
+Use `./bin/cadre`, not bare `cadre` — bare `cadre` may resolve to a globally installed plugin build of a different version that does not recognise these subcommands, which fails less obviously than not resolving at all.
 
-**This file is not bundled; `AGENTS.md` is.** `plugin/suite/AGENTS.md` is generated from the root `AGENTS.md`, so editing that file requires a regeneration pass. Root `CLAUDE.md` is not packaged at all (`documentation_paths` in `generate_global_plugin.py` covers `AGENTS.md`, `CONTRIBUTING.md`, `IDENTITY.md`, and `docs/`), and `plugin/AGENTS.md` / `plugin/CLAUDE.md` are hand-authored documents about the plugin directory — never regenerated, so they need manual upkeep.
-
-`roster/RUNBOOK.md` §17 holds the canonical version of this procedure; extend it there rather than restating it here.
+**`roster/RUNBOOK.md` §17 is the canonical version** — why each step exists, why the order matters, what each guard catches, and the `git add` gotcha in both of its directions. Extend it there rather than restating it here.
 
 `bin/cadre` dispatches every subcommand: `select`, `selection-telemetry`, `knowledge`, `sdlc`, `generate-plugin`, `generate-authority-aides`, `generate-role-metadata`, `bootstrap-codex`, `resolve-shared`, `mcp-dispatch-server`, `init`, `profile`, `gitlab-evidence`, `config`, `doctor`. `subcommands.tsv` in `bin/` is the dispatch table (`sdlc` is the one exception — it delegates to the external kernel and has no row there). A leading `cadre --interactive <subcommand>` opts that subcommand into prompting for a missing operator setting.
 

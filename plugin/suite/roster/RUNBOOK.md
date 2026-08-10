@@ -850,14 +850,29 @@ the committed mirror byte-for-byte against a fresh port, run by CI's
 `generate-plugin` leaves `cline-plugins/cline-agents/agents/<role>.md`
 diverged from its source and fails there.
 
-**`git add` new files before regenerating.** The generator walks git-*tracked*
-files and skips untracked ones without warning, so a new module under
-`roster/*/src/` that is not yet staged will be missing from `plugin/suite/`
-even though an already-tracked file edited to import it *is* copied. The
-result is a packaged CLI that imports a module the package does not contain —
-which surfaces as a `ModuleNotFoundError` in the `cline-agents` npm suite, a
-long way from the Python edit that caused it. `generate_global_plugin.py`
-guards this case for role `AGENT.md` files but not for arbitrary sources.
+**`git add` new files before regenerating.** For everything selected out of
+the repository tree — `roster/`, `.agents/skills/`, `bin/`, `provider/` — the
+generator walks git-*tracked* files and skips untracked ones without warning.
+A new module under `roster/*/src/` that is not yet staged is therefore missing
+from `plugin/suite/`, even though an already-tracked file edited to import it
+*is* copied (the copy reads working-tree content, not the committed blob). The
+result is a packaged CLI importing a module the package does not contain,
+which surfaces as a `ModuleNotFoundError` inside the `cline-agents` npm
+suite's knowledge-store retrieval test — reported as a `status: unavailable`
+assertion mismatch, a long way from the Python edit that caused it.
+
+`generate_global_plugin.py` fails loudly for two specific cases of this —
+untracked role `AGENT.md` files named by `catalog.yaml`, and untracked scripts
+named by `bin/subcommands.tsv` — but an ordinary new source module matches
+neither and is skipped in silence.
+
+**The documentation paths behave the opposite way, so check both directions.**
+`AGENTS.md`, `CONTRIBUTING.md`, `IDENTITY.md`, and everything under `docs/`
+are selected by a filesystem check rather than from the tracked set, so an
+untracked new `docs/*.md` **is** copied into `plugin/suite/docs/`. The hazard
+there is the mirror image: regenerate, see a clean `plugin/` diff, commit the
+packaged copy, and leave the source file untracked. Stage new files first and
+the two branches behave identically.
 
 Editing the repository-root `AGENTS.md` also requires a regeneration pass:
 `plugin/suite/AGENTS.md` is generated from it. Root `CLAUDE.md` is not
