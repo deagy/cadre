@@ -22,6 +22,7 @@ import {
   resolveContainedCwd,
   resolveHandoffPath,
   resolvePythonInterpreter,
+  resolveSubagentBackendMode,
   resolveToolPolicyConfig,
   retrieveKnowledgeContext,
   runGitlabEvidenceCli,
@@ -390,6 +391,48 @@ describe("settled decision #2: real tool-policy and mode enforcement", () => {
     const { toolPolicies, mode } = resolveToolPolicyConfig({ allowedTools: undefined });
     expect(toolPolicies).toBeUndefined();
     expect(mode).toBeUndefined();
+  });
+});
+
+// deagy/cadre#129 residual, Wave 9: `HubRuntimeHost` never composes
+// `beforeTool` hooks at all (confirmed against the installed `@cline/core`
+// SDK source -- see index.ts's DEFAULT_BACKEND_MODE module comment), so a
+// subagent session started under hub mode would silently run with the
+// destructive-git guard below never wired in. getSessionManager() now forces
+// every subagent session to `backendMode: "local"` unconditionally via
+// resolveSubagentBackendMode(), overriding whatever
+// CLINE_AGENTS_BACKEND_MODE/DEFAULT_BACKEND_MODE would otherwise resolve to.
+// These are pure-function unit tests of that resolver (independent of
+// getSessionManager()'s module-scoped ClineCore.create() cache, which only
+// ever calls ClineCore.create() once per test process -- see the mocked-
+// ClineCore describe block further below for the one wiring-level assertion
+// that complements these).
+describe("subagent backend-mode forcing (deagy/cadre#129 residual: HubRuntimeHost drops beforeTool)", () => {
+  it("resolves 'auto' (the default) to 'local'", () => {
+    expect(resolveSubagentBackendMode("auto")).toBe("local");
+  });
+
+  it("resolves 'local' to 'local' (already the forced value)", () => {
+    expect(resolveSubagentBackendMode("local")).toBe("local");
+  });
+
+  it("resolves an unrecognized value to 'local', matching the pre-fix fallback behavior for garbage input", () => {
+    expect(resolveSubagentBackendMode("nonsense")).toBe("local");
+  });
+
+  it("rejects 'hub' as a hard configuration error instead of a silently-ignored setting", () => {
+    expect(() => resolveSubagentBackendMode("hub")).toThrow(
+      /CLINE_AGENTS_BACKEND_MODE="hub" is not supported for subagent sessions/,
+    );
+    // The message must explain *why* (so an operator isn't left guessing)
+    // and *what to do instead* -- not just that it failed.
+    expect(() => resolveSubagentBackendMode("hub")).toThrow(/HubRuntimeHost never composes/);
+    expect(() => resolveSubagentBackendMode("hub")).toThrow(/Unset CLINE_AGENTS_BACKEND_MODE/);
+  });
+
+  it("rejects 'hub' case-insensitively and after trimming whitespace", () => {
+    expect(() => resolveSubagentBackendMode(" HUB ")).toThrow(/not supported for subagent sessions/);
+    expect(() => resolveSubagentBackendMode("Hub")).toThrow(/not supported for subagent sessions/);
   });
 });
 
@@ -1092,6 +1135,24 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
     expect(result.label).toBe("test run");
     expect(result.preset).toBe("security-reviewer");
     expect(result.task).toBe("do the thing");
+  });
+
+  it("starts the shared subagent ClineCore session with backendMode 'local' (deagy/cadre#129 residual, Wave 9)", () => {
+    // getSessionManager() caches its ClineCore.create() call at module scope
+    // (see this describe block's own beforeAll comment above) -- the
+    // previous test is what triggers the one and only real call to
+    // ClineCore.create() for this whole test process, so this is asserting
+    // against the actual wired call site, not a re-derived expectation.
+    // resolveSubagentBackendMode's own dedicated unit tests (above, in the
+    // "subagent backend-mode forcing" describe block) already cover every
+    // CLINE_AGENTS_BACKEND_MODE value (unset/"auto", "local", "hub",
+    // garbage) in isolation; this test's job is only to prove that
+    // getSessionManager() actually threads the resolver's result into the
+    // real ClineCore.create() call, for the environment this suite starts in
+    // (CLINE_AGENTS_BACKEND_MODE unset in CI/local runs, i.e. the "auto"
+    // default).
+    expect(createSpy).toHaveBeenCalledTimes(1);
+    expect(createSpy.mock.calls[0]?.[0]).toMatchObject({ backendMode: "local" });
   });
 
   // ---- provider/model selection (issue #142) ----------------------------

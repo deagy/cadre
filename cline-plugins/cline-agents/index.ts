@@ -368,6 +368,35 @@ const HANDOFF_PATH_MAX_LENGTH = 240;
 const envOr = (key: string, fallback: string): string =>
   process.env[key]?.trim() || fallback;
 
+// `CLINE_AGENTS_BACKEND_MODE` retains its own env var and its own raw value
+// here (used only for the setup-time log/telemetry lines below, so an
+// operator/dashboard can see what was actually configured) -- but the value
+// this constant holds is NEVER passed to `getSessionManager()`'s
+// `ClineCore.create()` call unmodified. `resolveSubagentBackendMode` (near
+// `getSessionManager()` below) forces every subagent session to
+// `backendMode: "local"`, unconditionally, regardless of this setting.
+//
+// This is forced, not merely defaulted, because it closes a real gap, not a
+// theoretical one: `HubRuntimeHost` (the runtime a discovered/preferred hub
+// resolves to) never composes `beforeTool` hooks at all -- confirmed by
+// reading the installed `@cline/core` SDK source, not assumed from its
+// `.d.ts` -- so the destructive-git guard wired through
+// `mgr.start({ localRuntime: { hooks } })` in `startPresetSubagent` below
+// (see that guard's own module comment, "Destructive-git guard") is silently
+// never composed under hub mode. Combined with this plugin's own former
+// default `backendMode: "auto"` (`strategy: "prefer-hub"`), a real
+// deployment with any other `ClineCore` client already running a local hub
+// on the same machine would have dispatched every subagent with the guard
+// silently absent, with zero operator action required to hit it. Since a
+// subagent session started here is this plugin's own internal dispatch
+// mechanism -- never a user-facing session where hub's shared-state/
+// visibility benefits would matter -- there is no legitimate reason for a
+// subagent's guard coverage to depend on incidental local process state
+// (whether some other hub happens to be running), so the fix is to remove
+// the dependency entirely rather than trying to detect or warn about it at
+// dispatch time. See `resolveSubagentBackendMode` for the one env-var
+// exception (`CLINE_AGENTS_BACKEND_MODE=hub`) this deliberately still
+// surfaces as a hard error rather than a silently-ignored setting.
 const DEFAULT_BACKEND_MODE = envOr("CLINE_AGENTS_BACKEND_MODE", "auto");
 
 // Provider and model are operator configuration, never a shipped default.
@@ -832,6 +861,18 @@ function resolveToolPolicyConfig(
 // of `roster/shared/agent-autonomy.yaml`'s
 // `repository.discard_uncommitted_work_or_move_branches: never` and
 // `workspace-isolation.md`, not a replacement for either.
+//
+// This guard's coverage does NOT depend on incidental local process state.
+// `mgr.start({ localRuntime: { hooks } })` below only takes effect under a
+// `LocalRuntimeHost` -- `HubRuntimeHost` never composes `beforeTool` hooks at
+// all (confirmed against the installed `@cline/core` SDK source; a hub-
+// client session-start path drops `localRuntime.hooks` silently at a
+// `JSON.stringify` serialization boundary). `getSessionManager()` below
+// therefore forces every subagent session to `backendMode: "local"`
+// unconditionally -- see `DEFAULT_BACKEND_MODE`'s module comment for the
+// full rationale -- so this guard's presence is never contingent on whether
+// some other `ClineCore` client happens to be running a discoverable hub on
+// the same machine.
 //
 // Deliberately NOT covered, mirrored from guard_workspace_mutation.py's own
 // module docstring (Wave 3 independent review, deagy/cadre#129) -- kept as
@@ -1666,6 +1707,17 @@ function emitSteer(sessionId: string | undefined, prompt: string): void {
   }
 }
 
+// getSessionManager() is the *only* ClineCore instance this plugin ever
+// creates -- confirmed by reading every call site in this file (start_subagent's
+// startPresetSubagent, runSubagentTurn's mgr.send/readMessages, and
+// get_subagent's mgr.get, all below): each calls getSessionManager(), and
+// nothing in this file spins up a second ClineCore for some other, non-
+// subagent "top-level session" concept. This plugin's entire purpose is
+// spawning and driving subagent sessions (see the "About this plugin" module
+// comment at the top of this file), so there is no broader session this
+// forced-local decision could be over-scoped against -- forcing local mode
+// inside getSessionManager() forces it for exactly, and only, subagent
+// dispatch.
 async function getSessionManager(): Promise<ClineCore> {
   sessionManagerPromise ??= ClineCore.create({
     backendMode: resolveSubagentBackendMode(DEFAULT_BACKEND_MODE),
@@ -1677,15 +1729,41 @@ async function getSessionManager(): Promise<ClineCore> {
   return sessionManagerPromise;
 }
 
-function resolveSubagentBackendMode(value: string): SubagentBackendMode {
-  switch (value) {
-    case "auto":
-    case "hub":
-    case "local":
-      return value;
-    default:
-      return "auto";
+/**
+ * Resolve the `backendMode` a subagent `ClineCore` session actually starts
+ * with. Always returns `"local"` -- see `DEFAULT_BACKEND_MODE`'s module
+ * comment above for why the guard's coverage cannot depend on whether a hub
+ * happens to be reachable/preferred.
+ *
+ * `"hub"` is deliberately rejected as a hard configuration error rather than
+ * silently downgraded to `"local"` like every other value. Rationale for
+ * that asymmetry: an operator who explicitly sets
+ * `CLINE_AGENTS_BACKEND_MODE=hub` is making a specific, intentional request
+ * -- silently overriding it with no signal is itself a footgun (they would
+ * have no way to discover, short of reading this source, why hub-specific
+ * behavior never took effect). `"auto"` (the default) and `"local"` are not
+ * that kind of explicit request -- `"auto"` already means "no preference,
+ * let the system decide", so resolving it straight to `"local"` is honoring
+ * the setting's own stated semantics, not overriding it. An unrecognized
+ * value falls through the same way `"auto"` does, matching this function's
+ * pre-fix fallback behavior for anything that wasn't a recognized literal.
+ * `SubagentBackendMode` and `CLINE_AGENTS_BACKEND_MODE` are kept, unremoved,
+ * specifically so this "hub" case remains expressible and rejectable -- if
+ * this file ever gains a second, non-subagent session concept where hub mode
+ * has a legitimate use, that call site (not this one) is where it would be
+ * threaded through unforced.
+ */
+function resolveSubagentBackendMode(value: string): "local" {
+  const normalized = value.trim().toLowerCase() as SubagentBackendMode | (string & {});
+  if (normalized === "hub") {
+    throw new Error(
+      'CLINE_AGENTS_BACKEND_MODE="hub" is not supported for subagent sessions: subagent dispatch is ' +
+        "always forced to backendMode \"local\" because HubRuntimeHost never composes the destructive-git " +
+        "beforeTool guard (see this file's DEFAULT_BACKEND_MODE module comment for the full rationale). " +
+        'Unset CLINE_AGENTS_BACKEND_MODE, or set it to "auto" or "local", to start subagents.',
+    );
   }
+  return "local";
 }
 
 function extractLastAssistantText(
@@ -1964,6 +2042,12 @@ export {
   evaluateGitCommand,
   normalizeRunCommandsInput,
   createDestructiveGitGuardHook,
+  // Forced-local subagent backend mode (deagy/cadre#129 residual, Wave 9):
+  // exported so the "hub" hard-error and "auto"/unset/other silent-local
+  // resolution can each be unit-tested directly, independent of
+  // getSessionManager()'s module-scoped ClineCore.create() cache (which only
+  // ever calls ClineCore.create() once per test process).
+  resolveSubagentBackendMode,
   type AgentDefinition,
   type KnowledgeContextRequest,
   type KnowledgeRetrievalResult,

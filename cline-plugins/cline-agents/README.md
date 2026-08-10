@@ -444,12 +444,39 @@ copy. See `package.json` for the exact pinned version.
 
 | Variable | Default |
 |---|---|
-| `CLINE_AGENTS_BACKEND_MODE` | `auto` (`auto` \| `hub` \| `local`) |
+| `CLINE_AGENTS_BACKEND_MODE` | `auto` (`auto` \| `hub` \| `local`) — see caveat below |
 | `CLINE_AGENTS_PROVIDER_ID` | *(none — required, see above)* |
 | `CLINE_AGENTS_MODEL_OPUS` / `_SONNET` / `_HAIKU` | *(none — per-tier model id)* |
 | `CLINE_AGENTS_MODEL_DEFAULT` | *(none — one model for every tier)* |
 | `CLINE_DATA_DIR` | `~/.cline/data` |
 | `CLINE_DIR` | `~/.cline` |
+
+**`CLINE_AGENTS_BACKEND_MODE` does not control the backend mode a subagent
+session actually starts with.** Every subagent this plugin dispatches
+(`start_subagent`) is always started with `backendMode: "local"`, regardless
+of this variable's value. This is forced, not merely defaulted: Cline's
+hub-mode session start silently never composes the `beforeTool` hooks that
+carry the "Destructive-git guard" above — confirmed by reading the installed
+`@cline/core` SDK directly, not assumed from its `.d.ts`. `HubRuntimeHost`
+(the runtime a discovered or preferred hub resolves to) never builds the
+in-process runtime that hosts hook composition at all, and the hub-client
+session-start path separately serializes its config through
+`JSON.stringify`, which drops the hook function with no warning. Either gap
+on its own would silently strip the guard from a hub-mode subagent session;
+forcing `"local"` removes both.
+
+- `auto` (the default), `local`, unset, and any unrecognized value all
+  resolve to `local`, exactly as before — this was already the practical
+  outcome for `local` and unset, and is now guaranteed rather than
+  incidental for `auto`/unrecognized values too.
+- Setting `CLINE_AGENTS_BACKEND_MODE=hub` now throws a hard, descriptive
+  error at session-manager construction time, naming the reason, instead of
+  being silently ignored as it previously was.
+
+`CLINE_AGENTS_BACKEND_MODE` remains meaningful for a session you construct
+yourself with `ClineCore.create()` outside this plugin's own subagent
+dispatch (see "Quick start" above) — this override applies only to the
+sessions `start_subagent` creates.
 
 ## Observability
 
