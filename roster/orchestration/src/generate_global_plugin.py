@@ -580,6 +580,27 @@ def excerpt_universal_sections(relative: str, body: str) -> str:
             "would carry no applicability header"
         )
     headings = [heading for heading, _ in sections]
+    # A *balanced* stray fence pair needs no parser bug to leak policy: it
+    # deletes the section boundaries between its markers, and whatever
+    # headings it swallows are absorbed into the preceding section. When that
+    # section is one of the kept universal ones, write-capable-only text
+    # ships to every read-only wrapper with no other signal -- the leak is
+    # silent in exactly the direction that matters, because swallowing a
+    # *dropped* section instead trips the missing-heading check above.
+    #
+    # Deliberately checked here and not in split_policy_sections(): that
+    # function is a general splitter whose documented behavior is to ignore
+    # fenced headings, and callers legitimately rely on it. The strict
+    # equality belongs on the path that ships policy text.
+    raw_heading_count = sum(1 for line in body.splitlines() if line.startswith("## "))
+    if raw_heading_count != len(sections):
+        raise PolicyExcerptError(
+            f"{relative}: parsed {len(sections)} section(s) but the file has "
+            f"{raw_heading_count} '## ' line(s). A code fence is swallowing a section "
+            "boundary, which silently merges sections and can leak write-capable-only "
+            "text into the read-only excerpt. If a fenced '## ' line is genuinely "
+            "needed here, add an explicit allow-list rather than removing this check."
+        )
     missing = [heading for heading in required if heading not in headings]
     if missing:
         raise PolicyExcerptError(
@@ -588,18 +609,41 @@ def excerpt_universal_sections(relative: str, body: str) -> str:
             f"{', '.join(repr(heading) for heading in headings)}. A heading listed in "
             "UNIVERSAL_POLICY_SECTIONS was renamed or removed -- update both together."
         )
-    # The file's own applicability header must enumerate the same sections
+    # The file's own applicability header must enumerate exactly the sections
     # this dict names, so a reader of either can check it against the other.
-    # Without this, the header can say "every other section is write-capable
-    # only" while the dict quietly keeps four -- the drift the #211 review
-    # caught by hand.
-    unlisted = [heading for heading in required if heading not in preamble]
-    if unlisted:
+    # Symmetric on purpose: one-directional (`required` is named somewhere in
+    # the preamble) lets the header promise a section binds every tier while
+    # the dict silently drops it, which is the original #211 bug reached from
+    # the other side.
+    #
+    # Matched against the header's bullet list, not the whole preamble text:
+    # substring matching over prose both false-positives (the header names
+    # `Isolating your own edits (write-capable tiers)` in a sentence
+    # explaining what is excluded) and false-negatives on short headings
+    # (heading "A" is satisfied by any word containing "A").
+    promised = {
+        line[2:].strip()
+        for line in preamble.splitlines()
+        if line.startswith("- ")
+    } & set(headings)
+    if promised != set(required):
+        unlisted = sorted(set(required) - promised)
+        overpromised = sorted(promised - set(required))
+        detail = []
+        if unlisted:
+            detail.append(
+                "registered but not named in the header's list: "
+                + ", ".join(repr(heading) for heading in unlisted)
+            )
+        if overpromised:
+            detail.append(
+                "named in the header's list but not registered, so it would be "
+                "dropped from every read-only wrapper despite the header saying it "
+                "binds every tier: " + ", ".join(repr(heading) for heading in overpromised)
+            )
         raise PolicyExcerptError(
-            f"{relative}: the applicability header does not name "
-            f"{', '.join(repr(heading) for heading in unlisted)}. A section that binds "
-            "every tier must be enumerated in the preamble as well as in "
-            "UNIVERSAL_POLICY_SECTIONS, so the two cannot drift apart."
+            f"{relative}: the applicability header and UNIVERSAL_POLICY_SECTIONS "
+            "disagree about which sections bind every tier (" + "; ".join(detail) + ")."
         )
     kept = []
     for heading, text in sections:

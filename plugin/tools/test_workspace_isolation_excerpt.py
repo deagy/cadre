@@ -22,6 +22,7 @@ as they assert the absence of the write-capable-only steps.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -175,7 +176,13 @@ class WorkspaceIsolationExcerptTestCase(unittest.TestCase):
             "## Never mutate a working tree you did not create",
             "## Never mutate someone else's working tree",
         )
-        self.assertNotEqual(renamed, self.body, "fixture did not rename the heading")
+        self.assertNotEqual(
+            renamed,
+            self.body,
+            "this fixture's rename was a no-op, which means the heading it targets no "
+            "longer exists upstream in workspace-isolation.md -- check for a rename "
+            "there before assuming the fixture is stale",
+        )
         with self.assertRaises(generator.PolicyExcerptError) as raised:
             generator.excerpt_universal_sections(POLICY_RELATIVE, renamed)
         self.assertIn("Never mutate a working tree you did not create", str(raised.exception))
@@ -215,15 +222,135 @@ class WorkspaceIsolationExcerptTestCase(unittest.TestCase):
         "has edits to isolate" had de-bound three sections that bind a
         read-only role which creates an inspection worktree. A total-size
         ratio would fight that correction instead of guarding it.
+
+        Pinned rather than bounded: a fraction-of-the-file bound left 54
+        lines of headroom, enough for a 22-line leak of write-capable prose
+        to pass comfortably. A pin forces whoever changes the header to
+        change this number on purpose.
         """
-        preamble, _ = generator.split_policy_sections(self.body)
-        self.assertLess(
+        preamble, sections = generator.split_policy_sections(self.body)
+        self.assertLessEqual(
             len(preamble.splitlines()),
-            len(self.body.splitlines()) / 4,
-            "the applicability header has grown into a substantial share of the file",
+            40,
+            "update this pin deliberately when the applicability header changes",
         )
-        excerpt = generator.excerpt_universal_sections(POLICY_RELATIVE, self.body)
-        self.assertLess(len(excerpt.splitlines()), len(self.body.splitlines()))
+        # Membership *and* order, against the registered tuple: the excerpt
+        # keeps file order, so a reordering that separates the universal
+        # sections from the top of the file is a real change to what a
+        # read-only reader sees first.
+        required = generator.UNIVERSAL_POLICY_SECTIONS[POLICY_RELATIVE]
+        self.assertEqual(
+            list(required),
+            [heading for heading, _ in sections if heading in set(required)],
+        )
+
+    def test_no_code_fence_swallows_a_section_boundary(self) -> None:
+        """A *balanced* stray fence pair needs no parser bug to leak policy:
+        it deletes the boundaries between its markers, and a swallowed
+        heading is absorbed into the preceding section. Silent when that
+        section is one of the kept four -- write-capable text then ships to
+        every read-only wrapper -- and caught by the missing-heading check
+        only when it swallows a dropped section instead.
+        """
+        _, sections = generator.split_policy_sections(self.body)
+        raw = [line for line in self.body.splitlines() if line.startswith("## ")]
+        self.assertEqual(
+            len(raw),
+            len(sections),
+            "a code fence is swallowing a '## ' section boundary; if a fenced "
+            "heading is genuinely needed, add an explicit allow-list rather than "
+            "relaxing this check",
+        )
+
+    def test_excerpt_raises_when_a_fence_swallows_a_section_boundary(self) -> None:
+        """The same condition, at the generator boundary rather than here --
+        a silent leak into a shipped policy wrapper should fail the build,
+        not only this suite.
+        """
+        mutated = self.body.replace(
+            "## No runner names as behavioral conditions",
+            "## No runner names as behavioral conditions\n\n```",
+            1,
+        ).replace(
+            "## Isolating your own edits (write-capable tiers)",
+            "## Isolating your own edits (write-capable tiers)\n\n```",
+            1,
+        )
+        self.assertNotEqual(mutated, self.body, "fixture did not insert the fences")
+        with self.assertRaises(generator.PolicyExcerptError) as raised:
+            generator.excerpt_universal_sections(POLICY_RELATIVE, mutated)
+        self.assertIn("swallowing a section boundary", str(raised.exception))
+
+    def test_every_self_declared_universal_section_is_registered(self) -> None:
+        """The reverse of the drift guard, reached by *addition* rather than
+        rename: write a new section whose body says it binds every tier,
+        forget `UNIVERSAL_POLICY_SECTIONS`, and it is silently absent from
+        every read-only wrapper. That is the original #211 bug again, and
+        adding a section is exactly what a future editor of this file does.
+
+        One-directional on purpose: a section carrying the marker phrase
+        must be registered, but a registered section need not carry it --
+        three of today's four do not, and forcing the phrase into them would
+        be ceremony, not protection.
+        """
+        marker = re.compile(r"every role(,| and) every (capability )?tier", re.I)
+        required = set(generator.UNIVERSAL_POLICY_SECTIONS[POLICY_RELATIVE])
+        _, sections = generator.split_policy_sections(self.body)
+        offenders = [
+            heading for heading, text in sections if marker.search(text) and heading not in required
+        ]
+        self.assertEqual(
+            [],
+            offenders,
+            "section(s) declare in their own body that they bind every role at every "
+            "tier, but are not registered in UNIVERSAL_POLICY_SECTIONS, so read-only "
+            "wrappers do not carry them. Register them (and name them in the file's "
+            "applicability header), or reword the claim.",
+        )
+
+    def test_excerpt_raises_on_an_unbalanced_backtick_fence(self) -> None:
+        with self.assertRaises(generator.PolicyExcerptError) as raised:
+            generator.split_policy_sections("preamble\n\n```sh\nunclosed\n")
+        self.assertIn("unbalanced", str(raised.exception))
+
+    def test_excerpt_raises_on_an_unbalanced_tilde_fence(self) -> None:
+        with self.assertRaises(generator.PolicyExcerptError) as raised:
+            generator.split_policy_sections("preamble\n\n~~~sh\nunclosed\n")
+        self.assertIn("unbalanced", str(raised.exception))
+
+    def test_excerpt_raises_when_the_header_does_not_enumerate_a_section(self) -> None:
+        stripped = self.body.replace(
+            "- Never remove or prune a worktree yourself\n", "", 1
+        )
+        self.assertNotEqual(stripped, self.body, "fixture did not remove the header bullet")
+        with self.assertRaises(generator.PolicyExcerptError) as raised:
+            generator.excerpt_universal_sections(POLICY_RELATIVE, stripped)
+        self.assertIn("disagree about which sections bind every tier", str(raised.exception))
+
+    def test_excerpt_raises_when_the_header_promises_an_unregistered_section(self) -> None:
+        """The symmetric direction: the header must not claim a section binds
+        every tier while the dict drops it from every read-only wrapper.
+        """
+        promised = self.body.replace(
+            "- No runner names as behavioral conditions\n",
+            "- No runner names as behavioral conditions\n- Escalating\n",
+            1,
+        )
+        self.assertNotEqual(promised, self.body, "fixture did not add the header bullet")
+        with self.assertRaises(generator.PolicyExcerptError) as raised:
+            generator.excerpt_universal_sections(POLICY_RELATIVE, promised)
+        self.assertIn("Escalating", str(raised.exception))
+
+    def test_excerpt_raises_on_an_empty_universal_section_body(self) -> None:
+        gutted = self.body.replace(
+            "## No runner names as behavioral conditions\n\nEvery decision in this file",
+            "## No runner names as behavioral conditions\n\n## Every decision in this file",
+            1,
+        )
+        self.assertNotEqual(gutted, self.body, "fixture did not gut the section")
+        with self.assertRaises(generator.PolicyExcerptError) as raised:
+            generator.excerpt_universal_sections(POLICY_RELATIVE, gutted)
+        self.assertIn("empty body", str(raised.exception))
 
 
 if __name__ == "__main__":

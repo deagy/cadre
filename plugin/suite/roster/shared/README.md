@@ -129,13 +129,39 @@ alone once de-bound the never-remove-or-prune rule from exactly the roles
 the excerpt instructs to create a worktree.
 
 It fails closed, raising `PolicyExcerptError` on: a renamed or removed
-heading; a named section with an empty body; a preamble that does not
-enumerate every universally binding section (so the file's own header and
-this dict cannot drift apart); an unbalanced code fence; an empty section
-tuple (the mechanism therefore cannot be used to drop a whole file); and, at
-import, a key absent from `SHARED_POLICIES`. Section *content* is not
-checked here — `plugin/tools/test_workspace_isolation_excerpt.py` asserts
-specific rule prose survives into the committed wrappers on both runners.
+heading; a named section with an empty body; a header bullet list that does
+not match the registered set **in both directions** (so the header cannot
+name a section the dict drops, nor the reverse); an unbalanced code fence; a
+parsed section count that disagrees with the file's raw `## ` line count; an
+empty section tuple (the mechanism therefore cannot be used to drop a whole
+file); and, at import, a key absent from `SHARED_POLICIES`.
+
+Two of those deserve their reasoning recorded, because both were found by
+mutation testing rather than by review, and neither needs any parsing bug to
+fire:
+
+- **The section-count cross-check.** A *balanced* stray fence pair deletes
+  the section boundaries between its markers, so a swallowed heading is
+  absorbed into the preceding section. When that section is one of the kept
+  universal ones, write-capable-only text ships to every read-only wrapper
+  and the generator still exits 0 — silent in exactly the direction that
+  matters, since swallowing a *dropped* section trips the missing-heading
+  check instead. Checked in `excerpt_universal_sections`, not in
+  `split_policy_sections`, which is a general splitter whose documented
+  behavior is to ignore fenced headings.
+- **The symmetric header check.** A one-directional check (every registered
+  heading appears in the header) lets a new section declare in its own body
+  that it binds every tier while going unregistered — the original bug
+  reached by *addition* rather than rename, which is what a future editor of
+  the file will actually do. The test suite closes the remaining half by
+  scanning section bodies for that claim.
+
+Section *content* is not checked here.
+`plugin/tools/test_workspace_isolation_excerpt.py` asserts specific rule
+prose survives into the committed wrappers on both runners. Note that its
+exact-excerpt test recomputes its expectation from the same function it
+validates, so it guards committed-output drift, not generator logic — do not
+count it as logic protection.
 
 **Do not grow this into a general policy-envelope generator.**
 `docs/investigations/policy-envelope-ceiling-2026-08.md` measured the general
