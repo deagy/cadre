@@ -291,10 +291,14 @@ class SelectorTests(unittest.TestCase):
                 self.assertEqual(result["workflow"], "agent-suite-maintenance")
 
     def test_generic_pyproject_manifests_remain_unclaimed_by_path(self) -> None:
-        # These manifests carry dependency pins, but kernel/ and engine/ are
-        # ordinary downstream directory names. A path-only base rule would be
-        # non-narrowable for consumers, so these stay needs-triage until the
-        # selector can express path-and-intent or repository identity (#196).
+        # These manifests carry dependency pins. Genericness of the filename
+        # alone is not why they're unclaimed -- supply-chain already claims
+        # equally generic **/go.mod, **/package.json, etc. base-wide; see
+        # roster/orchestration/routing-doctrine.md's two-part test (#201).
+        # pyproject.toml is unclaimed pending an explicit, reviewed decision
+        # to apply that test to it (not forbidden by it), and because the
+        # selector still can't express path-and-intent or repository
+        # identity if that turns out to matter (#196).
         for relative_path in (
             "pyproject.toml",
             "kernel/pyproject.toml",
@@ -1287,15 +1291,18 @@ class SelectorTests(unittest.TestCase):
         self.assertNotIn("security-reviewer", result["agents"]["reviewers"])
 
     def test_root_pyproject_toml_alone_does_not_route_to_packaging(self) -> None:
-        # #189 review finding 2 and #196: routing.yaml ships as the BASE
-        # ruleset to every consuming project (routing_overlay.py only lets a
-        # consumer widen a base route, never narrow it), and root
-        # pyproject.toml is a generic file present in arbitrary downstream
-        # Python projects. Cadre-specific version files above are claimed
-        # under a narrower route, but generic pyproject.toml files are not.
-        # A pyproject.toml-only change with no route-specific task wording
-        # must continue to fall through to needs-triage for consumer-owned
-        # routing.
+        # #189 review finding 2, #196, and #201: root pyproject.toml is a
+        # generic file present in arbitrary downstream Python projects, but
+        # that genericness is not by itself why it stays off `packaging`.
+        # `packaging` fails roster/orchestration/routing-doctrine.md's
+        # two-part test on domain-generality: its staffed roles
+        # (application-engineer/debugging-engineer) are aimed at THIS
+        # repository's own plugin-distribution tooling, so routing a
+        # stranger's pyproject.toml there would misassign a Cadre-specific
+        # team with no context, not merely add a redundant reviewer.
+        # Cadre-specific version files above are claimed under a narrower
+        # route; a pyproject.toml-only change with no route-specific task
+        # wording must continue to fall through to needs-triage.
         result = plan(
             task="Look at pyproject.toml",
             changed_files=["pyproject.toml"],
