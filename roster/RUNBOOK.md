@@ -835,6 +835,18 @@ after role, policy, workflow, runtime, or skill changes, and commit the
 result in the same pull request; `.github/workflows/validate.yml`'s
 `generated-content` job fails the build on drift (`--check`).
 
+**`generate-role-metadata` must run before `generate-plugin`, and nothing
+checks that it did.** `generate-plugin` reads `roster/catalog.yaml` rather than
+deriving role metadata from frontmatter, but it copies each role's `AGENT.md`
+straight out of the working tree. Edit a role's frontmatter and run
+`generate-plugin` alone and it exits 0 in silence, having written a package
+whose bundled `suite/roster/<phase>/<role>/AGENT.md` carries the new value
+while its own `suite/roster/catalog.yaml` and Codex wrapper still carry the
+old one. `generate_provider_copy()` does refuse a stale `provider/`, but it
+compares against content derived from the same stale `catalog.yaml`, so the
+two agree and the guard stays quiet. Running the steps in order is the only
+thing that prevents this.
+
 `cadre generate-plugin` does **not** regenerate the Cline mirror. Porting the
 74 role presets and 8 skills into `cline-plugins/cline-agents/` is a separate
 command that must run *after* `generate-plugin`, because it reads the freshly
