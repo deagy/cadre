@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS messages (
   conversation_title TEXT, source_message_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL,
   content_hash TEXT NOT NULL, created_at TEXT, classification TEXT NOT NULL,
   injection_risk INTEGER NOT NULL DEFAULT 0, redactions_json TEXT NOT NULL,
-  metadata_json TEXT NOT NULL, ingested_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL, ingested_at TEXT NOT NULL, retention_until TEXT,
   UNIQUE(source, conversation_id, source_message_id)
 );
 CREATE TABLE IF NOT EXISTS chunks (
@@ -55,6 +55,25 @@ CREATE INDEX IF NOT EXISTS idx_retrieval_runs_task ON retrieval_runs(task_id, ag
 """
 
 
+def _migrate_additive_columns(db: sqlite3.Connection) -> None:
+    """Add columns introduced after a store's initial creation, additively.
+
+    `CREATE TABLE IF NOT EXISTS` in SCHEMA only covers a store created fresh
+    with the current schema; a store created before `retention_until` existed
+    has a `messages` table with no such column, and `ALTER TABLE ... ADD
+    COLUMN` has no `IF NOT EXISTS` form in SQLite. `retention_until` is
+    nullable with no default, so this is purely additive: existing rows read
+    back as `NULL` (no retention window recorded, matching the "unknown" case
+    a pre-existing row legitimately has), and no existing query, index, or
+    constraint changes shape. Idempotent and cheap enough to run on every
+    open, matching this schema's existing "no separate migration step"
+    convention.
+    """
+    existing_columns = {row["name"] for row in db.execute("PRAGMA table_info(messages)")}
+    if "retention_until" not in existing_columns:
+        db.execute("ALTER TABLE messages ADD COLUMN retention_until TEXT")
+
+
 def open_store(database_path: str) -> sqlite3.Connection:
     path = Path(database_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -63,6 +82,7 @@ def open_store(database_path: str) -> sqlite3.Connection:
     db.execute("PRAGMA foreign_keys = ON")
     db.execute("PRAGMA journal_mode = WAL")
     db.executescript(SCHEMA)
+    _migrate_additive_columns(db)
     return db
 
 
@@ -83,20 +103,29 @@ def fail_run(db: sqlite3.Connection, run_id: str, error: Exception) -> None:
         db.execute("UPDATE ingestion_runs SET completed_at = ?, status = 'failed', error = ? WHERE id = ?", (_now(), str(error)[:2000], run_id))
 
 
-def save_message(db: sqlite3.Connection, message: dict[str, Any], protected: dict[str, Any], chunks: list[str], vectors: list[list[float]], embedding: dict[str, Any]) -> None:
+def save_message(
+    db: sqlite3.Connection,
+    message: dict[str, Any],
+    protected: dict[str, Any],
+    chunks: list[str],
+    vectors: list[list[float]],
+    embedding: dict[str, Any],
+    retention_until: str | None = None,
+) -> None:
     message_id = _hash(f"{message['source']}|{message['conversation_id']}|{message['message_id']}")
     with (nullcontext() if db.in_transaction else db):
         db.execute("""
           INSERT INTO messages (id, source, source_uri, conversation_id, conversation_title,
             source_message_id, role, content, content_hash, created_at, classification,
-            injection_risk, redactions_json, metadata_json, ingested_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            injection_risk, redactions_json, metadata_json, ingested_at, retention_until)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(source, conversation_id, source_message_id) DO UPDATE SET
             source_uri=excluded.source_uri, conversation_title=excluded.conversation_title,
             role=excluded.role, content=excluded.content, content_hash=excluded.content_hash,
             created_at=excluded.created_at, classification=excluded.classification,
             injection_risk=excluded.injection_risk, redactions_json=excluded.redactions_json,
-            metadata_json=excluded.metadata_json, ingested_at=excluded.ingested_at
+            metadata_json=excluded.metadata_json, ingested_at=excluded.ingested_at,
+            retention_until=excluded.retention_until
         """, (
             message_id, message["source"], message["source_uri"], message["conversation_id"],
             message["conversation_title"], message["message_id"], message["role"], protected["content"],
@@ -104,6 +133,7 @@ def save_message(db: sqlite3.Connection, message: dict[str, Any], protected: dic
             1 if protected["injection_risk"] else 0,
             json.dumps(protected["redactions"], separators=(",", ":"), ensure_ascii=False),
             json.dumps(message["metadata"], separators=(",", ":"), ensure_ascii=False), _now(),
+            retention_until,
         ))
         db.execute("DELETE FROM chunks WHERE message_id = ?", (message_id,))
         for ordinal, chunk in enumerate(chunks):

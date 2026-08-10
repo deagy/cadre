@@ -504,12 +504,17 @@ def _check_recommended_action(frontmatter: dict[str, Any], findings: list[str]) 
     value = frontmatter["recommended_action"]
     if value == "delete":
         findings.append(
-            "recommended_action 'delete' is not an available action: the knowledge store implements "
-            "no deletion capability at all, so no staged record can request one. A required deletion "
-            "escalates to knowledge-store-steward and an authorized human, with evidence-custodian "
-            "coordination (roster/knowledge-store/AGENT.md, 'Escalate when'); it is never recorded "
-            "as a staged-record action. Use 'defer' and state the deletion request in "
-            "sensitivity_notes"
+            "recommended_action 'delete' is not an available action, re-decided again when "
+            "delete-ingested was implemented (issue #184): the knowledge store now has deletion "
+            "capability for both staged records (delete-staged) and ingested content "
+            "(delete-ingested), so the reason is no longer that no capability exists. It is that "
+            "proposing a deletion and being authorized to perform one are different acts: this "
+            "validator runs on an agent's own proposal, and an agent may propose a deletion only "
+            "by escalating it, never by recording it as a self-service staged-record action. A "
+            "required deletion escalates to knowledge-store-steward and an authorized human, with "
+            "evidence-custodian coordination (roster/knowledge-store/AGENT.md, 'Escalate when'); "
+            "it is never recorded as a staged-record action. Use 'defer' and state the deletion "
+            "request in sensitivity_notes"
         )
         return
     _check_enum(frontmatter, "recommended_action", RECOMMENDED_ACTIONS, findings)
