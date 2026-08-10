@@ -971,7 +971,7 @@
     },
     {
       "id": "PACKAGING-PYPROJECT-OUT-OF-SCOPE-1",
-      "description": "#189 review finding 2: root pyproject.toml is deliberately NOT a packaging-route path. It is a generic file present in arbitrary downstream Python projects, and routing.yaml ships as the BASE ruleset to every consuming project (routing_overlay.py only lets a consumer widen a base route, never narrow it) -- claiming it under a route named 'packaging' whose keywords are about this repo's own Cline ports and plugin manifests would be wrong for every consumer. A pyproject.toml-only change with no packaging keyword (and no other route's keyword -- the task text deliberately avoids change_intake baseline words like 'update'/'change' and supply-chain's 'dependency' so the result is genuinely needs-triage, not just support-only) is therefore needs-triage, not the packaging route. kernel/pyproject.toml, engine/pyproject.toml, root pyproject.toml, and cadre_cli/__init__.py all remain unrouted, a documented out-of-scope adjacent gap for a follow-up issue.",
+      "description": "#189 review finding 2 and #196: root pyproject.toml is deliberately NOT a packaging-route path. It is a generic file present in arbitrary downstream Python projects, and routing.yaml ships as the BASE ruleset to every consuming project (routing_overlay.py only lets a consumer widen a base route, never narrow it) -- claiming it under a route named 'packaging' whose keywords are about this repo's own Cline ports and plugin manifests would be wrong for every consumer. A pyproject.toml-only change with no packaging keyword (and no other route's keyword -- the task text deliberately avoids change_intake baseline words like 'update'/'change' and supply-chain's 'dependency' so the result is genuinely needs-triage, not just support-only) is therefore needs-triage, not the packaging route. The distinctive Cadre CLI files cadre_cli/__init__.py and cadre_cli/_version.py route through agent-suite-governance; root pyproject.toml remains intentionally unclaimed.",
       "task": "Look at pyproject.toml",
       "changed_files": [
         "pyproject.toml"
@@ -985,6 +985,104 @@
         "support": [],
         "matched_routes": [],
         "workflow": "needs-triage"
+      }
+    },
+    {
+      "id": "PACKAGING-NESTED-PYPROJECT-OUT-OF-SCOPE-1",
+      "description": "#196 negative fixture: kernel/pyproject.toml and engine/pyproject.toml remain intentionally unclaimed by path. They carry dependency metadata, but kernel/ and engine/ are ordinary downstream directory names, and the selector cannot yet express a path-and-intent or repository-identity predicate that would avoid non-narrowable base-rule matches for consumers.",
+      "task": "Inspect selected file",
+      "changed_files": [
+        "kernel/pyproject.toml",
+        "engine/pyproject.toml"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-PACKAGING-NESTED-PYPROJECT-OOS-1",
+      "expect_needs_triage": true,
+      "expected": {
+        "primary": [],
+        "reviewers": [],
+        "support": [],
+        "matched_routes": [],
+        "workflow": "needs-triage"
+      }
+    },
+    {
+      "id": "PACKAGING-KERNEL-ENGINE-BIN-OUT-OF-SCOPE-1",
+      "description": "#196 negative fixture, completing the CHANGELOG's intentionally-unclaimed list: the kernel module, its validation requirements and dev entrypoint, the engine package, and bin/ stay unclaimed by path for the same base-ruleset reason as the nested pyproject.toml files -- kernel/, engine/, and bin/ are ordinary downstream directory names, and routing_overlay.py lets a consumer widen a base route but never narrow it. Pinned so a future dependency-manifest or supply-chain glob cannot quietly widen into them.",
+      "task": "Inspect selected file",
+      "changed_files": [
+        "kernel/agentic_sdlc/__init__.py",
+        "kernel/requirements-validation.txt",
+        "kernel/dev_entrypoint.py",
+        "kernel/agentic_sdlc/gate_issues.py",
+        "engine/agentic_sdlc_langgraph/cli.py",
+        "bin/cadre"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-PACKAGING-KERNEL-ENGINE-BIN-OOS-1",
+      "expect_needs_triage": true,
+      "expected": {
+        "primary": [],
+        "reviewers": [],
+        "support": [],
+        "matched_routes": [],
+        "workflow": "needs-triage"
+      }
+    },
+    {
+      "id": "PACKAGING-CADRE-CLI-INIT-1",
+      "description": "#196 positive fixture: cadre_cli/__init__.py routes through agent-suite-governance as a distinctive file in this repository's pip distribution package.",
+      "task": "Inspect selected file",
+      "changed_files": [
+        "cadre_cli/__init__.py"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-PACKAGING-CADRE-CLI-INIT-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "debugging-engineer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [
+          "technical-writer"
+        ],
+        "matched_routes": [
+          "agent-suite-governance"
+        ],
+        "workflow": "agent-suite-maintenance"
+      }
+    },
+    {
+      "id": "PACKAGING-CADRE-CLI-VERSION-1",
+      "description": "#196 positive fixture: cadre_cli/_version.py routes through agent-suite-governance as the version file root pyproject.toml reads through [tool.hatch.version].",
+      "task": "Inspect selected file",
+      "changed_files": [
+        "cadre_cli/_version.py"
+      ],
+      "classification": "internal",
+      "task_id": "GOLDEN-PACKAGING-CADRE-CLI-VERSION-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "debugging-engineer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [
+          "technical-writer"
+        ],
+        "matched_routes": [
+          "agent-suite-governance"
+        ],
+        "workflow": "agent-suite-maintenance"
       }
     },
     {
