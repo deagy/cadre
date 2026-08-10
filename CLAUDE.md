@@ -43,24 +43,30 @@ python3 -B -m unittest discover -s kernel/test -p "test_*.py"   # kernel
 cd engine && uv sync && uv run pytest                            # LangGraph engine
 python3 -m unittest discover -s plugin/tools -p "test_*.py"      # packaging + docs guards
 
-# Regenerate register-side derived files after editing any AGENT.md or
-# catalog-order.txt: roster/catalog.yaml, routing.yaml's knowledge_focus block,
-# and the generated half of provider/ (--check is the CI drift-guard equivalent)
-cadre generate-role-metadata
-# ...then re-run this — it fails the build on drift
+# Regeneration after editing roster/, .agents/skills/, or AGENTS.md.
+# git add new files FIRST -- untracked files are silently skipped (see below)
+./bin/cadre generate-authority-aides   # only for roster/authority/aides.yaml or _template.md.tmpl
+./bin/cadre generate-role-metadata     # roster/catalog.yaml, routing.yaml's knowledge_focus, provider/
+./bin/cadre generate-plugin --output plugin        # the committed distribution under plugin/
+python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin   # the Cline mirror
+
+# ...then re-run both guards — they fail the build on drift
 python3 -m unittest discover -s roster/orchestration/test -p "test_repository_health.py"
+python3 -m unittest discover -s plugin/tools -p "test_*.py"
 
-# Build the packaged plugin distribution (gitignored; not committed)
-cadre generate-plugin --output ./plugin-dist
-
-# Editing roster/authority/aides.yaml or roster/authority/_template.md.tmpl requires
-# this first, to regenerate the 8 roster/authority/*-aide/AGENT.md files, before
-# `cadre generate-role-metadata` above (--check is the CI drift-guard equivalent)
-cadre generate-authority-aides
+# Scratch build of the distribution to inspect without touching committed
+# output (this path is gitignored; `--output plugin` above is the real one)
+./bin/cadre generate-plugin --output ./plugin-dist
 
 # Produce a deterministic dispatch plan (selection only — no execution, no mutation)
 cadre select --task "..." --files a.tsx,b.go --task-id TASK-42 --classification internal
 ```
+
+**On that regeneration sequence.** The order is load-bearing and each step has its own CI guard, so stopping early is the usual way to leave a PR red. Two points that catch people out: `git add` new files *before* regenerating, and note that this file is **not** bundled while `AGENTS.md` is (`plugin/AGENTS.md` and `plugin/CLAUDE.md` are hand-authored documents about the plugin directory, never regenerated, so they need manual upkeep).
+
+Use `./bin/cadre`, not bare `cadre` — bare `cadre` may resolve to a globally installed plugin build of a different version that does not recognise these subcommands, which fails less obviously than not resolving at all.
+
+**`roster/RUNBOOK.md` §17, "Regenerating derived output", is the canonical version** — why each step exists, why the order matters, what each guard catches, and the `git add` gotcha in both of its directions. Extend it there rather than restating it here.
 
 `bin/cadre` dispatches every subcommand: `select`, `selection-telemetry`, `knowledge`, `sdlc`, `generate-plugin`, `generate-authority-aides`, `generate-role-metadata`, `bootstrap-codex`, `resolve-shared`, `mcp-dispatch-server`, `init`, `profile`, `gitlab-evidence`, `config`, `doctor`. `subcommands.tsv` in `bin/` is the dispatch table (`sdlc` is the one exception — it delegates to the external kernel and has no row there). A leading `cadre --interactive <subcommand>` opts that subcommand into prompting for a missing operator setting.
 
