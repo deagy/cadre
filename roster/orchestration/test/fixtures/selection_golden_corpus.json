@@ -3503,7 +3503,7 @@
     },
     {
       "id": "EDGE_CLOUD_INTEGRATION_EXECUTION_GOLDEN_1",
-      "description": "Narrow edge-cloud-integration-execution route regression fixture. Workflow shape: edge-cloud configuration glue is platform configuration under infrastructure-provisioner or cloud-architect accountability.",
+      "description": "Narrow edge-cloud-integration-execution route regression fixture. Workflow shape: edge-cloud configuration glue is platform configuration, and the route staffs infrastructure-provisioner and infrastructure-reviewer alongside the executor.",
       "task": "Implement edge cloud integration implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3529,7 +3529,7 @@
     },
     {
       "id": "EMBEDDED_C_EXECUTION_GOLDEN_1",
-      "description": "Narrow embedded-c-execution route regression fixture. Workflow shape: embedded C is delivered application code, accountable to c-systems-implementer or backend-engineer rather than to infrastructure.",
+      "description": "Narrow embedded-c-execution route regression fixture. Workflow shape: embedded C compiled into a device image is delivered application code, not declarative platform configuration.",
       "task": "Implement embedded c implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3700,7 +3700,7 @@
     },
     {
       "id": "GUARDRAIL_POLICY_EXECUTION_GOLDEN_1",
-      "description": "Narrow guardrail-policy-execution route regression fixture. Workflow shape: safety filters, refusals, and regression harnesses are product AI code under ai-engineer accountability, not admission-control policy infrastructure.",
+      "description": "Narrow guardrail-policy-execution route regression fixture. Workflow shape: safety filters, refusals, and regression harnesses are product AI behavior code, not admission-control policy applied to a cluster. The route's security-reviewer/policy-as-code-engineer staffing is review rigor for a sensitive artifact, not evidence of shape -- the ai-feature route carries security-reviewer too and is new-service.",
       "task": "Implement guardrail policy implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3757,7 +3757,7 @@
     },
     {
       "id": "KERNEL_MODULE_EXECUTION_GOLDEN_1",
-      "description": "Narrow kernel-module-execution route regression fixture. Workflow shape: kernel modules and drivers are delivered code under backend-engineer accountability.",
+      "description": "Narrow kernel-module-execution route regression fixture. Workflow shape: kernel modules and drivers are compiled, delivered code artifacts.",
       "task": "Implement kernel module implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3838,7 +3838,7 @@
     },
     {
       "id": "LINUX_SYSTEMS_EXECUTION_GOLDEN_1",
-      "description": "Narrow linux-systems-execution route regression fixture. Workflow shape: systemd units, packages, sysctls, and filesystem layout are host configuration under infrastructure-provisioner accountability.",
+      "description": "Narrow linux-systems-execution route regression fixture. Workflow shape: systemd units, packages, sysctls, and filesystem layout are host configuration, which is infrastructure-change.md's subject regardless of who reviews the change. Recorded divergence, not a justification: this is the only one of the 20 infrastructure-change routes that staffs neither infrastructure-reviewer nor infrastructure-provisioner (it staffs test-engineer/code-reviewer/application-engineer), so the plan points the operator at infrastructure-change.md's 'Classify -> Provision+Plan -> Infrastructure Reviewer -> gated approval -> Apply' shape while dispatching no infrastructure reviewer. The linux-systems-implementer AGENT.md names 'infrastructure-provisioner or backend-engineer accountability', which the route staffing also does not match, so the staffing is the suspect half, not the shape. Filed as a routing question rather than fixed here, because changing route staffing changes agent selection and is outside #210's scope.",
       "task": "Implement linux systems implementation",
       "changed_files": [],
       "classification": "internal",
@@ -4187,7 +4187,7 @@
     },
     {
       "id": "PROTOCOL_INTEGRATION_EXECUTION_GOLDEN_1",
-      "description": "Narrow protocol-integration-execution route regression fixture. Workflow shape: protocol adapters, parsers, and conformance fixtures are delivered service code under backend-engineer or api-contract-engineer accountability.",
+      "description": "Narrow protocol-integration-execution route regression fixture. Workflow shape: protocol adapters, parsers, framing, and conformance fixtures are delivered service code.",
       "task": "Implement protocol integration implementation",
       "changed_files": [],
       "classification": "internal",
