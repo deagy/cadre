@@ -23,6 +23,10 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-08-10
+
+Shipped to users as plugin [v0.15.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.15.0) — the packaged plugin is how register-side changes reach an installed runner.
+
 ### Added
 
 - **Agents propose durable knowledge to the steward instead of writing to the store.** Every handoff now carries a `knowledge_steward_handoffs` list — durable decisions, findings, root causes, reusable patterns, or stale guidance discovered during a task — which `knowledge-store-steward` accepts, rejects, or defers. An empty list means none. Proposal is separated from approval: the field grants no agent any write authority, and `roster/shared/agent-autonomy.yaml`'s `ingest_update_reclassify_or_delete: knowledge_store_steward_only` is unchanged.
@@ -67,7 +71,33 @@ check and reporting "nothing to do". See
 
   **`bootstrap_sdlc.py` is the one keyword in this route (and in all of `routing.yaml`) that contains an underscore.** `_keyword_matches`'s word-boundary class excludes hyphens but not underscores or dots, so this keyword also matches embedded in a longer token (e.g. `legacy_bootstrap_sdlc.py_old`), not only the literal filename on its own. This is a known, accepted, and now test-pinned quirk of this one keyword; the matcher's boundary class itself is unchanged, since it is shared by roughly 90 other keyword arrays and any change there is out of this route's scope.
 
+- **The knowledge store can now remove ingested content, and records a retention window when it takes it in.** `roster/knowledge-store/SECURITY.md` named the inability to delete as a production prerequisite and as the gate on further ingestion; both are now met. ([#184](https://github.com/deagy/cadre/issues/184))
+
+  `ingest` records `messages.retention_until` per message, resolved from `retention.default_days_by_classification` in the store's config or overridden per-invocation with `--retention-days`. `restricted` deliberately has **no** configured default and cannot be given one — setting `restricted` in `default_days_by_classification` is a loud config error, not a silent override — so restricted ingestion is refused outright unless it carries an explicit `--retention-days`, governed by `retention.refuse_restricted_without_window`. Every other classification ships configured as `null`, provisionally: a window is recorded only where an operator has set one.
+
+  **Retention is reported, never enforced automatically.** `knowledge retention-report` is read-only and evaluates expiry against `--as-of` (default now; a bare date means midnight UTC starting that day, so pass a full timestamp to include that day's expiries). Nothing deletes on a timer — expiry is a signal to a human, not a trigger.
+
+  `knowledge delete-ingested` removes content at `--scope source|conversation|message`. It is steward-only and every invocation requires a named authorizing human (`--authorized-by`) alongside `--deleted-by`, `--reason`, and a `--trigger` from a closed set (`steward-decision`, `source-authority-revoked`, `classification-error`, `source-owner-request`, `retention-expiry`). At the shared global-fallback config tier `--source` is required, mirroring the same restriction `ingest` already carries there. `--dry-run` reports what would go without touching the store.
+
+  **Deletion evidence cannot claim a removal that did not happen.** Each deletion writes an `ingested_content_deletions` row whose `delete_status` reaches `completed` inside the same atomic transaction as the `DELETE` itself, so a crash between the two is not representable. Stores created before this change are migrated in place — `retention_until` is added via `ALTER TABLE` rather than relying on `CREATE TABLE IF NOT EXISTS`, which would silently skip an existing `messages` table.
+
+  **`recommended_action` still has no `delete` value.** Now that a deletion capability exists the omission is no longer about capability; it is that a staged record proposes an *act* the steward performs under authorization, and encoding it as a recommendation would route a deletion around the named-human requirement above.
+
+- **`cadre doctor` reports which `cadre` is actually running.** It prints the resolved script path, the interpreter and its version, the install kind (checkout, pip/pipx distribution, or plugin build), and the checkout root of your cwd — then warns when the binary that ran does not belong to the checkout you are standing in. `--json` emits the same facts machine-readably. This is the diagnostic for the failure mode where a globally installed build shadows a checkout and silently runs the wrong generator. ([#150](https://github.com/deagy/cadre/issues/150))
+
+- **`cadre select --explain` surfaces near-miss route reasoning.** The inverse of the `matched_routes` reasons below: why a route did *not* fire. A route is reported only when one of its `keyword_groups` entries is partially satisfied (`1 <= matched < total`), which is the only graded near-miss signal that exists — plain keywords and paths are disjunctive, so an unmatched route's overlap on those is always exactly zero and reporting "0 of N" for every route would be noise.
+
+  **Today this legitimately reports "no near misses" on a real invocation:** no route in `routing.yaml` currently declares `keyword_groups` (only two risk rules do). The stderr message says so explicitly, naming the reason, rather than leaving it looking like the flag failed.
+
 ### Fixed
+
+- **Keyword matching treated a hyphen as a word boundary, so keywords matched inside hyphenated words.** `_keyword_matches()` used `(^|[^a-z0-9])keyword([^a-z0-9]|$)`, which let the pipeline route's `runner` keyword match inside `cross-runner` — routing a task about cross-runner UX documentation to `cicd-engineer` and `pipeline-security-reviewer`. The same fault affected `cd`, `index`, `lock`, and `alert`, with `ci` and `token` sharing the code path. The matcher now uses lookaround assertions treating a hyphen as a word character rather than a boundary: `(?<![a-z0-9-])escaped(?![a-z0-9-])`. ([#151](https://github.com/deagy/cadre/issues/151))
+
+- **The `rollback` workflow was unreachable.** `rollback` was a valid workflow enum value with a full `roster/workflows/rollback.md` behind it, but `_select_workflow()` had no branch that could return it: the `production` risk check ran first and swallowed every rollback, so a plan pointed the reader at `production-release.md` at exactly the moment a rollback procedure was what they needed. A `rollback` route and a branch returning it are now placed ahead of the production check. The ordering decides the label only — `production`'s reviewers and its human gate come from the risk rules via `_build_human_gates`, not from `_select_workflow`. ([#157](https://github.com/deagy/cadre/issues/157))
+
+- **Routine role and catalog edits were narrated as defect investigation.** `_select_workflow()` mapped every `agent-suite-governance` match to `debugging` unconditionally. `debugging` and `agent-suite-governance` share paths by design — editing a role is simultaneously roster maintenance and something the debugging route's broad paths cover — so path overlap alone cannot separate them; what can is whether `debugging` fired on a debugging-shaped *keyword* rather than a shared path. Adds `agent-suite-maintenance` to the workflow enum with `roster/workflows/agent-suite-maintenance.md` behind it, and narrows the architecture glob. ([#154](https://github.com/deagy/cadre/issues/154))
+
+- **The nine deliberately-unclaimed paths are now pinned by tests, not prose.** The packaging-route entry above names paths the base ruleset intentionally leaves unclaimed, but only the `pyproject.toml` manifests had regression coverage; `kernel/agentic_sdlc/**`, its `requirements-validation.txt` and `dev_entrypoint.py`, `engine/agentic_sdlc_langgraph/**`, and `bin/**` were asserted in prose alone, so a future glob could widen into them silently — the exact drift reviewers caught by hand twice. ([#197](https://github.com/deagy/cadre/pull/197))
 
 - **No pre-commit hook in this repository has ever run.** `.pre-commit-config.yaml` was not valid YAML: `files: "\.ya?ml$"` uses `\.`, which is not a valid escape inside a double-quoted YAML scalar, so PyYAML rejected the whole document — and pre-commit parses its config with PyYAML. Every hook below that line was silently inert, including the catalog-schema, catalog-health, and generated-role-metadata drift guards. The two patterns are now single-quoted, where a backslash is literal. All 48 tracked YAML files parse, so enabling the config newly breaks nothing, and every hook entry passes on the current tree.
 
