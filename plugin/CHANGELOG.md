@@ -15,6 +15,30 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.15.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.15.0) - 2026-08-10
+
+### Changed
+
+- **The Cline agent-dispatch plugin no longer ships a default model provider, and no longer requires `ANTHROPIC_API_KEY`.** Every bundled preset carried `providerId: anthropic` and a vendor-qualified `modelId`, so automatic dispatch selected Anthropic regardless of how Cline itself was configured — prompting for that credential, or silently using it where it happened to exist. Presets now carry only the capability tier (`opus`/`sonnet`/`haiku`); the provider and the concrete model serving a tier are operator configuration resolved at dispatch time via `CLINE_AGENTS_PROVIDER_ID` and `CLINE_AGENTS_MODEL_OPUS`/`_SONNET`/`_HAIKU` (or a single `CLINE_AGENTS_MODEL_DEFAULT`). ([#142](https://github.com/deagy/cadre/issues/142))
+
+  **This is a required action for existing Cline installs.** A dispatch with no provider configured no longer silently falls back to Anthropic; set the environment variables above.
+
+- **Installing the plugin now enables destructive-git protection, on by default.** The guard previously lived only in this repository's own `.claude/settings.json`, so a consuming project that installed the plugin got no equivalent. It is now wired into the main plugin's `hooks/hooks.json` (Claude Code) and the Cline plugin's `startPresetSubagent` dispatch path as a `beforeTool` hook. Destructive git commands — `git reset --hard`, `git clean -f`, `git branch -D`, `git push --force`, or a checkout that would discard uncommitted or unpushed work — are refused when the working tree actually has something to lose. Fail-open on parse ambiguity rather than a blanket blocklist. Opt out with `CADRE_DISABLE_WORKSPACE_MUTATION_GUARD=1`, kept outside generated configuration so regeneration cannot silently re-enable it. ([#129](https://github.com/deagy/cadre/issues/129))
+
+### Fixed
+
+- **The Cline Git-source install failed to install its dependencies.** Fixed in the install path, with `docs/INSTALL.md`'s Cline Git-source section regenerated into `plugin/suite/` so the packaged copy matches. Local Codex CLI install state (`.codex-marketplace-install.json`) that had been swept into the tree — pinning whichever revision was on the author's disk — is no longer committed. ([#127](https://github.com/deagy/cadre/pull/127))
+
+- **The cross-lockfile version guard could fail on a correctly-pinned tree.** `test_both_lockfiles_resolve_the_same_runtime_versions` compared only the top-level `node_modules/<dep>` key between `package-lock.json` and `cline-plugins/package-lock.json`, assuming a nested entry always belongs to an unrelated transitive dependant. npm hoisting can instead push a `cline-plugins` workspace's own correctly-pinned dependency into a workspace-scoped key. Adds a workspace-scoped fallback lookup — never a name-only glob, so an unrelated nested pin cannot satisfy it — that fails loudly on disagreeing nested candidates rather than picking one silently, and raises explicit `AssertionError`s so the fail-loud guarantees survive `python -O`. ([#182](https://github.com/deagy/cadre/pull/182))
+
+### Security
+
+- **Releases now pause for an explicit human approval before signing and publishing.** `main` is protected against deletion and force-push and requires a pull request with passing checks, but "landed on `main`" still went straight to a signed, published release: both release jobs read `TAG_SIGNING_KEY` with no `environment:` declared. Both now declare `environment: release`, which requires approval before the job starts and limits the allowed refs to `main` and the `plugin-v*`/`kernel-v*` tags. Scoping the secret to that environment is what makes the gate protect the key rather than merely gate the job. The `changed` detection job is deliberately not gated — it decides whether a release is needed and touches no secret. ([#147](https://github.com/deagy/cadre/pull/147))
+
+### Dependencies
+
+- `@cline/shared` 0.0.65 → 0.0.71, `vitest` 3.2.7 → 4.1.10, `actions/setup-node` 6.0.0 → 7.0.0.
+
 ## [0.14.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.14.0) - 2026-08-08
 
 ### Added
