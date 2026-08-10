@@ -2480,26 +2480,46 @@ class WorkflowShapeDeclarationTests(unittest.TestCase):
         self.assertEqual(mixed["workflow"], "new-service")
 
     def test_the_widened_exclusion_set_reclassifies_a_real_pair(self) -> None:
-        # One member of the 85 route pairs #210 reclassified (see
-        # _select_workflow's comment for the enumeration). `infrastructure` +
-        # `go-service-execution` returned "infrastructure-change" before
-        # #210, because go-service-execution was not one of the three
-        # hardcoded ids the infrastructure check excluded; it declares
-        # new-service now, so the pair is mixed-shape and resolves to generic
-        # delivery work. The widening is deliberate -- a plan that matched
-        # both a service-code route and an infrastructure route is doing
-        # both.
+        # One member of the 85 route combinations #210 reclassified (see
+        # _select_workflow's comment for the enumeration), reached through
+        # real routing rather than synthetic shapes.
         #
-        # Failing here means either the widening was reverted or one of the
-        # two routes' declared shapes changed; both are worth a human read
-        # rather than an expectation edit.
+        # For this exact matched set the pre-#210 rule returned
+        # "infrastructure-change": `infrastructure` matched and none of the
+        # three ids its check excluded (frontend/backend/pipeline) was
+        # present, so the narrow label survived even though a service-code
+        # route had also matched. `go-service-execution` declares
+        # new-service now, which makes the set mixed-shape and resolves it to
+        # generic delivery work. That reclassification is the deliberate
+        # widening; this test is what fails if it is reverted or if
+        # go-service-execution's declared shape changes.
+        #
+        # The input is constructed, not natural, and every part of it is
+        # load-bearing:
+        #   - "go implementation" (not "go service implementation") matches
+        #     go-service-execution's keyword without matching `backend`,
+        #     whose keyword list contains "service implementation".
+        #   - no *.go file, because `**/*.go` is a `backend` path glob too.
+        #   - "cluster configuration" + a .tf file bring in `infrastructure`
+        #     (and opentofu-module-execution, which declares
+        #     infrastructure-change and so does not disturb the mix).
+        #
+        # The matched set is asserted EXACTLY, and that is the point. The
+        # first version of this test used assertIn on two route ids and
+        # passed while `backend` was quietly also matching -- and `backend`
+        # contributes new-service on its own, so the assertion held whatever
+        # go-service-execution declared, under the old rule as well as the
+        # new one. A broad route creeping into this set silently neutralizes
+        # the pin, so a change in the set must fail here rather than be
+        # tolerated.
         result = plan(
-            task="Implement a go service implementation and update the cluster configuration",
-            changed_files=["services/api/main.go", "infrastructure/cluster.tf"],
+            task="Update the cluster configuration and the go implementation",
+            changed_files=["infrastructure/cluster.tf"],
         )
-        matched = [route["id"] for route in result["matched_routes"]]
-        self.assertIn("infrastructure", matched)
-        self.assertIn("go-service-execution", matched)
+        self.assertEqual(
+            [route["id"] for route in result["matched_routes"]],
+            ["infrastructure", "go-service-execution", "opentofu-module-execution"],
+        )
         self.assertEqual(result["workflow"], "new-service")
 
     def test_quality_gates_do_not_depend_on_the_declared_shape(self) -> None:
