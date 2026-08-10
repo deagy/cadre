@@ -47,7 +47,22 @@
     "their primary role's 'build' catalog phase would have implied; and two",
     "execution routes that must stay unclassified (verify-phase test",
     "authoring, security-phase control work), which is the failure mode the",
-    "issue's rejected naive fix would have produced."
+    "issue's rejected naive fix would have produced.",
+    "",
+    "Six 'WF-SHAPE-PIN-*' cases exist for a different reason than the rest of",
+    "this file. They are not here because their workflow was in doubt -- all",
+    "six are ordinary new-service delivery work -- but because",
+    "test_workflow_shape_coverage.py found their routes' workflow_shape",
+    "declarations pinned by nothing: every other fixture matching them also",
+    "matched a broad route already contributing new-service, so the",
+    "declaration could be edited to any legal value with a green suite. Each",
+    "one's input is constructed to match its route WITHOUT a broad route",
+    "co-matching, which is what makes the declaration decisive. Their",
+    "'reasoning' records both the shape judgment and the isolation technique,",
+    "since the latter is fragile: it depends on which keywords the broad",
+    "route currently claims. If one of these stops isolating, the coverage",
+    "test fails and names the route rather than the fixture silently",
+    "measuring nothing."
   ],
   "cases": [
     {
@@ -308,6 +323,72 @@
       "task_id": "FITNESS-UNCLASSIFIED-SECURITY-EXECUTION-1",
       "expected_workflow": "unclassified",
       "reasoning": "Secure-boot work is governed by the security review and G5 authority that new-service.md lists as one stage among ten, not by the intent-to-runtime lifecycle as a whole, and no roster/workflows/*.md describes a security-control change end to end. unclassified.md's step 3 is the correct disposition for that: proceed on the plan's own required_quality_gates and human_gates, and propose a new shape if the combination recurs. Recorded so a later broadening of new-service to 'anything a build-capable role implements' has to argue with this case rather than pass silently."
+    },
+    {
+      "id": "WF-SHAPE-PIN-PYTHON-AUTOMATION-1",
+      "description": "python-automation-execution in isolation -> new-service (pins its declared shape)",
+      "task": "Maintain the automation script",
+      "changed_files": [
+        "scripts/release_notes.py"
+      ],
+      "classification": "internal",
+      "task_id": "FITNESS-SHAPE-PIN-PYTHON-AUTOMATION-1",
+      "expected_workflow": "new-service",
+      "reasoning": "new-service.md covers 'work that proceeds beyond intake into design and delivery'. A Python automation script under scripts/ is a delivered code artifact: it is not infrastructure (it provisions no host, cluster, or network), not a pipeline definition (it is not a CI/CD execution graph), and not intake-only. Its input is constructed rather than reused, specifically so this route matches without a broad route (frontend/backend/ai-feature) co-matching -- otherwise the broad route already contributes new-service and this route's own declaration is decorative, which is what test_workflow_shape_coverage.py measures. `scripts/**` is in the frontend route's exclude_paths and matches no backend path glob, and the task text avoids backend's 'python' keyword, so the executor route stands alone."
+    },
+    {
+      "id": "WF-SHAPE-PIN-GO-SERVICE-1",
+      "description": "go-service-execution in isolation -> new-service (pins its declared shape)",
+      "task": "Implement the go implementation for the exporter",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "FITNESS-SHAPE-PIN-GO-SERVICE-1",
+      "expected_workflow": "new-service",
+      "reasoning": "Implementing a Go service is the archetypal new-service.md case -- design-and-delivery of service code, the same reasoning as WF-NEW-SERVICE-1's backend API. Its input is constructed rather than reused, specifically so this route matches without a broad route (frontend/backend/ai-feature) co-matching -- otherwise the broad route already contributes new-service and this route's own declaration is decorative, which is what test_workflow_shape_coverage.py measures. Matching by keyword with no changed files is what isolates it: any *.go path would also match the backend route, and the word 'golang' would match backend's keyword list, so the task says 'go implementation' and carries no files."
+    },
+    {
+      "id": "WF-SHAPE-PIN-REACT-COMPONENT-1",
+      "description": "react-component-execution in isolation -> new-service (pins its declared shape)",
+      "task": "Implement jsx component",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "FITNESS-SHAPE-PIN-REACT-COMPONENT-1",
+      "expected_workflow": "new-service",
+      "reasoning": "A React/JSX component is frontend application code, and the frontend route already resolves to new-service for exactly this kind of change (selection_golden_corpus.json's FRONTEND-1), so the narrow executor must agree rather than contradict it. Its input is constructed rather than reused, specifically so this route matches without a broad route (frontend/backend/ai-feature) co-matching -- otherwise the broad route already contributes new-service and this route's own declaration is decorative, which is what test_workflow_shape_coverage.py measures. The word 'jsx' avoids frontend's bare 'react' keyword, and frontend's keyword_groups need a typescript/javascript term alongside a UI term, so neither fires."
+    },
+    {
+      "id": "WF-SHAPE-PIN-POSTGRES-QUERY-1",
+      "description": "postgres-query-execution without the backend route -> new-service (pins its declared shape)",
+      "task": "Refine the stored query definitions",
+      "changed_files": [
+        "postgres/queries/sqlc.yaml"
+      ],
+      "classification": "internal",
+      "task_id": "FITNESS-SHAPE-PIN-POSTGRES-QUERY-1",
+      "expected_workflow": "new-service",
+      "reasoning": "Query implementation is backend delivery work: it produces code the service executes, not infrastructure and not a pipeline. Its input is constructed rather than reused, specifically so this route matches without a broad route (frontend/backend/ai-feature) co-matching -- otherwise the broad route already contributes new-service and this route's own declaration is decorative, which is what test_workflow_shape_coverage.py measures. Isolating this one is unusually narrow: every keyword the route declares ('postgres query', 'postgresql query', 'pgx query') contains a backend keyword, and any *.sql file matches backend's path globs, so the input is a non-SQL generator config under postgres/queries/ with a task naming neither product nor engine. The co-matched database-reliability route declares unclassified and contributes nothing, which is what leaves this route's declaration decisive."
+    },
+    {
+      "id": "WF-SHAPE-PIN-A11Y-REMEDIATION-1",
+      "description": "frontend-accessibility-remediation-execution without the frontend route -> new-service (pins its declared shape)",
+      "task": "Apply the a11y remediation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "FITNESS-SHAPE-PIN-A11Y-REMEDIATION-1",
+      "expected_workflow": "new-service",
+      "reasoning": "Accessibility remediation edits frontend application code, which new-service.md's Implementation stage covers and which FRONTEND-1 already labels new-service for the same subject matter (keyboard accessibility). Its input is constructed rather than reused, specifically so this route matches without a broad route (frontend/backend/ai-feature) co-matching -- otherwise the broad route already contributes new-service and this route's own declaration is decorative, which is what test_workflow_shape_coverage.py measures. Both of the route's path globs sit under frontend/**, and two of its three keywords contain frontend's bare 'accessibility' keyword, so the only isolating input is the 'a11y remediation' phrasing with no changed files -- 'a11y' appears solely in frontend's second keyword_group, which cannot fire without a typescript/javascript term from the first."
+    },
+    {
+      "id": "WF-SHAPE-PIN-INFERENCE-GATEWAY-1",
+      "description": "inference-gateway-execution without the ai-feature route -> new-service (pins its declared shape)",
+      "task": "Update the gateway timeout configuration",
+      "changed_files": [
+        "ai/inference-gateway/config.yaml"
+      ],
+      "classification": "internal",
+      "task_id": "FITNESS-SHAPE-PIN-INFERENCE-GATEWAY-1",
+      "expected_workflow": "new-service",
+      "reasoning": "Model API adapters, timeouts, retries, and budgets are delivered service code -- the gateway is a service the product calls, so new-service.md's design-and-delivery shape applies, not infrastructure-change (it configures no platform) and not pipeline-change (it defines no delivery flow). Its input is constructed rather than reused, specifically so this route matches without a broad route (frontend/backend/ai-feature) co-matching -- otherwise the broad route already contributes new-service and this route's own declaration is decorative, which is what test_workflow_shape_coverage.py measures. The route's own keyword contains 'inference', an ai-feature keyword, so the isolating input matches by path instead, using a non-.go config file (a *.go path would pull in both backend and go-service-execution)."
     }
   ]
 }
