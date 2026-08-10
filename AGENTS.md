@@ -14,7 +14,19 @@ Resolve Python 3.10+ as documented in the runbook. From each internal-tool compo
 <python> -B -m unittest discover -s test -p "test_*.py"
 ```
 
-After changing `roster/catalog.yaml`, `roster/`, or `.agents/skills/`, run `cadre generate-role-metadata` (it regenerates `roster/catalog.yaml`, routing's `knowledge_focus` block, and the generated half of `provider/`) and re-run `roster/orchestration/test/test_repository_health.py`, which fails on drift. Regenerating the packaged plugin itself is `cadre generate-plugin --output plugin`, run in this same repository and committed alongside the source change; `.github/workflows/validate.yml`'s `generated-content` job re-runs it with `--check` so drift cannot outlive a pull request. Run lifecycle integration tests against the in-tree `kernel/`.
+After changing `roster/catalog.yaml`, `roster/`, or `.agents/skills/`, three regeneration steps are required, each with its own CI guard. Running only the first is the most common way to leave a PR red:
+
+```sh
+cadre generate-role-metadata                      # roster/catalog.yaml, routing's knowledge_focus, generated half of provider/
+cadre generate-plugin --output plugin             # the packaged plugin, in this same repository
+python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin   # the Cline mirror
+```
+
+`generate-plugin` does **not** update `cline-plugins/`; the Cline port is a separate step, so a role edit that stops after step two leaves `cline-plugins/cline-agents/agents/<role>.md` diverged from its source. Commit all regenerated output alongside the source change.
+
+This also applies to code, not just role definitions: `plugin/suite/` bundles a copy of `roster/`, so adding a module under `roster/knowledge-store/src/` without regenerating ships a plugin whose own CLI cannot import it — which fails as a `ModuleNotFoundError` in the `cline-agents` npm tests, a long way from the edit that caused it.
+
+Then re-run the guards: `roster/orchestration/test/test_repository_health.py` (catalog/role drift) and `python3 -m unittest discover -s plugin/tools -p "test_*.py"` (packaging, docs guards, and the Cline mirror's byte-for-byte match against source). `.github/workflows/validate.yml`'s `generated-content` job re-runs `generate-plugin --check` so drift cannot outlive a pull request. Run lifecycle integration tests against the in-tree `kernel/`.
 
 For Go services, use `gofmt`, `go tool goimports`, `go vet ./...`, `go test ./...`, `go test -race ./...`, and `go tool golangci-lint run ./...`. For React frontends, use the project-pinned package manager for install, test, typecheck, and build commands. Podman, PostgreSQL migrations, Helm, and OpenTofu remain disposable or validation-only unless a project has explicit production approval; follow the component README and never target a persistent environment without approval.
 

@@ -43,14 +43,25 @@ python3 -B -m unittest discover -s kernel/test -p "test_*.py"   # kernel
 cd engine && uv sync && uv run pytest                            # LangGraph engine
 python3 -m unittest discover -s plugin/tools -p "test_*.py"      # packaging + docs guards
 
-# Regenerate register-side derived files after editing any AGENT.md or
-# catalog-order.txt: roster/catalog.yaml, routing.yaml's knowledge_focus block,
-# and the generated half of provider/ (--check is the CI drift-guard equivalent)
-cadre generate-role-metadata
-# ...then re-run this — it fails the build on drift
-python3 -m unittest discover -s roster/orchestration/test -p "test_repository_health.py"
+# Editing any AGENT.md, catalog-order.txt, .agents/skills/, or any code under
+# roster/ that plugin/suite/ bundles requires ALL THREE of these, in order.
+# Each has its own CI guard; stopping after the first is the most common way
+# to leave a PR red.
+cadre generate-role-metadata                      # roster/catalog.yaml, routing.yaml's knowledge_focus, generated half of provider/
+cadre generate-plugin --output plugin             # the committed plugin distribution under plugin/
+python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin   # the Cline mirror
 
-# Build the packaged plugin distribution (gitignored; not committed)
+# generate-plugin does NOT touch cline-plugins/ -- the Cline port is separate.
+# plugin/suite/ bundles a copy of roster/, so adding a module under
+# roster/<...>/src/ without regenerating ships a plugin whose own CLI cannot
+# import it (surfaces as ModuleNotFoundError in the cline-agents npm tests).
+
+# ...then re-run both guards — they fail the build on drift
+python3 -m unittest discover -s roster/orchestration/test -p "test_repository_health.py"
+python3 -m unittest discover -s plugin/tools -p "test_*.py"
+
+# Scratch build of the distribution to inspect without touching committed
+# output (this path is gitignored; `--output plugin` above is the real one)
 cadre generate-plugin --output ./plugin-dist
 
 # Editing roster/authority/aides.yaml or roster/authority/_template.md.tmpl requires
