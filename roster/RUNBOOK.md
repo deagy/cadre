@@ -856,7 +856,7 @@ regeneration specifically, means silently committing output built by the wrong
 generator. Elsewhere the stakes are lower and bare `cadre` is fine.
 
 `./bin/cadre generate-plugin` does **not** regenerate the Cline mirror. Porting the
-74 role presets and 8 skills into `cline-plugins/cline-agents/` is a separate
+86 role presets and 8 skills into `cline-plugins/cline-agents/` is a separate
 command that must run *after* `generate-plugin`, because it reads the freshly
 written `plugin/` tree:
 
