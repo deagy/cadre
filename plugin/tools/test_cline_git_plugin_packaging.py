@@ -48,6 +48,10 @@ def _workspace_runtime_dependencies() -> dict[str, dict[str, str]]:
     """
     declarations: dict[str, dict[str, str]] = {}
     for entrypoint in ENTRYPOINTS:
+        # Assumes each entrypoint sits directly under cline-plugins/<workspace>/;
+        # if one ever moves a level deeper, .parent.name resolves to the wrong
+        # directory and this raises FileNotFoundError from a missing
+        # cline-plugins/<that name>/package.json instead of naming the assumption.
         workspace = Path(entrypoint).parent.name
         manifest = _read_json("cline-plugins", workspace, "package.json")
         for name, version in manifest.get("dependencies", {}).items():
