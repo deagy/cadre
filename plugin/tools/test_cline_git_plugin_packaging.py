@@ -91,6 +91,18 @@ def _resolve_workspace_package_key(
     dependency. If more than one such nested candidate exists and they
     disagree, fail loudly rather than silently choosing one.
 
+    A resolution being *valid* is not the same as it being the *only* one.
+    Node resolves from the closest ``node_modules`` upward, so a
+    ``<workspace>/node_modules/<dependency>`` entry is what code in that
+    workspace actually loads -- even when a correct copy also sits at the top
+    level. Returning the top-level key without looking for a disagreeing
+    sibling would therefore pass a tree whose workspaces really do load
+    different versions, and this comparison is the only check tying the root
+    lockfile to ``cline-plugins/`` at all (the ``cline-git-source`` CI job
+    proves resolvability but not version, and the release SBOM scans only
+    ``cline-plugins/``). Every path below establishes exclusivity, not just
+    existence.
+
     A top-level ``node_modules/<dependency>`` key existing is not by itself
     proof it is *our* copy: the key name only encodes the package name, not
     whose requirement won the slot, so a conflicting version forced there by
@@ -105,17 +117,38 @@ def _resolve_workspace_package_key(
     """
     top_level_key = f"node_modules/{dependency}"
     declared_pins = {version.lstrip("^~=") for version in by_workspace.values()}
-    if (
-        top_level_key in workspace_packages
-        and workspace_packages[top_level_key]["version"] in declared_pins
-    ):
-        return top_level_key
-
-    candidates = [
+    scoped_keys = [
         f"{workspace}/node_modules/{dependency}"
         for workspace in sorted(by_workspace)
         if f"{workspace}/node_modules/{dependency}" in workspace_packages
     ]
+    if (
+        top_level_key in workspace_packages
+        and workspace_packages[top_level_key]["version"] in declared_pins
+    ):
+        top_level = workspace_packages[top_level_key]
+        disagreeing = [
+            key
+            for key in scoped_keys
+            if (
+                workspace_packages[key]["version"],
+                workspace_packages[key]["integrity"],
+            )
+            != (top_level["version"], top_level["integrity"])
+        ]
+        if disagreeing:
+            raise AssertionError(
+                f"{dependency} resolves to {top_level['version']} at the top-level key"
+                f" {top_level_key!r}, but a declaring workspace also has its own copy at a"
+                f" different version: {[(key, workspace_packages[key]['version']) for key in disagreeing]}"
+                " in cline-plugins/package-lock.json. Node resolves from the closest"
+                " node_modules upward, so that workspace loads its own copy, not the"
+                " top-level one -- a valid top-level resolution is not proof it is the"
+                " only resolution."
+            )
+        return top_level_key
+
+    candidates = scoped_keys
     if not candidates:
         raise AssertionError(
             f"{dependency} was not found at the top-level key {top_level_key!r} in"
@@ -202,6 +235,18 @@ class TestClineGitPluginPackaging(unittest.TestCase):
         for dependency, by_workspace in self.declarations.items():
             with self.subTest(dependency=dependency):
                 key = _resolve_workspace_package_key(workspace, dependency, by_workspace)
+                root_key = f"node_modules/{dependency}"
+                # The root lockfile has no workspaces (asserted separately), so
+                # a top-level-only lookup is structurally right there -- but say
+                # so rather than raising a bare KeyError, which sends a reader
+                # looking for a resolver bug instead of a missing dependency.
+                self.assertIn(
+                    root_key,
+                    root,
+                    f"{dependency} is declared by a cline-plugins workspace but absent from the"
+                    " root package-lock.json. A Git-source install ships the root closure, so"
+                    " the dependency would be missing at runtime there.",
+                )
                 self.assertEqual(
                     root[f"node_modules/{dependency}"]["version"],
                     workspace[key]["version"],
@@ -212,6 +257,9 @@ class TestClineGitPluginPackaging(unittest.TestCase):
                 self.assertEqual(
                     root[f"node_modules/{dependency}"]["integrity"],
                     workspace[key]["integrity"],
+                    f"{dependency} resolves to the same version in both lockfiles but a"
+                    " different artifact. Same version, different tarball is a substitution,"
+                    " not drift -- treat it as such.",
                 )
 
     def test_hoisting_fallback_does_not_match_an_unrelated_transitive_dependant(
@@ -246,6 +294,50 @@ class TestClineGitPluginPackaging(unittest.TestCase):
             "node_modules/dify-ai-provider/node_modules/zod",
             "the fallback must not match an unrelated transitive dependant's own"
             " nested pin just because the leaf package name matches",
+        )
+
+    def test_a_valid_top_level_entry_does_not_hide_a_disagreeing_workspace_copy(
+        self,
+    ) -> None:
+        """Issue #186: a valid resolution is not proof it is the only one.
+
+        Node resolves from the closest ``node_modules`` upward, so a workspace
+        holding its own copy loads that one -- even when a correctly pinned
+        copy also sits at the top level. Returning the top-level key without
+        checking for a disagreeing sibling would pass a tree whose workspaces
+        genuinely load different versions, and this comparison is the only
+        check tying the root lockfile to ``cline-plugins/``.
+        """
+        packages = {
+            "node_modules/zod": {"version": "4.4.3", "integrity": "sha512-ours"},
+            "cline-agents/node_modules/zod": {"version": "6.6.6", "integrity": "sha512-other"},
+        }
+        with self.assertRaises(AssertionError) as caught:
+            _resolve_workspace_package_key(
+                packages, "zod", {"cline": "4.4.3", "cline-agents": "4.4.3"}
+            )
+        message = str(caught.exception)
+        self.assertIn("cline-agents/node_modules/zod", message)
+        self.assertIn("6.6.6", message)
+        self.assertIn("only resolution", message)
+
+    def test_a_workspace_copy_matching_the_top_level_entry_is_not_a_conflict(
+        self,
+    ) -> None:
+        """npm can legitimately write both keys at the same version.
+
+        Only a *disagreeing* sibling is drift; an identical one is duplication,
+        and failing on it would make the check reject correct trees.
+        """
+        packages = {
+            "node_modules/zod": {"version": "4.4.3", "integrity": "sha512-ours"},
+            "cline-agents/node_modules/zod": {"version": "4.4.3", "integrity": "sha512-ours"},
+        }
+        self.assertEqual(
+            _resolve_workspace_package_key(
+                packages, "zod", {"cline": "4.4.3", "cline-agents": "4.4.3"}
+            ),
+            "node_modules/zod",
         )
 
     def test_hoisting_fallback_fails_loudly_on_disagreeing_nested_candidates(
