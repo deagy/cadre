@@ -2127,6 +2127,11 @@ class RepositoryHealthTests(unittest.TestCase):
         # allowance in test_sample_references_are_limited_to_allowed_archives.
         "roster/orchestration/runs/",
         "roster/orchestration/examples/",
+        # Dated investigation records. Their counts are evidence about what
+        # was measured on a given date, not claims about the present, so
+        # forcing them to track the live catalog destroys the finding rather
+        # than keeping it current. Same rationale as docs/proposals/.
+        "docs/investigations/",
     )
 
     # docs/capability-index.md states a dozen per-tier subset counts, each on

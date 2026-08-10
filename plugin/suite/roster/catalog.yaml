@@ -5,10 +5,16 @@ version: 1
 # with it:
 #   opus:   design/architecture/governance/crypto-assurance roles making
 #           high-blast-radius or hard-to-reverse judgment calls.
-#   sonnet: default tier — engineering build/debug, security engineering,
-#           review, testing, operations, incident coordination, planning.
+#   sonnet: default tier — accountable engineering build/debug, security
+#           engineering, review, testing, operations, incident coordination,
+#           planning.
 #   haiku:  narrow, single-purpose, low-ambiguity roles — cataloging,
-#           stewardship, and triage/escalation routing.
+#           stewardship, triage/escalation routing, and bounded execution
+#           specialists. An authoring role (code, test, or document) qualifies
+#           as an execution specialist when its scope is bounded to a
+#           pre-approved slice, it works under a named accountable role that
+#           retains design and scope ownership, and it holds no approval,
+#           deployment, or risk-acceptance authority.
 #
 # `codex_model` is the OpenAI/Codex CLI equivalent, propagated into the
 # generated `.toml` wrapper's `model` key. Codex does not share Claude's

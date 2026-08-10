@@ -23,6 +23,20 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+### Added
+
+- **Twelve new execution-specialist roles, taking the catalog from 74 to 86.** Each is a bounded author working under an existing accountable role, not a new accountability boundary: `architecture-diagram-author`, and the `-implementer` roles for React components, Node/TypeScript, Go services, Python automation, PostgreSQL queries, OpenTofu modules, Helm charts, Kubernetes manifests, GitHub Actions, GitLab CI, and selector tests. They may not approve, deploy, accept risk, or mutate persistent environments, and none appears in any route's `reviewers` slot — the independent reviewer for their work is unchanged. **Consumer impact:** shared policy is embedded verbatim into every generated wrapper, so all 86 wrappers change even though 74 roles' own definitions did not.
+
+  Note the honest limit of this change: a specialist's generated wrapper is ~1% smaller than the broad role it accompanies, because ~960 lines of `roster/shared/` policy are embedded into every wrapper regardless of tier. What this buys today is routing precision — a narrower authority envelope and a task-shaped role — not a smaller prompt. The compact policy envelope that would deliver the context saving is specified in [`docs/proposals/small-context-execution-roles-2026-08.md`](docs/proposals/small-context-execution-roles-2026-08.md) and is not implemented here.
+
+- **`roster/catalog.yaml`'s model-tier heuristic now names the bounded-execution-specialist category.** The haiku clause previously covered only cataloging, stewardship, and triage routing, so twelve `code_author` build roles at `haiku` contradicted the register that governs tiers. The rule is amended rather than departed from per-role.
+
+### Changed
+
+- **The keyword arm of the execution routes now requires corroboration.** Bare technology nouns moved into `keyword_groups`, because `match_rule` ORs the keyword and path arms and `exclude_paths` applies only within the path arm — so a mention alone previously put a `code_author` on a documentation change and pulled in build gates. An incident write-up naming a Go service no longer selects a Go implementer or requires G1–G7.
+
+- **`docs/investigations/` is exempt from the role-count drift guard.** Its counts are evidence of what was measured on a date, not claims about the present; the guard was rewriting a dated finding to track the live catalog.
+
 ## [0.18.0] - 2026-08-10
 
 Shipped to users as plugin [v0.15.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.15.0) — the packaged plugin is how register-side changes reach an installed runner.

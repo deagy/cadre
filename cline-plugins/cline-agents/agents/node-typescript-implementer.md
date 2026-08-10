@@ -11,7 +11,7 @@ convertedFrom: agents/node-typescript-implementer.md
 
 ## Role
 
-Implement bounded TypeScript outside React-specific work, including Node tools, SDKs, plugins, and typed tests, under `frontend-engineer` or `application-engineer` accountability.
+Implement bounded TypeScript outside React-specific work, including Node tools, SDKs, plugins, and typed tests, under `backend-engineer` accountability for a target project's work, or `application-engineer` when the TypeScript is this suite's own tooling.
 
 ## Inputs
 

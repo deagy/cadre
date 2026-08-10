@@ -352,7 +352,7 @@ class SelectorTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "ready")
         self.assertEqual(result["workflow"], "new-service")
-        self.assertEqual(result["agents"]["primary"], ["frontend-engineer", "backend-engineer"])
+        self.assertEqual(result["agents"]["primary"], ["frontend-engineer", "backend-engineer", "go-service-implementer"])
         self.assertIn("test-engineer", result["agents"]["reviewers"])
         self.assertIn("code-reviewer", result["agents"]["reviewers"])
         # cross_stack.support is [frontend-engineer, backend-engineer], but
@@ -1074,7 +1074,7 @@ class SelectorTests(unittest.TestCase):
             changed_files=["terraform/modules/worker/main.tf"],
         )
         self.assertEqual(result["workflow"], "infrastructure-change")
-        self.assertEqual(result["agents"]["primary"], ["infrastructure-provisioner"])
+        self.assertEqual(result["agents"]["primary"], ["infrastructure-provisioner", "opentofu-module-implementer"])
         self.assertEqual(result["agents"]["reviewers"], ["infrastructure-reviewer"])
 
     def test_routes_compose_runtime_changes_to_infrastructure_review(self) -> None:
@@ -2226,7 +2226,7 @@ class SelectorTests(unittest.TestCase):
         from build_dispatch_plan import STANDALONE_REASON
 
         self.assertEqual(result["lifecycle_tracking"], {"status": "standalone", "reason": STANDALONE_REASON})
-        self.assertEqual(result["agents"]["primary"], ["frontend-engineer", "backend-engineer"])
+        self.assertEqual(result["agents"]["primary"], ["frontend-engineer", "backend-engineer", "go-service-implementer"])
         self.assertIn("test-engineer", result["agents"]["reviewers"])
 
     @patch("build_dispatch_plan.try_lifecycle_contract", return_value=None)

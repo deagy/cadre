@@ -54,7 +54,7 @@ the two.
 ### 1. Can a Cline preset express a tool restriction? Yes — verified by reading three layers
 
 **Preset frontmatter** (`cline-plugins/cline-agents/agents/security-reviewer.md`,
-read directly): carries `allowedTools: [read_files, search_codebase]`. All 86
+read directly): carries `allowedTools: [read_files, search_codebase]`. All 74
 bundled presets carry this field; verified structurally, not by sampling one
 file — `plugin/tools/port_cline_agents.py` line 283 derives
 `allowed_tools = list(dict.fromkeys(TOOL_MAP[t] for t in tools))` from the
@@ -88,7 +88,7 @@ not" axis. This is a real, stated precision limit, not a gap in enforcement.
 `toolPolicies` map (`{"*": {enabled: false}, <each allowed tool>: {enabled:
 true}}`), and — for a preset whose `allowedTools` contains none of
 `run_commands`/`editor`/`apply_patch` (i.e., genuinely read-only, 28 of the
-86 roles, confirmed by `grep -rl '^capability: read_only'
+74 roles, confirmed by `grep -rl '^capability: read_only'
 roster/*/*/AGENT.md | wc -l` = 28) — also sets `mode: "plan"` as an
 additional guard. This is exercised by `cline-plugins/cline-agents/index.test.mts`
 (`resolveToolPolicyConfig` unit tests at lines 361-390), which assert the
@@ -151,7 +151,7 @@ is the one thing actually worth fixing.** `resolveToolPolicyConfig` returns
 compatibility behavior ("preserving the upstream template's default
 full-tool behavior for a hand-authored custom preset that never opted into
 this field"), not a bug. It means:
-  - All 86 **bundled** Cadre-role presets are covered (`allowedTools` always
+  - All 74 **bundled** Cadre-role presets are covered (`allowedTools` always
     set by the generator) — the specific case #129 raised, closed.
   - A **global** preset (`~/.cline/data/settings/agents/`) or a **project**
     preset (`<workspaceRoot>/.cline/agents/`) that a human writes by hand and
@@ -159,7 +159,7 @@ this field"), not a bug. It means:
     unrestricted, by design of this port's fidelity to the upstream
     template. This is a real, currently-undocumented-as-a-risk gap, but it
     is a *human-authored custom preset* gap, not a Cadre-catalog-role gap —
-    out of #129's stated scope, which was specifically about the 86 ported
+    out of #129's stated scope, which was specifically about the 74 ported
     roles.
 
 **c. Documenting accepted risk — appropriate for the live-runtime-enforcement
@@ -175,7 +175,7 @@ explicitly rather than either overclaiming full verification or repeating
 
 - **Which capability tiers reach Cline:** all of them — the port has no
   tier-based exclusion; every role in `roster/catalog.yaml` gets a preset
-  (86 presets = 86 catalog roles, enforced by
+  (74 presets = 74 catalog roles, enforced by
   `plugin/tools/test_port_cline_agents.py` and PR #149's parity test).
 - **What each can do:** gated by `allowedTools` → `toolPolicies`, coarsened
   to Cline's four canonical tool names (`read_files`, `search_codebase`,
@@ -231,7 +231,7 @@ explicitly rather than either overclaiming full verification or repeating
    refused rather than merely that the policy object was constructed
    correctly.
 2. **Global/project custom presets with no `allowedTools` get full ambient
-   access.** Documented behavior, not a defect in the 86 bundled roles, but
+   access.** Documented behavior, not a defect in the 74 bundled roles, but
    worth a line in `cline-plugins/cline-agents/README.md` if it doesn't
    already carry one warning a project-preset author to set `allowedTools`
    explicitly. (I did not find such a warning in the README section I read;

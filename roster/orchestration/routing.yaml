@@ -263,19 +263,154 @@
     },
     {
       "id": "infrastructure",
-      "paths": ["terraform/**", "infrastructure/**", "infra/**", "talos/**", "kubernetes/**", "k8s/**", "helm/**", "charts/**", "deploy/compose/**", "**/compose.yaml", "**/compose.yml", "**/docker-compose.yaml", "**/docker-compose.yml", "**/*.tf", "**/*.tfvars"],
-      "keywords": ["infrastructure", "declarative infrastructure", "cluster configuration", "package deployment", "node operating system", "container orchestration", "docker compose", "podman compose", "compose.yaml", "named volume", "container storage", "proxmox", "terraform", "talos", "kubernetes", "k8s", "helm"],
-      "primary": ["infrastructure-provisioner"],
-      "reviewers": ["infrastructure-reviewer"],
-      "quality_gates": ["G3", "G4", "G5", "G6", "G7", "G8"]
+      "paths": [
+        "terraform/**",
+        "infrastructure/**",
+        "infra/**",
+        "talos/**",
+        "kubernetes/**",
+        "k8s/**",
+        "helm/**",
+        "charts/**",
+        "deploy/compose/**",
+        "**/compose.yaml",
+        "**/compose.yml",
+        "**/docker-compose.yaml",
+        "**/docker-compose.yml",
+        "**/*.tf",
+        "**/*.tfvars"
+      ],
+      "exclude_paths": [
+        "**/*.md",
+        "**/*.txt"
+      ],
+      "keywords": [
+        "infrastructure",
+        "declarative infrastructure",
+        "cluster configuration",
+        "package deployment",
+        "node operating system",
+        "container orchestration",
+        "docker compose",
+        "podman compose",
+        "compose.yaml",
+        "named volume",
+        "container storage",
+        "proxmox",
+        "terraform",
+        "talos",
+        "kubernetes",
+        "k8s",
+        "helm"
+      ],
+      "keyword_groups": [
+        [
+          "opentofu",
+          "tofu"
+        ],
+        [
+          "module",
+          "provider",
+          "state",
+          "plan",
+          "apply",
+          "resource",
+          "provision",
+          "provisioning",
+          "variable",
+          "backend",
+          "workspace",
+          "import",
+          "destroy",
+          "deploy",
+          "deployment",
+          "cluster",
+          "vm",
+          "virtual machine"
+        ]
+      ],
+      "primary": [
+        "infrastructure-provisioner"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "quality_gates": [
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "G7",
+        "G8"
+      ]
     },
     {
       "id": "pipeline",
-      "paths": [".gitlab-ci.yml", ".gitlab/**", "**/.gitlab-ci.yml", ".github/workflows/**", "**/.github/workflows/**", ".github/actions/**", "ci/**", "pipelines/**"],
-      "keywords": ["ci pipeline", "build pipeline", "delivery pipeline", "deployment pipeline", "release pipeline", "ci", "cd", "runner", "build job", "deployment job", "gitlab ci", "github actions", "workflow run", "reusable workflow"],
-      "primary": ["cicd-engineer"],
-      "reviewers": ["pipeline-security-reviewer"],
-      "quality_gates": ["G5", "G6", "G7", "G8"]
+      "paths": [
+        ".gitlab-ci.yml",
+        ".gitlab/**",
+        "**/.gitlab-ci.yml",
+        ".github/workflows/**",
+        "**/.github/workflows/**",
+        ".github/actions/**",
+        "ci/**",
+        "pipelines/**"
+      ],
+      "keywords": [
+        "ci pipeline",
+        "build pipeline",
+        "delivery pipeline",
+        "deployment pipeline",
+        "release pipeline",
+        "ci",
+        "cd",
+        "runner",
+        "build job",
+        "deployment job",
+        "gitlab ci",
+        "workflow run",
+        "reusable workflow"
+      ],
+      "keyword_groups": [
+        [
+          "github actions",
+          "github action",
+          "github workflow"
+        ],
+        [
+          "workflow",
+          "job",
+          "step",
+          "runner",
+          "pipeline",
+          "build",
+          "deploy",
+          "deployment",
+          "release",
+          "cache",
+          "matrix",
+          "permissions",
+          "trigger",
+          "secret",
+          "artifact",
+          "run",
+          "check",
+          "failing",
+          "failed"
+        ]
+      ],
+      "primary": [
+        "cicd-engineer"
+      ],
+      "reviewers": [
+        "pipeline-security-reviewer"
+      ],
+      "quality_gates": [
+        "G5",
+        "G6",
+        "G7",
+        "G8"
+      ]
     },
     {
       "id": "testing",
@@ -444,11 +579,32 @@
     },
     {
       "id": "architecture-diagram-execution",
-      "paths": ["**/architecture/diagrams/**", "**/architecture/**/diagrams/**", "**/architecture/**/*.drawio", "**/architecture/**/*.mmd"],
-      "keywords": ["architecture diagram", "system diagram", "c4 diagram", "mermaid diagram", "drawio diagram"],
-      "primary": ["cloud-architect", "architecture-diagram-author"],
-      "reviewers": ["threat-modeler"],
-      "quality_gates": ["G3"]
+      "paths": [
+        "**/architecture/diagrams/**",
+        "**/architecture/**/diagrams/**",
+        "**/architecture/**/*.drawio",
+        "**/architecture/**/*.mmd"
+      ],
+      "exclude_paths": [
+        "roster/**"
+      ],
+      "keywords": [
+        "architecture diagram",
+        "system diagram",
+        "c4 diagram",
+        "mermaid diagram",
+        "drawio diagram"
+      ],
+      "primary": [
+        "cloud-architect",
+        "architecture-diagram-author"
+      ],
+      "reviewers": [
+        "threat-modeler"
+      ],
+      "quality_gates": [
+        "G3"
+      ]
     },
     {
       "id": "python-automation-execution",
@@ -460,28 +616,139 @@
     },
     {
       "id": "go-service-execution",
-      "paths": [],
-      "keywords": ["go service", "golang service", "go implementation"],
-      "primary": ["backend-engineer", "go-service-implementer"],
-      "reviewers": ["test-engineer", "code-reviewer"],
-      "quality_gates": ["G3", "G4", "G5", "G6", "G7"]
+      "paths": [
+        "**/*.go"
+      ],
+      "keywords": [
+        "go service implementation",
+        "golang service implementation",
+        "go implementation",
+        "golang implementation"
+      ],
+      "keyword_groups": [
+        [
+          "go service",
+          "golang service",
+          "go server",
+          "golang server",
+          "go handler",
+          "golang handler",
+          "go package",
+          "golang package",
+          "go module",
+          "golang module",
+          "go binary",
+          "go cli",
+          "goroutine"
+        ],
+        [
+          "implement",
+          "implementation",
+          "write",
+          "author",
+          "add",
+          "create",
+          "build",
+          "scaffold",
+          "refactor",
+          "port",
+          "extend",
+          "wire up",
+          "fix"
+        ]
+      ],
+      "primary": [
+        "backend-engineer",
+        "go-service-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ],
+      "quality_gates": [
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "G7"
+      ]
     },
     {
       "id": "react-component-execution",
-      "paths": ["**/*.component.tsx", "**/*.component.jsx"],
-      "keywords": ["react component", "react ui component", "jsx component"],
-      "primary": ["frontend-engineer", "react-component-implementer"],
-      "reviewers": ["test-engineer", "code-reviewer", "accessibility-reviewer"],
-      "support": ["interaction-designer"],
-      "quality_gates": ["G3", "G5", "G6", "G7"]
+      "paths": [
+        "**/components/**/*.tsx",
+        "**/components/**/*.jsx",
+        "**/*.component.tsx",
+        "**/*.component.jsx"
+      ],
+      "keywords": [
+        "react component",
+        "react ui component",
+        "jsx component"
+      ],
+      "primary": [
+        "frontend-engineer",
+        "react-component-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer",
+        "accessibility-reviewer"
+      ],
+      "support": [
+        "interaction-designer"
+      ],
+      "quality_gates": [
+        "G3",
+        "G5",
+        "G6",
+        "G7"
+      ]
     },
     {
       "id": "github-actions-execution",
-      "paths": [".github/workflows/**", "**/.github/workflows/**", ".github/actions/**"],
-      "keywords": ["github actions", "github workflow", "github action"],
-      "primary": ["cicd-engineer", "github-actions-implementer"],
-      "reviewers": ["pipeline-security-reviewer"],
-      "quality_gates": ["G5", "G6", "G7", "G8"]
+      "paths": [
+        ".github/workflows/**",
+        "**/.github/workflows/**",
+        ".github/actions/**"
+      ],
+      "keywords": [
+        "github actions workflow",
+        "github workflow",
+        "github actions job",
+        "github action implementation"
+      ],
+      "keyword_groups": [
+        [
+          "github actions",
+          "github action"
+        ],
+        [
+          "workflow",
+          "job",
+          "step",
+          "runner",
+          "matrix",
+          "reusable workflow",
+          "composite action",
+          "trigger",
+          "permissions",
+          "cache"
+        ]
+      ],
+      "primary": [
+        "cicd-engineer",
+        "github-actions-implementer"
+      ],
+      "reviewers": [
+        "pipeline-security-reviewer"
+      ],
+      "quality_gates": [
+        "G5",
+        "G6",
+        "G7",
+        "G8"
+      ]
     },
     {
       "id": "gitlab-ci-execution",
@@ -493,51 +760,217 @@
     },
     {
       "id": "opentofu-module-execution",
-      "paths": [],
-      "keywords": ["opentofu module", "opentofu", "terraform module"],
-      "primary": ["infrastructure-provisioner", "opentofu-module-implementer"],
-      "reviewers": ["infrastructure-reviewer"],
-      "quality_gates": ["G3", "G4", "G5", "G6", "G7", "G8"]
+      "paths": [
+        "**/*.tf",
+        "**/*.tfvars"
+      ],
+      "keywords": [
+        "opentofu module",
+        "terraform module",
+        "tofu module",
+        "tf module",
+        "opentofu implementation"
+      ],
+      "keyword_groups": [
+        [
+          "opentofu",
+          "tofu"
+        ],
+        [
+          "module",
+          "provider",
+          "state",
+          "plan",
+          "apply",
+          "resource",
+          "variable",
+          "output",
+          "backend",
+          "workspace",
+          "import",
+          "provision",
+          "provisioning",
+          "proxmox",
+          "talos",
+          "kubernetes",
+          "vm",
+          "virtual machine",
+          "cluster",
+          "network",
+          "dns",
+          "storage"
+        ]
+      ],
+      "primary": [
+        "infrastructure-provisioner",
+        "opentofu-module-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "quality_gates": [
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "G7",
+        "G8"
+      ]
     },
     {
       "id": "helm-chart-execution",
-      "paths": ["helm/**", "charts/**", "**/charts/Chart.yaml"],
-      "keywords": ["helm chart", "helm values", "helm template"],
-      "primary": ["infrastructure-provisioner", "helm-chart-implementer"],
-      "reviewers": ["infrastructure-reviewer"],
-      "quality_gates": ["G3", "G4", "G5", "G6", "G7", "G8"]
+      "paths": [
+        "helm/**",
+        "charts/**",
+        "**/charts/**/Chart.yaml"
+      ],
+      "exclude_paths": [
+        "**/*.md",
+        "**/*.txt"
+      ],
+      "keywords": [
+        "helm chart",
+        "helm values",
+        "helm template"
+      ],
+      "primary": [
+        "infrastructure-provisioner",
+        "helm-chart-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "quality_gates": [
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "G7",
+        "G8"
+      ]
     },
     {
       "id": "kubernetes-manifest-execution",
-      "paths": ["kubernetes/**", "k8s/**"],
-      "keywords": ["kubernetes manifest", "kubernetes deployment manifest", "k8s manifest"],
-      "primary": ["infrastructure-provisioner", "kubernetes-manifest-implementer"],
-      "reviewers": ["infrastructure-reviewer"],
-      "quality_gates": ["G3", "G4", "G5", "G6", "G7", "G8"]
+      "paths": [
+        "kubernetes/**",
+        "k8s/**"
+      ],
+      "exclude_paths": [
+        "**/*.md",
+        "**/*.txt"
+      ],
+      "keywords": [
+        "kubernetes manifest",
+        "kubernetes deployment manifest",
+        "k8s manifest"
+      ],
+      "primary": [
+        "infrastructure-provisioner",
+        "kubernetes-manifest-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "quality_gates": [
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "G7",
+        "G8"
+      ]
     },
     {
       "id": "postgres-query-execution",
-      "paths": ["postgres/queries/**"],
-      "keywords": ["postgres query", "postgresql query", "pgx query"],
-      "primary": ["backend-engineer", "postgres-query-implementer"],
-      "reviewers": ["test-engineer", "code-reviewer"],
-      "quality_gates": ["G3", "G4", "G5", "G6", "G7"]
+      "paths": [
+        "postgres/queries/**",
+        "**/postgres/**/*.sql",
+        "**/postgresql/**/*.sql"
+      ],
+      "keywords": [
+        "postgres query",
+        "postgresql query",
+        "pgx query"
+      ],
+      "primary": [
+        "backend-engineer",
+        "postgres-query-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ],
+      "quality_gates": [
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "G7"
+      ]
     },
     {
       "id": "node-typescript-execution",
-      "paths": [],
-      "keywords": ["node typescript", "node.js typescript", "typescript node", "node implementation"],
-      "primary": ["frontend-engineer", "node-typescript-implementer"],
-      "reviewers": ["test-engineer", "code-reviewer", "accessibility-reviewer"],
-      "support": ["interaction-designer"],
-      "quality_gates": ["G3", "G5", "G6", "G7"]
+      "paths": [
+        "tools/**/*.ts",
+        "scripts/**/*.ts",
+        "cli/**/*.ts",
+        "server/**/*.ts",
+        "sdk/**/*.ts",
+        "plugins/**/*.ts",
+        "packages/**/src/**/*.ts",
+        "**/*.config.ts"
+      ],
+      "exclude_paths": [
+        "**/*.tsx",
+        "**/components/**",
+        "**/*.test.ts",
+        "**/*.spec.ts"
+      ],
+      "keywords": [
+        "node typescript",
+        "node.js typescript",
+        "typescript node",
+        "node implementation",
+        "typescript build",
+        "typescript tooling",
+        "typescript sdk",
+        "typescript cli"
+      ],
+      "primary": [
+        "backend-engineer",
+        "node-typescript-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ],
+      "quality_gates": [
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "G7"
+      ]
     },
     {
       "id": "selector-test-execution",
-      "paths": ["roster/orchestration/test/**", "roster/orchestration/src/routing.py", "roster/orchestration/src/build_dispatch_plan.py"],
-      "keywords": ["selector test", "agent selector test", "routing regression test", "dispatch plan test"],
-      "primary": ["application-engineer", "selector-test-implementer"],
-      "reviewers": ["test-engineer", "code-reviewer"]
+      "paths": [
+        "roster/orchestration/test/**"
+      ],
+      "keywords": [
+        "selector test",
+        "agent selector test",
+        "routing regression test",
+        "dispatch plan test"
+      ],
+      "primary": [
+        "application-engineer",
+        "selector-test-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ]
     },
     {
       "id": "knowledge-store",
