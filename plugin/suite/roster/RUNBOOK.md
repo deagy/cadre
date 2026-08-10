@@ -835,6 +835,36 @@ after role, policy, workflow, runtime, or skill changes, and commit the
 result in the same pull request; `.github/workflows/validate.yml`'s
 `generated-content` job fails the build on drift (`--check`).
 
+`cadre generate-plugin` does **not** regenerate the Cline mirror. Porting the
+74 role presets and 8 skills into `cline-plugins/cline-agents/` is a separate
+command that must run *after* `generate-plugin`, because it reads the freshly
+written `plugin/` tree:
+
+```sh
+python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin
+```
+
+Its guard is separate too: `plugin/tools/test_port_cline_agents.py` compares
+the committed mirror byte-for-byte against a fresh port, run by CI's
+`plugin-tools` job rather than `generated-content`. A change that stops after
+`generate-plugin` leaves `cline-plugins/cline-agents/agents/<role>.md`
+diverged from its source and fails there.
+
+**`git add` new files before regenerating.** The generator walks git-*tracked*
+files and skips untracked ones without warning, so a new module under
+`roster/*/src/` that is not yet staged will be missing from `plugin/suite/`
+even though an already-tracked file edited to import it *is* copied. The
+result is a packaged CLI that imports a module the package does not contain —
+which surfaces as a `ModuleNotFoundError` in the `cline-agents` npm suite, a
+long way from the Python edit that caused it. `generate_global_plugin.py`
+guards this case for role `AGENT.md` files but not for arbitrary sources.
+
+Editing the repository-root `AGENTS.md` also requires a regeneration pass:
+`plugin/suite/AGENTS.md` is generated from it. Root `CLAUDE.md` is not
+packaged, and `plugin/AGENTS.md` / `plugin/CLAUDE.md` are hand-authored
+documents describing the plugin directory itself — they are never regenerated
+and need manual upkeep.
+
 Editing `roster/authority/aides.yaml` or `roster/authority/_template.md.tmpl`
 requires an extra step first: run `cadre generate-authority-aides` to
 regenerate the 8 `roster/authority/*-aide/AGENT.md` files, *then*
