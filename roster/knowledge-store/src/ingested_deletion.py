@@ -115,6 +115,35 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def _canonical_timestamp(value: str) -> str:
+    """Normalise a caller-supplied ISO-8601 timestamp to the stored format.
+
+    `retention_until` is compared as TEXT, so a cutoff is only meaningful if
+    it has the exact shape `_now()` produces. Comparing an unnormalised
+    string is not a near-miss, it is silently wrong in either direction: a
+    date-only `2026-08-10` sorts *below* `2026-08-10T08:00:00.000Z`, so
+    everything expiring on that day would be reported as not-yet-expired,
+    with no error to signal it. A retention report that under-reports
+    expired content while looking correct is the worst failure available
+    here, so unparseable input is refused rather than compared as-is.
+
+    A date-only value means midnight UTC at the *start* of that day; pass a
+    full timestamp to include a day's expiries. A naive value (no offset) is
+    read as UTC, matching how every stored value is written.
+    """
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError as error:
+        raise IngestedDeletionError(
+            f"--as-of must be an ISO-8601 date or timestamp (got {value!r}). "
+            "Examples: 2026-08-10, 2026-08-10T08:00:00Z."
+        ) from error
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    canonical = parsed.astimezone(timezone.utc)
+    return canonical.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
 def install_schema(db: sqlite3.Connection) -> None:
     """Create the evidence table if absent. Additive and idempotent."""
     db.executescript(SCHEMA)
@@ -230,7 +259,7 @@ def retention_report(db: sqlite3.Connection, *, as_of: str | None = None) -> dic
     `delete-ingested` (scoped by source/conversation/message) to act on what
     it reports.
     """
-    cutoff = as_of or _now()
+    cutoff = _canonical_timestamp(as_of) if as_of else _now()
     rows = db.execute(
         "SELECT id, source, conversation_id, classification, retention_until FROM messages "
         "WHERE retention_until IS NOT NULL AND retention_until <= ? ORDER BY retention_until, id",
@@ -506,7 +535,7 @@ def delete_ingested(
     }
 
 
-def deletion_evidence(db: sqlite3.Connection) -> list[dict[str, Any]]:
+def deletion_evidence(db: sqlite3.Connection, *, source: str | None = None) -> list[dict[str, Any]]:
     """Every ingested-content deletion ever attempted, oldest first.
 
     No foreign key to anything it describes -- see module docstring. Never
@@ -517,6 +546,15 @@ def deletion_evidence(db: sqlite3.Connection) -> list[dict[str, Any]]:
     `delete_status` `attempted` or `failed`, meaning content may still be
     present. Only `delete_status == "completed"` means the content was
     actually removed -- see module docstring's disambiguation rule.
+
+    `source` filters to one project's deletions. Digests are not content, but
+    a row still carries the deleting project's identifier, a free-text
+    `reason`, and asserted `deleted_by`/`authorized_by` identities -- so in a
+    store shared by several projects this is cross-project metadata, and the
+    caller decides whose evidence it is asking for. Rows whose `source` spans
+    several projects (a deletion that matched more than one) are matched when
+    the requested source is one of them, so a scoped read never hides a
+    deletion that touched the caller's own content.
     """
     rows = db.execute(
         "SELECT id, scope, scope_key, source, classification, message_count, chunk_count, "
@@ -524,6 +562,12 @@ def deletion_evidence(db: sqlite3.Connection) -> list[dict[str, Any]]:
         "reason, deleted_by, authorized_by, ingestion_runs_redacted_json, delete_status, "
         "reclaim_status, deleted_at FROM ingested_content_deletions ORDER BY deleted_at, id"
     ).fetchall()
+    if source is not None:
+        # `source` holds `_plan`'s comma-joined summary, so this splits on the
+        # same separator rather than matching the column. An exact match would
+        # miss a multi-source deletion that included this caller, and a `LIKE`
+        # would treat `%`/`_` in a project identifier as wildcards.
+        rows = [row for row in rows if source in str(row["source"]).split(",")]
     results = []
     for row in rows:
         entry = dict(row)

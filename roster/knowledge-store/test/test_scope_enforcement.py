@@ -17,8 +17,13 @@ import tempfile
 import unittest
 import uuid
 import yaml
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
+
+
+def tzinfo_offset(hours: int) -> timezone:
+    return timezone(timedelta(hours=hours))
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -575,6 +580,193 @@ class ScopeEnforcementTests(unittest.TestCase):
             after = self._run(["stats"])
             self.assertEqual(baseline["messages"], after["messages"])
             self.assertEqual(baseline["chunks"], after["chunks"])
+
+    def test_ac15b_no_handler_issues_a_mutating_statement_against_ingested_content(self) -> None:
+        """The load-bearing half of AC-15b: observed SQL, not handler source text.
+
+        `test_ac15b_ingested_deletion_is_never_a_side_effect` reads each
+        handler's own body with `inspect.getsource`, which is worth keeping as
+        a cheap tripwire but cannot be the guarantee: it does not follow calls,
+        so moving `DELETE FROM messages` into any helper the handler invokes
+        passes it. Its behavioural half (comparing `stats` counts) is no
+        backstop either -- a mutation that deletes nothing observable, or
+        deletes rows the assertion does not count, moves no counts.
+
+        This test instead installs a trace callback on the connection the CLI
+        actually opens, so every statement reaching SQLite is recorded no
+        matter which function issued it, and asserts none of them mutates
+        `messages`/`chunks`. The one documented exception is `save_message`'s
+        own chunk rebuild during `ingest`, allowed by exact shape.
+        """
+        import re
+
+        import cli as cli_module
+
+        statements: list[str] = []
+        real_open_store = cli_module.open_store
+
+        def recording_open_store(*args, **kwargs):
+            db = real_open_store(*args, **kwargs)
+            db.set_trace_callback(statements.append)
+            return db
+
+        mutating = re.compile(
+            r"\b(?:DELETE\s+FROM|UPDATE|INSERT\s+(?:OR\s+\w+\s+)?INTO)\s+[\"'`\[]?(messages|chunks)\b",
+            re.IGNORECASE,
+        )
+        chunk_rebuild = re.compile(r"DELETE\s+FROM\s+chunks\s+WHERE\s+message_id", re.IGNORECASE)
+
+        def offending(allow_ingest_writes: bool) -> list[str]:
+            found = [line for line in statements if mutating.search(line)]
+            if allow_ingest_writes:
+                # `ingest` legitimately writes ingested content; what it must
+                # never do is remove a message row or rebuild anything beyond
+                # the one message's own chunks.
+                found = [
+                    line
+                    for line in found
+                    if not chunk_rebuild.search(line)
+                    and not re.search(r"INSERT\s+(?:OR\s+\w+\s+)?INTO\s+(messages|chunks)", line, re.IGNORECASE)
+                ]
+            return found
+
+        env_patch, cwd_patch = self._project_local_env()
+        with env_patch, cwd_patch, mock.patch.object(cli_module, "open_store", recording_open_store):
+            self._run(["init"])
+
+            statements.clear()
+            self._run([
+                "ingest", "--input", str(ROOT / "examples" / "chat-export.json"),
+                "--classification", "internal",
+            ])
+            self.assertEqual(
+                [],
+                offending(allow_ingest_writes=True),
+                "ingest issued a mutating statement against messages/chunks beyond inserting "
+                "content and rebuilding the one message's own chunks",
+            )
+
+            for command in (
+                ["search", "--query", "production release approval", "--classification", "internal"],
+                [
+                    "context", "--agent", "release-engineer", "--task-id", "REL-1",
+                    "--query", "production release approval", "--classification", "internal",
+                ],
+                ["stats"],
+                ["retention-report"],
+            ):
+                statements.clear()
+                self._run(command)
+                self.assertEqual(
+                    [],
+                    offending(allow_ingest_writes=False),
+                    f"`{command[0]}` mutated messages/chunks -- read paths must never write "
+                    "ingested content, whether directly or through a helper",
+                )
+
+    def test_deletion_evidence_requires_a_scope_at_the_shared_tier(self) -> None:
+        """`deletion-evidence` is scoped like `search`, not left open.
+
+        Evidence rows are not content, but they carry the deleting project's
+        identifier, a steward's free-text reason, and asserted actor
+        identities -- cross-project metadata in a store several projects
+        share. Every other command reading that store makes the caller name a
+        scope; this one must too, rather than being the single exception.
+        """
+        env_patch, cwd_patch = self._global_fallback_env()
+        with env_patch, cwd_patch:
+            self._run(["init"])
+            with self.assertRaises(ValueError) as unscoped:
+                self._run(["deletion-evidence"])
+            self.assertIn("--source", str(unscoped.exception))
+
+            with self.assertRaises(ValueError) as ambiguous:
+                self._run(["deletion-evidence", "--source", "proj-a", "--all-sources"])
+            self.assertIn("Ambiguous scope", str(ambiguous.exception))
+
+            # Explicit cross-project opt-in stays available -- the point is
+            # that it is stated, not that it is forbidden.
+            self.assertIn("deletions", self._run(["deletion-evidence", "--all-sources"]))
+
+    def test_deletion_evidence_does_not_disclose_another_projects_deletions(self) -> None:
+        """A scoped read returns only the named project's evidence."""
+        env_patch, cwd_patch = self._global_fallback_env()
+        with env_patch, cwd_patch:
+            self._run(["init"])
+            for source in ("proj-a", "proj-b"):
+                self._run([
+                    "ingest", "--input", str(ROOT / "examples" / "chat-export.json"),
+                    "--classification", "internal", "--source", source,
+                ])
+                self._run([
+                    "delete-ingested", "--scope", "source", "--id", source, "--source", source,
+                    "--reason", f"cleanup for {source}", "--trigger", "steward-decision",
+                    "--deleted-by", f"steward-{source}", "--authorized-by", f"human-{source}",
+                ])
+
+            scoped = self._run(["deletion-evidence", "--source", "proj-a"])["deletions"]
+            self.assertEqual(["proj-a"], sorted({entry["source"] for entry in scoped}))
+            joined = json.dumps(scoped)
+            self.assertNotIn("proj-b", joined)
+            self.assertNotIn("steward-proj-b", joined)
+
+            everything = self._run(["deletion-evidence", "--all-sources"])["deletions"]
+            self.assertEqual({"proj-a", "proj-b"}, {entry["source"] for entry in everything})
+
+    def test_retention_report_rejects_an_unparseable_as_of(self) -> None:
+        env_patch, cwd_patch = self._project_local_env()
+        with env_patch, cwd_patch:
+            self._run(["init"])
+            with self.assertRaises(ValueError) as refused:
+                self._run(["retention-report", "--as-of", "last tuesday"])
+            self.assertIn("ISO-8601", str(refused.exception))
+
+    def test_retention_report_as_of_is_compared_as_an_instant_not_a_string(self) -> None:
+        """`--as-of` is an instant, not a string sorted against stored text.
+
+        `retention_until` is stored in one canonical shape and compared with
+        `<=`, so any other valid ISO-8601 spelling sorts by character rather
+        than by clock. A non-UTC offset is the case where that diverges
+        silently in the dangerous direction: `T15:23+02:00` is *earlier* than
+        a `T14:23Z` expiry, but sorts *after* it, so an unnormalised cutoff
+        reports content as expired that has not expired -- inviting a steward
+        to delete it early, with a report that looks correct either way.
+
+        Pinned on the count, which differs between the two behaviours, rather
+        than on the echoed `as_of` string, which a normaliser could satisfy
+        without the comparison using it.
+        """
+        env_patch, cwd_patch = self._project_local_env()
+        with env_patch, cwd_patch:
+            self._run(["init"])
+            self._run([
+                "ingest", "--input", str(ROOT / "examples" / "chat-export.json"),
+                "--classification", "internal", "--retention-days", "1",
+            ])
+            eventually = self._run(["retention-report", "--as-of", "2999-01-01T00:00:00Z"])
+            total = eventually["expired_message_count"]
+            self.assertGreater(total, 0)
+            expiry = max(item["retention_until"] for item in eventually["items"])
+            self.assertTrue(expiry.endswith("Z"), expiry)
+
+            # One hour before the expiry, written in +02:00. Nothing has
+            # expired at that instant; naive string comparison says otherwise
+            # because "T15" sorts above "T14".
+            earlier = datetime.strptime(expiry, "%Y-%m-%dT%H:%M:%S.%f%z") - timedelta(hours=1)
+            as_of = earlier.astimezone(tzinfo_offset(2)).isoformat(timespec="seconds")
+            self.assertGreater(as_of, expiry, "fixture no longer exercises the sort/clock divergence")
+            self.assertEqual(
+                0,
+                self._run(["retention-report", "--as-of", as_of])["expired_message_count"],
+                f"content expiring at {expiry} was reported expired as of {as_of}, which is earlier",
+            )
+
+            # The same instant one hour *after* the expiry does report it,
+            # so the assertion above is not passing by reporting nothing.
+            later = (earlier + timedelta(hours=2)).astimezone(tzinfo_offset(2)).isoformat(timespec="seconds")
+            self.assertEqual(
+                total, self._run(["retention-report", "--as-of", later])["expired_message_count"]
+            )
 
     def test_ac15b_evidence_columns_exclude_content(self) -> None:
         db, _ = self._store_with_one_message()

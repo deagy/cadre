@@ -103,7 +103,7 @@ ingest --input <file> [--source <name>] [--classification <level>] [--retention-
 search --query <text> --classification <level> [--top <n>] [--source <name> | --all-sources]
 context --agent <role> --task-id <id> --query <text> --classification <level> [--top <n>] [--source <name> | --all-sources]
 stats
-retention-report [--as-of <iso-8601 timestamp>]
+retention-report [--as-of <iso-8601 date or timestamp>]
 delete-ingested --scope {source|conversation|message} --id <id> --reason <text> --deleted-by <actor> --authorized-by <human> --trigger <trigger> [--source <name>] [--dry-run]
 
 propose (--input <file>|- | --from-finding <file>|-) [--render-only]
@@ -113,15 +113,28 @@ import-staged --directory <dir>
 export-staged --output <dir> [--status <status>] [--check]
 disposition-staged --id <id> --action <accepted|rejected|deferred> --reason <text> --classification-used <level> --decided-by <actor> [--diverged-from-proposal]
 delete-staged --id <id> --reason <text> --deleted-by <actor> [--authorized-by <human>]
-deletion-evidence
+deletion-evidence [--source <name> | --all-sources]
 ```
 
 Without `--config`, configuration is read using the project-local-then-global resolution above; if no config file exists at the resolved location, built-in defaults apply relative to that same directory. An existing config resolves its database path relative to the config directory. A supplied `--config` path must exist and contain a JSON object; otherwise the command fails closed.
 
 At the global-fallback tier only (see "Enforced scope at the global-fallback
-tier" above), `search`/`context` require exactly one of `--source`/
-`--all-sources`, and `ingest` requires an explicit `--source`. Project-local
-and explicit-`--config` invocations impose no such requirement.
+tier" above), `search`/`context`/`deletion-evidence` require exactly one of `--source`/
+`--all-sources`, and `ingest`/`delete-ingested` require an explicit
+`--source`. Project-local and explicit-`--config` invocations impose no such
+requirement. `deletion-evidence` is scoped for the same reason retrieval is:
+an evidence row is not content, but it carries the deleting project's
+identifier, its steward's free-text reason, and asserted actor identities, so
+reading every project's rows out of a shared store is a cross-project read and
+has to say so. A source-scoped read returns ingested-content evidence only --
+staged-record deletions carry no source to filter by and cannot exist in the
+shared store at all.
+
+`retention-report --as-of` takes an ISO-8601 date or timestamp and is compared
+as an instant, not as text: a date alone means midnight UTC starting that day
+(pass a full timestamp to include that day's expiries), a value without an
+offset is read as UTC, and anything unparseable is refused rather than
+silently sorted against stored values.
 
 `context` is the agent-facing command. It returns a schema-versioned bundle containing trust requirements, citations, and retrieved passages. `search` is a lower-level diagnostic command. Both require an explicit classification and apply exact-match classification and optional source filtering before ranking. `--top` must be an integer from 1 through 20, enforcing the orchestration policy limit.
 
