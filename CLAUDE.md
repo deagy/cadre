@@ -55,6 +55,9 @@ python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin  
 # plugin/suite/ bundles a copy of roster/, so adding a module under
 # roster/<...>/src/ without regenerating ships a plugin whose own CLI cannot
 # import it (surfaces as ModuleNotFoundError in the cline-agents npm tests).
+# This file and AGENTS.md are bundled too (plugin/AGENTS.md, plugin/CLAUDE.md,
+# plugin/suite/AGENTS.md), so editing either of them also needs a regen pass.
+# The trigger is "did I touch anything plugin/ copies?", not a directory list.
 
 # ...then re-run both guards — they fail the build on drift
 python3 -m unittest discover -s roster/orchestration/test -p "test_repository_health.py"

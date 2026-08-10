@@ -26,6 +26,8 @@ python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin  
 
 This also applies to code, not just role definitions: `plugin/suite/` bundles a copy of `roster/`, so adding a module under `roster/knowledge-store/src/` without regenerating ships a plugin whose own CLI cannot import it — which fails as a `ModuleNotFoundError` in the `cline-agents` npm tests, a long way from the edit that caused it.
 
+It applies to this file too. `plugin/AGENTS.md`, `plugin/CLAUDE.md`, and `plugin/suite/AGENTS.md` are generated from the repository-root `AGENTS.md`/`CLAUDE.md`, so editing either of those documents — including editing them to describe this very rule — requires the same regeneration pass. Treat "did I touch anything `plugin/` copies?" as the trigger, rather than trying to remember a list of directories.
+
 Then re-run the guards: `roster/orchestration/test/test_repository_health.py` (catalog/role drift) and `python3 -m unittest discover -s plugin/tools -p "test_*.py"` (packaging, docs guards, and the Cline mirror's byte-for-byte match against source). `.github/workflows/validate.yml`'s `generated-content` job re-runs `generate-plugin --check` so drift cannot outlive a pull request. Run lifecycle integration tests against the in-tree `kernel/`.
 
 For Go services, use `gofmt`, `go tool goimports`, `go vet ./...`, `go test ./...`, `go test -race ./...`, and `go tool golangci-lint run ./...`. For React frontends, use the project-pinned package manager for install, test, typecheck, and build commands. Podman, PostgreSQL migrations, Helm, and OpenTofu remain disposable or validation-only unless a project has explicit production approval; follow the component README and never target a persistent environment without approval.
