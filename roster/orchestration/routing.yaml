@@ -1255,6 +1255,7 @@
         "css-layout-implementer"
       ],
       "reviewers": [
+        "code-reviewer",
         "accessibility-reviewer"
       ],
       "support": [
@@ -1327,6 +1328,7 @@
         "frontend-accessibility-remediator"
       ],
       "reviewers": [
+        "code-reviewer",
         "accessibility-reviewer"
       ],
       "support": [
@@ -1417,7 +1419,8 @@
         "prompt-artifact-implementer"
       ],
       "reviewers": [
-        "test-engineer"
+        "test-engineer",
+        "code-reviewer"
       ],
       "support": [
         "ai-engineer"
@@ -1487,7 +1490,9 @@
         "retrieval-pipeline-implementer"
       ],
       "reviewers": [
-        "test-engineer"
+        "test-engineer",
+        "code-reviewer",
+        "security-reviewer"
       ],
       "support": [
         "ai-engineer"
@@ -1661,7 +1666,7 @@
       ]
     },
     {"id":"agent-workflow-execution","workflow_shape":"new-service","paths":["agents/workflows/**","roster/workflows/**"],"keywords":["agent workflow implementation"],"primary":["agent-workflow-implementer"],"reviewers":["code-reviewer"],"support":["application-engineer"]},
-    {"id":"ai-observability-execution","workflow_shape":"unclassified","paths":["ai/observability/**"],"keywords":["ai observability implementation"],"primary":["ai-observability-implementer"],"reviewers":["security-reviewer"],"support":["ai-engineer"]},
+    {"id":"ai-observability-execution","workflow_shape":"unclassified","paths":["ai/observability/**"],"keywords":["ai observability implementation"],"primary":["ai-observability-implementer"],"reviewers":["code-reviewer","security-reviewer"],"support":["ai-engineer"]},
     {"id":"ansible-automation-execution","workflow_shape":"infrastructure-change","paths":["ansible/**"],"keywords":["ansible automation implementation"],"primary":["ansible-automation-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
     {"id":"bare-metal-provisioning-execution","workflow_shape":"infrastructure-change","paths":["bare-metal/**"],"keywords":["bare metal provisioning implementation"],"primary":["bare-metal-provisioning-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
     {"id":"bgp-routing-execution","workflow_shape":"infrastructure-change","paths":["networking/bgp/**"],"keywords":["bgp routing implementation"],"primary":["bgp-routing-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
@@ -1679,7 +1684,7 @@
     {"id":"firmware-execution","workflow_shape":"new-service","paths":["firmware/**"],"keywords":["firmware implementation"],"primary":["firmware-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["backend-engineer"]},
     {"id":"gitops-delivery-execution","workflow_shape":"pipeline-change","paths":["gitops/**"],"keywords":["gitops delivery implementation"],"primary":["gitops-delivery-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
     {"id":"guardrail-policy-execution","workflow_shape":"new-service","paths":["policies/guardrails/**"],"keywords":["guardrail policy implementation"],"primary":["guardrail-policy-implementer"],"reviewers":["security-reviewer"],"support":["policy-as-code-engineer"]},
-    {"id":"inference-gateway-execution","workflow_shape":"new-service","paths":["ai/inference-gateway/**"],"keywords":["inference gateway implementation"],"primary":["inference-gateway-implementer"],"reviewers":["security-reviewer"],"support":["ai-engineer"]},
+    {"id":"inference-gateway-execution","workflow_shape":"new-service","paths":["ai/inference-gateway/**"],"keywords":["inference gateway implementation"],"primary":["inference-gateway-implementer"],"reviewers":["code-reviewer","security-reviewer"],"support":["ai-engineer"]},
     {"id":"kernel-module-execution","workflow_shape":"new-service","paths":["kernel-modules/**"],"keywords":["kernel module implementation"],"primary":["kernel-module-implementer"],"reviewers":["test-engineer","code-reviewer","security-reviewer"],"support":["backend-engineer"]},
     {"id":"kubernetes-networking-execution","workflow_shape":"infrastructure-change","paths":["kubernetes/networking/**"],"keywords":["kubernetes networking implementation"],"primary":["kubernetes-networking-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
     {"id":"kubernetes-operator-execution","workflow_shape":"new-service","paths":["kubernetes/operators/**"],"keywords":["kubernetes operator implementation"],"primary":["kubernetes-operator-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
@@ -1695,18 +1700,18 @@
     {"id":"pki-certificate-lifecycle-execution","workflow_shape":"unclassified","paths":["security/pki/**"],"keywords":["pki certificate lifecycle implementation"],"primary":["pki-certificate-lifecycle-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
     {"id":"pqc-integration-execution","workflow_shape":"unclassified","paths":["security/pqc/**"],"keywords":["pqc integration implementation"],"primary":["pqc-integration-implementer"],"reviewers":["security-reviewer"],"support":["cryptographic-assurance-engineer"]},
     {"id":"precision-timing-execution","workflow_shape":"infrastructure-change","paths":["timing/**"],"keywords":["precision timing implementation"],"primary":["precision-timing-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"protocol-fuzzing-execution","workflow_shape":"unclassified","paths":["fuzz/protocols/**"],"keywords":["protocol fuzzing implementation"],"primary":["protocol-fuzzing-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
+    {"id":"protocol-fuzzing-execution","workflow_shape":"unclassified","paths":["fuzz/protocols/**"],"keywords":["protocol fuzzing implementation"],"primary":["protocol-fuzzing-implementer"],"reviewers":["code-reviewer","security-reviewer"],"support":["test-engineer"]},
     {"id":"protocol-integration-execution","workflow_shape":"new-service","paths":["protocols/integration/**"],"keywords":["protocol integration implementation"],"primary":["protocol-integration-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["backend-engineer"]},
     {"id":"qkd-qkms-integration-execution","workflow_shape":"unclassified","paths":["quantum/qkd-qkms/**"],"keywords":["qkd qkms integration implementation"],"primary":["qkd-qkms-integration-implementer"],"reviewers":["security-reviewer"],"support":["cryptographic-assurance-engineer"]},
-    {"id":"quantum-network-integration-execution","workflow_shape":"unclassified","paths":["quantum/network/**"],"keywords":["quantum network integration implementation"],"primary":["quantum-network-integration-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"rbac-manifest-execution","workflow_shape":"unclassified","paths":["security/rbac/**"],"keywords":["rbac manifest implementation"],"primary":["rbac-manifest-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
+    {"id":"quantum-network-integration-execution","workflow_shape":"unclassified","paths":["quantum/network/**"],"keywords":["quantum network integration implementation"],"primary":["quantum-network-integration-implementer"],"reviewers":["security-reviewer","infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
+    {"id":"rbac-manifest-execution","workflow_shape":"unclassified","paths":["security/rbac/**"],"keywords":["rbac manifest implementation"],"primary":["rbac-manifest-implementer"],"reviewers":["security-reviewer","infrastructure-reviewer"],"support":["secrets-identity-engineer"]},
     {"id":"rtos-integration-execution","workflow_shape":"new-service","paths":["rtos/**","embedded/rtos/**","firmware/rtos/**"],"keywords":["rtos integration implementation","rtos task implementation","rtos scheduling implementation"],"primary":["rtos-integration-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["backend-engineer"]},
     {"id":"secret-hygiene-execution","workflow_shape":"unclassified","paths":["security/secret-hygiene/**"],"keywords":["secret hygiene implementation"],"primary":["secret-hygiene-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
     {"id":"secure-boot-execution","workflow_shape":"unclassified","paths":["security/secure-boot/**"],"keywords":["secure boot implementation"],"primary":["secure-boot-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
     {"id":"secure-channel-integration-execution","workflow_shape":"unclassified","paths":["security/secure-channels/**"],"keywords":["secure channel integration implementation"],"primary":["secure-channel-integration-implementer"],"reviewers":["security-reviewer"],"support":["cryptographic-assurance-engineer"]},
     {"id":"sonicos-config-execution","workflow_shape":"infrastructure-change","paths":["networking/sonicos/**"],"keywords":["sonicos config implementation"],"primary":["sonicos-config-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
     {"id":"starlingx-config-execution","workflow_shape":"infrastructure-change","paths":["starlingx/**"],"keywords":["starlingx config implementation"],"primary":["starlingx-config-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"supply-chain-remediation-execution","workflow_shape":"unclassified","paths":["security/supply-chain-remediation/**"],"keywords":["supply chain remediation implementation"],"primary":["supply-chain-remediation-implementer"],"reviewers":["supply-chain-security-reviewer"],"support":["cicd-engineer"]},
+    {"id":"supply-chain-remediation-execution","workflow_shape":"unclassified","paths":["security/supply-chain-remediation/**"],"keywords":["supply chain remediation implementation"],"primary":["supply-chain-remediation-implementer"],"reviewers":["code-reviewer","supply-chain-security-reviewer"],"support":["cicd-engineer"]},
     {"id":"go-test-execution","workflow_shape":"unclassified","paths":["tests/go/**"],"keywords":["go test implementation"],"primary":["go-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
     {"id":"hardware-test-execution","workflow_shape":"unclassified","paths":["tests/hardware/**"],"keywords":["hardware test implementation"],"primary":["hardware-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
     {"id":"interoperability-test-execution","workflow_shape":"unclassified","paths":["tests/interoperability/**"],"keywords":["interoperability test implementation"],"primary":["interoperability-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
