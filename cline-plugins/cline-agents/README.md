@@ -212,13 +212,13 @@ consequence is that briefs are large. Measured with
 
 | | estimated tokens |
 |---|---|
-| median brief | ~14,900 |
-| largest brief (`knowledge-store-steward`) | ~17,200 |
+| median brief | ~15,700 |
+| largest brief (`knowledge-store-steward`) | ~18,000 |
 | median role-specific content | ~370 |
-| median embedded shared policy | ~14,800 |
+| median embedded shared policy | ~15,500 |
 
-Those are estimates from a chars-per-token divisor rather than a real
-tokenizer — treat a model near the line as under it. Every role fits from
+Those are estimates from the command's default 4.0 chars-per-token divisor
+rather than a real tokenizer — treat a model near the line as under it. Every role fits from
 roughly 20k upward; at 16k, 131 of 159 do not. The recommendation is 32k
 rather than 20k because the headroom has to cover the estimate's error, the
 task itself, tool schemas, any retrieved knowledge, and the reply.

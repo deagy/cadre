@@ -314,9 +314,9 @@ authoritative for the *why*.
   - **Configure a model with at least a 32k context window.** Role briefs
     carry their shared-policy block embedded verbatim, because a dispatched
     subagent is an isolated session with no other channel to receive it. That
-    makes the briefs large: a median of roughly 14,900 tokens and a largest of
-    about 17,200 (`cadre role-fidelity --mode static`; estimates from a
-    chars-per-token divisor, not a real tokenizer). Every role fits from about
+    makes the briefs large: a median of roughly 15,700 tokens and a largest of
+    about 18,000 (`cadre role-fidelity --mode static` at its default 4.0
+    chars/token divisor; an estimate, not a real tokenizer). Every role fits from about
     20k upward; at 16k, 131 of 159 do not. 32k is the documented minimum
     because the gap absorbs the estimate's error, the task and tool schemas,
     any retrieved knowledge, and the reply.

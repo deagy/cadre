@@ -457,7 +457,13 @@ const LEGACY_MODEL_TIERS: Readonly<Record<string, ModelTier>> = {
 const asModelTier = (value: string | undefined): ModelTier | undefined => {
   const normalized = value?.trim().toLowerCase() ?? "";
   if ((MODEL_TIERS as readonly string[]).includes(normalized)) return normalized as ModelTier;
-  const legacy = LEGACY_MODEL_TIERS[normalized];
+  // `Object.hasOwn`, not a bare lookup: a bare one also resolves inherited
+  // `Object.prototype` keys, so `modelTier: constructor` (or `toString`,
+  // `valueOf`) would return a truthy *function* here, and `modelForTier`
+  // would then throw `tier.toUpperCase is not a function` -- a crash instead
+  // of the documented "treated as no tier at all". A preset is allowed to say
+  // anything: project presets arrive with an untrusted checkout.
+  const legacy = Object.hasOwn(LEGACY_MODEL_TIERS, normalized) ? LEGACY_MODEL_TIERS[normalized] : undefined;
   if (legacy) {
     console.error(
       `[cline-agents] Preset declares the retired modelTier "${normalized}"; reading it as "${legacy}". ` +
@@ -586,7 +592,8 @@ interface AgentDefinition {
   providerId?: string;
   modelId?: string;
   /**
-   * Capability tier (`opus`/`sonnet`/`haiku`) carried by generated presets.
+   * Capability tier (`high`/`mid`/`low`) carried by generated presets; the
+   * retired `opus`/`sonnet`/`haiku` spellings are still read, with a warning.
    * Deliberately not a vendor-qualified model id: the tier is this suite's
    * own domain knowledge, while the provider and the concrete model that
    * serve it are operator configuration. Resolved at dispatch time.

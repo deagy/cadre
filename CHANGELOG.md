@@ -76,6 +76,13 @@ check and reporting "nothing to do". See
   that has stopped steering the output, and its results may never stand in
   for a human review, gate approval, or risk acceptance.
 
+  For CI use the two thresholds are deliberately separate. `--fail-under`
+  gates the pass rate, which is computed over *answered* probes only so a
+  flaky endpoint cannot masquerade as a fidelity verdict; `--min-coverage`
+  gates how much of the run actually happened. A run using only the former
+  can exit 0 on a single lucky answer out of hundreds of attempts, so a CI
+  invocation should set both.
+
   Measured against two local models on this suite's own roles
   (`roster/orchestration/runs/cadre-cline-local-model-fidelity-2026-08-10/`),
   a 27B model scored 45/45 while a 70B model of a different family scored
@@ -124,7 +131,7 @@ check and reporting "nothing to do". See
 - **Documented a 32k minimum context window for the Cline dispatch path.**
   Role briefs embed shared policy verbatim (a dispatched subagent is an
   isolated session with no other channel to receive it), so they run to a
-  median of ~14,900 estimated tokens. Every role fits from roughly 20k upward;
+  median of ~15,700 estimated tokens. Every role fits from roughly 20k upward;
   at 16k, 131 of 159 do not. Recorded in `cline-agents/README.md` and
   `references/runner-adapters.md`, with the caveat that fitting is necessary
   but not sufficient — advertised context is not effective context.

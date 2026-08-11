@@ -37,7 +37,7 @@ return a blocking question in its result instead of prompting directly.**
 Before the first dispatch this session, this is entirely handled for you: this plugin's tools resolve the bundled role catalog on their own, with no config step needed before first dispatch:
 
 - **Codex CLI only, no question needed**: run `cadre bootstrap-codex`. It installs generated `agents-<role>.toml` wrappers, never touches legacy bare global role files, and fails if an existing namespaced file lacks this generator's provenance marker. Mention in your final report that wrappers were synced, so it isn't a silent write. Claude Code needs no equivalent step: its plugin-bundled `agents/*.md` wrappers are auto-discovered once the plugin is installed.
-- **Cline only, check before the first dispatch**: the `cline-agents` plugin ships no default provider or model on purpose, so dispatch **fails closed** until the operator has set `CLINE_AGENTS_PROVIDER_ID` plus at least one of `CLINE_AGENTS_MODEL_HIGH`/`_MID`/`_LOW` or `CLINE_AGENTS_MODEL_DEFAULT` (one variable is enough — it serves every tier). This is the single most common reason a Cline dispatch appears to do nothing: `dispatch_selected_roles` catches the per-role failure and returns every role as `skipped`, so you see a correct, fully staffed plan and zero started agents. If those variables are unset, say so and ask the human to set them rather than reporting the plan as if it ran. Neither Claude Code nor Codex has an equivalent requirement, and `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is unrelated — it is a Claude Code peer-messaging flag with no effect on Cline.
+- **Cline only, check before the first dispatch**: the `cline-agents` plugin ships no default provider or model on purpose, so dispatch **fails closed** until the operator has set `CLINE_AGENTS_PROVIDER_ID` plus a model for every tier a plan uses: either `CLINE_AGENTS_MODEL_HIGH`/`_MID`/`_LOW` individually, or `CLINE_AGENTS_MODEL_DEFAULT` — only `_DEFAULT` covers every tier on its own, so setting just one of the per-tier variables still skips every role in the other two tiers. This is the single most common reason a Cline dispatch appears to do nothing: `dispatch_selected_roles` catches the per-role failure and returns every role as `skipped`, so you see a correct, fully staffed plan and zero started agents. If those variables are unset, say so and ask the human to set them rather than reporting the plan as if it ran. Neither Claude Code nor Codex has an equivalent requirement, and `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is unrelated — it is a Claude Code peer-messaging flag with no effect on Cline.
 - **Every runner, ask first**: if none of the three knowledge-store config tiers resolve yet (no explicit `--config`, no project-local `.agents/knowledge-store/config.json`, and no `~/.agents/knowledge-store/config.json` — i.e. this is genuinely the first knowledge-store use anywhere on this machine, or the first use in a project that hasn't opted in either way), this is a real decision, not plumbing: ask the human once, before creating anything —
 
   > No knowledge-store config found. Create an isolated store for this project only (`.agents/knowledge-store/config.json`, recommended — keeps this project's content separate from every other project), or use the shared store across every project on this machine (`~/.agents/knowledge-store/config.json`)?
@@ -563,9 +563,9 @@ authoritative for the *why*.
   - **Configure a model with at least a 32k context window.** Role briefs
     carry their shared-policy block embedded verbatim, because a dispatched
     subagent is an isolated session with no other channel to receive it. That
-    makes the briefs large: a median of roughly 14,900 tokens and a largest of
-    about 17,200 (`cadre role-fidelity --mode static`; estimates from a
-    chars-per-token divisor, not a real tokenizer). Every role fits from about
+    makes the briefs large: a median of roughly 15,700 tokens and a largest of
+    about 18,000 (`cadre role-fidelity --mode static` at its default 4.0
+    chars/token divisor; an estimate, not a real tokenizer). Every role fits from about
     20k upward; at 16k, 131 of 159 do not. 32k is the documented minimum
     because the gap absorbs the estimate's error, the task and tool schemas,
     any retrieved knowledge, and the reply.

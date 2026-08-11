@@ -18,9 +18,11 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1] / "src"
@@ -237,6 +239,28 @@ class PresetCompositionTests(unittest.TestCase):
         self.assertEqual(0, preset.shared_policy_chars)
 
 
+class LoadPresetsTests(unittest.TestCase):
+    def test_role_selection_resolves_against_the_filename_it_selects_on(self) -> None:
+        """`--role` selects by filename stem, so a preset whose frontmatter
+        `name` differs from its filename must not be loaded and then reported
+        missing in the same call."""
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / "code-reviewer.md").write_text(
+                "---\nname: Code Reviewer\nmodelTier: mid\n---\n\nBrief.\n", encoding="utf-8"
+            )
+            [preset] = rf.load_presets(directory, ["code-reviewer"])
+            self.assertEqual("Code Reviewer", preset.name)
+
+    def test_an_unmatched_role_still_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / "code-reviewer.md").write_text("---\nname: r\n---\n\nB.\n", encoding="utf-8")
+            with self.assertRaises(rf.FidelityError) as caught:
+                rf.load_presets(directory, ["no-such-role"])
+            self.assertIn("no-such-role", str(caught.exception))
+
+
 class StaticReportTests(unittest.TestCase):
     def test_flags_only_the_briefs_that_exceed_the_usable_budget(self) -> None:
         small = _preset("x" * 400, name="small")     # ~100 tokens
@@ -367,13 +391,145 @@ class RunProbesTests(unittest.TestCase):
         self.assertEqual("alpha verbatim", report["results"][0]["reply"])
 
 
+class ChatClientTests(unittest.TestCase):
+    """The one component that touches the network, exercised with `urlopen`
+    replaced -- so still no network here."""
+
+    class _Response:
+        def __init__(self, body: bytes) -> None:
+            self._body = body
+
+        def read(self) -> bytes:
+            return self._body
+
+        def __enter__(self) -> "ChatClientTests._Response":
+            return self
+
+        def __exit__(self, *_exc: object) -> bool:
+            return False
+
+    def _client_returning(self, body: bytes) -> rf.ChatClient:
+        client = rf.ChatClient(base_url="stub://v1", model="m")
+        self._patch = unittest.mock.patch.object(
+            rf.urllib.request, "urlopen", lambda *a, **k: self._Response(body)
+        )
+        self.addCleanup(self._patch.stop)
+        self._patch.start()
+        return client
+
+    def test_a_non_json_body_is_a_transport_error_not_a_crash(self) -> None:
+        """A 200 carrying an intercepting proxy's HTML, or an SSE stream from
+        an endpoint that ignored the non-streaming request. `run_probes`
+        catches `FidelityError` and nothing else, so anything else here aborts
+        the whole run and discards every transcript already collected."""
+        client = self._client_returning(b"<html>not your endpoint</html>")
+        with self.assertRaises(rf.FidelityError) as caught:
+            client.complete("system", "user")
+        self.assertIn("unreadable response", str(caught.exception))
+
+    def test_a_well_formed_reply_is_returned_verbatim(self) -> None:
+        client = self._client_returning(
+            json.dumps({"choices": [{"message": {"content": "the reply"}}]}).encode("utf-8")
+        )
+        self.assertEqual("the reply", client.complete("system", "user"))
+
+    def test_a_json_body_of_the_wrong_shape_is_reported_as_such(self) -> None:
+        client = self._client_returning(json.dumps({"error": "no such model"}).encode("utf-8"))
+        with self.assertRaises(rf.FidelityError) as caught:
+            client.complete("system", "user")
+        self.assertIn("unexpected response shape", str(caught.exception))
+
+
 class CliTests(unittest.TestCase):
     def test_probe_mode_without_an_endpoint_fails_with_an_actionable_message(self) -> None:
-        stderr = io.StringIO()
-        with contextlib.redirect_stderr(stderr):
-            code = rf.main(["--mode", "probe", "--role", "code-reviewer"])
+        # CADRE_FIDELITY_BASE_URL/_MODEL are argparse defaults, so a developer
+        # machine with them exported -- exactly what this feature's README
+        # tells an operator to do -- would otherwise turn this assertion into
+        # a live run against their endpoint. Nothing here touches the network.
+        with unittest.mock.patch.dict(
+            os.environ, {"CADRE_FIDELITY_BASE_URL": "", "CADRE_FIDELITY_MODEL": ""}, clear=False
+        ):
+            os.environ.pop("CADRE_FIDELITY_BASE_URL")
+            os.environ.pop("CADRE_FIDELITY_MODEL")
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                code = rf.main(["--mode", "probe", "--role", "code-reviewer"])
         self.assertEqual(2, code)
         self.assertIn("--base-url", stderr.getvalue())
+
+    @contextlib.contextmanager
+    def _probe_run(self, roles: int, answers: list[str | None]):
+        """Drive `main` in probe mode with `ChatClient` replaced. `answers` is
+        one entry per call: a string to reply, or None to raise a transport
+        error. Nothing here touches the network."""
+        calls = iter(answers)
+
+        class _Scripted:
+            def __init__(self, **kwargs) -> None:
+                self.base_url = kwargs.get("base_url", "stub://")
+                self.model = kwargs.get("model", "stub-model")
+
+            def complete(self, system_prompt: str, user_prompt: str) -> str:
+                reply = next(calls, None)
+                if reply is None:
+                    raise rf.FidelityError("connection refused")
+                return reply
+
+        with tempfile.TemporaryDirectory() as tmp:
+            presets = Path(tmp) / "agents"
+            presets.mkdir()
+            for index in range(roles):
+                (presets / f"r{index}.md").write_text(
+                    f"---\nname: r{index}\nmodelTier: mid\n---\n\nBrief.\n", encoding="utf-8"
+                )
+            probes = Path(tmp) / "probes.yaml"
+            probes.write_text(
+                json.dumps([{"id": "p", "prompt": "do it", "must_mention_any": ["alpha"]}]),
+                encoding="utf-8",
+            )
+            with unittest.mock.patch.object(rf, "ChatClient", _Scripted):
+                def run(*extra: str) -> int:
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        return rf.main(
+                            [
+                                "--mode", "probe",
+                                "--presets-dir", str(presets),
+                                "--probes", str(probes),
+                                "--base-url", "stub://",
+                                "--model", "stub-model",
+                                *extra,
+                            ]
+                        )
+
+                yield run
+
+    def test_a_mostly_errored_run_passes_fail_under_alone(self) -> None:
+        """Documents why --min-coverage exists. The pass rate is over answered
+        probes only, so one lucky answer out of four attempts satisfies even a
+        demanding --fail-under. This is not a bug in --fail-under -- it is the
+        reason a coverage threshold has to be a separate gate."""
+        with self._probe_run(roles=4, answers=["alpha"]) as run:
+            self.assertEqual(0, run("--fail-under", "0.9"))
+
+    def test_min_coverage_fails_a_run_that_mostly_did_not_happen(self) -> None:
+        with self._probe_run(roles=4, answers=["alpha"]) as run:
+            self.assertEqual(1, run("--fail-under", "0.9", "--min-coverage", "0.9"))
+
+    def test_min_coverage_passes_a_complete_run(self) -> None:
+        with self._probe_run(roles=4, answers=["alpha"] * 4) as run:
+            self.assertEqual(0, run("--fail-under", "0.9", "--min-coverage", "0.9"))
+
+    def test_the_two_gates_are_independent(self) -> None:
+        """Full coverage, bad answers: --min-coverage must not rescue a run that
+        genuinely failed on fidelity."""
+        with self._probe_run(roles=4, answers=["beta"] * 4) as run:
+            self.assertEqual(1, run("--fail-under", "0.9", "--min-coverage", "0.9"))
+
+    def test_a_fully_errored_run_fails_min_coverage(self) -> None:
+        # Reachable without --fail-under: a dead endpoint scores nothing, so
+        # coverage is the only signal that says so.
+        with self._probe_run(roles=2, answers=[]) as run:
+            self.assertEqual(1, run("--min-coverage", "0.5"))
 
     def test_static_mode_writes_a_json_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

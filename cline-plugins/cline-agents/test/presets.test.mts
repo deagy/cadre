@@ -1778,6 +1778,42 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
     }
   });
 
+  it("treats an Object.prototype key in modelTier as no tier, not as a crash", async () => {
+    // The legacy-tier lookup is a plain object, so `modelTier: constructor`
+    // (or `toString`, `valueOf`) resolves through the prototype chain and
+    // yields a truthy *function*, which then throws
+    // "tier.toUpperCase is not a function" deep inside resolution. A preset is
+    // free to say anything -- project presets arrive with an untrusted
+    // checkout -- so this has to land on the documented "no tier at all" path.
+    process.env.CLINE_AGENTS_MODEL_DEFAULT = "generic/model";
+    const globalDir = mkdtempSync(join(tmpdir(), "cline-proto-tier-"));
+    mkdirSync(join(globalDir, ".cline", "agents"), { recursive: true });
+    writeFileSync(
+      join(globalDir, ".cline", "agents", "proto-tier.md"),
+      [
+        "---",
+        "name: proto-tier",
+        "description: inherited key as a tier",
+        "modelTier: constructor",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    try {
+      const tools = await registerTools(globalDir);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      await tool.execute({ label: "proto", task: "t", preset: "proto-tier" }, FAKE_TOOL_CTX);
+      expect(startConfigs[before].modelId).toBe("generic/model");
+    } finally {
+      delete process.env.CLINE_AGENTS_MODEL_DEFAULT;
+    }
+  });
+
   it("honours a retired tier variable so an existing shell keeps dispatching", async () => {
     // The tier vocabulary moved from opus/sonnet/haiku to high/mid/low. An
     // operator whose shell still exports the old variables must not have a

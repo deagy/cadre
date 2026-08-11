@@ -53,16 +53,21 @@ added in the same change set.
 | Metric | Value |
 |---|---|
 | Roles analyzed | 159 |
-| Median brief | ~14,900 estimated tokens |
-| Largest brief (`knowledge-store-steward`) | ~17,200 |
+| Median brief | ~15,700 estimated tokens |
+| Largest brief (`knowledge-store-steward`) | ~18,000 |
 | Median role-specific content | ~370 |
-| Median embedded shared policy | ~14,800 |
+| Median embedded shared policy | ~15,500 |
 | Shared policy as share of all payload tokens | 97% |
 | Roles over budget at 8k window / 2k reserve | 159 of 159 |
 | Roles over budget at 16k | 131 of 159 |
 | Roles over budget at 20k | 0 of 159 |
 
 Token counts are estimates from a chars-per-token divisor, not a tokenizer.
+The figures above are the tool's **default** 4.0 divisor, so they reproduce
+from `cadre role-fidelity --mode static` with no flags; an earlier draft of
+this table quoted a 4.2-divisor run (~14,900 / ~17,200), which no documented
+command produced. None of the conclusions move: the over-budget counts at 8k,
+16k and 20k are identical under both divisors.
 
 **Probe** (`--mode probe`): each role's real shipped brief as the system
 prompt, one probe task as the user message, replies scored against the
@@ -157,6 +162,13 @@ conclusion generalized. **It does not.** Full transcripts in
 Scores below are the **corrected** ones, after two probe defects this run
 exposed (§4b). The run as originally printed reported 28/45; that number was
 wrong in both directions and should not be quoted.
+
+`sage-9role-sample.json` is the run as it was written, so its per-result
+`passed`/`failures` fields and its `pass_rate: 0.622` are that superseded
+scoring — the replies are the evidence, not those flags. Re-scoring the
+committed replies with the probes in `role-fidelity-probes.yaml` reproduces
+the corrected table below exactly (36/45, `stays-in-remit` 0/9), and leaves
+`scout-9role-sample.json` at 45/45.
 
 | Probe | `Scout` (Qwen3.6-27B) | `Sage` (Llama-3.3-70B) |
 |---|---|---|

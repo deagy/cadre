@@ -62,6 +62,7 @@ green run is not quietly self-fulfilling.
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import re
@@ -191,7 +192,12 @@ def load_presets(presets_dir: Path, roles: Sequence[str] | None = None) -> list[
             Preset(name=fields.get("name", path.stem), path=path, frontmatter=fields, body=body)
         )
     if wanted:
-        missing = sorted(wanted - {p.name for p in presets})
+        # Selection is by filename stem, so resolution has to be checked
+        # against the stem too. Checking `p.name` (the frontmatter field)
+        # instead reports a preset that was found and loaded as missing
+        # whenever the two differ -- which a hand-authored preset is free to
+        # do, and which no error message here would explain.
+        missing = sorted(wanted - {p.path.stem for p in presets})
         if missing:
             raise FidelityError(f"no preset found for role(s): {', '.join(missing)}")
     if not presets:
@@ -468,6 +474,17 @@ class ChatClient:
             raise FidelityError(f"{url}: cannot reach endpoint: {error.reason}") from error
         except (TimeoutError, OSError) as error:
             raise FidelityError(f"{url}: request failed: {error}") from error
+        except (ValueError, http.client.HTTPException) as error:
+            # A truncated body (`IncompleteRead`), a non-UTF-8 body, or a 200
+            # that is not JSON at all -- an intercepting proxy's HTML error
+            # page, or an endpoint streaming SSE because it ignored the
+            # non-streaming request. Every one of these is the endpoint
+            # misbehaving, i.e. the same class as a timeout, so it has to
+            # surface as a FidelityError: `run_probes` catches only that, and
+            # anything else aborts the whole run and discards every transcript
+            # collected so far, which for a multi-hour catalog sweep is the
+            # expensive part of the run.
+            raise FidelityError(f"{url}: unreadable response: {error}") from error
         try:
             return body["choices"][0]["message"]["content"] or ""
         except (KeyError, IndexError, TypeError) as error:
@@ -741,6 +758,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Exit non-zero if the pass rate falls below this (0..1).",
     )
+    probe_group.add_argument(
+        "--min-coverage",
+        type=float,
+        default=None,
+        help=(
+            "Exit non-zero if coverage (answered / attempted probes) falls below this (0..1). "
+            "Pair with --fail-under: the pass rate is computed over answered probes only, so a "
+            "run where most probes hit a transport error would otherwise pass on the few that "
+            "answered."
+        ),
+    )
     return parser
 
 
@@ -803,7 +831,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.mode == "static" and report["over_budget_count"]:
         return 1
     if args.mode == "probe" and not report.get("dry_run"):
+        # Two independent gates. `pass_rate` answers "how did the model do on the
+        # probes it answered"; `coverage` answers "did the run actually happen".
+        # A None for either means there was nothing to measure, which fails a
+        # threshold the caller asked for rather than passing by vacuity.
         if args.fail_under is not None and (report["pass_rate"] or 0.0) < args.fail_under:
+            return 1
+        if args.min_coverage is not None and (report["coverage"] or 0.0) < args.min_coverage:
             return 1
     return 0
 
