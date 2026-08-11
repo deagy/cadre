@@ -296,8 +296,18 @@ def _undeclared_workflow_shape_routes(matched_routes: list[dict[str, Any]]) -> l
     out of scope entirely: `workflow_shape` is a route-only field and
     `_select_workflow` never reads a shape off a risk rule.
 
-    Match order is preserved, and route ids are unique within the effective
-    configuration, so no de-duplication is needed.
+    Two properties here are contractual, not incidental, and are pinned by
+    tests in test_undeclared_workflow_shape.py rather than left to the
+    reader's good faith:
+
+    - The result is in *match order*, never sorted. It lines up positionally
+      with the plan's own `matched_routes`, which is the only way a reader
+      can correlate the two lists. Route ids are unique within the effective
+      configuration, so no de-duplication is needed.
+    - Only *matched* routes appear. This reads `matched_routes`, not
+      `config["routes"]`; a configured-but-unmatched route with no shape is
+      not a defect in this plan and must never be reported here, or the
+      signal would fire on every plan and stop meaning anything.
     """
     return [
         route["id"]
@@ -745,21 +755,36 @@ def build_dispatch_plan(
         else {"status": "standalone", "reason": STANDALONE_REASON}
     )
 
-    # Emitted only when non-empty, and therefore additive rather than a
-    # schema break: `undeclared_workflow_shape_routes` is an optional
-    # top-level property in selection.schema.json, absent from its `required`
-    # array, exactly like `provenance`. `schema_version` stays 5 -- a
-    # consumer validating against a pinned v5 copy of the schema is
-    # unaffected, and no existing plan gains a field (every route in this
-    # repository's routing.yaml declares a shape, so the list is empty here).
+    # `undeclared_workflow_shape_routes` is optional and omitted when empty,
+    # but that did NOT make it additive: adding it incremented schema_version
+    # 5 -> 6. RUNBOOK.md's "When schema_version increments" rule is that any
+    # change to the emitted field set bumps the version, because
+    # selection.schema.json is closed (`additionalProperties: false`) and is
+    # vendored away from the producer, so a consumer's pinned copy rejects a
+    # plan carrying a property it has never seen. Its sole carve-out --
+    # "optional AND not emitted by default" -- does not reach this field, and
+    # the `provenance` analogy that first suggested it was wrong: the
+    # carve-out works only because the consumer never sees the field, while
+    # this one is emitted unconditionally to exactly the population it exists
+    # for (projects running a routing overlay), which are also the
+    # customized, long-lived installations most likely pinned to an older
+    # vendored schema. At 6 they fail on schema_version's `const`, an error
+    # naming the real cause; at 5 they would have failed on
+    # `additionalProperties` while the plan truthfully reported the version
+    # their copy claims to handle.
     #
     # Unlike `provenance` it IS part of the fingerprint's hashed payload,
     # deliberately: it is computed from the same matched routes the rest of
     # the plan is, not from generation-time environment state, so it belongs
-    # in the determinism check over what the selector actually decided.
+    # in the determinism check over what the selector actually decided. This
+    # is load-bearing rather than merely tidy. `matched_routes` emits only
+    # `id` + `reasons` and never the shape, so a route that flips between
+    # `workflow_shape: "unclassified"` and omitting the field entirely
+    # produces an otherwise byte-identical plan -- excluding this field would
+    # make those two genuinely different configurations fingerprint-identical.
     undeclared_workflow_shapes = _undeclared_workflow_shape_routes(matched_routes)
     dispatch = {
-        "schema_version": 5,
+        "schema_version": 6,
         "task_id": task_id,
         "generated_at": generated_at,
         "status": "ready" if selected_agents else "needs-triage",
