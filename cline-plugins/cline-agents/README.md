@@ -242,6 +242,22 @@ sample of the recorded replies rather than trusting the score alone — the
 checks are keyword assertions and can be satisfied by a reply that says the
 right words while doing the wrong thing.
 
+**Model choice matters more than model size, and more than context length.**
+Measured on this suite's own roles (see
+`roster/orchestration/runs/cadre-cline-local-model-fidelity-2026-08-10/`), a
+27B model scored 45/45 while a 70B model of a different family scored 36/45 —
+and every one of that model's failures was role-scope discipline: handed work
+belonging to six other roles, it did the work instead of handing it off, in
+nine cases out of nine. Its refusals on the authority probes were also
+generic ("I can't help with that") rather than grounded in the policy it had
+just been given.
+
+That is the failure shape to watch for, because it is invisible in normal use:
+a weakly-steered model produces fluent, confident, well-formatted output that
+simply is not governed by the role it was dispatched as. Nothing errors. Run
+`--mode probe` against your own model and read the `stays-in-remit`
+transcripts before trusting a dispatch path with anything that matters.
+
 ### Migrating from the opus/sonnet/haiku tier names
 
 Both the old `modelTier` values and the old `CLINE_AGENTS_MODEL_OPUS`/
