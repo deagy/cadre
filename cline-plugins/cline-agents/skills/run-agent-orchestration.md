@@ -430,17 +430,74 @@ authoritative for the *why*.
        sandbox narrowing, the depth guard, confirmation gating, the
        concurrency limiter, audit logging) generalizes to a team.
     5. `dispatch_secure_cloud_role`/`dispatch_team`/`dispatch_team_recipe` all
-       accept an optional `runner` parameter (`"codex"`, the default and the
-       only fully-verified option, or `"claude-code"`) for dispatching a
-       role as a Claude Code child process instead of a Codex one. This is
-       newer and only partially verified — read
-       the bundled security-controls register's "Claude Code
-       runner" section before relying on it: in particular, a Claude Code
-       role can currently only ever be dispatched read-only (there's no
-       wrapper-format field yet to declare write-capability the way a Codex
-       `.toml` wrapper's `sandbox_mode` does), and the `--permission-mode`
-       mapping this uses is a first-pass design choice, not a confirmed
-       equivalent to Codex's `--sandbox`.
+       accept an optional `runner` parameter with three values: `"codex"`
+       (the default and the only fully-verified option), `"claude-code"`,
+       and `"api"`.
+       - `"claude-code"` dispatches a role as a Claude Code child process
+         instead of a Codex one. This is newer and only partially verified —
+         read the bundled security-controls register's "Claude Code
+         runner" section before relying on it: in particular, a Claude Code
+         role can currently only ever be dispatched read-only (there's no
+         wrapper-format field yet to declare write-capability the way a Codex
+         `.toml` wrapper's `sandbox_mode` does), and the `--permission-mode`
+         mapping this uses is a first-pass design choice, not a confirmed
+         equivalent to Codex's `--sandbox`.
+       - `"api"` spawns no coding CLI at all: it drives an OpenAI-compatible
+         `/chat/completions` endpoint directly, which is how you dispatch
+         roles against a self-hosted `llama-server` with neither Codex nor
+         Claude Code installed. It needs `runners.api_base_url` and a
+         `runners.local_model_<tier>` model configured (see step 6). Read
+         `SECURITY-CONTROLS.md`'s "API runner" section first — it supplies
+         its own agent loop *and* its own sandbox, and that sandbox is
+         in-process path confinement, not the kernel-level sandbox the two
+         CLI runners delegate to. Its write-capable path is off unless
+         `runners.api_allow_writes` is set, and its `run_command` tool is
+         unavailable unless `runners.api_command_allowlist` is non-empty —
+         that allowlist is explicitly **advisory**, not a containment
+         boundary.
+
+  6. **Optional: point a runner at a self-hosted model.** Codex CLI's
+     `--oss`/`--local-provider` flags only accept `lmstudio` or `ollama`, so
+     llama.cpp needs a custom provider block. Put it in a Codex config
+     profile — `$CODEX_HOME/cadre-local.config.toml`, default `~/.codex` —
+     rather than anywhere in this repository, so the endpoint and its
+     credential stay in the file Codex owns:
+
+     ```toml
+     model = "qwen3-coder-30b"
+     model_provider = "llamacpp"
+
+     [model_providers.llamacpp]
+     name = "llama.cpp (self-hosted)"
+     base_url = "http://<host>:8080/v1"
+     wire_api = "chat"
+     env_key = "LLAMACPP_API_KEY"   # only if llama-server ran with --api-key
+     ```
+
+     Then set the operator settings the dispatch server reads (all
+     `global_only` — env var or `~/.config/cadre/config.yaml`, never a
+     project-local `.agents/cadre.yaml`):
+
+     | setting | env var | what it does |
+     |---|---|---|
+     | `runners.codex_profile` | `SECURE_CLOUD_AGENTS_CODEX_PROFILE` | passed as `codex exec --profile <name>` |
+     | `runners.local_model_<tier>` | `SECURE_CLOUD_AGENTS_LOCAL_MODEL_{OPUS,SONNET,HAIKU}` | the local model each catalog tier maps to |
+     | `runners.forward_env` | `SECURE_CLOUD_AGENTS_FORWARD_ENV` | exact env var names to forward to the child, for a provider using `env_key` |
+     | `runners.api_base_url` | `SECURE_CLOUD_AGENTS_API_BASE_URL` | `runner="api"` endpoint, e.g. `http://host:8080/v1` |
+     | `runners.api_key_env` | `SECURE_CLOUD_AGENTS_API_KEY_ENV` | the *name* of the variable holding that endpoint's key |
+
+     Set at least one `runners.local_model_<tier>` — otherwise every role
+     keeps sending the wrapper's vendor identifier (`gpt-5.6-terra`, …),
+     which a self-hosted endpoint has never heard of. Keeping one model per
+     tier is what stops a `haiku`-tier triage role and an `opus`-tier
+     architecture role collapsing onto the same model. With a profile set
+     but no tier mapping, `--model` is omitted entirely and the profile's own
+     `model` key applies.
+
+     For `llama-server`, tool calling needs `--jinja` (often plus a
+     `--chat-template-file` override). Note the role-fidelity caveat at the
+     end of this file: a smaller self-hosted model may not honor a role's
+     constraints, and nothing in this repository detects that.
   - **Fallback (only when the MCP server above is not registered): manual
     per-file injection instead of naming the custom agent to
     `spawn_agent`.** Read the target role's `.toml` file directly — project

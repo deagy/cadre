@@ -60,7 +60,8 @@ that reach per entry rather than leaving it to be inferred.
 
 | Dispatch path | What it is | Where the child's model comes from | Entries in this register that reach it |
 |---|---|---|---|
-| **MCP servers** (`roster/orchestration/mcp/`) | `dispatch_secure_cloud_role` / `dispatch_team` / `dispatch_team_recipe` spawning a `codex exec` or `claude` child, plus the separate create-only GitLab evidence server | the generated wrapper resolved by `resolve_role_file()` / `resolve_claude_role_file()` -- never caller-supplied | every MCP entry below |
+| **MCP servers, CLI runners** (`roster/orchestration/mcp/`) | `dispatch_secure_cloud_role` / `dispatch_team` / `dispatch_team_recipe` spawning a `codex exec` or `claude` child, plus the separate create-only GitLab evidence server | the generated wrapper resolved by `resolve_role_file()` / `resolve_claude_role_file()` -- never caller-supplied, *unless* the operator configured a local provider (see "Self-hosted model providers") | every MCP entry below |
+| **MCP servers, api runner** (`roster/orchestration/mcp/api_runner.py`) | the same three tools with `runner="api"`, driving an OpenAI-compatible chat endpoint over HTTP with **no child process at all** | operator settings only (`runners.api_base_url` + `runners.local_model_<tier>`). The wrapper's own `model` field is deliberately discarded -- it names a vendor model the endpoint has never heard of -- so the wrapper decides *which role* runs but not *which model* serves it | every MCP entry below, **except** the four named as not reaching it in "API runner" |
 | **`cline-agents` plugin** (`cline-plugins/cline-agents/`) | `start_subagent` / `dispatch_selected_roles` starting a subagent inside a Cline session | operator environment: `CLINE_AGENTS_PROVIDER_ID` plus `CLINE_AGENTS_MODEL_<TIER>` / `CLINE_AGENTS_MODEL_DEFAULT`, or a per-call override | the role-fidelity model-validation notice, and nothing else |
 | **Claude Code plugin subagents** (`plugin/agents/*.md`) | an operator invoking a packaged subagent directly in a Claude Code session, with no MCP server in the loop | the wrapper's own `model:` frontmatter tier, resolved by Claude Code itself | none |
 | **Manual / direct invocation** | a human or agent pasting a role brief into any runner, or invoking `codex`/`claude`/an API by hand | whatever the operator chose | none |
@@ -334,6 +335,42 @@ credentials) cannot reach the dispatched child by default. Tested by
 environment with credential-shaped variable names
 (`AWS_SECRET_ACCESS_KEY`, `API_TOKEN`, `GITLAB_TOKEN`, `OPENAI_API_KEY`) and
 asserts none of them appear in the resulting child environment.
+
+`CODEX_HOME` was added to `ENV_ALLOWLIST` for the self-hosted-provider work.
+It is a directory path, not a credential, and it is required for `codex exec
+--profile <name>` to resolve `$CODEX_HOME/<name>.config.toml`. Codex defaults
+it to `~/.codex` and `HOME` was already allowlisted, so this matters only to
+operators who relocate it.
+
+**`runners.forward_env` -- an opt-in widening, mechanically bounded.** A Codex
+`[model_providers.*]` block declaring `env_key = "SOME_VAR"` cannot
+authenticate to a self-hosted endpoint unless `SOME_VAR` is present in the
+child's environment, so `build_child_env()` also copies the variables named
+by `runners.forward_env`. What keeps this from dissolving the control above:
+
+- It is empty by default. An operator who does not opt in gets exactly the
+  deny-by-default behavior this entry has always described, and the poisoned-
+  environment test above still passes unchanged.
+- It accepts **exact names only**. `_validate_env_var_name_list` refuses
+  wildcards and prefixes outright rather than ignoring them, so one config
+  line cannot widen the environment by an unbounded amount.
+- It is `global_only`, so a cloned repository's project-local
+  `.agents/cadre.yaml` can never set it.
+- It is applied *before* `DEPTH_ENV_VAR`, so forwarding cannot overwrite the
+  re-dispatch counter.
+- The forwarded **names** are recorded in the audit trail; the values are
+  structurally barred from it by `_FORBIDDEN_AUDIT_KEYS`.
+
+Tested by `ForwardEnvTests` (`test_nothing_is_forwarded_by_default`,
+`test_an_unnamed_variable_is_not_forwarded_alongside_a_named_one`,
+`test_a_wildcard_is_refused_rather_than_matched`,
+`test_forwarding_cannot_overwrite_the_dispatch_depth_counter`) and, for the
+scope rule, `SelfHostedProviderFieldTests.test_every_new_field_is_global_only`.
+
+Note what this widening honestly is: a deliberate mechanism for handing a
+credential to a dispatched child. It is bounded and auditable, not absent.
+An operator who forwards a broadly-scoped token has given that token to the
+dispatched role, and no control here narrows it afterward.
 
 ### Audit-record secret redaction
 
@@ -681,15 +718,289 @@ passing unmodified.
   about whether to duplicate `developer_instructions` between a flag and
   stdin.
 - **Everything else (env allowlist, output caps, timeout/group-kill,
-  confirmation gating, audit logging, depth guard) is runner-agnostic** --
-  none of those controls inspect `runner` at all, so their existing
-  enforcement/test coverage applies identically to a Claude Code dispatch.
+  confirmation gating, audit logging, depth guard) is runner-agnostic
+  *across the two CLI runners*** -- none of those controls inspect `runner`
+  at all, so their existing enforcement/test coverage applies identically to
+  a Claude Code dispatch. This sentence used to say "runner-agnostic" without
+  qualification, which the `api` runner made false: four of those six live
+  inside `spawn_and_wait()`/`build_child_env()` and therefore reach only a
+  dispatch that spawns a child process. See "API runner" below for exactly
+  which four, and what replaces them there.
 - **Not verified: live, authenticated end-to-end execution of a real role
   dispatch.** The one live `claude` invocation in this session was a
   trivial smoke test of stdin-piping behavior with `--model haiku`, not a
   full role dispatch through `dispatch_secure_cloud_role()`/`dispatch_team()`
   against a real installed Claude Code CLI. Do this before relying on the
   Claude Code runner for anything beyond local development.
+
+### Self-hosted model providers (Codex runner)
+
+An operator may point the `codex` runner at an OpenAI-compatible endpoint they
+host themselves -- typically `llama-server` -- instead of a vendor API. Three
+settings do this, all `global_only`: `runners.codex_profile`,
+`runners.local_model_<tier>`, and `runners.forward_env` (covered in the env
+allowlist entry above). All three are consumed in exactly one function,
+`build_child_argv()`.
+
+- **The endpoint and its credential never enter this repository's
+  configuration: mechanically enforced.** Cadre passes `--profile <name>` and
+  nothing else about the provider; `base_url`, `wire_api` and `env_key` live
+  in the operator's own `$CODEX_HOME/<name>.config.toml`, which Codex owns.
+  There is no Cadre setting that can hold a `base_url` for this runner, and
+  `settings.py`'s `_SECRET_LEAF_PATTERNS` refuses a credential-shaped key in
+  any config file it manages. Tested by
+  `SelfHostedProviderFieldTests.test_every_new_field_is_global_only` and
+  `test_an_api_key_leaf_is_still_refused_in_a_config_file`.
+- **Model-tier semantics survive the switch: mechanically enforced.** Each
+  catalog tier maps to its own operator-chosen model, so a `haiku`-tier
+  triage role does not silently get the model an `opus`-tier architecture
+  role was meant to use. `ResolvedRole.model_tier` is derived by inverting
+  `runner-capabilities.json`'s `model_tiers` -- the manifest's first
+  dispatch-time read, anticipated by
+  `runs/cadre-idea-8-capability-manifest-2026-07-29/requirements.md:13`. An
+  identifier in neither namespace yields `None`, i.e. "no override applies",
+  never a guessed tier. Tested by `ModelTierReverseMapTests` and
+  `CodexLocalProviderArgvTests.test_a_different_tiers_setting_does_not_leak_across_tiers`.
+- **No configuration means no behavior change: mechanically enforced.** With
+  none of the three settings present, `build_child_argv()` produces the argv
+  it produced before this feature existed. Tested by
+  `CodexLocalProviderArgvTests.test_no_settings_configured_keeps_the_original_argv`.
+- **Model identifiers cannot smuggle arguments: mechanically enforced.** A
+  model or profile name is validated against an anchored allowlist
+  (`_validate_identifier`) that admits letters, digits and `. _ : / + -` and
+  refuses whitespace, shell metacharacters, and a leading `-` -- the last
+  because a value beginning with `-` is read as another option by the CLI
+  receiving it. Tested by
+  `SelfHostedProviderFieldTests.test_a_model_identifier_with_shell_metacharacters_is_refused`.
+- **What this does *not* control.** The operator's chosen endpoint sees the
+  role's full `developer_instructions` and the task brief, exactly as a
+  vendor API would. Pointing a role at a self-hosted or third-party endpoint
+  is a data-egress decision, and this register does not make it a safe one --
+  it only ensures the decision is explicit, `global_only`, and recorded in
+  the audit trail as the `runner` and tier that served it. The
+  role-fidelity notice earlier in this file applies with full force here:
+  a smaller self-hosted model may not honor a role's constraints, and no
+  control in this repository detects that.
+
+### API runner (`runner="api"`)
+
+The first dispatch runner that spawns no coding CLI. `api_runner.py` drives
+an OpenAI-compatible `/chat/completions` endpoint directly and supplies both
+halves a child CLI would otherwise provide: the agent loop, and the sandbox.
+That second half is the whole risk of this runner, and this section is
+written to be read before enabling it, not after.
+
+- **Which existing MCP controls still reach it.** Role resolution, sandbox
+  narrowing, classification checks, the confirmation gate, the concurrency
+  limiter, audit logging, and untrusted-brief fencing are all above the
+  runner switch and apply unchanged. Brief fencing in particular reuses
+  `dispatch_core.fence_untrusted_brief()` -- the same code the CLI runners
+  use, not a second copy -- with the role's trusted instructions in the
+  system slot and the fenced brief in the user slot. Tested by
+  `ApiRunnerLoopTests.test_the_brief_is_fenced_through_dispatch_cores_own_helper`.
+- **Which four do not, and why.** The env allowlist, output caps,
+  timeout/group-kill, and the depth guard all live in `spawn_and_wait()` /
+  `build_child_env()`. On the model-call path there is no child process for
+  them to apply to. Their replacements:
+  - *env allowlist*: not applicable -- there is no child environment. See the
+    new trust boundary below.
+  - *output caps*: `MAX_RESPONSE_BYTES` per HTTP response,
+    `MAX_TOOL_RESULT_BYTES` per tool result, and `core.MAX_CHILD_OUTPUT_BYTES`
+    on the assembled transcript.
+  - *timeout*: one wall-clock deadline for the whole loop, plus
+    `MAX_TOOL_ITERATIONS`. Tested by
+    `ApiRunnerLoopTests.test_the_iteration_cap_terminates_a_looping_model`.
+  - *depth guard*: **narrowed, not replaced -- and this entry previously
+    overclaimed it.** An earlier revision said recursive dispatch was
+    "structurally impossible rather than merely capped." That was wrong, and
+    it was the strongest-worded claim in this section. Three mechanisms
+    genuinely apply, and none of them is structural:
+      1. No tool exposes dispatch, so a role cannot re-dispatch directly.
+      2. `_REFUSED_COMMANDS` refuses `cadre`/`codex`/`claude`/`cline`/
+         `agentic-sdlc` — but **only as the literal `command` argument**. An
+         operator who allowlists any general-purpose interpreter (`python`,
+         `bash`, `node`, `make`, `npm`) has given the dispatched agent a way
+         to exec one of those as a *grandchild*, which this check never sees:
+         it is handed the string `"python"`, never `"codex"`. Tested by
+         `ApiRunnerCommandAllowlistTests.test_agent_launching_binaries_are_refused_even_if_allowlisted`,
+         which proves exactly the narrow claim and nothing wider.
+      3. `_sanitized_child_path()` strips from the child's `PATH` every
+         directory containing one of those binaries, so a bare-name `exec`
+         inside an allowlisted interpreter fails to resolve. This defeats
+         bare-name lookup only; an absolute path is unaffected, and any
+         interpreter can construct one.
+    So the honest statement is: **the attack surface is narrower than the CLI
+    runners', and `MAX_DISPATCH_DEPTH` remains the actual backstop** — a
+    guard this register already documents as advisory against an adversarial
+    child. If the structural property is wanted, `runners.api_command_allowlist`
+    must exclude general-purpose interpreters, and that is an operator
+    obligation this code does not enforce.
+  On the `run_command` path all four are restored, because that tool routes
+  through the real `spawn_and_wait()` and `build_child_env()`. Tested by
+  `ApiRunnerCommandAllowlistTests.test_the_command_child_gets_the_deny_by_default_environment`.
+- **Path confinement: mechanically enforced, but in-process only.** Every
+  file tool resolves its path with `os.path.realpath` and then
+  `dispatch_core._ensure_contained` -- the same helper the role-file resolver
+  uses -- and refuses `.git`. Traversal, absolute paths outside the root, and
+  symlinks pointing out of the tree are all denied, and a denied path is
+  reported back to the model as a tool error so it can correct a typo without
+  aborting the dispatch; the refused operation never happens either way.
+
+  Both reads *and* writes then open with `O_NOFOLLOW` plus a post-open
+  `fstat`/`S_ISREG` check -- reads via `_read_text_capped()`, writes via
+  `_write_bytes_nofollow()`. This matters more than it looks: a `realpath`
+  check proves containment at check time, and the write happens afterwards.
+  An earlier revision of this entry claimed universal `O_NOFOLLOW` coverage
+  while `write_file`/`edit_file` in fact used `Path.write_bytes`/`write_text`,
+  which follow a symlink at the final component -- leaving a check-then-open
+  window that a symlink appearing in between would defeat, redirecting a
+  write anywhere this process can reach. `dispatch_team()` runs members
+  concurrently against one project root, so that interleaving was reachable,
+  not theoretical. The claim is now true as written.
+
+  Tested by `ApiRunnerPathConfinementTests` (21 tests), including
+  `test_a_symlink_at_the_write_target_is_refused_by_o_nofollow`, which
+  exercises the write syscall's own guard rather than the resolve-time check.
+
+  **Read the limit precisely: this constrains the tool surface, not the
+  process.** The CLI runners get kernel-level confinement from Codex's and
+  Claude Code's own sandboxes; this runner has none. It holds against a model
+  asking for the wrong path. It would not hold against arbitrary code
+  execution inside this process.
+- **Write gating: mechanically enforced.** A write requires all four of
+  `mode="scoped-repository-edit"`, a write-capable `effective_sandbox` from
+  `compute_effective_sandbox()`, a consumed `ConfirmationGate` token, and the
+  operator's `runners.api_allow_writes` opt-in (default false). The role's
+  own capability tier is checked independently: a `read_only` tier is never
+  offered write tools no matter what the other three say. Tested by
+  `ApiRunnerWriteAuthorizationTests` and `ApiRunnerToolAvailabilityTests`.
+- **`run_command`'s allowlist: ADVISORY, not enforced.** This is the single
+  most important line in this section. The allowlist bounds which *commands*
+  may start -- bare names only, no path separators, resolved through
+  `shutil.which`, `shell=False`, `cwd` pinned to the project root, and empty
+  by default so the tool is not offered at all. It does **not** bound what
+  those commands then do, because the dispatched agent chooses the arguments
+  and every command an operator would realistically allowlist (`pytest`,
+  `go`, `npm`) executes repository-controlled code by design: a `conftest.py`,
+  a `TestMain`, a `package.json` script. Enabling `runners.api_command_allowlist`
+  is therefore equivalent to granting the dispatched role the ability to run
+  repository code with this server process's own file access. It must never
+  be described as equivalent to the CLI runners' OS sandbox, and it is not a
+  containment boundary. Tested by `ApiRunnerCommandAllowlistTests`, which
+  asserts which commands can start and deliberately asserts nothing about
+  what an allowlisted command then does.
+- **Network posture: the first outbound-HTTP entry for a dispatch path.**
+  `dispatch_server.py` is stdio-only and `requirements-mcp.txt` forbids a
+  networked transport extra; this runner nonetheless opens outbound HTTP,
+  which is new ground for this register. Bounded by: an operator-configured
+  `base_url` only (never caller- or model-supplied, and `global_only` so a
+  cloned repository cannot redirect it); redirects refused outright
+  (`_RejectRedirects`, following `embeddings.py`), so an endpoint cannot move
+  the request and its `Authorization` header to a host the operator never
+  configured; a response size cap; a request timeout; and a URL policy that
+  accepts `https://` anywhere but `http://` only toward a loopback,
+  link-local or RFC1918/ULA host, so a mistyped public endpoint cannot
+  receive an API key in the clear. URL userinfo is refused.
+
+  **Two distinct halves, deliberately cited separately.** An earlier revision
+  cited only the configuration-time tests as proof of the whole bullet,
+  including redirect refusal -- which those tests do not touch at all. They
+  validate URL *strings* in `settings.py`; they never construct a
+  `ChatEndpoint` or open a socket. A runtime behavior needs a runtime test:
+  - *Configuration-time URL policy* (scheme, host class, userinfo): tested by
+    `SelfHostedProviderFieldTests.test_plaintext_http_toward_a_public_host_is_refused`,
+    `test_url_userinfo_is_refused`, `test_https_is_accepted_for_any_host`,
+    `test_plaintext_http_is_accepted_toward_a_private_host`, and
+    `ApiRunnerEndpointConfigTests`.
+  - *Runtime HTTP behavior* (redirect refusal, response cap, error handling):
+    tested by `ChatEndpointHttpTests`, which drives `ChatEndpoint.complete()`
+    over real loopback HTTP.
+    `test_a_redirect_is_refused_and_the_credential_never_reaches_the_new_host`
+    stands up the redirect *target* as well and asserts it received no
+    `Authorization` header. That test was verified mutation-sensitive:
+    making `_RejectRedirects` follow redirects makes it fail.
+
+  Host classification unwraps IPv4-mapped IPv6 (`::ffff:<v4>`) and judges the
+  mapped address, rather than trusting `ipaddress`'s `is_private` directly.
+  CPython classified the whole `::ffff:0:0/96` range as private until
+  CVE-2024-4032 (fixed in 3.12.4 / 3.13.0a6, backported); this repository
+  supports Python 3.10+ and cannot control an operator's patch release, so
+  trusting `is_private` would make a security-relevant decision depend on the
+  interpreter build -- on an unpatched one, `http://[::ffff:8.8.8.8]/v1`
+  would have been accepted as "private" and shipped a key in cleartext to a
+  public host.
+
+  Honest limit, unchanged: the private-host check resolves the name once, at
+  configuration time. It is a guard against a typo, not against DNS
+  rebinding.
+- **New trust boundary: the API key is read from this server process's own
+  environment**, via the variable *named* by `runners.api_key_env`. That is
+  precisely the class of variable the child env allowlist exists to keep out
+  of a dispatched child. There is no contradiction -- this path spawns no
+  child, so there is no child environment to leak into, and
+  `test_credential_shaped_variables_never_leak_through` still passes
+  unchanged -- but it is a genuinely new boundary and is stated here rather
+  than left to be inferred.
+- **Audit trail: `runner` is now recorded on every record**, along with
+  `tool_calls`, `files_written` (paths only) and `commands_run` for this
+  runner. Before this, the trail could not distinguish a Codex dispatch from
+  a Claude one; with three runners of materially different enforcement
+  properties that was untenable. File *contents* remain structurally barred
+  by `_FORBIDDEN_AUDIT_KEYS`. The single-role unknown-runner denial is now
+  audited too, matching `dispatch_team`, which always did. Tested by
+  `DispatchWithApiRunnerTests.test_the_runner_is_recorded_on_every_audit_record`,
+  `test_tool_activity_reaches_the_audit_record`, and
+  `test_an_unknown_runner_is_denied_and_now_audited`.
+- **Not verified: live execution against a real llama.cpp server.** Every
+  test above runs against a scripted fake endpoint, and the end-to-end
+  exercise during development used a local stub, not `llama-server`. Tool
+  calling on llama.cpp additionally requires `--jinja` and often a
+  `--chat-template-file` override, and its `tool_calls[].function.arguments`
+  is known to deviate from the OpenAI schema (ggml-org/llama.cpp#20198;
+  `parse_tool_calls` accepts both shapes). Confirm behavior against the real
+  endpoint before relying on this runner for anything beyond local
+  development.
+- **Deadline integrity.** Each model call is bounded by the *smaller* of the
+  endpoint ceiling and the dispatch budget still remaining, so a slow
+  endpoint cannot overrun the `timeout_seconds` the rest of the pipeline
+  (`spawn_and_wait`'s group-kill, the concurrency limiter, job/team TTLs) is
+  built around. An earlier revision checked the deadline only *between* turns
+  and passed a flat 120s to each call, letting a final in-flight request
+  overrun by up to that much. Tested by
+  `ApiRunnerLoopTests.test_each_call_is_bounded_by_the_remaining_dispatch_budget`
+  and `test_an_expired_deadline_stops_the_dispatch_before_any_model_call`.
+- **Partial-mutation reporting.** Tool side effects are **not transactional
+  and are never rolled back.** If the endpoint fails partway through a
+  write-capable dispatch, files already written stay written. What is
+  guaranteed is that this is *reported*: the result and the audit record
+  carry `files_written`/`commands_run`/`tool_calls` even on that failure
+  path, and the transcript states explicitly that the effects are not rolled
+  back. An earlier revision let the exception escape, producing an
+  `unavailable` verdict with no indication the workspace had been mutated --
+  the single worst outcome for an auditor. A mid-loop failure with *no*
+  mutations still raises `unavailable`, so a genuine outage is not disguised
+  as a dispatch that ran. Tested by
+  `ApiRunnerLoopTests.test_a_mid_loop_endpoint_failure_still_reports_what_was_written`
+  and `DispatchWithApiRunnerTests.test_async_dispatch_surfaces_the_api_runners_activity_fields`
+  (the `wait=False` path dropped these fields entirely until that test caught it).
+- **Accountable-review note.** Following the precedent set by the Claude Code
+  runner's `--permission-mode` mapping, the `run_command` allowlist and the
+  in-process path confinement are design choices that have not been reviewed
+  by the accountable Security Lead. They must be, specifically before this
+  runner's write-capable path is used anywhere but a local working copy.
+
+  Two items belong in that review specifically, both raised by an independent
+  security review of the change that introduced this runner and both
+  documented above rather than silently fixed:
+  1. The recursion claim under "which four do not, and why" was an overclaim
+     and is now stated honestly. Whether "narrower surface plus an advisory
+     `MAX_DISPATCH_DEPTH`" is *sufficient*, or whether
+     `runners.api_command_allowlist` needs a mechanical interpreter refusal,
+     is a Security Lead decision, not an author one.
+  2. The `run_command` allowlist's advisory status is accurately labelled,
+     but the consequence deserves an explicit accepted-risk decision:
+     enabling it grants the dispatched role the ability to run
+     repository-controlled code with this server process's own file access.
 
 ### GitLab evidence MCP server (`gitlab_core.py` / `gitlab_server.py`)
 

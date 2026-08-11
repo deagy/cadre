@@ -23,6 +23,32 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+**`cadre init` is defaults-first.** It no longer requires `--answers` or `--interactive`; running with neither keeps every shipped default and writes nothing, which is a complete run rather than a skipped one (overlays are sparse, so keeping a default means writing no overlay for that field). See [`roster/shared/README.md`](roster/shared/README.md)'s "Generating overlays with `cadre init`" for the three levels of effort.
+
+### Added
+
+- **`cadre init --set [REGION:]PATH=VALUE`**, repeatable, overrides one field without an answer file and records the `field_decisions` entry the answer schema requires. The region (`stack`, `libraries`, `autonomy`, `platform`) is derived by looking the path up in the shipped defaults rather than taken from the caller — that is what keeps the `stack`/`governance` category honest, since that label drives `--print-answers` redaction. Unknown paths fail closed; a path ambiguous across regions (`policy_version`, which exists in both `library-standards.yaml` and `agent-autonomy.yaml`) requires a `REGION:` qualifier. Mapping values are refused, because a mapping does not override the named leaf — it grafts leaves below it that no shipped default defines. `--set` wins over `--answers` and `--stack`, and is mutually exclusive with `--interactive`.
+
+- A `--stack` preset no longer needs an answer file: on a defaults run the RG-A `field_decisions` a preset implies are synthesized. Safe because `load_stack_preset` structurally forbids a preset from touching governance. A hand-authored `--answers` file still fails closed on a missing decision.
+
+### Changed
+
+- **`cadre init --interactive` gates a group of fields behind one question** instead of prompting per leaf, taking the floor from ~160 questions to ~30. Declining a group keeps its shipped defaults, and declined groups still record a `kept` decision so a `--print-answers` echo replayed through `--answers` reproduces the run. Safe for RG-B because the autonomy check only ever permits narrowing.
+
+- **The `lifecycle-onboarding` skill resolves authorities at the gate that needs them** rather than interviewing for all 13 up front. It asks for `product_owner` and `engineering_lead` — enough to clear G1 and G2 — carries the gate/authority table from `kernel/contracts/lifecycle-gates.json`, and defers the rest. Unresolved roles are `blockers`, not `errors`: the project stays `valid`, tasks can be planned, and only the gate belonging to an unresolved role is held. The skill also now prefers `--set` over authoring an answer file, and documents that a run record captures authority applicability at creation time — so a role must be assigned before planning the task that needs its gate.
+
+### Fixed
+
+- **A `platform-impact-profile.yaml` overlay dropped every entry the run did not answer.** `deep_merge` replaces lists wholesale rather than merging by id, but `build_platform_overlay` emitted only the entries a run touched — collapsing the resolved profile from 14 impact categories to 1 after a single override, and taking the `applicability: unknown` entries that block G3/G4/G5/G7 with it. The overlay now carries the complete list: shipped entries, then the project's existing overlay, then the run's overrides.
+
+- RG-C tracked one decision per entry but repeated `--set`s on that entry overwrote each other, losing the applicability whenever a rationale followed it. `source_value` now reports `unknown`, matching the interactive collector.
+
+- The autonomy group gate offered the two B-003 fixed-policy keys as reviewable groups; accepting one raised an uncaught `OverlayError` mid-prompt, and `build_autonomy_overlay` refuses those keys regardless.
+
+- A declined stack group recorded the shipped default as `source_value` while a `--stack` preset's value was what actually reached the overlay.
+
+- Declining every RG-C group planned a write of an empty `{}` overlay instead of no file, contradicting the defaults-first premise.
+
 **The workspace-mutation guard hook again blocks `git` commands it previously allowed.** Five separate bypasses are closed below. If a workflow of yours depends on one of these spellings passing — most plausibly `timeout ... git ...`, or `git checkout -B` onto a branch that already exists elsewhere — it will now be refused. `CADRE_DISABLE_WORKSPACE_MUTATION_GUARD` remains the escape hatch.
 
 ### Fixed
@@ -55,6 +81,60 @@ check and reporting "nothing to do". See
   in the fallback rule.
 
 ### Added
+
+- **Dispatch to self-hosted models: a local-provider path for the `codex`
+  runner, and a new `runner="api"` that needs no coding CLI at all.** Both
+  MCP-dispatch-server features; neither changes behavior for an operator who
+  configures nothing.
+
+  For the **`codex` runner**, three new `global_only` settings —
+  `runners.codex_profile`, `runners.local_model_{opus,sonnet,haiku}`, and
+  `runners.forward_env` — let `codex exec` run against an OpenAI-compatible
+  endpoint you host yourself. The provider block (`base_url`, `wire_api`,
+  `env_key`) stays in your own `$CODEX_HOME/<name>.config.toml`, which Codex
+  owns; Cadre passes `--profile <name>` and never stores an inference
+  endpoint or credential for this runner. One model per catalog tier, rather
+  than one model for everything, so a `haiku`-tier triage role and an
+  `opus`-tier architecture role do not collapse onto the same model — the
+  same shape as Cline's existing `CLINE_AGENTS_MODEL_<TIER>`. With a profile
+  set but no tier mapping, `--model` is omitted entirely and the profile's
+  own `model` key applies, which also sidesteps the field-confirmed
+  ChatGPT-auth rejection of any explicit `--model`. Note Codex's
+  `--oss`/`--local-provider` shortcut only knows `lmstudio` and `ollama`, so
+  llama.cpp needs a custom `[model_providers.*]` block; `docs/INSTALL.md` has
+  a worked example. This is the first *dispatch-time* read of
+  `roster/runner-capabilities.json`, which was previously build-time-only —
+  its `model_tiers` table is inverted to recover a role's tier from its
+  wrapper's model identifier.
+
+  `runner="api"` (`roster/orchestration/mcp/api_runner.py`, stdlib-only, no
+  new dependencies) drives `/chat/completions` directly, supplying its own
+  agent loop and file/search/edit tools. It reuses the committed Codex
+  `.toml` wrappers, so there is no fourth wrapper format; only the model
+  changes, coming from `runners.api_base_url` plus the tier settings above.
+  **Read `roster/orchestration/SECURITY-CONTROLS.md`'s "API runner" section
+  before enabling it.** Because it spawns no child CLI it has no OS-level
+  sandbox: file tools are confined in-process by path resolution, which is
+  strictly weaker than what Codex and Claude Code enforce. Its write path is
+  off unless `runners.api_allow_writes` is set, and its `run_command` tool is
+  absent unless `runners.api_command_allowlist` is non-empty — and that
+  allowlist is documented as **advisory, not a containment boundary**, since
+  the dispatched agent chooses the arguments and `pytest`/`go`/`npm` execute
+  repository-controlled code by design. Recursive dispatch is structurally
+  impossible: no tool exposes dispatch, and the agent-launching binaries are
+  refused by name regardless of the allowlist.
+
+  Two audit-trail changes come with this and apply to every runner: each
+  record now carries `runner` (the trail previously could not distinguish a
+  Codex dispatch from a Claude one), and the single-role unknown-runner
+  denial is now audited, matching `dispatch_team`, which always did. The
+  `api` runner additionally records `tool_calls`, `files_written` (paths
+  only) and `commands_run`.
+
+  Not verified: live execution against a real `llama-server` or an
+  authenticated `codex exec` under a local provider. Tool calling on
+  llama.cpp needs `--jinja`, and its `tool_calls[].function.arguments`
+  deviates from the OpenAI schema (both shapes are accepted).
 
 - **A role-fidelity model-validation notice on the `cline-agents` dispatch
   path, recorded as a control** ([#234](https://github.com/deagy/cadre/issues/234)).

@@ -15,6 +15,24 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.19.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.19.0) - 2026-08-11
+
+### Fixed
+
+- **A `platform-impact-profile.yaml` overlay written by `cadre init` dropped every impact category and BOM the run did not explicitly answer.** Shared-config resolution replaces lists wholesale rather than merging them by id, but the overlay only listed the entries a run touched — so answering one category left the resolved profile containing that entry alone. The dropped entries were the ones still marked `applicability: unknown`, which is the state that blocks the governance, security, and evidence gates, so resolving a single category silently cleared the blocking state on all the others. **Required action:** if you ran `cadre init` against this file on an earlier version, open your project's `.agents/shared/platform-impact-profile.yaml` and check it still lists every entry the shipped template does; re-running `cadre init` now writes the complete list.
+
+### Added
+
+- **`cadre init` keeps every shipped default unless told otherwise, and no longer requires an answer source.** `--answers <file>` or `--interactive` used to be mandatory; running with neither now keeps the shipped defaults and writes nothing. That is a complete run, not a skipped one — overlays are sparse, so "keep the default" means "write no overlay for that field", and a project with no overlay resolves to exactly the shipped values.
+
+- **`cadre init --set [REGION:]PATH=VALUE`** overrides a single field without authoring an answer file, and is repeatable. The region (`stack`, `libraries`, `autonomy`, `platform`) is derived by looking the path up in the shipped defaults rather than being supplied by the caller, which is what keeps each recorded decision's `stack`/`governance` category honest. A path no shipped default defines, or one that is ambiguous across regions, fails closed. A `--set` on an `agent-autonomy.yaml` field goes through the same allowlist and narrowing check as every other path, so it can only ever narrow the shipped policy.
+
+### Changed
+
+- **`cadre init --interactive` asks about a group of fields at a time rather than every field individually**, taking the floor from roughly 160 questions to roughly 30. Declining a group keeps its shipped defaults. This is safe for the autonomy section specifically because that section's overlay check only ever permits narrowing, so a field nobody reviewed keeps the most restrictive value it shipped with.
+
+- **The `lifecycle-onboarding` skill no longer interviews for all 13 authority roles during onboarding.** An authority only gates the G-gate(s) that name it, so the skill now asks for the product owner and engineering lead — enough to clear G1 and G2 — and resolves the rest when a task first reaches the gate that needs them. Unresolved roles leave a project `valid` but not `ready`, tasks can still be planned, and gates whose authorities are resolved can still be approved; only the gate belonging to an unresolved role is held. The skill also now prefers `--set` over hand-authoring an answer file. **Worth knowing:** a run record captures which authorities were assigned when the record was created, so assign a role before planning the task that will need its gate — a role assigned afterwards does not unblock a task that was already planned.
+
 ## [0.18.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.18.0) - 2026-08-11
 
 ### Changed

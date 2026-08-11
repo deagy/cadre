@@ -998,3 +998,154 @@ class ConfigSetCommandTests(unittest.TestCase):
         with contextlib.redirect_stderr(buffer):
             settings.main([])
         self.assertIn("set KEY VALUE", buffer.getvalue())
+
+
+class SelfHostedProviderFieldTests(SettingsTestCase):
+    """The `runners.*` fields added for self-hosted / local-provider dispatch.
+
+    Two properties matter more than the individual validators: none of these
+    fields may be settable from an untrusted project-local file, and none may
+    hold a credential.
+    """
+
+    LOCAL_PROVIDER_KEYS = (
+        "runners.codex_profile",
+        "runners.local_model_opus",
+        "runners.local_model_sonnet",
+        "runners.local_model_haiku",
+        "runners.forward_env",
+        "runners.api_base_url",
+        "runners.api_key_env",
+        "runners.api_allow_writes",
+        "runners.api_command_allowlist",
+    )
+
+    def test_every_new_field_is_global_only(self) -> None:
+        # These select a model, an endpoint, a config profile that can
+        # redirect where a prompt is sent, or the child's environment. A
+        # cloned repository must not be able to set any of them.
+        for key in self.LOCAL_PROVIDER_KEYS:
+            with self.subTest(key=key):
+                self.assertEqual(settings.FIELDS[key].scope, settings.SCOPE_GLOBAL_ONLY)
+
+    def test_a_project_local_file_setting_one_is_a_hard_error(self) -> None:
+        _write_project_config(self.project_dir, 'runners:\n  api_base_url: "http://127.0.0.1:1/v1"\n')
+        settings.reset_cache()
+        with self.assertRaises(settings.SettingsScopeError):
+            settings.resolve_setting("runners.api_base_url", start=self.project_dir, env={})
+
+    def test_none_of_them_is_required_so_existing_installs_are_unaffected(self) -> None:
+        for key in self.LOCAL_PROVIDER_KEYS:
+            with self.subTest(key=key):
+                self.assertFalse(settings.FIELDS[key].required)
+
+    def test_an_api_key_leaf_is_still_refused_in_a_config_file(self) -> None:
+        # api_key_env holds a *name*; the key itself has no storable home.
+        (self.xdg_config_home / "cadre").mkdir(parents=True)
+        (self.xdg_config_home / "cadre" / "config.yaml").write_text(
+            'runners:\n  api_key: "sk-should-never-be-stored"\n', encoding="utf-8"
+        )
+        settings.reset_cache()
+        with self.assertRaises(settings.SettingsError):
+            settings.resolve_setting("runners.api_key_env", start=self.project_dir, env={})
+
+    def test_https_is_accepted_for_any_host(self) -> None:
+        value = settings.resolve_setting(
+            "runners.api_base_url",
+            start=self.project_dir,
+            env={"SECURE_CLOUD_AGENTS_API_BASE_URL": "https://api.example.com/v1/"},
+        )
+        self.assertEqual(value, "https://api.example.com/v1")
+
+    def test_plaintext_http_is_accepted_toward_a_private_host(self) -> None:
+        value = settings.resolve_setting(
+            "runners.api_base_url",
+            start=self.project_dir,
+            env={"SECURE_CLOUD_AGENTS_API_BASE_URL": "http://192.168.1.50:8080/v1"},
+        )
+        self.assertEqual(value, "http://192.168.1.50:8080/v1")
+
+    def test_plaintext_http_toward_a_public_host_is_refused(self) -> None:
+        with self.assertRaises(settings.SettingsError):
+            settings.resolve_setting(
+                "runners.api_base_url",
+                start=self.project_dir,
+                env={"SECURE_CLOUD_AGENTS_API_BASE_URL": "http://93.184.216.34/v1"},
+            )
+
+    def test_url_userinfo_is_refused(self) -> None:
+        with self.assertRaises(settings.SettingsError):
+            settings.resolve_setting(
+                "runners.api_base_url",
+                start=self.project_dir,
+                env={"SECURE_CLOUD_AGENTS_API_BASE_URL": "http://user:pass@127.0.0.1:8080/v1"},
+            )
+
+    def test_a_model_identifier_may_contain_a_colon_or_slash(self) -> None:
+        value = settings.resolve_setting(
+            "runners.local_model_sonnet",
+            start=self.project_dir,
+            env={"SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET": "org/qwen3-coder:30b"},
+        )
+        self.assertEqual(value, "org/qwen3-coder:30b")
+
+    def test_a_model_identifier_with_shell_metacharacters_is_refused(self) -> None:
+        for candidate in ("a b", "a;rm -rf /", "$(x)", "-oProxyCommand=x"):
+            with self.subTest(candidate=candidate):
+                with self.assertRaises(settings.SettingsError):
+                    settings.resolve_setting(
+                        "runners.local_model_sonnet",
+                        start=self.project_dir,
+                        env={"SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET": candidate},
+                    )
+
+    def test_forward_env_accepts_exact_names_only(self) -> None:
+        value = settings.resolve_setting(
+            "runners.forward_env",
+            start=self.project_dir,
+            env={"SECURE_CLOUD_AGENTS_FORWARD_ENV": "LLAMACPP_API_KEY, OTHER_VAR"},
+        )
+        self.assertEqual(value, ["LLAMACPP_API_KEY", "OTHER_VAR"])
+
+    def test_forward_env_refuses_a_wildcard(self) -> None:
+        with self.assertRaises(settings.SettingsError):
+            settings.resolve_setting(
+                "runners.forward_env",
+                start=self.project_dir,
+                env={"SECURE_CLOUD_AGENTS_FORWARD_ENV": "LLAMA_*"},
+            )
+
+    def test_api_key_env_refuses_something_shaped_like_a_key_rather_than_a_name(self) -> None:
+        # The realistic mistake this guards against is pasting the key itself
+        # where the variable *name* belongs. The fixture is deliberately an
+        # obviously-fake placeholder rather than a realistic key shape,
+        # matching the convention `.gitleaks.toml` describes -- a
+        # realistic-looking literal here trips the `generic-api-key` rule and
+        # turns the secret-scan job red for a value that was never a secret.
+        with self.assertRaises(settings.SettingsError):
+            settings.resolve_setting(
+                "runners.api_key_env",
+                start=self.project_dir,
+                env={"SECURE_CLOUD_AGENTS_API_KEY_ENV": "pasted-key-not-a-variable-name"},
+            )
+
+    def test_the_command_allowlist_refuses_a_path(self) -> None:
+        with self.assertRaises(settings.SettingsError):
+            settings.resolve_setting(
+                "runners.api_command_allowlist",
+                start=self.project_dir,
+                env={"SECURE_CLOUD_AGENTS_API_COMMAND_ALLOWLIST": "/usr/bin/pytest"},
+            )
+
+    def test_api_allow_writes_defaults_to_false(self) -> None:
+        self.assertIs(
+            settings.resolve_setting("runners.api_allow_writes", start=self.project_dir, env={}), False
+        )
+
+    def test_every_new_field_is_listed_in_the_generated_config_header(self) -> None:
+        # That header is what an operator reads inside their own config file;
+        # a field missing from it is effectively undiscoverable.
+        source = Path(settings.__file__).read_text(encoding="utf-8")
+        for key in self.LOCAL_PROVIDER_KEYS:
+            with self.subTest(key=key):
+                self.assertIn(f"#   {key}", source)
