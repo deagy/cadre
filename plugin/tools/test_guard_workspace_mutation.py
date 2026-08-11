@@ -272,8 +272,498 @@ class PushTests(GuardTestCase):
 
 
 # ---------------------------------------------------------------------------
+# worktree remove / prune / move / add (issue #215)
+# ---------------------------------------------------------------------------
+
+
+class WorktreeTests(GuardTestCase):
+    """`git worktree` handler.
+
+    `workspace-isolation.md`'s "Never remove or prune a worktree yourself"
+    reaches all 159 role wrappers since #211 but had no structural
+    enforcement before #215. These cases pin both what the handler blocks
+    and, explicitly, what it does not.
+    """
+
+    def add_worktree(self, name: str, branch: str | None = None) -> Path:
+        path = Path(self._tmp) / name
+        args = ["worktree", "add", "-q", str(path)]
+        if branch:
+            args += ["-b", branch]
+        else:
+            args.append("--detach")
+        _git(self.repo, *args)
+        return path
+
+    # -- remove ------------------------------------------------------------
+
+    def test_blocks_worktree_remove(self) -> None:
+        self.commit_file("a.txt", "one")
+        wt = self.add_worktree("wt1", branch="wt1")
+        decision = self.assert_blocked(f"git worktree remove {wt}")
+        self.assertIn("deregisters a worktree", decision["reason"])
+
+    def test_blocks_worktree_remove_force(self) -> None:
+        self.commit_file("a.txt", "one")
+        wt = self.add_worktree("wt1", branch="wt1")
+        self.assert_blocked(f"git worktree remove --force {wt}")
+        self.assert_blocked(f"git worktree remove -f {wt}")
+
+    def test_blocks_worktree_remove_by_bare_name(self) -> None:
+        # Verified against git 2.53.0 that `git worktree remove wt1`
+        # (basename, not path) really does remove it -- which is why the
+        # handler refuses flat instead of matching the target against
+        # `git worktree list`.
+        self.commit_file("a.txt", "one")
+        self.add_worktree("wt1", branch="wt1")
+        self.assert_blocked("git worktree remove wt1")
+
+    def test_blocks_worktree_remove_of_unregistered_path(self) -> None:
+        # Costs nothing to block: git itself exits 128 on this input.
+        self.commit_file("a.txt", "one")
+        self.assert_blocked("git worktree remove /path/that/is/not/a/worktree")
+
+    def test_blocks_worktree_remove_of_a_worktree_the_session_created(self) -> None:
+        # The policy is absolute, not scoped to "someone else's" worktree:
+        # a worktree that holds work is the deliverable location until a
+        # human decides otherwise, so tidying up your own is still blocked.
+        self.commit_file("a.txt", "one")
+        wt = self.add_worktree("mine", branch="mine")
+        decision = self.assert_blocked(f"git worktree remove {wt}")
+        self.assertIn("including one you created", decision["reason"])
+
+    # -- move --------------------------------------------------------------
+
+    def test_blocks_worktree_move(self) -> None:
+        self.commit_file("a.txt", "one")
+        wt = self.add_worktree("wt1", branch="wt1")
+        dest = Path(self._tmp) / "wt1-moved"
+        decision = self.assert_blocked(f"git worktree move {wt} {dest}")
+        self.assertIn("relocates the registered worktree", decision["reason"])
+
+    # -- prune -------------------------------------------------------------
+
+    def test_blocks_prune_when_something_would_be_deregistered(self) -> None:
+        self.commit_file("a.txt", "one")
+        wt = self.add_worktree("wt1", branch="wt1")
+        # Make the worktree unreachable without touching git metadata --
+        # this is the "teammate's worktree on a momentarily unavailable
+        # path" case the prune policy exists for.
+        shutil.move(str(wt), str(Path(self._tmp) / "wt1-relocated"))
+        decision = self.assert_blocked("git worktree prune")
+        self.assertIn("deregister", decision["reason"])
+        self.assertIn("names no target", decision["reason"])
+
+    def test_allows_prune_when_nothing_would_be_deregistered(self) -> None:
+        # The rejected stricter policy ("block whenever any worktree this
+        # session did not create is registered") would block this. A prune
+        # that removes nothing removes nothing; blocking it is pure
+        # friction, and friction is what gets a guard disabled.
+        self.commit_file("a.txt", "one")
+        self.add_worktree("wt1", branch="wt1")
+        self.assert_allowed("git worktree prune")
+
+    def test_allows_prune_with_no_worktrees_at_all(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.assert_allowed("git worktree prune")
+
+    def test_allows_explicit_prune_dry_run(self) -> None:
+        self.commit_file("a.txt", "one")
+        wt = self.add_worktree("wt1", branch="wt1")
+        shutil.move(str(wt), str(Path(self._tmp) / "wt1-relocated"))
+        self.assert_allowed("git worktree prune -n")
+        self.assert_allowed("git worktree prune --dry-run")
+        self.assert_allowed("git worktree prune -n -v")
+        self.assert_allowed("git worktree prune -nv")
+
+    def test_prune_dry_run_report_is_read_from_stderr(self) -> None:
+        # Regression pin for a behaviour verified against git 2.53.0:
+        # `git worktree prune -n` writes its report to STDERR, not stdout
+        # (unlike `git clean -n`, whose report the sibling handler reads
+        # from stdout). A handler that only inspected stdout would see an
+        # empty report and allow every prune.
+        self.commit_file("a.txt", "one")
+        wt = self.add_worktree("wt1", branch="wt1")
+        shutil.move(str(wt), str(Path(self._tmp) / "wt1-relocated"))
+        rc, out, err = guard.run_git(["worktree", "prune", "-n", "-v"], str(self.repo))
+        self.assertEqual(0, rc)
+        self.assertEqual("", out.strip(), "if this now has content, git changed streams")
+        self.assertIn("wt1", err)
+
+    def test_allows_prune_when_expire_never_suppresses_it(self) -> None:
+        # `--expire` is passed through to the dry run, so a prune the
+        # caller has explicitly scoped to remove nothing is not blocked.
+        self.commit_file("a.txt", "one")
+        wt = self.add_worktree("wt1", branch="wt1")
+        shutil.move(str(wt), str(Path(self._tmp) / "wt1-relocated"))
+        self.assert_allowed("git worktree prune --expire never")
+        self.assert_allowed("git worktree prune --expire=never")
+
+    # -- add ---------------------------------------------------------------
+
+    def test_allows_plain_worktree_add(self) -> None:
+        # `create_local_branch_or_worktree: allowed` -- the ordinary,
+        # policy-endorsed isolation step must never be blocked.
+        self.commit_file("a.txt", "one")
+        dest = Path(self._tmp) / "new-wt"
+        self.assert_allowed(f"git worktree add {dest}")
+        self.assert_allowed(f"git worktree add -b agent/task/role {dest}")
+        self.assert_allowed(f"git worktree add --detach {dest} HEAD")
+
+    def test_allows_dash_capital_b_on_a_branch_that_does_not_exist(self) -> None:
+        self.commit_file("a.txt", "one")
+        dest = Path(self._tmp) / "new-wt"
+        self.assert_allowed(f"git worktree add -B brand-new {dest}")
+
+    def test_allows_dash_capital_b_when_branch_already_points_at_start_point(self) -> None:
+        self.commit_file("a.txt", "one")
+        _git(self.repo, "branch", "same")
+        dest = Path(self._tmp) / "new-wt"
+        self.assert_allowed(f"git worktree add -B same {dest}")
+
+    def test_blocks_dash_capital_b_that_would_move_an_existing_branch(self) -> None:
+        # Verified against git 2.53.0: this really does reset the branch,
+        # reported only as "Preparing worktree (resetting branch 'x'; was
+        # at <sha>)".
+        self.commit_file("a.txt", "one")
+        _git(self.repo, "branch", "existing")
+        self.commit_file("a.txt", "two", message="second commit")
+        dest = Path(self._tmp) / "new-wt"
+        decision = self.assert_blocked(f"git worktree add -B existing {dest}")
+        self.assertIn("force-resets the existing branch", decision["reason"])
+
+    def test_blocks_attached_short_flag_spelling_dash_bbranch(self) -> None:
+        # `-Bexisting` (no space) is accepted by git's parse-options and
+        # resets the branch identically; missing it would leave the same
+        # destructive operation unguarded behind a one-space difference.
+        self.commit_file("a.txt", "one")
+        _git(self.repo, "branch", "existing")
+        self.commit_file("a.txt", "two", message="second commit")
+        dest = Path(self._tmp) / "new-wt"
+        self.assert_blocked(f"git worktree add -Bexisting {dest}")
+
+    def test_blocks_dash_capital_b_with_explicit_start_point(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.commit_file("a.txt", "two", message="second commit")
+        _git(self.repo, "branch", "existing")
+        dest = Path(self._tmp) / "new-wt"
+        # `existing` is at HEAD; resetting it to HEAD~1 moves it.
+        self.assert_blocked(f"git worktree add -B existing {dest} HEAD~1")
+
+    # -- verbs with no opinion ---------------------------------------------
+
+    def test_allows_read_only_and_non_removing_verbs(self) -> None:
+        self.commit_file("a.txt", "one")
+        wt = self.add_worktree("wt1", branch="wt1")
+        self.assert_allowed("git worktree list")
+        self.assert_allowed("git worktree list --porcelain")
+        self.assert_allowed("git worktree")
+        self.assert_allowed(f"git worktree lock {wt}")
+        self.assert_allowed(f"git worktree unlock {wt}")
+        self.assert_allowed("git worktree repair")
+
+    # -- composition with the rest of the guard ----------------------------
+
+    def test_blocks_worktree_remove_through_bash_dash_c_and_chaining(self) -> None:
+        self.commit_file("a.txt", "one")
+        wt = self.add_worktree("wt1", branch="wt1")
+        self.assert_blocked(f"cd /tmp && git worktree remove {wt}")
+        self.assert_blocked(f'bash -c "git worktree remove {wt}"')
+        self.assert_blocked(f"env git worktree remove {wt}")
+
+    def test_blocks_worktree_remove_with_global_dash_capital_c(self) -> None:
+        self.commit_file("a.txt", "one")
+        wt = self.add_worktree("wt1", branch="wt1")
+        self.assert_blocked(f"git -C {self.repo} worktree remove {wt}")
+
+
+class WorktreeDocumentedGapTests(GuardTestCase):
+    """Spellings this handler deliberately does NOT cover.
+
+    Each asserts the actual (gap) behaviour so closing or widening a gap is
+    a reviewed decision rather than a silent regression in either
+    direction -- same standard as the alias and recursion-bound gaps
+    already pinned in this module.
+    """
+
+    def test_rm_of_a_worktree_directory_is_a_documented_gap(self) -> None:
+        # `workspace-isolation.md` forbids deleting a worktree directory
+        # directly in the same sentence as the git verbs, but this hook
+        # only inspects `git` invocations -- `rm` is not a git subcommand.
+        self.commit_file("a.txt", "one")
+        wt = Path(self._tmp) / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
+        self.assert_allowed(f"rm -rf {wt}")
+
+    def test_git_gc_is_a_documented_gap(self) -> None:
+        # `git gc` prunes worktrees as part of its own housekeeping and
+        # has no handler, so this reaches the same effect unguarded.
+        self.commit_file("a.txt", "one")
+        self.assert_allowed("git gc")
+        self.assert_allowed("git gc --prune=now")
+
+    def test_aliased_worktree_remove_is_a_documented_gap(self) -> None:
+        # `_HANDLERS` matches literal git subcommand names only; an alias
+        # (`git wtr` for `worktree remove`) is invisible to it. Same gap
+        # already recorded for the other handlers.
+        self.commit_file("a.txt", "one")
+        _git(self.repo, "config", "alias.wtr", "worktree remove")
+        self.assert_allowed("git wtr wt1")
+
+    def test_dash_c_alias_injection_is_a_documented_gap(self) -> None:
+        # `git -c alias.wtr='worktree remove' wtr <path>` defines the alias
+        # inside the command line itself, so unlike the config-file alias
+        # gap it needs nothing external to be visible. It is still not
+        # covered: `parse_git_invocation` skips `-c <value>` as a global
+        # flag and reads `wtr` as the subcommand, which matches no handler.
+        self.commit_file("a.txt", "one")
+        wt = Path(self._tmp) / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
+        self.assert_allowed(f"git -c alias.wtr='worktree remove' wtr {wt}")
+
+    def test_unrecognized_wrapper_commands_are_a_documented_gap(self) -> None:
+        # _WRAPPER_TOKENS is deliberately not exhaustive. `timeout` is the
+        # one a normal agent would plausibly reach for unprompted.
+        self.commit_file("a.txt", "one")
+        wt = Path(self._tmp) / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
+        for wrapper in ("timeout 10", "nice", "stdbuf -o0", "setsid", "ionice"):
+            self.assert_allowed(f"{wrapper} git worktree remove {wt}")
+
+    def test_worktree_add_force_over_a_registered_path_is_a_documented_gap(self) -> None:
+        # Verified against git 2.53.0: plain `add` refuses to reuse the path
+        # of a registered-but-missing worktree, `--force` overrides and
+        # re-registers it, and `-f -f` does so even when it is locked. Not
+        # guarded -- see the module docstring for why the fix would
+        # re-introduce the path-matching problem `remove` avoids.
+        #
+        # NOTE ON WHAT THIS TEST DOES AND DOES NOT SHOW: it calls
+        # `evaluate_command` only, and never runs git, so the `shutil.move`
+        # below does not affect the assertion -- the guard has no handler
+        # branch for `add --force` at all, so it would return None either
+        # way. The setup is here to describe the scenario, not to prove it.
+        # The empirical claim about git's behaviour rests on the separate
+        # probe recorded in the module docstring, not on this test.
+        self.commit_file("a.txt", "one")
+        wt = Path(self._tmp) / "victim"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "victim")
+        shutil.move(str(wt), str(Path(self._tmp) / "victim-elsewhere"))
+        self.assert_allowed(f"git worktree add --force {wt} -b intruder")
+        self.assert_allowed(f"git worktree add -f -f {wt} -b intruder")
+
+    def test_worktree_remove_nested_beyond_recursion_bound_is_a_documented_gap(self) -> None:
+        self.commit_file("a.txt", "one")
+        wt = Path(self._tmp) / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
+        nested = wrap_in_bash_c(
+            wrap_in_bash_c(wrap_in_bash_c(wrap_in_bash_c(f"git worktree remove {wt}")))
+        )
+        self.assert_allowed(nested)
+
+
+# ---------------------------------------------------------------------------
 # Command-line shape / chaining robustness
 # ---------------------------------------------------------------------------
+
+
+class NewlineSeparatorTests(GuardTestCase):
+    """Newline is a command separator (issue #215 review, finding F1).
+
+    Before this, `split_top_level` split on `&&`/`||`/`;`/`|` but not on
+    newlines, and `shlex.split` treats a newline as ordinary whitespace --
+    so a two-line command collapsed into one token list whose `tokens[0]`
+    was the first line's program, `parse_git_invocation` returned None,
+    and EVERY handler was bypassed. No adversarial intent required:
+    multi-line Bash tool calls are routine.
+    """
+
+    def test_newline_separated_destructive_command_is_blocked(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        # The `&&` spelling is the control: both must be blocked.
+        self.assert_blocked("echo hi && git reset --hard")
+        self.assert_blocked("echo hi\ngit reset --hard")
+
+    def test_newline_bypass_is_closed_for_every_handler(self) -> None:
+        # The bypass was never worktree-specific, so neither is the fix.
+        self.commit_file("a.txt", "one")
+        _git(self.repo, "branch", "throwaway")
+        (self.repo / "scratch.tmp").write_text("junk", encoding="utf-8")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        wt = Path(self._tmp) / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
+        for command in (
+            "cd /tmp\ngit reset --hard",
+            "cd /tmp\ngit clean -fd",
+            "cd /tmp\ngit checkout HEAD~1 -- a.txt",
+            "cd /tmp\ngit restore --source=HEAD~1 a.txt",
+            "cd /tmp\ngit branch -D throwaway",
+            "cd /tmp\ngit push --force origin main",
+            f"cd /tmp\ngit worktree remove {wt}",
+        ):
+            with self.subTest(command=command):
+                self.assert_blocked(command)
+
+    def test_windows_style_crlf_line_endings(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked("echo hi\r\ngit reset --hard")
+
+    def test_blank_lines_and_leading_indentation_do_not_hide_the_command(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked("echo one\n\n    git reset --hard\n")
+
+    def test_newline_inside_quotes_is_not_a_separator(self) -> None:
+        # A quoted multi-line string stays one segment, so the quoted text
+        # is an argument to `echo`, not a command.
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_allowed("echo 'first line\ngit reset --hard'")
+
+    def test_command_after_a_heredoc_is_blocked(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        wt = Path(self._tmp) / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
+        self.assert_blocked(
+            f"cat <<'EOF' > note.md\nsome text\nEOF\ngit worktree remove {wt}"
+        )
+        self.assert_blocked("cat <<EOF > note.md\nsome text\nEOF\ngit reset --hard")
+
+    def test_heredoc_body_is_not_treated_as_a_command(self) -> None:
+        # The false positive that newline-splitting would otherwise
+        # introduce: writing documentation that quotes a destructive
+        # command is routine, especially in this repository. The body is
+        # text being written to a file, not an invocation.
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_allowed("cat <<'EOF' > note.md\ngit reset --hard\nEOF")
+        self.assert_allowed("cat <<'EOF' > note.md\ngit clean -fd\ngit push --force\nEOF")
+
+    def test_heredoc_dash_form_allows_tab_indented_terminator(self) -> None:
+        # The two spellings must DIFFER, or the `<<-` branch is dead code.
+        # An earlier version of this test asserted only the `<<-` case and
+        # passed identically with the non-dash spelling, because segments
+        # were stripped before terminator matching -- a test that could
+        # not fail for its stated reason. The pair below discriminates.
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        # `<<-` accepts the tab-indented terminator, so the heredoc ends
+        # and the trailing command is a real command.
+        self.assert_blocked("cat <<-'EOF' > note.md\ntext\n\tEOF\ngit reset --hard")
+        # Plain `<<` does NOT: bash requires the terminator line to be
+        # exactly the delimiter, so this heredoc is unterminated and
+        # swallows the trailing command, exactly as the shell would.
+        self.assert_allowed("cat <<'EOF' > note.md\ntext\n\tEOF\ngit reset --hard")
+        # Only TABS are stripped by `<<-`, never spaces.
+        self.assert_allowed("cat <<-'EOF' > note.md\ntext\n    EOF\ngit reset --hard")
+
+    def test_terminator_must_be_exactly_the_delimiter(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked("cat <<'EOF' > note.md\ntext\nEOF\ngit reset --hard")
+        # A near-miss terminator leaves the heredoc open (fails open).
+        self.assert_allowed("cat <<'EOF' > note.md\ntext\nEOFX\ngit reset --hard")
+
+    def test_here_string_is_not_mistaken_for_a_heredoc(self) -> None:
+        # `<<<` is a here-STRING: no body, no terminator line. Treating it
+        # as a heredoc would swallow the rest of the command.
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked("cat <<<somestring\ngit reset --hard")
+
+    def test_split_top_level_splits_on_newline(self) -> None:
+        self.assertEqual(
+            ["echo one", "echo two", "git status"],
+            guard.split_top_level("echo one\necho two\ngit status"),
+        )
+
+
+class HeredocContextTests(GuardTestCase):
+    """Regressions F7/F8 (issue #215 re-review).
+
+    The first newline-splitting fix searched finished segment text for a
+    heredoc opener, by which point two facts the scanner knew had been
+    discarded: which separator produced each break, and whether the `<<`
+    was inside quotes. Both are now recorded during the scan.
+    """
+
+    def test_command_chained_onto_the_heredoc_opener_line_is_still_checked(self) -> None:
+        # F7. `cat > f <<EOF && git worktree remove <path>` runs that git
+        # command before a single body line is read. Consuming forward to
+        # the delimiter swallowed it.
+        self.commit_file("a.txt", "one")
+        wt = Path(self._tmp) / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
+        self.assert_blocked(f"cat > note.md <<EOF && git worktree remove {wt}")
+        self.assert_blocked(f"cat > note.md <<EOF; git worktree remove {wt}")
+        self.assert_blocked(f"cat > note.md <<EOF | git worktree remove {wt}")
+
+    def test_heredoc_body_after_a_chained_opener_is_still_skipped(self) -> None:
+        # The body still starts on the NEXT line, so the false positive
+        # the heredoc handling exists to prevent stays prevented even when
+        # the opener's line carries a second command.
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_allowed("cat > note.md <<EOF && echo started\ngit reset --hard\nEOF")
+
+    def test_quoted_mention_of_a_heredoc_is_not_a_redirection(self) -> None:
+        # F8. A `<<EOF` inside quotes is text, not a redirection, so it
+        # must not start swallowing subsequent commands.
+        self.commit_file("a.txt", "one")
+        wt = Path(self._tmp) / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
+        self.assert_blocked(f'echo "see <<EOF for details"; git worktree remove {wt}')
+        self.assert_blocked(f"echo 'see <<EOF'; git worktree remove {wt}")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked('echo "docs mention <<EOF"\ngit reset --hard')
+
+    def test_left_shift_in_arithmetic_expansion_is_not_a_heredoc(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked("echo $(( 1 << 2 ))\ngit reset --hard")
+        self.assert_blocked("echo $(( x << shift ))\ngit reset --hard")
+
+    def test_fd_prefixed_heredoc_is_still_recognized(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_allowed("cat 2<<'EOF'\ngit reset --hard\nEOF")
+
+
+class LineContinuationTests(GuardTestCase):
+    """Regression F9 (issue #215 re-review).
+
+    Backslash-newline is how long commands are normally written. Once
+    newline became a separator, `git push \\` / `origin main --force`
+    split into two segments -- neither of which is a destructive git
+    invocation -- and a force push walked through a guard that had caught
+    the single-line spelling since #129.
+    """
+
+    def test_force_push_split_across_lines_is_blocked(self) -> None:
+        self.assert_blocked("git push --force origin main")  # control
+        self.assert_blocked("git push \\\n  origin main --force")
+        self.assert_blocked("git push \\\n  --force \\\n  origin main")
+
+    def test_continuation_inside_other_handlers(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        wt = Path(self._tmp) / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
+        self.assert_blocked("git reset \\\n  --hard")
+        self.assert_blocked(f"git worktree \\\n  remove {wt}")
+
+    def test_crlf_continuation(self) -> None:
+        self.assert_blocked("git push \\\r\n  origin main --force")
+
+    def test_continuation_inside_single_quotes_stays_literal(self) -> None:
+        # Inside single quotes a backslash-newline is literal text, not a
+        # continuation, so this must not be joined into a command.
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_allowed("echo 'a\\\nb'")
+        self.assert_allowed("echo 'git reset \\\n--hard'")
 
 
 class CommandShapeTests(GuardTestCase):

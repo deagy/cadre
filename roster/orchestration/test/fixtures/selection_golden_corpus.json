@@ -3838,7 +3838,7 @@
     },
     {
       "id": "LINUX_SYSTEMS_EXECUTION_GOLDEN_1",
-      "description": "Narrow linux-systems-execution route regression fixture. Workflow shape: systemd units, packages, sysctls, and filesystem layout are host configuration, which is infrastructure-change.md's subject regardless of who reviews the change. Recorded divergence, not a justification: this is the only one of the 20 infrastructure-change routes that staffs neither infrastructure-reviewer nor infrastructure-provisioner (it staffs test-engineer/code-reviewer/application-engineer), so the plan points the operator at infrastructure-change.md's 'Classify -> Provision+Plan -> Infrastructure Reviewer -> gated approval -> Apply' shape while dispatching no infrastructure reviewer. The linux-systems-implementer AGENT.md names 'infrastructure-provisioner or backend-engineer accountability', which the route staffing also does not match, so the staffing is the suspect half, not the shape. Filed as a routing question rather than fixed here, because changing route staffing changes agent selection and is outside #210's scope.",
+      "description": "Narrow linux-systems-execution route regression fixture. Workflow shape (unchanged): linux-systems-implementer's AGENT.md names seven artifact kinds -- systemd, packages, permissions, sysctls, filesystem layout, bootstrap scripts, and diagnostics -- and all seven are host configuration, which is infrastructure-change.md's subject regardless of who reviews the change. Staffing corrected in #213, reasoning from that artifact set rather than from the previous staffing. reviewers is [infrastructure-reviewer] and support is [infrastructure-provisioner]: identical to the 18 other infrastructure-change routes that staff a support agent, and to the accountability linux-systems-implementer's own AGENT.md names. (The 19th, the broad infrastructure route, matches on reviewers only and correctly carries infrastructure-provisioner as its primary rather than as support -- do not 'align' a route to a flat count of 19 without re-deriving it.) The previous reviewers [test-engineer, code-reviewer] and support [application-engineer] are dropped, not supplemented. Two of the seven artifact kinds are executable code rather than declarative configuration -- bootstrap scripts and diagnostics -- and they are the reason to state explicitly that code review is reassigned here, not removed: infrastructure-change.md:23 has the infrastructure reviewer 'independently evaluate code and plan', and its checklist (privilege, exposure, logging, state, rollback) fits scripts that configure hosts better than code-reviewer's does. ansible-automation-execution routes more logic-heavy artifacts to infrastructure-reviewer alone. application-engineer's own AGENT.md scopes it to this suite's own tooling and explicitly disclaims a target project's capability work, so it was never the right support role for a target project's Linux hosts.",
       "task": "Implement linux systems implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3849,13 +3849,12 @@
           "linux-systems-implementer"
         ],
         "reviewers": [
-          "test-engineer",
-          "code-reviewer"
+          "infrastructure-reviewer"
         ],
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "infrastructure-provisioner"
         ],
         "matched_routes": [
           "linux-systems-execution"
