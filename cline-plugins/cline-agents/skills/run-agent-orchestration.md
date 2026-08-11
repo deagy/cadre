@@ -560,6 +560,22 @@ authoritative for the *why*.
     missing variable, rather than falling back to a vendor. See that
     plugin's `README.md` ("Model tiers and provider selection") for the full
     resolution order and per-tier variables.
+  - **Configure a model with at least a 32k context window.** Role briefs
+    carry their shared-policy block embedded verbatim, because a dispatched
+    subagent is an isolated session with no other channel to receive it. That
+    makes the briefs large: a median of roughly 14,900 tokens and a largest of
+    about 17,200 (`cadre role-fidelity --mode static`; estimates from a
+    chars-per-token divisor, not a real tokenizer). Every role fits from about
+    20k upward; at 16k, 131 of 159 do not. 32k is the documented minimum
+    because the gap absorbs the estimate's error, the task and tool schemas,
+    any retrieved knowledge, and the reply.
+
+    Fitting is necessary, not sufficient. Advertised context is not effective
+    context, and a small model that accepts a 15k-token brief may still stop
+    attending to its constraints well before the window fills — which looks
+    like a role ignoring its own authority limits, not like a truncation
+    error. `cadre role-fidelity --mode probe` measures that against a specific
+    model; run it before trusting a new one with dispatch.
 
 So as of this section, Cline has **three** distinct ways to reach a role,
 not zero: the `cline-agents` plugin above (preferred when installed — it is

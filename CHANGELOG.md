@@ -55,6 +55,14 @@ check and reporting "nothing to do". See
   variables are still honoured, mapped onto the new names, each warning on
   stderr; the current variable wins where both are set.
 
+- **Documented a 32k minimum context window for the Cline dispatch path.**
+  Role briefs embed shared policy verbatim (a dispatched subagent is an
+  isolated session with no other channel to receive it), so they run to a
+  median of ~14,900 estimated tokens. Every role fits from roughly 20k upward;
+  at 16k, 131 of 159 do not. Recorded in `cline-agents/README.md` and
+  `references/runner-adapters.md`, with the caveat that fitting is necessary
+  but not sufficient — advertised context is not effective context.
+
 ### Fixed
 
 - The `run-agent-orchestration` skill's **Bootstrap Local Setup** had no Cline

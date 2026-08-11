@@ -200,6 +200,48 @@ vendor will not show it.
 `modelTier` must be `high`, `mid`, or `low`. Any other value is treated
 as no tier at all rather than deriving an environment variable name from it.
 
+### Minimum context window: 32k
+
+Whatever you configure, give it at least a **32k context window**.
+
+Role briefs embed their shared-policy block verbatim. That is not an oversight
+to be optimized away: a dispatched subagent runs as an isolated session with
+no other channel to receive policy, so it has to arrive in the brief. The
+consequence is that briefs are large. Measured with
+`cadre role-fidelity --mode static`:
+
+| | estimated tokens |
+|---|---|
+| median brief | ~14,900 |
+| largest brief (`knowledge-store-steward`) | ~17,200 |
+| median role-specific content | ~370 |
+| median embedded shared policy | ~14,800 |
+
+Those are estimates from a chars-per-token divisor rather than a real
+tokenizer — treat a model near the line as under it. Every role fits from
+roughly 20k upward; at 16k, 131 of 159 do not. The recommendation is 32k
+rather than 20k because the headroom has to cover the estimate's error, the
+task itself, tool schemas, any retrieved knowledge, and the reply.
+
+**Fitting is necessary, not sufficient.** Advertised context is not effective
+context: a small or heavily quantized model will accept a 15k-token brief and
+may still stop attending to its constraints long before the window fills. That
+failure does not look like truncation — it looks like a role quietly ignoring
+its own authority limits, which is the one failure mode this suite can least
+afford. Before trusting a new model with dispatch, measure it:
+
+```sh
+export CADRE_FIDELITY_BASE_URL=http://localhost:11434/v1   # LM Studio: :1234
+export CADRE_FIDELITY_MODEL=your-model-tag
+cadre role-fidelity --mode probe --role code-reviewer --output fidelity.json
+```
+
+Read the `instruction-retention-under-load` result first; it is the cheapest
+and sharpest signal, and nothing else means much until it passes. Then read a
+sample of the recorded replies rather than trusting the score alone — the
+checks are keyword assertions and can be satisfied by a reply that says the
+right words while doing the wrong thing.
+
 ### Migrating from the opus/sonnet/haiku tier names
 
 Both the old `modelTier` values and the old `CLINE_AGENTS_MODEL_OPUS`/
