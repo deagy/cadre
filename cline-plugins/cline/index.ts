@@ -151,10 +151,10 @@ const setup = (api: SetupApi, ctx: SetupContext) => {
         "agents, retrieves knowledge, merges, deploys, or mutates infrastructure or approvals. The " +
         "role catalog is bundled with this plugin itself, not read from the target workspace, so " +
         "`root` may be any project — it does not need to be a checkout of deagy/cadre or contain its " +
-        "own catalog.yaml. This plugin does not (and, with the Cline plugin API as currently " +
-        "published, cannot) dispatch the selected role(s) itself — a Cline plugin's setup(api, ctx) " +
-        "only exposes registerTool/registerCommand/etc., not the session's spawn-agent or team " +
-        "primitives. After calling this tool, the orchestrating Cline session must dispatch " +
+        "own catalog.yaml. This plugin does not dispatch the selected role(s) itself — a Cline " +
+        "plugin's setup(api, ctx) registers contributions (registerTool/registerCommand/etc.) and " +
+        "does not expose the session's spawn-agent or team primitives. After calling this tool, " +
+        "the orchestrating Cline session must dispatch " +
         "manually: see the \"## Cline\" section of " +
         ".agents/skills/run-agent-orchestration/references/runner-adapters.md for the current " +
         "manual-injection workaround and /team limitations.",

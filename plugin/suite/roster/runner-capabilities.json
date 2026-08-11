@@ -40,7 +40,11 @@
       "named_agent_dispatch_supported": true,
       "named_agent_dispatch_workaround": null,
       "concurrency_bound_config_key": null,
-      "native_workspace_isolation": "worktree"
+      "native_workspace_isolation": "worktree",
+      "prompt_hook_support": "context_injection",
+      "prompt_hook_mechanism": "UserPromptSubmit hook. Exit 0 with stdout, or a top-level additionalContext field, injects context the model acts on; exit 2 (or decision \"block\") blocks the prompt and erases it",
+      "tool_gate_support": "blocking",
+      "tool_gate_mechanism": "PreToolUse hook returning hookSpecificOutput.permissionDecision \"deny\" with a permissionDecisionReason that reaches the model"
     },
     "codex": {
       "has_generated_wrapper": true,
@@ -52,7 +56,11 @@
       "named_agent_dispatch_supported": false,
       "named_agent_dispatch_workaround": "dispatch_secure_cloud_role MCP tool (cadre mcp-dispatch-server), preferred; manual per-file developer_instructions injection into spawn_agent, fallback",
       "concurrency_bound_config_key": "agents.max_concurrent_threads_per_session (native spawn_agent) or MAX_CONCURRENT_CHILDREN (this repo's MCP dispatch server path)",
-      "native_workspace_isolation": null
+      "native_workspace_isolation": null,
+      "prompt_hook_support": "context_injection",
+      "prompt_hook_mechanism": "userPromptSubmit lifecycle hook (HookEventName in the app-server protocol schema); a command/mcp_tool handler emits a \"context\" HookOutputEntry, spilled to disk above ConfiguredHookHandler.additionalContextLimit (default ~2500 tokens). The config.toml table shape is not in docs/config.md -- verify against an installed codex before relying on it",
+      "tool_gate_support": "blocking",
+      "tool_gate_mechanism": "preToolUse/permissionRequest lifecycle hook emitting a \"stop\" HookOutputEntry"
     },
     "cline": {
       "has_generated_wrapper": true,
@@ -64,7 +72,11 @@
       "named_agent_dispatch_supported": true,
       "named_agent_dispatch_workaround": null,
       "concurrency_bound_config_key": null,
-      "native_workspace_isolation": null
+      "native_workspace_isolation": null,
+      "prompt_hook_support": "dispatch_only",
+      "prompt_hook_mechanism": "A UserPromptSubmit hook file under <workspace>/.cline/hooks (or .clinerules/hooks) IS executed, but is spawned detached with only a logging catch and its stdout is never read -- contextModification cannot reach the model. Verified against @cline/core 0.0.65 and 0.0.71; cline-plugins/cline/hook-surface.test.mts is the executable form",
+      "tool_gate_support": "blocking",
+      "tool_gate_mechanism": "PreToolUse hook file under <workspace>/.cline/hooks (or .clinerules/hooks); unlike every other event it is spawned non-detached with a timeout, awaited, and its stdout parsed, so {\"cancel\": true} returns to the runtime as {stop: true}"
     },
     "api": {
       "has_generated_wrapper": false,
@@ -76,7 +88,11 @@
       "named_agent_dispatch_supported": true,
       "named_agent_dispatch_workaround": null,
       "concurrency_bound_config_key": "MAX_CONCURRENT_CHILDREN (this repo's MCP dispatch server path)",
-      "native_workspace_isolation": null
+      "native_workspace_isolation": null,
+      "prompt_hook_support": "none",
+      "prompt_hook_mechanism": null,
+      "tool_gate_support": "none",
+      "tool_gate_mechanism": null
     }
   }
 }

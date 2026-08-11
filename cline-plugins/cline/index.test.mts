@@ -63,11 +63,16 @@ describe("cadre plugin", () => {
     expect(tools[0].description).toMatch(/plan only/i);
     expect(tools[0].description).toMatch(/never invokes agents/i);
     expect(tools[0].description).toMatch(/bin\/cadre select/);
-    // The Cline plugin API has no spawn/team primitive available to a
-    // registered tool's execute() (see runner-adapters.md's "## Cline"
-    // section); the description must say so rather than imply this tool
-    // dispatches anything.
-    expect(tools[0].description).toMatch(/cannot.*dispatch/i);
+    // `setup(api, ctx)` exposes no spawn/team primitive to a registered
+    // tool's execute() (see runner-adapters.md's "## Cline" section); the
+    // description must say this tool does not dispatch rather than imply it
+    // does. Deliberately NOT asserting the old "cannot dispatch" phrasing:
+    // that claimed an API-wide impossibility, which `cline-agents` disproves
+    // by dispatching through its own embedded ClineCore, and which invited
+    // the broader over-read that a plugin has no hook stages at all (see
+    // hook-surface.test.mts). This plugin not dispatching is the fact; the
+    // API forbidding it universally is not.
+    expect(tools[0].description).toMatch(/does not dispatch/i);
     expect(tools[0].description).toMatch(/runner-adapters\.md/);
   });
 
