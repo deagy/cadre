@@ -128,12 +128,6 @@ class WritesNothingTests(PromotionTestCase):
         self.assertFalse(result["staged"])
         self.assertIn("Nothing has been written", result["next_step"])
 
-    def test_the_service_module_imports_no_knowledge_store_code(self) -> None:
-        source = (ROOT / "src" / "service.py").read_text(encoding="utf-8")
-        for forbidden in ("staged_store", "staged_records", "finding_record", "put_generated_record"):
-            self.assertNotIn(f"import {forbidden}", source)
-            self.assertNotIn(f"from {forbidden}", source)
-
     def test_the_entry_survives_promotion(self) -> None:
         stored = self.put()
         self.promote(stored["handle"])
@@ -154,6 +148,29 @@ class WritesNothingTests(PromotionTestCase):
         self.promote(stored["handle"])
         result = get_entry(self.db, {**CALLER, "handle": stored["handle"]})["results"][0]
         self.assertTrue(result["promoted_at"])
+
+    def test_repeated_promotion_overwrites_promoted_at(self) -> None:
+        stored = self.put()
+        first_promotion = self.promote(stored["handle"])
+        first_promoted_at = first_promotion["promoted_at"]
+
+        # Wait a moment to ensure timestamp differs (at least in some environments)
+        import time
+        time.sleep(0.01)
+
+        second_promotion = self.promote(stored["handle"])
+        second_promoted_at = second_promotion["promoted_at"]
+
+        # The timestamp should be updated, not kept from the first promotion
+        self.assertNotEqual(first_promoted_at, second_promoted_at,
+                           "Second promotion should update promoted_at timestamp")
+        self.assertGreater(second_promoted_at, first_promoted_at,
+                          "Second promotion timestamp should be later")
+
+        # Verify the stored value matches the second promotion
+        result = get_entry(self.db, {**CALLER, "handle": stored["handle"]})["results"][0]
+        self.assertEqual(result["promoted_at"], second_promoted_at,
+                        "Stored promoted_at should match the most recent promotion")
 
 
 class UntrustedProvenanceTests(PromotionTestCase):

@@ -21,6 +21,7 @@ from service import (
     get_entry,
     list_entries,
     promote_entry,
+    prune_audit as prune_audit_entries,
     put_entry,
     reindex_entries,
     search_entries,
@@ -144,6 +145,16 @@ def _parser() -> argparse.ArgumentParser:
     add_caller(promote)
     add_config(promote)
 
+    prune_audit = subparsers.add_parser("prune-audit")
+    prune_audit.add_argument("--older-than-days", required=True, type=int, dest="older_than_days")
+    prune_audit.add_argument(
+        "--acknowledge-loss",
+        dest="acknowledge_loss",
+        action="store_true",
+        help="required: pruning audit rows destroys accountability, it is not hygiene",
+    )
+    add_config(prune_audit)
+
     drop = subparsers.add_parser("drop")
     drop.add_argument("--handle", required=True)
     drop.add_argument("--reason", required=True)
@@ -243,6 +254,16 @@ def main(argv: list[str] | None = None) -> int:
 
         # `drop` destroys an entry, so it is gated and scoped exactly like a
         # read -- it sits below the scope enforcement, not above it.
+
+        if args.command == "prune-audit":
+            db = open_store(config["database"])
+            try:
+                return _emit(prune_audit_entries(db, {
+                    "older_than_days": args.older_than_days,
+                    "acknowledge_loss": args.acknowledge_loss,
+                }))
+            finally:
+                db.close()
 
         if args.command == "reindex":
             db = open_store(config["database"])

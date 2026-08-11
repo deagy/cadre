@@ -302,10 +302,21 @@ class TestTheContextStoreCannotEmbedRemotely(unittest.TestCase):
             "security decision that is currently refused (OD-5).\n" + "\n".join(offenders),
         )
 
-    def test_the_context_store_accepts_only_the_offline_provider(self) -> None:
-        config = (CONTEXT_SRC / "config.py").read_text(encoding="utf-8")
-        self.assertIn('SUPPORTED_EMBEDDING_PROVIDERS = ("hashing",)', config)
-        self.assertNotIn("openai-compatible", config.replace("openai-compatible endpoint", ""))
+    # The config-level refusal of a remote provider is deliberately NOT asserted
+    # here. It is a runtime property of one subsystem, and
+    # `roster/context-store/test/test_search.py::ProviderTests::
+    # test_a_remote_provider_is_refused_and_says_why` already exercises it
+    # against the real `load_config`, asserting the same three things.
+    #
+    # A copy in this file was removed rather than kept: it added no coverage,
+    # and reproducing it here meant putting the context store's `src` on
+    # `sys.path` inside the one file whose whole subject is that flat module
+    # names make `sys.path` order dangerous -- `TestTheStoresCannotShareADatabase`
+    # below scrubs exactly those entries for exactly that reason.
+    #
+    # What belongs in this file is the *structural* half, which is above: the
+    # import graph cannot reach the remote provider, and the shared module has
+    # no networking code in it. Those hold whether or not any validator runs.
 
 
 class TestTheStoresCannotShareADatabase(unittest.TestCase):

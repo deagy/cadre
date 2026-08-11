@@ -30,6 +30,18 @@ classification so a caller cannot write or read above its own ceiling.
 `agent` is **not** ambient and is honestly a caller-asserted parameter -- there
 is no role-id environment variable in the dispatch protocol today. See
 `ROLE_ID_ENV_VAR` below.
+
+`source` is the same honest gap, for the same reason. `classification` gets a
+real ceiling here because the dispatch server tracks a parent classification
+per session (`core.PARENT_CLASSIFICATION_ENV_VAR`); no equivalent ambient
+project/repository identity exists to check `source` against. The server's own
+working directory is not a usable substitute -- `dispatch_server.py` disables
+project-tier settings resolution specifically because an MCP server's cwd is
+wherever the host CLI happened to launch it, not reliably the target project
+root. So `source` is forwarded to the CLI exactly as asserted, and the CLI's
+own `_enforce_scope()` is the only check it gets -- identical to what a human
+running `cadre context` by hand would get. See
+`roster/context-store/SECURITY.md`'s "What is not enforced" section.
 """
 
 from __future__ import annotations

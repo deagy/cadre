@@ -24,8 +24,21 @@ if str(_SHARED_TEST_DIR) not in sys.path:
     sys.path.append(str(_SHARED_TEST_DIR))
 
 from config import DEFAULTS  # noqa: E402
-from database import SCHEMA, expired_rows, open_store, sweep_expired  # noqa: E402
-from service import ContextStoreError, get_entry, put_entry, resolve_expires_at  # noqa: E402
+from database import (  # noqa: E402
+    SCHEMA,
+    expired_rows,
+    open_store,
+    prune_audit_records,
+    record_access,
+    sweep_expired,
+)
+from service import (  # noqa: E402
+    ContextStoreError,
+    get_entry,
+    prune_audit,
+    put_entry,
+    resolve_expires_at,
+)
 from settings_test_helpers import isolate_settings  # noqa: E402
 
 
@@ -108,6 +121,44 @@ class TtlBoundTests(ExpiryTestCase):
                 self.put(ttl_days=bad)
 
 
+class PruneAuditCommandTests(ExpiryTestCase):
+    """The service layer around `prune_audit_records`.
+
+    The primitive had no caller when it was written, which is the same dead-code
+    shape this store already refused once (a `promoted_record_id` column with
+    nothing to write it). It is reachable now, and gated: destroying the record
+    that reads happened is not the same kind of act as sweeping scratch that was
+    always going to expire, so the caller has to say which one they mean.
+    """
+
+    def test_pruning_without_acknowledgement_is_refused(self) -> None:
+        with self.assertRaises(ContextStoreError) as ctx:
+            prune_audit(self.db, {"older_than_days": 30})
+        self.assertIn("--acknowledge-loss", str(ctx.exception))
+        self.assertIn("accountability", str(ctx.exception))
+
+    def test_a_missing_or_invalid_age_is_refused(self) -> None:
+        for bad in (None, 0, -1, True, "30", 1.5):
+            with self.assertRaises(ContextStoreError):
+                prune_audit(self.db, {"older_than_days": bad, "acknowledge_loss": True})
+
+    def test_acknowledged_pruning_runs(self) -> None:
+        self.put()
+        result = prune_audit(self.db, {"older_than_days": 30, "acknowledge_loss": True})
+        self.assertIn("access_runs", result)
+        self.assertIn("cutoff", result)
+
+    def test_recent_audit_rows_survive_a_generous_cutoff(self) -> None:
+        # The rows this put just wrote are newer than the cutoff, so nothing
+        # should be destroyed -- otherwise the age comparison is inverted.
+        self.put()
+        before = self.db.execute("SELECT COUNT(*) AS n FROM access_runs").fetchone()["n"]
+        self.assertGreater(before, 0)
+        prune_audit(self.db, {"older_than_days": 1, "acknowledge_loss": True})
+        after = self.db.execute("SELECT COUNT(*) AS n FROM access_runs").fetchone()["n"]
+        self.assertEqual(after, before)
+
+
 class SweepTests(ExpiryTestCase):
     def _age(self, handle: str, days: int) -> None:
         past = _iso(datetime.now(timezone.utc) - timedelta(days=days))
@@ -176,6 +227,113 @@ class SweepTests(ExpiryTestCase):
         future = _iso(datetime.now(timezone.utc) + timedelta(days=365))
         self.assertEqual(len(expired_rows(self.db, future)), 1)
         self.assertEqual(len(expired_rows(self.db)), 0)
+
+
+class AuditRetentionTests(ExpiryTestCase):
+    """`access_runs`/`expiry_evidence` are indefinite by default -- deliberately.
+
+    `prune_audit_records()` is the manual, operator-invoked-only escape hatch
+    for a deployment that has decided otherwise. Nothing in this store calls
+    it; these tests exercise it directly, the way a future CLI wiring would.
+    """
+
+    def _age_access_run(self, access_id: str, days: int) -> None:
+        past = _iso(datetime.now(timezone.utc) - timedelta(days=days))
+        with self.db:
+            self.db.execute("UPDATE access_runs SET created_at = ? WHERE id = ?", (past, access_id))
+
+    def _age_expiry_evidence(self, handle: str, days: int) -> None:
+        past = _iso(datetime.now(timezone.utc) - timedelta(days=days))
+        with self.db:
+            self.db.execute("UPDATE expiry_evidence SET swept_at = ? WHERE handle = ?", (past, handle))
+
+    def test_sweeping_entries_does_not_touch_the_audit_tables(self) -> None:
+        # The clock that deletes `entries` must not be the same clock that
+        # deletes the evidence that they existed, or `expiry_evidence` could
+        # not outlive what it attests to.
+        handle = self.put()["handle"]
+        record_access(self.db, {
+            "operation": "get", "handle": handle, "query_hash": None, "task_id": "T",
+            "agent": "a", "classification": "internal", "scope": None, "source": "demo",
+            "result_count": 1,
+        })
+        with self.db:
+            self.db.execute(
+                "UPDATE entries SET expires_at = ? WHERE handle = ?",
+                (_iso(datetime.now(timezone.utc) - timedelta(days=1)), handle),
+            )
+        sweep_expired(self.db)
+        self.assertIsNotNone(
+            self.db.execute("SELECT 1 FROM access_runs WHERE handle = ?", (handle,)).fetchone()
+        )
+        self.assertIsNotNone(
+            self.db.execute("SELECT 1 FROM expiry_evidence WHERE handle = ?", (handle,)).fetchone()
+        )
+
+    def test_nothing_calls_prune_automatically(self) -> None:
+        # Opening the store sweeps `entries` on purpose (see `open_store`'s
+        # docstring); it must not also prune the audit tables, which have no
+        # TTL to sweep against.
+        handle = self.put()["handle"]
+        access_id = record_access(self.db, {
+            "operation": "get", "handle": handle, "query_hash": None, "task_id": "T",
+            "agent": "a", "classification": "internal", "scope": None, "source": "demo",
+            "result_count": 1,
+        })
+        self._age_access_run(access_id, 10_000)  # absurdly old; still not swept on open
+        self.db.close()
+        reopened = open_store(self.config["database"])
+        self.addCleanup(reopened.close)
+        self.assertIsNotNone(
+            reopened.execute("SELECT 1 FROM access_runs WHERE id = ?", (access_id,)).fetchone()
+        )
+
+    def test_prune_deletes_only_rows_older_than_the_cutoff(self) -> None:
+        old_handle = self.put()["handle"]
+        old_access = record_access(self.db, {
+            "operation": "get", "handle": old_handle, "query_hash": None, "task_id": "T",
+            "agent": "a", "classification": "internal", "scope": None, "source": "demo",
+            "result_count": 1,
+        })
+        self._age_access_run(old_access, 100)
+
+        recent_handle = self.put()["handle"]
+        recent_access = record_access(self.db, {
+            "operation": "get", "handle": recent_handle, "query_hash": None, "task_id": "T",
+            "agent": "a", "classification": "internal", "scope": None, "source": "demo",
+            "result_count": 1,
+        })
+
+        result = prune_audit_records(self.db, older_than_days=30)
+        self.assertEqual(result["access_runs"], 1)
+        self.assertIsNone(
+            self.db.execute("SELECT 1 FROM access_runs WHERE id = ?", (old_access,)).fetchone()
+        )
+        self.assertIsNotNone(
+            self.db.execute("SELECT 1 FROM access_runs WHERE id = ?", (recent_access,)).fetchone()
+        )
+
+    def test_prune_also_covers_expiry_evidence_by_its_own_swept_at(self) -> None:
+        handle = self.put()["handle"]
+        past = _iso(datetime.now(timezone.utc) - timedelta(days=1))
+        with self.db:
+            self.db.execute("UPDATE entries SET expires_at = ? WHERE handle = ?", (past, handle))
+        swept = sweep_expired(self.db)
+        self.assertEqual(len(swept), 1)
+        self._age_expiry_evidence(handle, 100)
+
+        result = prune_audit_records(self.db, older_than_days=30)
+        self.assertEqual(result["expiry_evidence"], 1)
+        self.assertIsNone(
+            self.db.execute("SELECT 1 FROM expiry_evidence WHERE handle = ?", (handle,)).fetchone()
+        )
+
+    def test_older_than_days_has_no_default_and_must_be_a_positive_integer(self) -> None:
+        with self.assertRaises(TypeError):
+            prune_audit_records(self.db)  # no default -- an operator must choose
+        for bad in (0, -1, True, 1.5, "30"):
+            with self.assertRaises(ValueError):
+                prune_audit_records(self.db, older_than_days=bad)
 
 
 if __name__ == "__main__":

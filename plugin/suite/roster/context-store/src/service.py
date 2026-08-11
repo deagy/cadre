@@ -26,6 +26,7 @@ from database import (
     load_searchable_chunks,
     mark_promoted,
     now_iso,
+    prune_audit_records,
     record_access,
     replace_chunks,
 )
@@ -546,6 +547,34 @@ def export_entries(db: Any, options: dict[str, Any]) -> dict[str, Any]:
         "result_count": result["count"],
     })
     return result
+
+
+def prune_audit(db: Any, options: dict[str, Any]) -> dict[str, Any]:
+    """Operator-invoked audit pruning. Never scheduled, never defaulted.
+
+    `entries` expire on a timer because unreviewed working material
+    accumulating outside the steward gate is the failure this store exists to
+    prevent. The audit tables are the opposite case: they exist precisely to
+    outlive the content they attest to, so indefinite is the right default and
+    a silent ceiling would be the wrong direction to err in.
+
+    That makes this the one destructive operation here that is not hygiene.
+    Sweeping an expired entry destroys scratch whose contract was to expire;
+    pruning audit rows destroys the record that reads and writes happened at
+    all. Hence the explicit acknowledgement -- the flag is the operator saying
+    they know which of the two they are doing.
+    """
+    days = options.get("older_than_days")
+    if isinstance(days, bool) or not isinstance(days, int) or days < 1:
+        raise ContextStoreError("--older-than-days must be a positive integer")
+    if not options.get("acknowledge_loss"):
+        raise ContextStoreError(
+            "Pruning the audit tables destroys accountability rather than performing "
+            "hygiene: access_runs is how a read or write is attributable, and "
+            "expiry_evidence is the only remaining record that a swept entry existed. "
+            "Neither is recoverable. Pass --acknowledge-loss to proceed."
+        )
+    return prune_audit_records(db, older_than_days=days)
 
 
 RECOMMENDED_ACTIONS = ("ingest", "update", "reclassify", "defer")

@@ -28,7 +28,7 @@ import json
 import sqlite3
 import uuid
 from contextlib import nullcontext
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -138,6 +138,20 @@ def open_store(database_path: str, *, sweep: bool = True) -> sqlite3.Connection:
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
     db.execute("PRAGMA journal_mode = WAL")
+    # `sqlite3.connect()` already retries a locked write for its own `timeout`
+    # parameter (5s by default) before raising `OperationalError` -- so this
+    # store is not, in fact, undefended against contention today. But that
+    # window is an accident of the stdlib default, not a decision recorded
+    # anywhere in this file: nothing here states the value, and it silently
+    # tracks the default. Making it an explicit `PRAGMA` states the value where
+    # a reader of *this* code can find it, decouples it from a future edit to
+    # this `connect()` call that supplies its own `timeout` and unknowingly
+    # narrows it, and widens the window: this store's stated purpose is
+    # absorbing high-churn concurrent agent writes, where several `put`s
+    # landing within the same moment is the ordinary case, not the exotic one,
+    # so `database is locked` is worth tolerating a few seconds longer than the
+    # stdlib default before it surfaces to a caller.
+    db.execute("PRAGMA busy_timeout = 10000")
     db.executescript(SCHEMA)
     _migrate_additive_columns(db)
     if sweep:
@@ -373,6 +387,51 @@ def record_access(db: sqlite3.Connection, access: dict[str, Any]) -> str:
             ),
         )
     return access_id
+
+
+def prune_audit_records(db: sqlite3.Connection, *, older_than_days: int) -> dict[str, Any]:
+    """Delete `access_runs`/`expiry_evidence` rows older than a caller-chosen age.
+
+    Retention for these two tables is deliberately indefinite by default --
+    unlike `entries`, which always expires, an audit trail with a silent
+    default ceiling would be exactly the wrong direction to err in, so nothing
+    in this module calls this function, on a schedule or otherwise. It exists
+    only for an operator who has decided, explicitly and out of band, that a
+    cutoff is appropriate for their deployment; `older_than_days` has no
+    default so that decision cannot be made by omission.
+
+    Deleting `access_runs` loses attribution for reads and writes that
+    happened; deleting `expiry_evidence` loses the record that a swept entry
+    ever existed. Both are already-realized losses of accountability, not a
+    hygiene action like sweeping `entries` is -- weigh that before calling
+    this at all.
+
+    Reached only from `cadre context prune-audit`, which requires an explicit
+    `--older-than-days` and an `--acknowledge-loss` flag. Nothing calls it on a
+    schedule, and nothing supplies a default age.
+    """
+    if isinstance(older_than_days, bool) or not isinstance(older_than_days, int) or older_than_days < 1:
+        raise ValueError("older_than_days must be a positive integer")
+    cutoff = now_iso_before_days(older_than_days)
+    with db:
+        access_runs = db.execute(
+            "DELETE FROM access_runs WHERE created_at < ?", (cutoff,)
+        ).rowcount
+        expiry_evidence = db.execute(
+            "DELETE FROM expiry_evidence WHERE swept_at < ?", (cutoff,)
+        ).rowcount
+    return {"access_runs": access_runs, "expiry_evidence": expiry_evidence, "cutoff": cutoff}
+
+
+def now_iso_before_days(days: int) -> str:
+    """`now_iso()`, offset back by `days`. Its own function so the cutoff math
+    is exercised the same way whether it is called directly or through
+    `prune_audit_records`."""
+    return (
+        (datetime.now(timezone.utc) - timedelta(days=days))
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
 
 
 def store_stats(db: sqlite3.Connection) -> dict[str, Any]:

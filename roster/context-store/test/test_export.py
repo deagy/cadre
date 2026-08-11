@@ -13,6 +13,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -271,6 +272,50 @@ class ExportAccessTests(ExportTestCase):
         row = self.db.execute("SELECT * FROM access_runs WHERE operation = 'export'").fetchone()
         self.assertIsNotNone(row)
         self.assertEqual(row["result_count"], 1)
+
+
+class AtomicWriteTests(ExportTestCase):
+    """A filesystem failure partway through a batch must leave nothing behind.
+
+    `check_exportable()` only refuses on policy grounds, before any file
+    exists -- that is covered by `UntrustedRefusalTests
+    .test_nothing_is_written_when_the_batch_is_refused` above. This class
+    covers the other half: a write that fails midway through the actual I/O
+    loop, which policy refusal cannot catch because every entry passed it.
+    """
+
+    def test_a_failure_partway_through_the_batch_leaves_nothing_behind(self) -> None:
+        first = self.put("alpha")["handle"]
+        second = self.put("beta")["handle"]
+        third = self.put("gamma")["handle"]
+        handles_in_created_order = [first, second, third]
+
+        real_write_text = Path.write_text
+        calls = {"n": 0}
+
+        def flaky_write_text(self_path: Path, *args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise OSError("simulated disk-full")
+            return real_write_text(self_path, *args, **kwargs)
+
+        with mock.patch.object(Path, "write_text", flaky_write_text):
+            with self.assertRaises(OSError):
+                self.export(handles=handles_in_created_order)
+
+        # No entry's file survived, including the one written before the
+        # failure -- a caller who sees the export error should never have to
+        # go check what partially landed anyway.
+        self.assertEqual(list(self.out.rglob("*.md")), [])
+        # Nor did a stray staging directory survive to be discovered later.
+        leftover = [path for path in self.out.iterdir() if path != self.out] if self.out.exists() else []
+        self.assertEqual(leftover, [])
+
+    def test_a_clean_batch_leaves_no_staging_directory_behind(self) -> None:
+        self.put("alpha")
+        self.export()
+        visible = list(self.out.iterdir())
+        self.assertTrue(all(not entry.name.startswith(".export-") for entry in visible))
 
 
 class NoCheckModeTests(ExportTestCase):

@@ -29,6 +29,9 @@ risk calculus in two ways this module enforces:
 from __future__ import annotations
 
 import json
+import os
+import shutil
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -149,13 +152,41 @@ def check_exportable(
 
 
 def write_entries(entries: list[dict[str, Any]], output: str) -> dict[str, Any]:
-    """Write `<handle>.md` per entry. Filenames follow the durable identity."""
+    """Write `<handle>.md` per entry. Filenames follow the durable identity.
+
+    `check_exportable()` above only refuses a batch on *policy* grounds, before
+    any file exists. That leaves the actual write loop: a disk-full or
+    permission error partway through used to leave files 1..N-1 sitting in
+    `output` with no cleanup -- a batch a caller believed was refused, or never
+    ran, silently left partial output behind. This closes that gap by staging
+    every render in a private, uniquely-named subdirectory of `output` first;
+    only once every render has been written to staging does it get moved into
+    place with `os.replace`, which is an atomic rename on a POSIX filesystem
+    and the closest thing to atomic Windows offers for a same-volume move. If
+    any staged write fails, the staging directory is removed and the error
+    propagates -- `output` is left exactly as it was found, matching the same
+    "nothing behind" guarantee `check_exportable()` gives for a policy refusal.
+    """
     destination = Path(output)
     destination.mkdir(parents=True, exist_ok=True)
+    staging = destination / f".export-{uuid.uuid4().hex}.tmp"
+    staging.mkdir()
+    try:
+        staged: list[tuple[Path, Path]] = []
+        for entry in entries:
+            filename = f"{entry['handle']}.md"
+            staged_path = staging / filename
+            staged_path.write_text(render_entry(entry), encoding="utf-8")
+            staged.append((staged_path, destination / filename))
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+
     written: list[str] = []
-    for entry in entries:
-        (destination / f"{entry['handle']}.md").write_text(render_entry(entry), encoding="utf-8")
-        written.append(entry["handle"])
+    for staged_path, final_path in staged:
+        os.replace(staged_path, final_path)
+        written.append(final_path.stem)
+    staging.rmdir()
     return {
         "status": "exported",
         "count": len(written),

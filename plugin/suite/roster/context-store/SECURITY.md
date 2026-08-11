@@ -96,6 +96,22 @@ rather than by remembering which command produced it.
 source, and operation in `access_runs`. `access_runs` never stores content or
 query text.
 
+**Audit retention is indefinite, and that is a deliberate, recorded choice, not
+an oversight.** `access_runs` and `expiry_evidence` have no TTL and no code
+path deletes their rows automatically, even though the `entries` they attest
+to always expire. That asymmetry is intentional: an audit trail with a silent
+default ceiling is the wrong failure mode to build in by default, and it would
+be a strange inconsistency to delete the evidence that content existed on the
+same clock that deletes the content. `database.py`'s `prune_audit_records()`
+is a manual, operator-invoked-only primitive for a deployment that has decided
+otherwise -- it takes no default `older_than_days` and nothing in this store
+calls it, on a schedule or otherwise. It is not wired to a CLI subcommand as of
+this change; that needs `service.py`/`cli.py`, which is a separate change.
+Before calling it at all, weigh that deleting `access_runs` loses attribution
+for reads and writes that already happened, and deleting `expiry_evidence`
+loses the record that a swept entry ever existed -- both are irreversible
+losses of accountability, not a hygiene action the way sweeping `entries` is.
+
 **Global-tier project scope.** Against the shared store, `--source` is
 mandatory, with no `--all-sources` equivalent.
 
@@ -107,6 +123,17 @@ before any file is created, so a refused batch leaves nothing behind. This
 exists because export writes to a directory that is normally committed and
 cloneable: retrieval fences untrusted content, a Markdown file in a repository
 does not.
+
+**Export is also atomic against a filesystem failure partway through, not just
+a policy refusal.** `write_entries()` renders every entry into a private
+staging subdirectory first and only moves files into `output` with an atomic
+rename once every render has succeeded. A disk-full or permission error on
+entry N leaves `output` exactly as it was found -- not files `1..N-1` written
+with no cleanup, which is what a plain per-entry write loop would leave
+behind. "A refused batch leaves nothing behind" above is the policy half of
+this guarantee; this is the filesystem half, and both are true for the same
+reason: a caller who sees an error should never have to go check what
+partially landed anyway.
 
 **Global-only store location.** `context_store.home` cannot be set from a
 project-local `.agents/cadre.yaml`. That file arrives with `git clone`, and
@@ -156,6 +183,25 @@ claimed, not a verified identity.
 no role-id environment variable, so a tool call states the role it is acting
 as. Task, dispatch, and classification ceiling are ambient; the acting role is
 not.
+
+**`source` is caller-asserted even on the MCP path, with no ceiling at all.**
+`classification` gets a real narrowing check because the dispatch server
+tracks a parent classification per session. There is no equivalent ambient
+project/repository identity for `source` to be checked against, so
+`context_tools.py` forwards whatever the caller supplies straight through to
+the CLI, unmodified. The server's own working directory is not a usable
+substitute for that identity: `dispatch_server.py` disables project-tier
+settings resolution precisely because an MCP server's cwd is wherever the host
+CLI happened to be launched from, not reliably the target project root. The
+result is that an MCP caller gets exactly the same `source` control a human
+running `cadre context` by hand gets -- CLI-level `_enforce_scope()`, which
+only requires *some* value against the shared global store, never that the
+value is true. This is not a weaker MCP-specific hole; it is the same
+caller-asserted-scope limit stated above, applied to a caller that is an
+agent rather than a human. Closing it for real needs a genuine ambient
+project identity wired into the dispatch protocol, the same fix `agent`
+above needs -- not a second, cosmetic check here that only looks like a
+ceiling.
 
 **An exported file leaves this store's protection entirely.** Scope,
 classification filtering, expiry, and the untrusted fence all stop at the

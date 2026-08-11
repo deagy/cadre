@@ -40,6 +40,15 @@ DB_TEXT = "The postgres connection pool exhausts under load when max_conns is se
 UI_TEXT = "The React component re-renders on every keystroke because the callback is not memoized."
 K8S_TEXT = "Kubernetes ingress returns 502 when the readiness probe path is wrong."
 
+# Near-miss fixtures: very similar except one discriminating term.
+# Used to verify that ranking distinguishes between similar entries based on specific vocabulary.
+SIMILAR_POOL_GENERIC = "The postgres connection pool exhausts under load when max_conns is set too low."
+SIMILAR_POOL_MYSQL = "The mysql connection pool exhausts under load when max_conns is set too low."
+# These differ only in "postgres" vs "mysql" - a query for "postgres" should prefer the first.
+
+# Irrelevant fixture: used to test that search returns everything when no score minimum exists
+IRRELEVANT_TEXT = "The color of the sky varies by weather and time of day in most places."
+
 
 class SearchTestCase(unittest.TestCase):
     def setUp(self) -> None:
@@ -148,8 +157,93 @@ class RankingTests(SearchTestCase):
         self.assertIn("query_id", bundle)
 
 
+class NearMissRankingTests(SearchTestCase):
+    """Ranking with similar entries that differ in one discriminating term.
+
+    The easy-case fixtures (DB_TEXT, UI_TEXT, K8S_TEXT) share almost no vocabulary,
+    so ranking would pass under almost any plausible scoring function. These tests
+    verify that ranking actually distinguishes entries based on specific vocabulary,
+    not just returning the same order regardless of query.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        # Two entries that are nearly identical except one has "postgres"
+        # and the other has "mysql". A query for "postgres" should prefer the first.
+        self.put(SIMILAR_POOL_GENERIC, label="postgres")
+        self.put(SIMILAR_POOL_MYSQL, label="mysql")
+
+    def test_a_specific_term_ranks_the_matching_entry_first(self) -> None:
+        """Query for 'postgres' should rank the postgres entry higher than mysql entry."""
+        results = self.search("postgres")
+        self.assertGreaterEqual(len(results), 2,
+                               "Both entries should be returned (no minimum score)")
+        # The postgres entry should rank higher for a postgres-specific query
+        self.assertEqual(results[0]["label"], "postgres",
+                        "Entry with 'postgres' should rank higher for 'postgres' query")
+
+    def test_query_for_the_other_term_reverses_ranking(self) -> None:
+        """Query for 'mysql' should rank the mysql entry higher."""
+        results = self.search("mysql")
+        self.assertGreaterEqual(len(results), 2)
+        self.assertEqual(results[0]["label"], "mysql",
+                        "Entry with 'mysql' should rank higher for 'mysql' query")
+
+
+class NoMinimumScoreTests(SearchTestCase):
+    """Search has no score threshold, so all readable chunks are returned.
+
+    This is pinned behaviour: even a query with very low relevance scores
+    returns all matching entries (up to top limit), ordered by descending score.
+    If this changes (e.g., to add a minimum score), this test must fail to
+    surface that decision.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        # Store entries with varying relevance to an irrelevant query
+        self.put(DB_TEXT, label="database")
+        self.put(UI_TEXT, label="ui")
+        self.put(IRRELEVANT_TEXT, label="sky")
+
+    def test_an_irrelevant_query_returns_everything_up_to_top_limit(self) -> None:
+        """An irrelevant query matches nothing well, but returns all readable entries.
+
+        search_entries has no minimum score threshold. It scores every readable chunk
+        and returns the top N by descending score, even if all scores are very low.
+        This is pinned so a future optimization that adds minimum scoring would
+        surface the change here.
+        """
+        # Query that matches none of the entries well (no common vocabulary)
+        results = self.search("transmogrification quantum paradox", top=20)
+
+        # Should return all three entries (in some score order), not an empty list
+        self.assertGreaterEqual(len(results), 3,
+                               "No minimum score: all readable entries are returned")
+        returned_labels = {r["label"] for r in results}
+        self.assertEqual(returned_labels, {"database", "ui", "sky"},
+                        "All three entries should be present even with irrelevant query")
+
+        # All scores should be finite (though they may be low)
+        for result in results:
+            self.assertIsInstance(result["score"], float)
+            self.assertTrue(result["score"] > float('-inf') and result["score"] < float('inf'),
+                          f"Score must be finite, got {result['score']}")
+
+    def test_results_still_ordered_by_descending_score_for_irrelevant_query(self) -> None:
+        """Even with an irrelevant query, results are correctly ordered by score."""
+        results = self.search("transmogrification quantum paradox")
+        scores = [r["score"] for r in results]
+        self.assertEqual(scores, sorted(scores, reverse=True),
+                        "Results must be ordered by descending score even for irrelevant query")
+
+
 class SearchAccessControlTests(SearchTestCase):
     """Ranking runs after access filtering, never instead of it."""
+
+    def test_the_agents_own_entry_is_returned_when_relevant(self) -> None:
+        self.put(DB_TEXT, label="mine")
+        self.assertEqual(self.labels("database connection pool exhaustion"), ["mine"])
 
     def test_another_agents_entry_is_not_returned_however_relevant(self) -> None:
         self.put(DB_TEXT, label="theirs", agent="someone-else")
@@ -180,16 +274,128 @@ class SearchAccessControlTests(SearchTestCase):
         self.assertEqual(self.labels("connection pool", scope="agent"), ["mine"])
 
     def test_an_expired_entry_is_not_searchable(self) -> None:
+        """Prove entry is searchable before expiry and not after sweep."""
         from database import sweep_expired
 
         stored = self.put(DB_TEXT, label="stale")
+
+        # First: verify the entry IS searchable before it expires
+        self.assertEqual(self.labels("connection pool"), ["stale"],
+                        "Entry must be searchable before expiry")
+
+        # Then: expire and sweep it
         with self.db:
             self.db.execute(
                 "UPDATE entries SET expires_at = '2000-01-01T00:00:00.000Z' WHERE handle = ?",
                 (stored["handle"],),
             )
         sweep_expired(self.db)
-        self.assertEqual(self.labels("connection pool"), [])
+
+        # Now it's gone
+        self.assertEqual(self.labels("connection pool"), [],
+                        "Entry is not searchable after expiry and sweep")
+
+
+class ExpiryFilteringTests(SearchTestCase):
+    """Expired entries are cleaned by sweep on open, not by SQL predicates.
+
+    If a connection is held open across an expiry, the expired entries remain
+    readable. This is accepted behaviour -- sweep happens on open_store(), and
+    typical CLI usage opens a fresh connection per command. But it needs to be
+    pinned as known behaviour, not silently relied upon without a test.
+    """
+
+    def test_expired_entries_are_served_on_a_held_connection_without_sweep(self) -> None:
+        """Expired entries are *readable* via fetch_entry, fetch_entries, load_searchable_chunks.
+
+        This is a known property, not a bug, but it needs to be tested and documented
+        so a future change that relied on SQL filtering (e.g., to prevent a sweep step)
+        would fail this test and surface the decision.
+        """
+        from database import fetch_entry, fetch_entries, load_searchable_chunks
+        from service import get_entry, list_entries
+
+        stored = self.put(DB_TEXT, label="will-expire")
+
+        # Backdating without sweeping: the entry is now past expiry.
+        with self.db:
+            self.db.execute(
+                "UPDATE entries SET expires_at = '2000-01-01T00:00:00.000Z' WHERE handle = ?",
+                (stored["handle"],),
+            )
+
+        # Without sweeping, the row is still there and still readable by all paths.
+        # This is acceptable because typical use opens a fresh connection and sweeps.
+        # But we pin it so any SQL-level expiry filtering gets tested.
+
+        # fetch_entry has no SQL-level expiry check
+        raw = fetch_entry(self.db, stored["handle"])
+        self.assertIsNotNone(raw, "fetch_entry returns expired rows without a sweep")
+
+        # fetch_entries has no SQL-level expiry check
+        rows = fetch_entries(self.db, {
+            "classification": CALLER["classification"],
+            "source": CALLER["source"],
+        })
+        self.assertTrue(any(row["handle"] == stored["handle"] for row in rows),
+                       "fetch_entries returns expired rows without a sweep")
+
+        # get_entry will return it (relies on sweep on open, not SQL filter)
+        bundle = get_entry(self.db, {**CALLER, "handle": stored["handle"]})
+        self.assertEqual(len(bundle["results"]), 1,
+                        "get_entry returns expired entries on a held connection without sweep")
+
+        # list_entries will return it
+        bundle = list_entries(self.db, {**CALLER})
+        self.assertTrue(any(r["handle"] == stored["handle"] for r in bundle["results"]),
+                       "list_entries returns expired entries on a held connection without sweep")
+
+        # load_searchable_chunks has no SQL-level expiry check
+        chunks = load_searchable_chunks(self.db, self.config["embedding"], {
+            "classification": CALLER["classification"],
+            "source": CALLER["source"],
+            "scope": None,
+        })
+        self.assertTrue(any(row["handle"] == stored["handle"] for row in chunks),
+                       "load_searchable_chunks returns expired entries without a sweep")
+
+        # search_entries will return it (no SQL filter on expiry)
+        results = self.search("pool")
+        self.assertTrue(any(r["handle"] == stored["handle"] for r in results),
+                       "search_entries returns expired entries on a held connection without sweep")
+
+    def test_sweep_on_open_removes_expired_entries_normally(self) -> None:
+        """Normal operation: sweep on open ensures expired entries don't circulate.
+
+        This is the typical path -- a fresh connection is opened with sweep=True,
+        and expired rows are deleted before anything is read. The prior test pinned
+        the edge case; this confirms the normal path still works.
+        """
+        from database import open_store as original_open_store, sweep_expired
+        from service import get_entry as get_entry_service
+
+        # Create an entry in the first db instance
+        stored = self.put(DB_TEXT, label="will-expire")
+
+        # Backdate it
+        with self.db:
+            self.db.execute(
+                "UPDATE entries SET expires_at = '2000-01-01T00:00:00.000Z' WHERE handle = ?",
+                (stored["handle"],),
+            )
+
+        # Close the old connection
+        self.db.close()
+
+        # Open a fresh connection with sweep (the normal path)
+        # This will delete the expired entry on open
+        db2 = original_open_store(self.config["database"], sweep=True)
+        self.addCleanup(db2.close)
+
+        # Now it's gone
+        bundle = get_entry_service(db2, {**CALLER, "handle": stored["handle"]})
+        self.assertEqual(len(bundle["results"]), 0,
+                        "Sweep on open removes expired entries; fresh connection sees nothing")
 
 
 class DimensionMismatchTests(SearchTestCase):

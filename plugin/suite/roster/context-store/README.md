@@ -68,6 +68,15 @@ the parameter, but nothing sets it yet — wiring it into `build_child_env()`
 would make agent identity genuinely ambient for dispatched children and belongs
 in its own review of safety-relevant dispatch code.
 
+`source` is the same exception, for the same reason: there is no ambient
+project/repository identity in the dispatch protocol to check it against, so
+it is forwarded to the CLI exactly as the caller supplied it. Unlike `agent`
+this is not merely undecided — the MCP server's own working directory is
+explicitly *not* used as a stand-in, because it is unreliable for this purpose
+(`dispatch_server.py` disables project-tier settings resolution for the same
+reason: an MCP server's cwd is wherever the host CLI was launched, not
+reliably the target project). See `SECURITY.md`'s "What is not enforced".
+
 **The MCP tools are not behind the dispatch confirmation gate**, unlike a
 write-capable role dispatch. That gate exists to make a caller stop and
 re-assert before a spawned process mutates a repository or a persistent
@@ -132,6 +141,7 @@ promote --handle <h> --artifact <path> --revision <rev> --sensitivity-notes <tex
 export --output <dir> [--handle <h>]... [--scope <s>] [--dispatch-id <id>]
        [--filter-dispatch-id <id>] [--acknowledge-commit] [--include-untrusted]
        --agent <role> --task-id <id> --classification <level> [--source <name>]
+prune-audit --older-than-days <n> --acknowledge-loss
 drop   --handle <h> --reason <text>
 expire [--as-of <iso-8601>] [--dry-run]
 reindex [--force]
@@ -223,6 +233,26 @@ bottleneck this store exists to remove.
 its content — so a handle cited in a handoff can still be accounted for after
 the content is gone. Expiry is not reversible; there is no backup but yours.
 
+### Audit retention
+
+`access_runs` and `expiry_evidence` keep every row indefinitely — no TTL,
+no scheduled deletion. That is a deliberate choice, not an unbounded default
+left unspecified: content in `entries` always expires because it is
+unreviewed and accumulating it would defeat the whole design, but the *record*
+that a read, write, or expiry happened is an audit trail, and deleting it on
+the same clock that deletes the content it attests to would erase
+accountability rather than reduce risk. Indefinite is the deliberate default
+here, in contrast to `entries`, and for the opposite reason.
+
+An operator who has decided a cutoff is appropriate for their own deployment
+runs `cadre context prune-audit --older-than-days <n> --acknowledge-loss`.
+Both flags are required and neither has a default: the age cannot be chosen by
+omission, and the acknowledgement exists because this is the one destructive
+command here that is **not** hygiene. Sweeping an expired entry destroys
+scratch whose contract was always to expire; pruning audit rows destroys the
+record that reads and writes happened at all, and neither table is
+recoverable. Nothing calls it on a schedule.
+
 ### Promotion
 
 `promote` is the only sanctioned route from here into the curated corpus, and
@@ -275,7 +305,12 @@ exposure in two ways the command enforces before writing anything:
   agent to read it meets it as ordinary repository content.
 
 Refusals are collected and reported together, before any file is written, so a
-batch never leaves a half-exported directory behind.
+batch never leaves a half-exported directory behind. The write itself is
+atomic against a filesystem failure too, not only a policy refusal: every
+render lands in a private staging directory first, and only moves into
+`--output` with an atomic rename once the whole batch has rendered
+successfully. A disk-full or permission error on entry N is refused the same
+way — `--output` is left exactly as it was found, not holding files `1..N-1`.
 
 **There is no `--check` mode**, deliberately, and this is where the analogy with
 `cadre knowledge export-staged` stops. That command has one because its

@@ -228,6 +228,39 @@ class ClassificationNarrowingTests(ContextToolTestCase):
             self.put(classification="top-secret")
 
 
+class SourceIsCallerAssertedTests(ContextToolTestCase):
+    """`source` gets no ambient ceiling, unlike `classification` -- by design,
+    not by oversight. See `context_tools.py`'s module docstring and
+    `SECURITY.md`'s "What is not enforced" section: no ambient project
+    identity exists in the dispatch protocol to check it against, so a tool
+    call gets exactly the control a human running the CLI by hand gets. These
+    tests document the current, intended behaviour rather than a gap left
+    unnoticed -- a change here should be a deliberate decision, not a drive-by
+    fix.
+    """
+
+    def test_a_caller_can_assert_any_source_without_an_ambient_check(self) -> None:
+        # Nothing about "some-other-project" is validated against reality --
+        # it is accepted exactly as `demo` would be.
+        stored = self.put(source="some-other-project")
+        self.assertTrue(stored["handle"])
+        bundle = self.get(stored["handle"], source="some-other-project")
+        self.assertEqual(len(bundle["results"]), 1)
+
+    def test_two_different_asserted_sources_do_not_see_each_others_entries(self) -> None:
+        # Scope reduction still applies once a source is asserted -- this is
+        # not "no filtering happens", it is "the filter's input is trusted".
+        stored = self.put(source="project-a")
+        self.assertEqual(self.get(stored["handle"], source="project-b")["results"], [])
+
+    def test_source_is_not_in_the_env_allowlist_as_an_ambient_substitute(self) -> None:
+        # If a future change added a `SECURE_CLOUD_AGENTS_SOURCE`-style
+        # ambient override the way `ROLE_ID_ENV_VAR` exists for `agent`, this
+        # test would need updating alongside it -- it exists to make that a
+        # deliberate edit rather than a silent behavioural change.
+        self.assertFalse(any("SOURCE" in name for name in core.ENV_ALLOWLIST))
+
+
 class ScopeTests(ContextToolTestCase):
     def test_another_agent_cannot_read_an_agent_scoped_entry(self) -> None:
         stored = self.put()
