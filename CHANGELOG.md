@@ -23,6 +23,10 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+### Fixed
+
+- **`linux-systems-execution` now staffs infrastructure review** ([#213](https://github.com/deagy/cadre/issues/213)). The route declares `workflow_shape: infrastructure-change` but was the only one of the 20 routes with that shape staffing neither `infrastructure-reviewer` nor `infrastructure-provisioner`, so a plan pointed the operator at `roster/workflows/infrastructure-change.md`'s "Classify → Provision+Plan → Infrastructure Reviewer → gated approval → Apply" shape while dispatching nobody to perform that review. Its `reviewers` change from `[test-engineer, code-reviewer]` to `[infrastructure-reviewer]` and its `support` from `[application-engineer]` to `[infrastructure-provisioner]`, matching the other 19 routes and the accountability `linux-systems-implementer`'s own `AGENT.md` names. The declared shape is unchanged: the route's artifacts (systemd units, packages, sysctls, filesystem layout, under `systems/linux/**`) are host configuration, so the staffing was the half that disagreed with the artifact. **Consumer impact:** a task matching this route selects a different reviewer and support agent; `workflow` and `required_quality_gates` are unchanged.
+
 ## [0.20.0] - 2026-08-10
 
 Shipped to users as plugin [v0.17.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.17.0).

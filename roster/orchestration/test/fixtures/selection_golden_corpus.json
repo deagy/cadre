@@ -3838,7 +3838,7 @@
     },
     {
       "id": "LINUX_SYSTEMS_EXECUTION_GOLDEN_1",
-      "description": "Narrow linux-systems-execution route regression fixture. Workflow shape: systemd units, packages, sysctls, and filesystem layout are host configuration, which is infrastructure-change.md's subject regardless of who reviews the change. Recorded divergence, not a justification: this is the only one of the 20 infrastructure-change routes that staffs neither infrastructure-reviewer nor infrastructure-provisioner (it staffs test-engineer/code-reviewer/application-engineer), so the plan points the operator at infrastructure-change.md's 'Classify -> Provision+Plan -> Infrastructure Reviewer -> gated approval -> Apply' shape while dispatching no infrastructure reviewer. The linux-systems-implementer AGENT.md names 'infrastructure-provisioner or backend-engineer accountability', which the route staffing also does not match, so the staffing is the suspect half, not the shape. Filed as a routing question rather than fixed here, because changing route staffing changes agent selection and is outside #210's scope.",
+      "description": "Narrow linux-systems-execution route regression fixture. Workflow shape (unchanged): systemd units, packages, sysctls, and filesystem layout are host configuration, which is infrastructure-change.md's subject regardless of who reviews the change. Staffing corrected in #213, reasoning from that same artifact rather than from the previous staffing: host configuration is reviewed for privilege, exposure, logging, backup, state, and rollback effects, which is infrastructure-reviewer's stated checklist, so reviewers is [infrastructure-reviewer] and support is [infrastructure-provisioner], identical to the other 19 infrastructure-change routes and to the accountability linux-systems-implementer's own AGENT.md names. The previous reviewers [test-engineer, code-reviewer] and support [application-engineer] are dropped, not supplemented: infrastructure-change.md's flow names infrastructure provisioner, infrastructure reviewer, security/compliance reviewers, and release engineer, and none of the 19 siblings staff a code or test reviewer; application-engineer's own AGENT.md scopes it to this suite's own tooling and explicitly disclaims a target project's capability work, so it was never the right support role for a target project's Linux hosts.",
       "task": "Implement linux systems implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3849,13 +3849,12 @@
           "linux-systems-implementer"
         ],
         "reviewers": [
-          "test-engineer",
-          "code-reviewer"
+          "infrastructure-reviewer"
         ],
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "infrastructure-provisioner"
         ],
         "matched_routes": [
           "linux-systems-execution"
