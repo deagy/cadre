@@ -36,10 +36,12 @@ functions elsewhere stay exactly as they are.
 from __future__ import annotations
 
 import contextlib
+import ipaddress
 import json
 import os
 import re
 import shutil
+import socket
 import sys
 import tempfile
 import urllib.parse
@@ -293,6 +295,166 @@ def _validate_path(value: Any, spec: FieldSpec) -> str:
     return stripped
 
 
+_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/+-]*$")
+
+
+def _validate_identifier(value: Any, spec: FieldSpec) -> str:
+    """A model name or a Codex config-profile name.
+
+    Deliberately *not* `_validate_executable`: these values are passed as the
+    argument of a `--model`/`--profile` flag, never executed, so a path
+    separator is legal (`qwen3-coder:30b`, `org/model-name`) while whitespace
+    and shell metacharacters are not. Anchored allowlist rather than a
+    metacharacter denylist, so a character nobody thought about is refused
+    rather than admitted. The leading character may not be '-', for the same
+    reason `_validate_executable` refuses one: a value beginning with '-' is
+    read as another option by the CLI that receives it.
+    """
+    stripped = _validate_string(value, spec)
+    if not _IDENTIFIER_PATTERN.match(stripped):
+        raise SettingsError(
+            f"{spec.key} must start with a letter or digit and contain only letters, digits, "
+            f"and the characters . _ : / + - (no whitespace or shell metacharacters): {stripped!r}"
+        )
+    return stripped
+
+
+def _is_private_host(host: str) -> bool:
+    """True when `host` is a loopback/link-local/private address, or resolves
+    only to such addresses.
+
+    A bare hostname is resolved once, here at validation time, and every
+    address it maps to must be private -- a name resolving to a mix of
+    private and public addresses is treated as public (fails closed). Name
+    resolution can of course change after this check, so this is a
+    configuration-time guard against a typo shipping a plaintext credential
+    to the open internet, not a DNS-rebinding defence.
+    """
+    literal = host.strip("[]")
+    try:
+        address = ipaddress.ip_address(literal)
+    except ValueError:
+        pass
+    else:
+        return address.is_loopback or address.is_private or address.is_link_local
+    try:
+        resolved = socket.getaddrinfo(host, None)
+    except (socket.gaierror, UnicodeError, OSError):
+        return False
+    if not resolved:
+        return False
+    for entry in resolved:
+        try:
+            address = ipaddress.ip_address(entry[4][0])
+        except ValueError:
+            return False
+        if not (address.is_loopback or address.is_private or address.is_link_local):
+            return False
+    return True
+
+
+def _validate_endpoint_url(value: Any, spec: FieldSpec) -> str:
+    """An OpenAI-compatible API base URL, e.g. `http://10.0.0.5:8080/v1`.
+
+    Distinct from `_validate_gitlab_base_url`, which mandates https:// --
+    that rule is right for a hosted GitLab and wrong for a self-hosted
+    inference server on a LAN, which is the entire point of this field. The
+    compromise: https:// is accepted for any host, while plaintext http:// is
+    accepted *only* toward a loopback/private/link-local address, so a
+    mistyped or attacker-suggested public endpoint can never receive an API
+    key in the clear. URL userinfo is refused exactly as it is for GitLab --
+    credentials belong in the env var named by `runners.api_key_env`, never
+    in a URL that lands in config files and error messages.
+    """
+    stripped = _validate_string(value, spec)
+    _reject_control_characters(stripped, spec)
+    parsed = urllib.parse.urlparse(stripped)
+    if parsed.scheme not in ("http", "https"):
+        raise SettingsError(f"{spec.key} must be an http:// or https:// URL: {stripped!r}")
+    if "@" in parsed.netloc:
+        raise SettingsError(
+            f"{spec.key} must not contain URL userinfo (an '@' in the host component); put "
+            f"the credential in the variable named by runners.api_key_env: {stripped!r}"
+        )
+    host = parsed.hostname
+    if not host:
+        raise SettingsError(f"{spec.key} must include a host: {stripped!r}")
+    if parsed.scheme == "http" and not _is_private_host(host):
+        raise SettingsError(
+            f"{spec.key}: plaintext http:// is only allowed toward a loopback or private-network "
+            f"host (this is a self-hosted-endpoint escape hatch, not a general one); use https:// "
+            f"for {host!r}"
+        )
+    return stripped.rstrip("/")
+
+
+_ENV_VAR_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validate_env_var_name(value: Any, spec: FieldSpec) -> str:
+    """The *name* of an environment variable, never its value.
+
+    This is how a credential reaches this tooling without ever being stored
+    in a config file -- `_looks_like_secret_key` would reject an `api_key`
+    leaf outright, so the field holds the pointer instead. The name itself is
+    not sensitive.
+    """
+    stripped = _validate_string(value, spec)
+    if not _ENV_VAR_NAME_PATTERN.match(stripped):
+        raise SettingsError(
+            f"{spec.key} must be an environment variable *name* (letters, digits, underscore; "
+            f"not starting with a digit), not its value: {stripped!r}"
+        )
+    return stripped
+
+
+def _split_comma_list(value: Any, spec: FieldSpec) -> list[str]:
+    if value is None or value == "":
+        return []
+    if isinstance(value, (list, tuple)):
+        items = [str(item).strip() for item in value]
+    else:
+        items = [item.strip() for item in _validate_string(value, spec).split(",")]
+    return [item for item in items if item]
+
+
+def _validate_env_var_name_list(value: Any, spec: FieldSpec) -> list[str]:
+    """A comma-separated list of exact environment variable names.
+
+    Deliberately exact names only -- no wildcards and no prefix matching. A
+    pattern here would let one config line widen the dispatch child's
+    environment by an unbounded amount, which is precisely what
+    `dispatch_core.ENV_ALLOWLIST` exists to prevent.
+    """
+    items = _split_comma_list(value, spec)
+    for item in items:
+        if not _ENV_VAR_NAME_PATTERN.match(item):
+            raise SettingsError(
+                f"{spec.key} must be a comma-separated list of exact environment variable names "
+                f"(no wildcards or prefixes): {item!r}"
+            )
+    return items
+
+
+def _validate_command_allowlist(value: Any, spec: FieldSpec) -> list[str]:
+    """A comma-separated list of bare command names the `api` runner's
+    `run_command` tool may execute.
+
+    Bare names only: an entry containing a path separator is refused, so this
+    list can never be used to reach an arbitrary binary outside PATH. The
+    dispatch runner resolves each name through `shutil.which` and pins the
+    absolute result at call time.
+    """
+    items = _split_comma_list(value, spec)
+    for item in items:
+        if _has_path_separator(item) or item.startswith("-"):
+            raise SettingsError(
+                f"{spec.key} entries must be bare command names, not paths or options: {item!r}"
+            )
+        _reject_control_characters(item, spec)
+    return items
+
+
 _VALIDATORS: dict[str, Callable[[Any, FieldSpec], Any]] = {
     "gitlab_base_url": _validate_gitlab_base_url,
     "project_id": _validate_project_id,
@@ -300,6 +462,11 @@ _VALIDATORS: dict[str, Callable[[Any, FieldSpec], Any]] = {
     "executable": _validate_executable,
     "path": _validate_path,
     "string": _validate_string,
+    "identifier": _validate_identifier,
+    "endpoint_url": _validate_endpoint_url,
+    "env_var_name": _validate_env_var_name,
+    "env_var_name_list": _validate_env_var_name_list,
+    "command_allowlist": _validate_command_allowlist,
 }
 
 
@@ -364,6 +531,114 @@ FIELDS: dict[str, FieldSpec] = {
         kind="executable",
         required=False,
         default_static="codex",
+    ),
+    # --- Self-hosted / local-provider dispatch -----------------------------
+    #
+    # Every field below is global_only for the reason in this module's
+    # docstring: they select an executable's model, a config profile that can
+    # redirect where a dispatched agent's prompt is sent, an endpoint, or the
+    # set of environment variables a child inherits. All four are
+    # exfiltration-sensitive, and the project-local file is untrusted,
+    # clone-able repository content.
+    #
+    # None of them holds a credential. `runners.api_key_env` holds the *name*
+    # of the variable that does; see `_validate_env_var_name`.
+    "runners.codex_profile": FieldSpec(
+        # Layered by `codex exec --profile <name>` from
+        # $CODEX_HOME/<name>.config.toml, where the operator declares their
+        # own [model_providers.*] block (base_url / wire_api / env_key). That
+        # file is Codex's to own, not this repository's -- which is precisely
+        # why no base_url or credential for the codex runner appears here.
+        key="runners.codex_profile",
+        env_var="SECURE_CLOUD_AGENTS_CODEX_PROFILE",
+        scope=SCOPE_GLOBAL_ONLY,
+        kind="identifier",
+        required=False,
+        default_static=None,
+    ),
+    # One key per catalog model tier, rather than one map-valued key: this
+    # registry is flat and scalar by construction, and the shape matches the
+    # existing Cline precedent (CLINE_AGENTS_MODEL_<TIER>) exactly. A tier
+    # left unset keeps the wrapper's own vendor identifier.
+    "runners.local_model_opus": FieldSpec(
+        key="runners.local_model_opus",
+        env_var="SECURE_CLOUD_AGENTS_LOCAL_MODEL_OPUS",
+        scope=SCOPE_GLOBAL_ONLY,
+        kind="identifier",
+        required=False,
+        default_static=None,
+    ),
+    "runners.local_model_sonnet": FieldSpec(
+        key="runners.local_model_sonnet",
+        env_var="SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET",
+        scope=SCOPE_GLOBAL_ONLY,
+        kind="identifier",
+        required=False,
+        default_static=None,
+    ),
+    "runners.local_model_haiku": FieldSpec(
+        key="runners.local_model_haiku",
+        env_var="SECURE_CLOUD_AGENTS_LOCAL_MODEL_HAIKU",
+        scope=SCOPE_GLOBAL_ONLY,
+        kind="identifier",
+        required=False,
+        default_static=None,
+    ),
+    "runners.forward_env": FieldSpec(
+        # Narrow, explicit extension of dispatch_core.ENV_ALLOWLIST, for the
+        # single case that genuinely needs it: a Codex [model_providers.*]
+        # block declaring `env_key = "SOME_VAR"` cannot authenticate unless
+        # SOME_VAR reaches the child. Empty by default, so the deny-by-default
+        # posture is unchanged for every operator who does not opt in.
+        key="runners.forward_env",
+        env_var="SECURE_CLOUD_AGENTS_FORWARD_ENV",
+        scope=SCOPE_GLOBAL_ONLY,
+        kind="env_var_name_list",
+        required=False,
+        default_static=None,
+    ),
+    "runners.api_base_url": FieldSpec(
+        key="runners.api_base_url",
+        env_var="SECURE_CLOUD_AGENTS_API_BASE_URL",
+        scope=SCOPE_GLOBAL_ONLY,
+        kind="endpoint_url",
+        required=False,
+        default_static=None,
+    ),
+    "runners.api_key_env": FieldSpec(
+        key="runners.api_key_env",
+        env_var="SECURE_CLOUD_AGENTS_API_KEY_ENV",
+        scope=SCOPE_GLOBAL_ONLY,
+        kind="env_var_name",
+        required=False,
+        default_static=None,
+    ),
+    "runners.api_allow_writes": FieldSpec(
+        # The api runner has no OS-level sandbox to delegate to (see
+        # roster/orchestration/SECURITY-CONTROLS.md's "API runner" section),
+        # so its write-capable path is opt-in and off by default. This is one
+        # of four independent conditions a write must satisfy, not a
+        # standalone switch.
+        key="runners.api_allow_writes",
+        env_var="SECURE_CLOUD_AGENTS_API_ALLOW_WRITES",
+        scope=SCOPE_GLOBAL_ONLY,
+        kind="tristate_bool",
+        required=False,
+        default_static=False,
+    ),
+    "runners.api_command_allowlist": FieldSpec(
+        # Empty by default, which means the api runner offers no command-
+        # execution tool at all. Non-empty enables it for exactly these
+        # command names. Read the "advisory, not enforced" note in
+        # SECURITY-CONTROLS.md before setting this: the dispatched agent
+        # chooses the *arguments*, and test runners execute repository-
+        # controlled code by design.
+        key="runners.api_command_allowlist",
+        env_var="SECURE_CLOUD_AGENTS_API_COMMAND_ALLOWLIST",
+        scope=SCOPE_GLOBAL_ONLY,
+        kind="command_allowlist",
+        required=False,
+        default_static=None,
     ),
     "agentic_sdlc.bin_path": FieldSpec(
         key="agentic_sdlc.bin_path",
@@ -983,8 +1258,20 @@ _HEADER_COMMENT = """\
 #   gitlab.supports_work_item_hierarchy    GITLAB_SUPPORTS_WORK_ITEM_HIERARCHY
 #   runners.claude_bin                     SECURE_CLOUD_AGENTS_CLAUDE_BIN (global-only)
 #   runners.codex_bin                      SECURE_CLOUD_AGENTS_CODEX_BIN  (global-only)
+#   runners.codex_profile                  SECURE_CLOUD_AGENTS_CODEX_PROFILE          (global-only)
+#   runners.local_model_opus               SECURE_CLOUD_AGENTS_LOCAL_MODEL_OPUS       (global-only)
+#   runners.local_model_sonnet             SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET     (global-only)
+#   runners.local_model_haiku              SECURE_CLOUD_AGENTS_LOCAL_MODEL_HAIKU      (global-only)
+#   runners.forward_env                    SECURE_CLOUD_AGENTS_FORWARD_ENV            (global-only)
+#   runners.api_base_url                   SECURE_CLOUD_AGENTS_API_BASE_URL           (global-only)
+#   runners.api_key_env                    SECURE_CLOUD_AGENTS_API_KEY_ENV            (global-only)
+#   runners.api_allow_writes               SECURE_CLOUD_AGENTS_API_ALLOW_WRITES       (global-only)
+#   runners.api_command_allowlist          SECURE_CLOUD_AGENTS_API_COMMAND_ALLOWLIST  (global-only)
 #   agentic_sdlc.bin_path                  AGENTIC_SDLC_BIN               (global-only)
 #   knowledge_store.home                   KNOWLEDGE_STORE_HOME           (global-only)
+#
+# runners.api_key_env holds the *name* of the variable containing the
+# self-hosted endpoint's API key, never the key itself.
 """
 
 

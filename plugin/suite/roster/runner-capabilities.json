@@ -65,6 +65,18 @@
       "named_agent_dispatch_workaround": null,
       "concurrency_bound_config_key": null,
       "native_workspace_isolation": null
+    },
+    "api": {
+      "has_generated_wrapper": false,
+      "dispatch_naming": "dispatch_secure_cloud_role MCP tool with runner=\"api\" (reuses the Codex .toml wrappers for developer_instructions/sandbox_mode; the model comes from runners.local_model_<tier>, not the wrapper). Spawns no coding CLI, so it has no OS-level sandbox -- file tools are confined in-process by path resolution only; see roster/orchestration/SECURITY-CONTROLS.md's 'API runner' section",
+      "communication_mode_peer_support": "no",
+      "peer_support_gate": null,
+      "nested_teams_supported": "not_applicable",
+      "team_size_guidance": null,
+      "named_agent_dispatch_supported": true,
+      "named_agent_dispatch_workaround": null,
+      "concurrency_bound_config_key": "MAX_CONCURRENT_CHILDREN (this repo's MCP dispatch server path)",
+      "native_workspace_isolation": null
     }
   }
 }
