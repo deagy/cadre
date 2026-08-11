@@ -79,26 +79,40 @@ where practical -- see `git status --porcelain`/`git clean -n` use below):
     are always allowed, per this task's explicit "git restore of your own
     edits" example.
 
-  * `git checkout <branch>` (switching branches, no `-b`/`-B`, no `--`,
-    and `<branch>` really is a local branch per `git show-ref`) when the
-    tree is dirty. Git itself refuses when the switch would conflict with
-    modified files, but a switch that doesn't conflict still carries or
-    strands uncommitted edits across branches and is exactly the "switched
-    another session's worktree off its branch" shape from today. A clean
-    tree switch is always allowed. `git checkout -b`/`-B <new>` (creating,
-    or forcing, a branch pointer) is always allowed -- a SCOPE decision,
-    not a safety claim. `-b` is genuinely safe: git refuses it when the
-    branch already exists. `-B` is NOT safe, and the earlier version of
-    this paragraph argued the mechanics backwards. `git checkout -B
-    feature` with the implicit HEAD start point is precisely the
-    destructive case when `feature` already exists and points elsewhere:
-    it moves the branch off its commits with no warning. An implicit start
-    point makes the check EASIER to perform, not the operation safer, and
-    `workspace-isolation.md` prohibits `git checkout -B`/`git switch -C`
-    by name. `check_worktree` performs exactly this check for
-    `git worktree add -B` (see below); extending it here means changing an
-    existing handler's behavior, which is out of scope for deagy/cadre#215
-    and tracked separately.
+  * `git checkout <branch>` / `git switch <branch>` (switching branches, no
+    branch-creating flag, no `--`, and `<branch>` really is a local branch
+    per `git show-ref`) when the tree is dirty. Git itself refuses when the
+    switch would conflict with modified files, but a switch that doesn't
+    conflict still carries or strands uncommitted edits across branches and
+    is exactly the "switched another session's worktree off its branch"
+    shape from today. A clean tree switch is always allowed. `switch` is
+    covered for the same reason as `checkout` and not as an extension of
+    scope: guarding only one spelling of one operation makes the guard
+    bypassable by typing the other, and `workspace-isolation.md` lists the
+    two side by side.
+
+  * `git checkout -B <branch>` and `git switch -C <branch>` (equivalently
+    `--force-create`) when `<branch>` already exists as a local branch AND
+    resolves to a commit other than the resolved start point -- the same
+    check `check_worktree` applies to `git worktree add -B`, and closed
+    here under deagy/cadre#221. `-b`/`-c` (plain create) is always allowed
+    and is genuinely safe: git refuses it when the branch already exists.
+    `-B`/`-C` is not. `git checkout -B feature` with the IMPLICIT HEAD
+    start point is precisely the destructive case when `feature` already
+    exists and points elsewhere: it moves the branch off its commits,
+    reporting only "Switched to and reset branch 'feature'". An implicit
+    start point makes the check easier to perform, not the operation safer
+    -- an earlier version of this paragraph argued those mechanics
+    backwards, and #215 deferred the fix as a scope decision rather than a
+    safety claim.
+      All of git's flag-value spellings are covered, each verified against
+    git 2.53.0 to really move the branch: `-B existing`, the attached
+    `-Bexisting`, and the combined group `-fB existing`. The combined form
+    needs git's own parse-options rule, not a substring test:
+    `git checkout -Bf existing` creates a branch literally named `f` and
+    treats `existing` as the START POINT, because `B` is not the group's
+    last character and so takes the rest of the group as its value. See
+    `flag_value`.
 
   * `git clean -f`/`-fd`/`-fdx` (any force-clean), but only when a dry run
     (`git clean -n[dx]`, run automatically before deciding) shows it would
@@ -182,33 +196,48 @@ where practical -- see `git status --porcelain`/`git clean -n` use below):
     allowed -- git itself refuses when the branch already exists -- and so
     is `-B` naming a branch that does not exist yet or that already points
     at the start point, since neither moves anything.
-      Note the deliberate asymmetry with `check_checkout`, which allows
-    `git checkout -B` unconditionally (see its bullet above): that is a
-    SCOPE decision under #215, not a claim that `checkout -B` is safe. It
-    is not safe -- `git checkout -B feature` with the implicit HEAD start
-    point is precisely the destructive case when `feature` already exists
-    and points elsewhere, and `workspace-isolation.md` lists
-    `git checkout -B` in its own prohibition list alongside this one. An
-    implicit start point makes the check EASIER to perform, not the
-    operation safer. `check_checkout` was left unchanged here only because
-    altering an existing handler's behavior is outside this issue; closing
-    it is tracked separately.
+      The asymmetry with `check_checkout` that #215 left in place is gone:
+    `checkout -B` and `switch -C` are now checked the same way, under
+    deagy/cadre#221 (see their bullet above). Those two share
+    `_check_force_created_branch`; this branch keeps its own copy of the
+    same logic only so it can give worktree-specific guidance ("use
+    `git worktree add -b <new-branch>`") in the refusal, and it reads the
+    start point from positional[1] rather than [0] because `add`'s first
+    positional is the new worktree's path. It does use the same
+    `flag_value`/`positionals` helpers, so every flag spelling -- including
+    the combined `-fB` group -- resolves identically in all three.
+
+  * `git gc` when its own worktree pruning would deregister a
+    registration -- deagy/cadre#217, scoped to worktree registrations only.
+    `gc` reaches the exact state `check_worktree`'s `prune` refusal exists
+    to protect, through a subcommand that names no worktree, so it is
+    checked the same way: a dry run decides, and a `gc` that would
+    deregister nothing is a no-op worth no friction. Which dry run is not
+    obvious, and the issue's framing was wrong about it -- see `check_gc`
+    for the probe transcript. Briefly: gc's own `--prune=<date>` governs
+    loose-OBJECT pruning and does not touch worktree registrations at all
+    (`git gc --prune=now` left a just-moved worktree registered), while
+    `gc.worktreePruneExpire` (default `3.months.ago`) does, so the probe
+    runs at THAT expiry rather than at `worktree prune`'s own immediate
+    default.
 
 Deliberately NOT covered, with reasoning:
 
   * Deleting a worktree's directory directly (`rm -rf .worktrees/foo`)
-    rather than through `git worktree remove`.
-    `workspace-isolation.md` forbids this in the same sentence as the git
-    verbs, but this hook only inspects `git` invocations -- an `rm` is not
-    a git subcommand and `_HANDLERS` never sees it. Deciding whether an
-    arbitrary `rm` target is a registered worktree (and doing it for every
-    `rm` the model runs) is a materially different and much broader
-    check than anything else here. Left as a known gap, pinned by
+    rather than through `git worktree remove`. **This rule is prompt-only
+    for `rm`, deliberately and permanently as far as this hook is
+    concerned.** `workspace-isolation.md` forbids it in the same sentence
+    as the git verbs, but this hook only inspects `git` invocations -- an
+    `rm` is not a git subcommand and `_HANDLERS` never sees it. Deciding
+    whether an arbitrary `rm` target is a registered worktree, for every
+    `rm` the model runs, is a much broader policy question than workspace
+    isolation, and deagy/cadre#217 re-examined it while closing the sibling
+    `git gc` path and concluded the same: a guard that tries and
+    half-succeeds is worse than one that declares the boundary. It is also
+    the most likely real-world bypass of the never-remove rule, which is
+    why it is stated plainly here and in `workspace-isolation.md` rather
+    than buried. Pinned by
     `test_rm_of_a_worktree_directory_is_a_documented_gap`.
-  * `git worktree prune` reached indirectly through `git gc`, which runs
-    worktree pruning as part of its own housekeeping. `gc` has no handler
-    (see the reflog/`gc --prune=now` gap below), so this spelling is not
-    intercepted. Pinned by `test_git_gc_is_a_documented_gap`.
   * `git worktree unlock` (which makes a locked worktree prunable again)
     and `git worktree repair` (which rewrites registration metadata).
     Neither deregisters or relocates a worktree on its own; each would
@@ -220,10 +249,16 @@ Deliberately NOT covered, with reasoning:
     and structurally different (stash entries, not the tracked working
     tree/branch state the incidents above involved). Left as a known gap
     rather than silently folded in without its own state-check design.
-  * Reflog expiry / `git gc --prune=now` -- destroys unreachable commits,
-    but is not an operation any workflow here performs routinely, and
+  * Reflog expiry (`git reflog expire`) and `git gc`'s OBJECT-pruning
+    surface (`--prune=now`/`--prune=all`) -- these destroy unreachable
+    commits, are not operations any workflow here performs routinely, and
     detecting "would this prune something otherwise recoverable" reliably
-    is materially harder than the checks above. Left as a known gap.
+    is materially harder than the checks above. `check_gc` is scoped to
+    worktree registrations and deliberately says nothing about this;
+    verified against git 2.53.0 that the two surfaces really are separate
+    (`gc --prune=now` did not deregister a prunable worktree). Left as a
+    known gap, pinned by
+    `test_gc_destructive_object_surface_is_a_documented_gap`.
   * Anything reached through a file the model writes and then executes
     (e.g. a shell script containing `git reset --hard`) rather than a
     literal `Bash` tool command -- `PreToolUse` only sees the `Bash`
@@ -233,9 +268,13 @@ Deliberately NOT covered, with reasoning:
     this gap is specifically about content that only exists as a file on
     disk, not an inline string in the `Bash` command itself.)
   * `--git-dir`/`--work-tree`/`GIT_DIR`/`GIT_WORK_TREE` redirection to a
-    different repository than `base_cwd`. `-C <dir>` (and the equivalent
-    `--git-dir`/`--work-tree` global flags) are parsed and skipped by
-    `parse_git_invocation` so the guard can still recognize the
+    different repository than `base_cwd`. `-C <dir>` IS honored, and
+    correctly: repeated `-C` accumulates in order exactly as git applies it,
+    with an absolute value resetting the accumulation (deagy/cadre#220, see
+    `accumulate_dash_c` -- the previous last-wins reading resolved
+    `git -C .worktrees -C ../ worktree prune` to the wrong directory and
+    failed every state-probing handler open). The `--git-dir`/`--work-tree`
+    global flags are parsed and skipped so the guard can still recognize the
     subcommand, but this hook's own state-check subprocess calls
     (`git_status_porcelain`, `is_local_branch`, the `rev-parse` calls in
     `check_reset`) always run against `base_cwd`/the `-C` value resolved by
@@ -252,38 +291,48 @@ Deliberately NOT covered, with reasoning:
     `VAR=value ...` assignment on the same command line) is materially
     harder than the checks above, and this hook's own author assessed a
     full fix as out of scope for this task.
-  * git alias resolution (e.g. a user-configured `git co` alias for
-    `checkout`, or a `!shell` alias). This hook only recognizes git's own
-    literal subcommand names in `_HANDLERS`; an aliased spelling of a
-    destructive subcommand is invisible to it, and resolving aliases would
-    require reading and trusting the invoking user's git config. Left as a
-    known gap.
-      That justification does NOT extend to the `-c` spelling, and saying
-    so was the gap's own blind spot: `git -c alias.wtr='worktree remove'
-    wtr <path>` defines the alias INSIDE the command line this hook has
-    already tokenized, so no config file needs to be read or trusted to
-    see it. `parse_git_invocation` skips `-c <value>` as a global flag
-    with a value and then reads `wtr` as the subcommand, which matches no
-    handler, so the command is allowed. Confirmed by running the hook.
-    Recognizing this would mean expanding an alias value and re-parsing
-    the result -- tractable, but a parser change affecting every handler
-    rather than a `worktree` one, so it is recorded here rather than
-    fixed under #215. Pinned by
-    `test_dash_c_alias_injection_is_a_documented_gap`.
+  * CONFIG-FILE git alias resolution (a user-configured `git co` alias for
+    `checkout`, or a `!shell` alias, defined in `.git/config` or
+    `~/.gitconfig`). This hook only recognizes git's own literal subcommand
+    names in `_HANDLERS`; an aliased spelling of a destructive subcommand is
+    invisible to it, and resolving one would require reading and trusting
+    the invoking user's git config. Left as a known gap, pinned by
+    `test_config_file_alias_remains_a_documented_gap`.
+      That justification never extended to the `-c` spelling, and saying so
+    was the gap's own blind spot: `git -c alias.wtr='worktree remove' wtr
+    <path>` defines the alias INSIDE the command line this hook has already
+    tokenized, so no config file needs to be read or trusted to see it.
+    That spelling is now CLOSED (deagy/cadre#218): `parse_git_invocation`
+    records `-c <name>=<value>` pairs and `expand_git_alias` resolves a
+    matching subcommand, including chained aliases, `-c` interleaved with
+    other globals, and the `!shell` form, which is fed through the same
+    bounded recursion `bash -c "..."` uses. See `expand_git_alias` for the
+    git behaviours that were verified rather than assumed -- in particular
+    that an alias can NOT shadow a real subcommand, which is why one
+    already in `_HANDLERS` is never expanded.
 
-  * Wrapper commands outside `_WRAPPER_TOKENS`. That set
-    (`sudo`, `command`, `exec`, `nohup`, `time`, `env`) is NOT exhaustive
-    and was never claimed to be complete; anything else leading the line
-    leaves `tokens[0]` as a non-`git` program, so `parse_git_invocation`
-    returns None and the wrapped command is allowed. Confirmed by running
-    the hook: `timeout 10 git worktree remove <path>` is allowed, as are
-    `nice`, `stdbuf -o0`, `setsid`, and `ionice`. `timeout` is the one a
-    normal agent would plausibly reach for on its own. Also not covered:
-    `xargs` and `find -exec`, which take the command in argument position
-    rather than as a prefix. Widening the set is easy but open-ended (each
-    entry needs its own flag-arity handling, as `env` already
-    demonstrates), so it is recorded rather than guessed at. Pinned by
-    `test_unrecognized_wrapper_commands_are_a_documented_gap`.
+  * Wrapper commands outside `_WRAPPER_TOKENS`. The set was extended under
+    deagy/cadre#219 (`timeout`, `nice`, `ionice`, `stdbuf`, `setsid`,
+    `chrt`, `taskset`, `xargs`, each with its own flag arity, plus `find
+    -exec`/`-execdir`/`-ok`/`-okdir` handled separately because they take
+    the command in ARGUMENT position), but it is still NOT exhaustive and is
+    not claimed to be: anything else leading the line leaves `tokens[0]` as
+    a non-`git` program, so `parse_git_invocation` returns None and the
+    wrapped command is allowed. `firejail`, `runuser`, `doas`, and
+    `unbuffer` are examples that remain uncovered; pinned by
+    `test_wrapper_set_remains_non_exhaustive`.
+      The alternative #219 raised -- inverting the design to scan ALL
+    tokens for a `git` invocation instead of stripping known prefixes --
+    was considered and rejected. It is more robust against unknown
+    wrappers, but it reintroduces exactly the false-positive class the
+    heredoc handling above exists to prevent: a literal `git worktree
+    remove` appearing as DATA (in a heredoc body, a quoted string, a grep
+    pattern, this very docstring) would start matching. Given this module's
+    stance that false positives are the real risk, enumerating and being
+    honest about the remainder beats matching more and being wrong
+    sometimes. `find -exec` is the deliberate exception: its command is in
+    a syntactically unambiguous position, delimited by `;` or `+`, so it
+    can be extracted without guessing.
 
   * `git worktree add --force <path>` (and `-f -f`) pointed at a path a
     registered-but-currently-missing worktree occupies. Verified against
@@ -302,6 +351,28 @@ Deliberately NOT covered, with reasoning:
     matching problem that `remove`'s flat refusal deliberately avoids;
     getting that half-right would be worse than recording it. Pinned by
     `test_worktree_add_force_over_a_registered_path_is_a_documented_gap`.
+
+Parity with the Cline guard (`cline-plugins/cline-agents/index.ts`): the
+two files implement the same guard for two runners and every behavioural
+change must land in both, in the same change. That used to be asserted in a
+comment -- prose about intent, not a check -- which is the failure
+`roster/shared/operating-principles.md` names directly. Since
+deagy/cadre#222 it is checked: `plugin/tools/test_guard_parity.py` parses
+both files and compares their handler tables, wrapper sets, global-flag
+sets, and recursion bounds, and drives
+`plugin/tools/guard_parity_fixture.json` -- a table of (command, repository
+state, expected decision) cases -- through BOTH implementations against the
+same prepared repositories, asserting they agree with each other and with
+the declared expectation. Structure alone would miss a `split("=", 2)` that
+truncates in JS where Python's `split("=", 1)` does not, a `??` where the
+other file means `or`, or a missing bounds check; behaviour alone would
+miss a handler present in both files but never reached. Hence both.
+
+Every empirical claim in this docstring was verified by execution against
+**git 2.53.0** on the machine that made the change, not recalled. Where a
+verified result contradicted the issue that prompted the work -- notably
+`git gc --prune=now`, which does NOT prune worktree registrations -- the
+code follows the observation and the contradiction is recorded next to it.
 
 Opt-out (env var, not a command-line flag): if `CADRE_DISABLE_WORKSPACE_
 MUTATION_GUARD` is set to `1` or `true` (case-insensitive) in the
@@ -447,6 +518,20 @@ def _scan_segments(command: str) -> list[dict]:
             if ch == quote and (i == 0 or command[i - 1] != "\\"):
                 quote = None
             i += 1
+            continue
+        # An unquoted backslash escapes the next character, so `\;` is a
+        # LITERAL semicolon and not a command separator. Without this,
+        # `find . -exec git worktree remove {} \;` -- the ordinary spelling
+        # of `find -exec`, since the shell would otherwise eat the `;` --
+        # split at the `;` into a segment ending in a dangling backslash,
+        # and the `git` invocation inside it was never evaluated as one.
+        # Backslash-NEWLINE is already gone by this point
+        # (`_join_line_continuations`), so the only escapes reaching here
+        # are the ordinary in-line ones.
+        if ch == "\\" and i + 1 < n:
+            buf.append(ch)
+            buf.append(command[i + 1])
+            i += 2
             continue
         if ch in ("'", '"'):
             quote = ch
@@ -600,36 +685,84 @@ def split_top_level(command: str) -> list[str]:
 
 
 _ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
-# `env` is included here (not just handled by the dedicated branch below) so
-# it reads as a wrapper token like the rest of this set even though its
-# actual skipping logic -- because `env` can take its own flags and
-# `VAR=value` pairs before the real command -- needs more than "skip one
-# token" (see the `env`-specific branch in `strip_leading_wrappers`).
-_WRAPPER_TOKENS = {"sudo", "command", "exec", "nohup", "time", "env"}
-# `env -u NAME` (`--unset NAME`), `env -C DIR` (`--chdir DIR`), and
-# `env -S STRING` (`--split-string STRING`) each take their value as the
-# next token, so they must be recognized here or the loop below will
-# mistake the value token for the start of the real command and stop
-# skipping too early -- letting a wrapped destructive command through
-# unrecognized. Every other `env` flag (e.g. `-i`/`--ignore-environment`)
-# takes no value and this parser doesn't need to distinguish it from a
-# no-value flag to keep skipping past it.
-_ENV_FLAGS_WITH_VALUE = {"-u", "--unset", "-C", "--chdir", "-S", "--split-string"}
+
+# Wrapper programs that run another command, mapped to the flags of their
+# OWN that consume the following token as a value. Getting an arity wrong
+# in the "takes no value" direction makes the loop below stop one token
+# early, which fails open (the wrapped `git` is never recognized); the
+# opposite error would skip past a real command, which also fails open.
+# Both directions therefore only ever lose coverage, never invent a block
+# -- consistent with this module's stance.
+#
+# The set is deliberately NOT exhaustive and cannot be (see the wrapper gap
+# in the module docstring): it enumerates the prefix wrappers an agent
+# plausibly reaches for. Flag lists were checked against the utilities
+# installed on the verification machine (GNU coreutils `timeout`/`nice`/
+# `stdbuf`, util-linux `ionice`/`setsid`/`chrt`/`taskset`, findutils
+# `xargs`), and every entry was confirmed by execution to actually run a
+# following `git` command in the token layout parsed here.
+#
+# `-i` (xargs) and `-t` (`--track`) style flags whose value is OPTIONAL are
+# deliberately absent: an optional-value flag written bare must not eat the
+# next token.
+_WRAPPER_FLAGS_WITH_VALUE = {
+    "sudo": {
+        "-u", "--user", "-g", "--group", "-p", "--prompt", "-C", "--close-from",
+        "-h", "--host", "-r", "--role", "-t", "--type", "-U", "--other-user",
+        "-T", "--command-timeout", "-D", "--chdir", "-R", "--chroot",
+    },
+    "command": set(),
+    "exec": set(),
+    "nohup": set(),
+    "time": set(),
+    # `env -u NAME` (`--unset`), `env -C DIR` (`--chdir`), `env -S STRING`
+    # (`--split-string`). Missing one lets the flag's VALUE be mistaken for
+    # the start of the real command.
+    "env": {"-u", "--unset", "-C", "--chdir", "-S", "--split-string"},
+    "timeout": {"-s", "--signal", "-k", "--kill-after"},
+    "nice": {"-n", "--adjustment"},
+    "ionice": {"-c", "--class", "-n", "--classdata", "-p", "--pid", "-P", "--pgid", "-u", "--uid"},
+    "stdbuf": {"-i", "--input", "-o", "--output", "-e", "--error"},
+    "setsid": set(),
+    "chrt": {"-p", "--pid", "-T", "--sched-runtime", "-P", "--sched-period", "-D", "--sched-deadline"},
+    "taskset": {"-c", "--cpu-list", "-p", "--pid"},
+    "xargs": {
+        "-I", "--replace", "-L", "--max-lines", "-n", "--max-args",
+        "-P", "--max-procs", "-s", "--max-chars", "-d", "--delimiter",
+        "-E", "--eof", "-a", "--arg-file", "--process-slot-var",
+    },
+}
+_WRAPPER_TOKENS = set(_WRAPPER_FLAGS_WITH_VALUE)
+
+# Wrappers that take a mandatory POSITIONAL of their own before the command:
+# `timeout <duration> <cmd>`, `chrt <priority> <cmd>`, `taskset <mask> <cmd>`.
+# Skipped lazily -- only while the current token is not `git` -- because
+# `taskset -c 0,1 git ...` supplies the same value through a flag and then
+# has no positional left, so an unconditional skip would step over `git`
+# itself. This is a bounded look at a wrapper's own argument slots, not the
+# scan-every-token inversion the module docstring rejects.
+_WRAPPER_LEADING_POSITIONALS = {"timeout": 1, "chrt": 1, "taskset": 1}
+
+# Wrappers that accept `VAR=value` pairs before the command they run.
+_WRAPPER_TAKES_ENV_ASSIGNMENTS = {"env", "sudo"}
 
 _GIT_GLOBAL_FLAGS_WITH_VALUE = {"-C", "--git-dir", "--work-tree", "--namespace", "-c"}
 
 
 def strip_leading_wrappers(tokens: list[str]) -> list[str]:
     """Strip leading `VAR=value` environment assignments and wrapper
-    commands (`sudo`, `env`, `command`, `exec`, `nohup`, `time`, ...) so the
-    real command is exposed at `tokens[0]`.
+    commands (`sudo`, `env`, `timeout`, `xargs`, ...) so the real command is
+    exposed at `tokens[0]`.
 
-    `env` gets dedicated handling because, unlike the other wrapper tokens,
-    it routinely carries its own flags and `VAR=value` assignments before
-    the command it runs (`env -i FOO=bar git reset --hard`, `env FOO=bar
-    git reset --hard`) -- a bare "skip one token" rule would leave those
-    trailing behind and stop `parse_git_invocation` from ever recognizing
-    `git` at `tokens[0]`.
+    Every wrapper is skipped along with its own flags, flag values, and
+    (for `timeout`/`chrt`/`taskset`) its own leading positional, because a
+    bare "skip one token" rule leaves those trailing behind and stops
+    `parse_git_invocation` from ever recognizing `git` at `tokens[0]` --
+    which is exactly how `timeout 10 git worktree remove <path>` walked
+    through this guard before deagy/cadre#219.
+
+    Wrappers nest, so the outer loop re-runs against whatever the previous
+    wrapper left behind: `sudo timeout 10 git ...` strips both.
     """
     i = 0
     while i < len(tokens):
@@ -637,29 +770,66 @@ def strip_leading_wrappers(tokens: list[str]) -> list[str]:
         if _ENV_ASSIGN_RE.match(t):
             i += 1
             continue
-        if t == "env":
-            i += 1
-            while i < len(tokens):
-                nt = tokens[i]
-                if nt == "--":
-                    i += 1
-                    break
-                if nt in _ENV_FLAGS_WITH_VALUE:
-                    i += 2
-                    continue
-                if nt.startswith("-") and nt != "-":
-                    i += 1
-                    continue
-                if _ENV_ASSIGN_RE.match(nt):
-                    i += 1
-                    continue
+        if t not in _WRAPPER_TOKENS:
+            break
+        flags_with_value = _WRAPPER_FLAGS_WITH_VALUE[t]
+        takes_assignments = t in _WRAPPER_TAKES_ENV_ASSIGNMENTS
+        positionals_left = _WRAPPER_LEADING_POSITIONALS.get(t, 0)
+        i += 1
+        while i < len(tokens):
+            nt = tokens[i]
+            if nt == "--":
+                i += 1
                 break
-            continue
-        if t in _WRAPPER_TOKENS:
+            if nt in flags_with_value:
+                i += 2
+                continue
+            if nt.startswith("-") and nt != "-":
+                i += 1
+                continue
+            if takes_assignments and _ENV_ASSIGN_RE.match(nt):
+                i += 1
+                continue
+            if positionals_left and nt != "git":
+                positionals_left -= 1
+                i += 1
+                continue
+            break
+    return tokens[i:]
+
+
+# `find`'s command-carrying primaries. Unlike everything in
+# `_WRAPPER_TOKENS` these take the command in ARGUMENT position, terminated
+# by `;` or `+`, so prefix stripping cannot reach them: the invocation sits
+# in the middle of `find`'s own expression. Verified by execution that
+# `find . -maxdepth 0 -exec git rev-parse --abbrev-ref HEAD \;` runs git.
+_FIND_COMMAND_PRIMARIES = {"-exec", "-execdir", "-ok", "-okdir"}
+_FIND_COMMAND_TERMINATORS = {";", "+"}
+
+
+def find_command_invocations(tokens: list[str]) -> list[list[str]]:
+    """Command token lists carried in `find ... -exec <cmd> ... ;` position.
+
+    Returns one list per `-exec`/`-execdir`/`-ok`/`-okdir` primary (a single
+    `find` can carry several). Returns `[]` for anything that is not a
+    `find` invocation, so callers can concatenate unconditionally.
+    """
+    if not tokens or tokens[0] != "find":
+        return []
+    found: list[list[str]] = []
+    i = 0
+    while i < len(tokens):
+        if tokens[i] not in _FIND_COMMAND_PRIMARIES:
             i += 1
             continue
-        break
-    return tokens[i:]
+        i += 1
+        body: list[str] = []
+        while i < len(tokens) and tokens[i] not in _FIND_COMMAND_TERMINATORS:
+            body.append(tokens[i])
+            i += 1
+        if body:
+            found.append(body)
+    return found
 
 
 _SHELL_DASH_C_PROGRAMS = {"bash", "sh", "zsh"}
@@ -702,20 +872,81 @@ def find_shell_dash_c_script(tokens: list[str]) -> Optional[str]:
     return None
 
 
+def accumulate_dash_c(current: Optional[str], value: str) -> Optional[str]:
+    """Fold one `git -C <value>` onto the directory already accumulated.
+
+    Git applies repeated `-C` CUMULATIVELY, each relative to the previous,
+    and an absolute value resets the accumulation. Verified against git
+    2.53.0 from a repository root: `git -C sub rev-parse --show-prefix`
+    prints `sub/`, `git -C sub -C deeper` prints `sub/deeper/`, `git -C sub
+    -C ..` prints nothing (back at the root), and `git -C sub -C /tmp`
+    fails with "not a git repository" -- i.e. it really did land in `/tmp`.
+    An empty value is a no-op in both positions (`-C "" -C sub` and `-C sub
+    -C ""` both print `sub/`).
+
+    Keeping only the LAST value (this parser's behaviour until
+    deagy/cadre#220) resolved `git -C .worktrees -C ../ worktree prune` to
+    `<base>/../` instead of `<base>/.worktrees/..`, so every state-probing
+    handler ran its `git` calls in the wrong directory, got a non-zero exit,
+    and failed open. The flat-refusal verbs (`worktree remove`/`move`) were
+    immune precisely because they never probe state.
+    """
+    if not value:
+        return current
+    if os.path.isabs(value):
+        return value
+    if current is None:
+        return value
+    return os.path.join(current, value)
+
+
+def record_git_config(config: dict, pair: str) -> None:
+    """Record one `git -c <name>=<value>` pair.
+
+    Config variable names are case-insensitive (verified against git
+    2.53.0: `git -c alias.WTR=... wtr` and `git -c alias.wtr=... WTR` both
+    resolve), so the key is lowercased. A `-c <name>` with no `=` sets a
+    boolean and carries no definition, so it is ignored.
+
+    Only the two-part `<section>.<key>` spelling is normalized correctly --
+    the middle component of a three-part `<section>.<subsection>.<key>` name
+    is case-SENSITIVE in git. Nothing here reads a three-part key.
+    """
+    name, sep, value = pair.partition("=")
+    if not sep:
+        return
+    config[name.strip().lower()] = value
+
+
 def parse_git_invocation(tokens: list[str]):
-    """Return (subcommand, sub_args, explicit_cwd) for a token list that
-    starts with `git`, skipping global flags (including `-C <dir>`), or
-    None if this isn't a recognizable `git <subcommand> ...` invocation.
+    """Return (subcommand, sub_args, explicit_cwd, config) for a token list
+    that starts with `git`, skipping global flags, or None if this isn't a
+    recognizable `git <subcommand> ...` invocation.
+
+    `explicit_cwd` is the accumulated `-C` directory (see
+    `accumulate_dash_c`); `config` maps lowercased `-c <name>=<value>`
+    variables to their values, which is what makes a command-line-defined
+    alias visible to `expand_git_alias` and lets `check_gc` see a
+    `gc.worktreePruneExpire` override.
     """
     if not tokens or tokens[0] != "git":
         return None
     i = 1
     explicit_cwd = None
+    config: dict = {}
     while i < len(tokens):
         t = tokens[i]
         if t == "-C":
             if i + 1 < len(tokens):
-                explicit_cwd = tokens[i + 1]
+                explicit_cwd = accumulate_dash_c(explicit_cwd, tokens[i + 1])
+            i += 2
+            continue
+        if t == "-c":
+            # Only the detached spelling exists: verified against git
+            # 2.53.0 that `git -calias.x=...` is rejected with "unknown
+            # option", so there is no attached form to parse here.
+            if i + 1 < len(tokens):
+                record_git_config(config, tokens[i + 1])
             i += 2
             continue
         if t in _GIT_GLOBAL_FLAGS_WITH_VALUE:
@@ -732,7 +963,7 @@ def parse_git_invocation(tokens: list[str]):
         return None
     subcommand = tokens[i]
     sub_args = tokens[i + 1 :]
-    return subcommand, sub_args, explicit_cwd
+    return subcommand, sub_args, explicit_cwd, config
 
 
 # ---------------------------------------------------------------------------
@@ -783,12 +1014,137 @@ def is_local_branch(cwd: str, name: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Argument-shape helpers shared by the handlers. These model git's own
+# parse-options behaviour for short flags, which several handlers need to
+# agree on: `-B name`, `-Bname`, and the combined group forms.
+# ---------------------------------------------------------------------------
+
+
+def _short_flag_group(token: str) -> Optional[str]:
+    """The letters of a combined short-flag group (`-fB` -> `"fB"`), or None.
+
+    Only all-alphabetic groups qualify, so `-Bexisting-1` and `-B=x` fall
+    through to the attached-value handling instead.
+    """
+    if len(token) > 1 and token[0] == "-" and token[1] != "-" and token[1:].isalpha():
+        return token[1:]
+    return None
+
+
+def flag_value(args: list[str], flag: str) -> Optional[str]:
+    """Value of `<flag> <value>`, `--long=<value>`, or -- for a short flag --
+    git's attached and combined spellings.
+
+    Git's parse-options consumes a short flag's value from the REST of its
+    group when characters follow it, and from the next token when it is the
+    group's last character. Verified against git 2.53.0:
+
+      * `git checkout -Bexisting` and `git worktree add -Bexisting <path>`
+        both reset `existing` exactly as the detached spelling does, so
+        missing the attached form would leave the same destructive
+        operation unguarded behind a one-space difference;
+      * `git checkout -fB existing` resets `existing` (`B` is last in the
+        group, so its value is the next token);
+      * `git checkout -Bf existing` creates a branch literally named `f`
+        and treats `existing` as the START POINT (`B` is not last, so the
+        remainder of the group is its value).
+
+    Note `-B=name` is NOT a git spelling despite reading like one:
+    `git checkout -B=weird` creates a branch named `=weird`. The attached
+    branch returns `"=weird"` here for exactly that reason, and the
+    `<flag>=<value>` branch is reserved for LONG flags, where it is real.
+    """
+    is_short = len(flag) == 2 and flag.startswith("-") and not flag.startswith("--")
+    letter = flag[1] if is_short else None
+    for i, a in enumerate(args):
+        if a == flag:
+            return args[i + 1] if i + 1 < len(args) else None
+        if is_short:
+            group = _short_flag_group(a)
+            if group is not None and letter in group:
+                position = group.index(letter)
+                if position == len(group) - 1:
+                    return args[i + 1] if i + 1 < len(args) else None
+                return group[position + 1 :]
+            if a.startswith(flag) and len(a) > 2:
+                return a[2:]
+        elif a.startswith(f"{flag}="):
+            return a.split("=", 1)[1]
+    return None
+
+
+def flag_present(args: list[str], flag: str) -> bool:
+    """Whether `flag` appears at all, in any of the spellings `flag_value`
+    understands. Distinct from `flag_value(...) is not None`, which cannot
+    tell "absent" from "present with no value left on the line."
+    """
+    is_short = len(flag) == 2 and flag.startswith("-") and not flag.startswith("--")
+    letter = flag[1] if is_short else None
+    for a in args:
+        if a == flag:
+            return True
+        if is_short:
+            group = _short_flag_group(a)
+            if group is not None and letter in group:
+                return True
+            if a.startswith(flag) and len(a) > 2:
+                return True
+        elif a.startswith(f"{flag}="):
+            return True
+    return False
+
+
+def _consumes_next_token(token: str, flags_with_value: set) -> bool:
+    """Whether `token` takes the FOLLOWING token as its value.
+
+    A combined group only does so when the value-taking flag is its last
+    character; otherwise the rest of the group is the value (see
+    `flag_value`).
+    """
+    if token in flags_with_value:
+        return True
+    group = _short_flag_group(token)
+    if group is not None and len(group) > 1:
+        for position, letter in enumerate(group):
+            if f"-{letter}" in flags_with_value:
+                return position == len(group) - 1
+    return False
+
+
+def positionals(args: list[str], flags_with_value: set) -> list[str]:
+    """Positional arguments, skipping flags and their values.
+
+    Conservative, not exhaustive -- an unrecognized flag falls through to
+    the generic `startswith("-")` skip without consuming a value. The
+    failure mode of getting a `flags_with_value` set wrong is a mis-resolved
+    start point, which `git rev-parse` then fails to resolve, which fails
+    open.
+    """
+    found: list[str] = []
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--":
+            found.extend(args[i + 1 :])
+            break
+        if _consumes_next_token(a, flags_with_value):
+            i += 2
+            continue
+        if a.startswith("-") and a != "-":
+            i += 1
+            continue
+        found.append(a)
+        i += 1
+    return found
+
+
+# ---------------------------------------------------------------------------
 # Per-subcommand checks. Each returns a reason dict to deny, or None to
 # express no opinion (allow).
 # ---------------------------------------------------------------------------
 
 
-def check_reset(sub_args: list[str], cwd: str):
+def check_reset(sub_args: list[str], cwd: str, config: Optional[dict] = None):
     if "--hard" not in sub_args:
         return None
     positional = [a for a in sub_args if not a.startswith("-")]
@@ -829,7 +1185,7 @@ def check_reset(sub_args: list[str], cwd: str):
     }
 
 
-def check_clean(sub_args: list[str], cwd: str):
+def check_clean(sub_args: list[str], cwd: str, config: Optional[dict] = None):
     short_chars: set[str] = set()
     long_opts: set[str] = set()
     for a in sub_args:
@@ -874,7 +1230,7 @@ def check_clean(sub_args: list[str], cwd: str):
     }
 
 
-def check_branch(sub_args: list[str], cwd: str):
+def check_branch(sub_args: list[str], cwd: str, config: Optional[dict] = None):
     short_chars: set[str] = set()
     long_opts: set[str] = set()
     positional: list[str] = []
@@ -903,7 +1259,7 @@ def check_branch(sub_args: list[str], cwd: str):
     }
 
 
-def check_push(sub_args: list[str], cwd: str):  # noqa: ARG001 - cwd unused, kept for handler symmetry
+def check_push(sub_args: list[str], cwd: str, config: Optional[dict] = None):  # noqa: ARG001 - cwd/config unused, kept for handler symmetry
     has_force = any(a in ("-f", "--force") for a in sub_args)
     has_lease = any(a == "--force-with-lease" or a.startswith("--force-with-lease=") for a in sub_args)
     has_delete_flag = any(a in ("--delete", "-d") for a in sub_args)
@@ -956,13 +1312,88 @@ def _check_ref_into_paths(cwd: str, ref: Optional[str], paths: list[str], cmd: s
     }
 
 
-def check_checkout(sub_args: list[str], cwd: str):
+# `git checkout` flags that consume the following token. `-U`/`--unified`
+# and `--conflict`/`--orphan`/`--pathspec-from-file` are here so a start
+# point is never confused with one of their values. Read off `git checkout
+# -h` on git 2.53.0.
+_CHECKOUT_FLAGS_WITH_VALUE = {
+    "-b", "-B", "-U", "--unified", "--conflict", "--orphan",
+    "--pathspec-from-file", "--inter-hunk-context",
+}
+# `git switch` equivalents. `-c`/`--create` and `-C`/`--force-create` are
+# switch's own spellings of checkout's `-b`/`-B`; note `-C` here is the
+# SUBCOMMAND's flag and has nothing to do with git's global `-C <dir>`,
+# which `parse_git_invocation` has already consumed before the subcommand
+# is read.
+_SWITCH_FLAGS_WITH_VALUE = {
+    "-c", "--create", "-C", "--force-create", "--conflict", "--orphan",
+}
+
+
+def _check_force_created_branch(
+    cwd: str,
+    args: list[str],
+    forced: str,
+    flags_with_value: set,
+    spelling: str,
+    start_index: int = 0,
+):
+    """Shared `-B`/`-C` force-create check for `checkout`, `switch`, and
+    `worktree add`.
+
+    Refuses only when `forced` already exists as a local branch AND its
+    current tip differs from the resolved start point -- i.e. only when the
+    command would actually move a branch off its commits. A name that does
+    not exist yet behaves exactly like `-b`/`-c`, and a branch already at
+    the start point moves nothing; both are allowed.
+
+    `start_index` is where the start point sits among the positionals:
+    0 for `checkout -B <branch> [<start>]` and `switch -C <branch>
+    [<start>]` (the branch name is the flag's value, not a positional),
+    1 for `worktree add -B <branch> <path> [<start>]`.
+    """
+    if not is_local_branch(cwd, forced):
+        return None  # behaves like `-b`/`-c`: nothing to move
+    found = positionals(args, flags_with_value)
+    start = found[start_index] if len(found) > start_index else "HEAD"
+    rc1, current, _ = run_git(["rev-parse", "--verify", forced], cwd)
+    rc2, target, _ = run_git(["rev-parse", "--verify", start], cwd)
+    if rc1 != 0 or rc2 != 0:
+        return None  # indeterminate; git will error on its own
+    if current.strip() == target.strip():
+        return None  # branch already points there: moves nothing
+    return {
+        "reason": (
+            f"Blocked: `git {spelling} {forced}` force-resets the existing branch "
+            f"'{forced}' to '{start}', moving it off the commits it points at now -- git "
+            "reports this only as a 'Switched to and reset branch' note, and any commit no "
+            "other ref reaches is then recoverable from `git reflog` alone. That is "
+            "`agent-autonomy.yaml`'s `discard_uncommitted_work_or_move_branches: never`, and "
+            "`workspace-isolation.md` names this flag. Creating a branch is allowed: use the "
+            "non-forcing spelling with a name that does not exist yet (git refuses it if the "
+            f"name is taken), or check out '{forced}' where it already is."
+        )
+    }
+
+
+def check_checkout(sub_args: list[str], cwd: str, config: Optional[dict] = None):
     if not sub_args:
         return None  # bare `git checkout`: lists status, not destructive
 
-    if "-b" in sub_args or "-B" in sub_args:
-        # Creating (or resetting) a branch pointer at the implicit/explicit
-        # start point. Left unblocked -- see module docstring.
+    if flag_present(sub_args, "-B"):
+        # `-B` force-creates: when the branch exists and points elsewhere,
+        # this moves it off its commits with no warning. Guarded since
+        # deagy/cadre#221; see the module docstring.
+        forced = flag_value(sub_args, "-B")
+        if not forced:
+            return None  # `-B` with no resolvable name; git errors on its own
+        return _check_force_created_branch(
+            cwd, sub_args, forced, _CHECKOUT_FLAGS_WITH_VALUE, "checkout -B"
+        )
+
+    if flag_present(sub_args, "-b"):
+        # Creating a branch pointer. Genuinely safe: git refuses `-b` when
+        # the branch already exists.
         return None
 
     if "--" in sub_args:
@@ -1006,7 +1437,7 @@ def _check_branch_switch(cwd: str, branch: str):
     }
 
 
-def check_restore(sub_args: list[str], cwd: str):
+def check_restore(sub_args: list[str], cwd: str, config: Optional[dict] = None):
     if not sub_args:
         return None
 
@@ -1036,6 +1467,118 @@ def check_restore(sub_args: list[str], cwd: str):
     return _check_ref_into_paths(cwd, source, paths, cmd="restore")
 
 
+def check_switch(sub_args: list[str], cwd: str, config: Optional[dict] = None):
+    """`git switch` -- the newer spelling of the `checkout` operations this
+    module already guards. Tracks deagy/cadre#221.
+
+    `-C`/`--force-create` is `checkout -B` under another name: verified
+    against git 2.53.0 that `git switch -C existing`, `git switch
+    -Cexisting`, and `git switch -fC existing` all move `existing` off its
+    commits, reporting only "Switched to and reset branch 'existing'".
+
+    The plain `git switch <branch>` form gets `checkout`'s dirty-tree check
+    for the same reason: leaving it out would make the entire branch-switch
+    guard bypassable by choosing the other spelling of the same operation,
+    which `workspace-isolation.md` lists side by side ("`git checkout
+    <ref>` / `git switch <ref>` that would leave dirty state behind").
+    `-c`/`--create` (git refuses it when the branch exists), `--orphan`,
+    and `-d`/`--detach` move no existing branch and are always allowed.
+    """
+    if not sub_args:
+        return None  # bare `git switch`: errors, mutates nothing
+
+    if flag_present(sub_args, "-C") or flag_present(sub_args, "--force-create"):
+        forced = flag_value(sub_args, "-C") or flag_value(sub_args, "--force-create")
+        if not forced:
+            return None  # no resolvable name; git errors on its own
+        return _check_force_created_branch(
+            cwd, sub_args, forced, _SWITCH_FLAGS_WITH_VALUE, "switch -C"
+        )
+
+    if (
+        flag_present(sub_args, "-c")
+        or flag_present(sub_args, "--create")
+        or "--orphan" in sub_args
+        or flag_present(sub_args, "-d")
+        or "--detach" in sub_args
+    ):
+        return None
+
+    found = positionals(sub_args, _SWITCH_FLAGS_WITH_VALUE)
+    if not found:
+        return None
+    name = found[0]
+    if is_local_branch(cwd, name):
+        return _check_branch_switch(cwd, name)
+    return None
+
+
+# How `git gc` decides whether to deregister a worktree, and the default it
+# uses when nothing overrides it. Verified against git 2.53.0, and the
+# result CONTRADICTS the framing in deagy/cadre#217:
+#
+#   * plain `git gc` did NOT prune a worktree whose directory had just been
+#     moved away, and neither did `git gc --prune=now` or `--prune=all` --
+#     `gc`'s own `--prune=<date>` governs loose-OBJECT pruning and does not
+#     reach worktree registrations at all;
+#   * `git -c gc.worktreePruneExpire=now gc` DID deregister it immediately;
+#   * once the worktree's administrative files were aged past the default,
+#     plain `git gc` deregistered it, and `git worktree prune -n -v --expire
+#     3.months.ago` reported exactly the same registration beforehand.
+#
+# So the state probe below is `worktree prune`'s dry run at gc's effective
+# expiry, not at prune's own immediate default -- using the immediate
+# default would block routine `git gc` runs that deregister nothing, which
+# is the friction this module's design stance treats as the real risk.
+_GC_WORKTREE_PRUNE_EXPIRE_DEFAULT = "3.months.ago"
+_GC_WORKTREE_PRUNE_EXPIRE_KEY = "gc.worktreepruneexpire"
+
+
+def check_gc(sub_args: list[str], cwd: str, config: Optional[dict] = None):  # noqa: ARG001 - sub_args unused
+    """`git gc` -- scoped to worktree registrations only. Tracks
+    deagy/cadre#217.
+
+    `gc` runs worktree pruning as housekeeping, so it reaches the exact
+    registration state `check_worktree`'s `prune` refusal exists to protect,
+    through a subcommand that names no worktree. The check mirrors that one:
+    a dry run decides, and a `gc` that would deregister nothing is a no-op
+    worth no friction.
+    Deliberately NOT extended to `gc`'s destructive surface generally --
+    reflog expiry and `--prune=now` object pruning remain the documented gap
+    they were, since detecting "would this prune something otherwise
+    recoverable" is materially harder than this check.
+    """
+    expire = (config or {}).get(_GC_WORKTREE_PRUNE_EXPIRE_KEY)
+    if expire is None:
+        rc, out, _err = run_git(["config", "--get", "gc.worktreePruneExpire"], cwd)
+        expire = out.strip() if rc == 0 and out.strip() else _GC_WORKTREE_PRUNE_EXPIRE_DEFAULT
+    if not expire:
+        expire = _GC_WORKTREE_PRUNE_EXPIRE_DEFAULT
+
+    rc, out, err = run_git(["worktree", "prune", "-n", "-v", "--expire", expire], cwd)
+    if rc != 0:
+        return None  # can't confirm state; the real command fails the same way
+    # Same stream quirk as `check_worktree`'s prune branch: git 2.53.0
+    # reports the dry run on stderr.
+    report = "\n".join(part for part in (out.strip(), err.strip()) if part)
+    if not report:
+        return None  # nothing prunable: gc deregisters nothing
+
+    entries = [line.strip() for line in report.splitlines() if line.strip()]
+    example = entries[0] if entries else "a registered worktree"
+    return {
+        "reason": (
+            f"Blocked: `git gc` prunes worktrees as part of its own housekeeping, and here "
+            f"that would deregister {len(entries)} worktree(s) (e.g. {example}). Like "
+            "`git worktree prune`, gc names no target -- it removes whatever git considers "
+            "unreachable, which can include a teammate's worktree on a momentarily "
+            "unavailable path. `workspace-isolation.md` says never remove or prune a worktree "
+            "yourself. Inspect what would go with `git worktree prune -n -v` (allowed, it "
+            "removes nothing) and report it, or ask the operator to run gc themselves."
+        )
+    }
+
+
 # `git worktree add` flags that consume the following token as their value,
 # so it must not be mistaken for a positional (the new worktree's path, or
 # its start point). Conservative, not exhaustive -- an unrecognized flag
@@ -1046,46 +1589,7 @@ def check_restore(sub_args: list[str], cwd: str):
 _WORKTREE_ADD_FLAGS_WITH_VALUE = {"-b", "-B", "--reason"}
 
 
-def _worktree_positionals(args: list[str], flags_with_value: set[str]) -> list[str]:
-    positional: list[str] = []
-    i = 0
-    while i < len(args):
-        a = args[i]
-        if a == "--":
-            positional.extend(args[i + 1 :])
-            break
-        if a in flags_with_value:
-            i += 2
-            continue
-        if a.startswith("-") and a != "-":
-            i += 1
-            continue
-        positional.append(a)
-        i += 1
-    return positional
-
-
-def _worktree_flag_value(args: list[str], flag: str) -> Optional[str]:
-    """Value of `<flag> <value>`, `<flag>=<value>`, or -- for a short flag
-    only -- git's attached spelling `-Bvalue`.
-
-    The attached short form is not a nicety: verified against git 2.53.0
-    that `git worktree add -Bexisting <path>` resets `existing` exactly as
-    the detached `-B existing` spelling does, so missing it would leave the
-    same destructive operation unguarded behind a one-space difference.
-    """
-    is_short = flag.startswith("-") and not flag.startswith("--")
-    for i, a in enumerate(args):
-        if a == flag:
-            return args[i + 1] if i + 1 < len(args) else None
-        if a.startswith(f"{flag}="):
-            return a.split("=", 1)[1]
-        if is_short and len(flag) == 2 and a.startswith(flag) and len(a) > 2:
-            return a[2:]
-    return None
-
-
-def check_worktree(sub_args: list[str], cwd: str):
+def check_worktree(sub_args: list[str], cwd: str, config: Optional[dict] = None):
     """`git worktree` -- see the module docstring for what each verb does and
     does not block, and why `prune` is state-checked while `remove`/`move`
     are refused flat. Tracks deagy/cadre#215.
@@ -1139,7 +1643,7 @@ def check_worktree(sub_args: list[str], cwd: str):
             return None  # caller's own dry run: reports, removes nothing
 
         dry_args = ["worktree", "prune", "-n", "-v"]
-        expire = _worktree_flag_value(rest, "--expire")
+        expire = flag_value(rest, "--expire")
         if expire:
             dry_args += ["--expire", expire]
 
@@ -1170,12 +1674,12 @@ def check_worktree(sub_args: list[str], cwd: str):
         }
 
     if verb == "add":
-        forced = _worktree_flag_value(rest, "-B")
+        forced = flag_value(rest, "-B")
         if not forced:
             return None  # plain `add`/`-b`: explicitly allowed, creates only
         if not is_local_branch(cwd, forced):
             return None  # `-B` on a new name behaves like `-b`: nothing to move
-        positional = _worktree_positionals(rest, _WORKTREE_ADD_FLAGS_WITH_VALUE)
+        positional = positionals(rest, _WORKTREE_ADD_FLAGS_WITH_VALUE)
         # positional[0] is the new worktree's path; positional[1], if
         # present, is the start point. Default start point is HEAD.
         start = positional[1] if len(positional) > 1 else "HEAD"
@@ -1202,15 +1706,103 @@ def check_worktree(sub_args: list[str], cwd: str):
     return None
 
 
+# Keep in lockstep with `GIT_GUARD_HANDLERS` in
+# `cline-plugins/cline-agents/index.ts`. That is no longer a claim in a
+# comment: `plugin/tools/test_guard_parity.py` parses both files and fails
+# when the key sets diverge, and drives a shared behavioural fixture through
+# both implementations (deagy/cadre#222).
 _HANDLERS = {
     "reset": check_reset,
     "checkout": check_checkout,
+    "switch": check_switch,
     "restore": check_restore,
     "clean": check_clean,
     "branch": check_branch,
     "push": check_push,
     "worktree": check_worktree,
+    "gc": check_gc,
 }
+
+
+# How many alias definitions to follow before giving up. Git itself detects
+# alias loops ("fatal: alias loop detected") and this mirrors that with a
+# `seen` set; the numeric bound is a second, cheaper backstop so a
+# pathological chain can never turn this hook into a long walk.
+_MAX_ALIAS_EXPANSION_DEPTH = 5
+
+
+def expand_git_alias(subcommand: str, sub_args: list[str], config: dict, explicit_cwd):
+    """Resolve a subcommand that names an alias defined by `-c` on the same
+    command line. Tracks deagy/cadre#218.
+
+    Returns `(subcommand, sub_args, explicit_cwd, config, shell_script)`. A
+    non-empty `shell_script` means the alias was git's `!<shell command>`
+    form and the caller should evaluate that string through
+    `evaluate_command` instead of dispatching a handler.
+
+    `config` is returned, not just consumed internally, because a definition
+    may set config the HANDLER needs rather than only config this function
+    needs. An earlier version folded `nested_config` into a local and
+    dropped it on return; `check_gc` is the one handler that reads config,
+    so `git -c alias.g='-c gc.worktreePruneExpire=now gc' g` was allowed
+    while real git pruned. Verified against git 2.53.0: the aliased form
+    deregisters a prunable worktree exactly as the direct spelling does, so
+    the guard must resolve the same expiry the real invocation will use.
+
+    This closes the COMMAND-LINE alias spelling only. The config-file alias
+    gap stays open (see the module docstring): resolving one means reading
+    and trusting the invoking user's git config, whereas `-c alias.x=...`
+    is already in the tokens this hook was handed.
+
+    Behaviour verified against git 2.53.0:
+
+      * `git -c alias.st='status --porcelain' st` runs the alias, so a
+        definition is live in the very invocation that defines it;
+      * remaining arguments are appended to the definition, for both the
+        plain (`git -c alias.lg='log --oneline -n' lg 1`) and shell
+        (`git -c alias.sh='!echo GOT' sh extra1 extra2` printed
+        "GOT extra1 extra2") forms;
+      * an alias may name another alias, and git detects loops;
+      * an alias CANNOT shadow a real subcommand -- `git -c
+        alias.status='log --oneline -n 1' status` ran the real `status` --
+        which is why a subcommand already in `_HANDLERS` is never expanded;
+      * alias names are matched case-insensitively;
+      * the attached spelling `git -calias.x=...` does not exist ("unknown
+        option"), so only the detached one is recorded.
+    """
+    seen: set = set()
+    for _ in range(_MAX_ALIAS_EXPANSION_DEPTH):
+        if subcommand in _HANDLERS:
+            break  # a real subcommand: git ignores any alias of that name
+        key = f"alias.{subcommand.lower()}"
+        if key in seen:
+            break  # alias loop, as git itself reports
+        definition = config.get(key)
+        if definition is None:
+            break
+        seen.add(key)
+        if definition.startswith("!"):
+            script = " ".join(
+                [definition[1:].strip(), *(shlex.quote(a) for a in sub_args)]
+            ).strip()
+            return subcommand, sub_args, explicit_cwd, config, script
+        try:
+            parts = shlex.split(definition, posix=True)
+        except ValueError:
+            break  # unbalanced quoting in the definition; don't guess
+        if not parts:
+            break
+        reparsed = parse_git_invocation(["git", *parts, *sub_args])
+        if reparsed is None:
+            break
+        subcommand, sub_args, nested_cwd, nested_config = reparsed
+        # A definition may carry global flags of its own (`git <definition>
+        # <args>` is literally what git runs), so fold them in.
+        if nested_cwd:
+            explicit_cwd = accumulate_dash_c(explicit_cwd, nested_cwd)
+        if nested_config:
+            config = {**config, **nested_config}
+    return subcommand, sub_args, explicit_cwd, config, None
 
 
 # How many levels of `bash -c "..."`/`sh -c "..."`/`zsh -c "..."` inline
@@ -1257,18 +1849,39 @@ def evaluate_command(command: str, base_cwd: str, _depth: int = 0):
             # `sh`/`zsh` itself as a git invocation.
             continue
 
-        parsed = parse_git_invocation(tokens)
-        if not parsed:
-            continue
-        subcommand, sub_args, explicit_cwd = parsed
-        handler = _HANDLERS.get(subcommand)
-        if handler is None:
-            continue
-        cwd = resolve_cwd(base_cwd, explicit_cwd)
-        decision = handler(sub_args, cwd)
-        if decision:
-            return decision
+        # The segment itself, plus any command `find` carries in argument
+        # position (`-exec git ... \;`), which prefix stripping cannot reach.
+        for candidate in [tokens, *(
+            strip_leading_wrappers(body) for body in find_command_invocations(tokens)
+        )]:
+            decision = _evaluate_git_tokens(candidate, base_cwd, _depth)
+            if decision:
+                return decision
     return None
+
+
+def _evaluate_git_tokens(tokens: list[str], base_cwd: str, _depth: int):
+    """Parse one already-wrapper-stripped token list as a `git` invocation
+    and run its handler, expanding a command-line-defined alias first.
+    """
+    parsed = parse_git_invocation(tokens)
+    if not parsed:
+        return None
+    subcommand, sub_args, explicit_cwd, config = parsed
+    subcommand, sub_args, explicit_cwd, config, shell_script = expand_git_alias(
+        subcommand, sub_args, config, explicit_cwd
+    )
+    if shell_script is not None:
+        # A `!shell` alias: hand the expansion to the same bounded
+        # recursion that `bash -c "..."` uses rather than ignoring it.
+        if _depth < _MAX_SHELL_RECURSION_DEPTH:
+            return evaluate_command(shell_script, base_cwd, _depth + 1)
+        return None
+    handler = _HANDLERS.get(subcommand)
+    if handler is None:
+        return None
+    cwd = resolve_cwd(base_cwd, explicit_cwd)
+    return handler(sub_args, cwd, config)
 
 
 _DISABLE_ENV_VAR = "CADRE_DISABLE_WORKSPACE_MUTATION_GUARD"

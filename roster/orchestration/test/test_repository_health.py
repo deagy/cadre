@@ -272,11 +272,28 @@ class RepositoryHealthTests(unittest.TestCase):
         self.assertNotEqual(ignored.returncode, 0, f"{pointer_file.parent} is ignored")
 
     def test_sample_references_are_limited_to_allowed_archives(self) -> None:
+        # No entry for a loose `examples/sample-plan.json`: it was deleted
+        # (#225) rather than refreshed, and should not come back. It was a
+        # second, unguarded copy of "what a dispatch plan looks like", frozen
+        # at `schema_version: 2` while the schema reached 6 -- it would not
+        # validate against the closed `selection.schema.json`, no test loaded
+        # it, and it ships in neither the wheel (`pyproject.toml`'s exclude)
+        # nor the plugin (`generate_global_plugin.py` skips `/examples/`).
+        # `docs/sample-selection-output.md` is the maintained answer to that
+        # question: it tracks the current schema_version, and its worked
+        # example is a golden-corpus case whose routes, agents, workflow, and
+        # teams are pinned by `test_selection_golden_corpus.py` -- so it
+        # cannot drift the way an unreferenced file can. Regenerating the
+        # archived copy instead would have falsified the dated dry run that
+        # `SAMPLE-001-report.md` narrates ("thirteen initial knowledge-context
+        # requests ... G3 through G8" were that plan's numbers), so the
+        # v2-era plan shape survives inside the archive package itself, in
+        # `SAMPLE-001/design-resolution-plan.json`. Two live samples of one
+        # artifact is how one of them goes stale; keep exactly one.
         allowed_prefixes = (
             ".gitignore",
             "roster/orchestration/examples/SAMPLE-001",
             "roster/orchestration/examples/SAMPLE-001-report.md",
-            "roster/orchestration/examples/sample-plan.json",
             "roster/orchestration/runs/.gitignore",
             "roster/orchestration/runs/SAMPLE-001-IMPLEMENT",
             "roster/orchestration/test/test_repository_health.py",

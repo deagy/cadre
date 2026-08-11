@@ -1,0 +1,1214 @@
+{
+  "_readme": [
+    "Shared behavioural fixture for the workspace-mutation guard: every case",
+    "is executed by BOTH `.claude/hooks/guard_workspace_mutation.py` and the",
+    "TypeScript mirror in `cline-plugins/cline-agents/index.ts`, so the two",
+    "implementations are pinned to the same OUTCOMES rather than merely to",
+    "the same structure (deagy/cadre#222). Driven by",
+    "`plugin/tools/test_guard_parity.py`; the TypeScript half runs through",
+    "`plugin/tools/guard_parity_runner.mjs` and is SKIPPED, not failed, when",
+    "node or a TypeScript transform is unavailable.",
+    "",
+    "A case declares `setup` (steps replayed into a disposable repository),",
+    "`command`, optional `cwd`, and the `expected` decision. `blocked` cases",
+    "may also assert `reason_contains`, which is what makes the string-",
+    "handling divergences #222 names (a truncating `split`, `??` where the",
+    "other file means `or`) observable at all -- both guards agreeing on",
+    "'blocked' would hide a ref that one of them silently cut short.",
+    "",
+    "Placeholders: {repo}, {tmp}, {wt:<name>} (a worktree's registered path).",
+    "Setup ops: commit, dirty, untracked, branch, branch-at, worktree,",
+    "detach-worktree, age-worktree, mkdir, config-alias.",
+    "`wrap_in_bash_c: N` wraps the command in N layers of `bash -c '...'`,",
+    "quoted once in the harness so both guards are handed the same string."
+  ],
+  "cases": [
+    {
+      "id": "reset-hard-dirty-blocked",
+      "issue": "129",
+      "why": "Baseline: the original incident shape must stay blocked in both guards.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "git reset --hard",
+      "expected": "blocked",
+      "reason_contains": "uncommitted changes"
+    },
+    {
+      "id": "reset-hard-clean-allowed",
+      "issue": "129",
+      "why": "A hard reset that discards nothing and moves nothing is routine.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        }
+      ],
+      "command": "git reset --hard",
+      "expected": "allowed"
+    },
+    {
+      "id": "push-force-blocked",
+      "issue": "129",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        }
+      ],
+      "command": "git push --force origin main",
+      "expected": "blocked",
+      "reason_contains": "force-with-lease"
+    },
+    {
+      "id": "push-force-with-lease-allowed",
+      "issue": "129",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        }
+      ],
+      "command": "git push --force-with-lease origin main",
+      "expected": "allowed"
+    },
+    {
+      "id": "clean-force-blocked",
+      "issue": "129",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "untracked",
+          "path": "scratch.tmp",
+          "content": "junk"
+        }
+      ],
+      "command": "git clean -fd",
+      "expected": "blocked",
+      "reason_contains": "permanently delete"
+    },
+    {
+      "id": "branch-force-delete-blocked",
+      "issue": "129",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "branch",
+          "name": "throwaway"
+        }
+      ],
+      "command": "git branch -D throwaway",
+      "expected": "blocked",
+      "reason_contains": "unmerged-work safety check"
+    },
+    {
+      "id": "worktree-remove-blocked",
+      "issue": "215",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "git worktree remove {wt:wt1}",
+      "expected": "blocked",
+      "reason_contains": "deregisters a worktree"
+    },
+    {
+      "id": "worktree-add-allowed",
+      "issue": "215",
+      "why": "create_local_branch_or_worktree: allowed -- the policy-endorsed step must never be blocked.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        }
+      ],
+      "command": "git worktree add -b agent/task/role {tmp}/new-wt",
+      "expected": "allowed"
+    },
+    {
+      "id": "heredoc-body-not-a-command",
+      "issue": "215",
+      "why": "The false positive newline splitting would otherwise introduce: documentation quoting a destructive command.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "cat <<'EOF' > note.md\ngit reset --hard\nEOF",
+      "expected": "allowed"
+    },
+    {
+      "id": "newline-separator-blocked",
+      "issue": "215",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "echo hi\ngit reset --hard",
+      "expected": "blocked"
+    },
+    {
+      "id": "empty-heredoc-delimiter-body-skipped",
+      "issue": "222",
+      "why": "Python `or` versus TypeScript `??` for an empty `<<''` delimiter: with `or` the delimiter reads as 'no match', the body is parsed as a command, and this flips to blocked. Both files select the first non-null group explicitly so they mean the same thing, not merely coincide.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "cat <<'' > note.md\ngit reset --hard\n\n",
+      "expected": "allowed"
+    },
+    {
+      "id": "restore-source-containing-equals-not-truncated",
+      "issue": "222",
+      "why": "`a.split(\"=\", 2)[1]` truncates in JS where Python's `split(\"=\", 1)[1]` keeps the remainder. Both must report the whole ref.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "git restore --source=weird=ref a.txt",
+      "expected": "blocked",
+      "reason_contains": "from 'weird=ref'"
+    },
+    {
+      "id": "restore-trailing-source-flag-is-bounds-checked",
+      "issue": "222",
+      "why": "A trailing `--source` with no value must not overwrite an earlier source with undefined. Without the bounds check the TypeScript side loses the ref and allows.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "two"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "git restore --source=HEAD~1 a.txt --source",
+      "expected": "blocked",
+      "reason_contains": "from 'HEAD~1'"
+    },
+    {
+      "id": "dash-c-accumulates-back-to-the-repository",
+      "issue": "220",
+      "why": "Git applies repeated -C cumulatively. Last-wins resolved this to <repo>/.. -- not a repository -- so the prune dry run exited non-zero and the handler failed open.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        },
+        {
+          "op": "detach-worktree",
+          "name": "wt1"
+        }
+      ],
+      "command": "git -C .worktrees -C .. worktree prune",
+      "expected": "blocked",
+      "reason_contains": "deregister"
+    },
+    {
+      "id": "dash-c-absolute-value-resets-accumulation",
+      "issue": "220",
+      "why": "An absolute -C is absolute in git, discarding what came before. Pointed at a non-repository it fails open, which is the documented posture.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "git -C {repo} -C {tmp} reset --hard",
+      "expected": "allowed"
+    },
+    {
+      "id": "dash-c-single-relative-still-resolves",
+      "issue": "220",
+      "why": "Control for the accumulation change: the ordinary single -C must keep working.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        },
+        {
+          "op": "mkdir",
+          "path": "sub"
+        }
+      ],
+      "command": "git -C sub reset --hard",
+      "cwd": "{repo}",
+      "expected": "blocked"
+    },
+    {
+      "id": "checkout-dash-capital-b-moves-branch-blocked",
+      "issue": "221",
+      "why": "Verified against git 2.53.0: `git checkout -B existing` with the implicit HEAD start point moves `existing` off its commits, reporting only 'Switched to and reset branch'.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "two"
+        },
+        {
+          "op": "branch-at",
+          "name": "existing",
+          "ref": "HEAD~1"
+        }
+      ],
+      "command": "git checkout -B existing",
+      "expected": "blocked",
+      "reason_contains": "force-resets the existing branch"
+    },
+    {
+      "id": "checkout-dash-capital-b-attached-blocked",
+      "issue": "221",
+      "why": "`-Bexisting` is a one-space difference from the detached spelling and resets identically.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "two"
+        },
+        {
+          "op": "branch-at",
+          "name": "existing",
+          "ref": "HEAD~1"
+        }
+      ],
+      "command": "git checkout -Bexisting",
+      "expected": "blocked"
+    },
+    {
+      "id": "checkout-combined-short-flag-fb-blocked",
+      "issue": "221",
+      "why": "`-fB existing`: B is the group's last character, so its value is the next token. Verified against git 2.53.0.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "two"
+        },
+        {
+          "op": "branch-at",
+          "name": "existing",
+          "ref": "HEAD~1"
+        }
+      ],
+      "command": "git checkout -fB existing",
+      "expected": "blocked"
+    },
+    {
+      "id": "checkout-dash-capital-b-new-name-allowed",
+      "issue": "221",
+      "why": "`-B` naming a branch that does not exist behaves like `-b`: nothing to move.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        }
+      ],
+      "command": "git checkout -B brand-new",
+      "expected": "allowed"
+    },
+    {
+      "id": "checkout-dash-capital-b-same-commit-allowed",
+      "issue": "221",
+      "why": "A branch already at the start point moves nothing, so refusing would be pure friction.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "branch",
+          "name": "same"
+        }
+      ],
+      "command": "git checkout -B same",
+      "expected": "allowed"
+    },
+    {
+      "id": "checkout-dash-b-allowed",
+      "issue": "221",
+      "why": "`-b` is genuinely safe: git refuses it when the branch already exists.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "git checkout -b feature/new",
+      "expected": "allowed"
+    },
+    {
+      "id": "switch-dash-capital-c-moves-branch-blocked",
+      "issue": "221",
+      "why": "`switch -C` is `checkout -B` under the newer spelling; note the collision with git's GLOBAL `-C <dir>`, which is consumed before the subcommand.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "two"
+        },
+        {
+          "op": "branch-at",
+          "name": "existing",
+          "ref": "HEAD~1"
+        }
+      ],
+      "command": "git switch -C existing",
+      "expected": "blocked",
+      "reason_contains": "force-resets the existing branch"
+    },
+    {
+      "id": "switch-dash-capital-c-attached-blocked",
+      "issue": "221",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "two"
+        },
+        {
+          "op": "branch-at",
+          "name": "existing",
+          "ref": "HEAD~1"
+        }
+      ],
+      "command": "git switch -Cexisting",
+      "expected": "blocked"
+    },
+    {
+      "id": "switch-force-create-long-spelling-blocked",
+      "issue": "221",
+      "why": "`--force-create` is `-C`'s long form per `git switch -h` on 2.53.0.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "two"
+        },
+        {
+          "op": "branch-at",
+          "name": "existing",
+          "ref": "HEAD~1"
+        }
+      ],
+      "command": "git switch --force-create existing",
+      "expected": "blocked"
+    },
+    {
+      "id": "switch-force-create-long-value-containing-equals-not-truncated",
+      "issue": "222",
+      "why": "The other half of the truncating-split divergence, on the shared flag helper rather than on checkRestore: a limited JS `split` would cut `we=ird` to `we`, which is not a branch, and the move would be allowed. Verified against git 2.53.0 that `git switch --force-create=we=ird` really does reset a branch named `we=ird`.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "two"
+        },
+        {
+          "op": "branch-at",
+          "name": "we=ird",
+          "ref": "HEAD~1"
+        }
+      ],
+      "command": "git switch --force-create=we=ird",
+      "expected": "blocked",
+      "reason_contains": "we=ird"
+    },
+    {
+      "id": "switch-global-dash-capital-c-not-confused-with-subcommand-flag",
+      "issue": "221",
+      "why": "`git -C <dir> switch <branch>`: the global -C is consumed before the subcommand, so it must not be read as switch's force-create flag.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "branch",
+          "name": "other"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "git -C {repo} switch other",
+      "cwd": "{tmp}",
+      "expected": "blocked",
+      "reason_contains": "uncommitted changes"
+    },
+    {
+      "id": "switch-create-new-branch-allowed",
+      "issue": "221",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "git switch -c feature/new",
+      "expected": "allowed"
+    },
+    {
+      "id": "switch-detach-allowed",
+      "issue": "221",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        }
+      ],
+      "command": "git switch --detach HEAD",
+      "expected": "allowed"
+    },
+    {
+      "id": "switch-branch-clean-tree-allowed",
+      "issue": "221",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "branch",
+          "name": "other"
+        }
+      ],
+      "command": "git switch other",
+      "expected": "allowed"
+    },
+    {
+      "id": "dash-c-alias-worktree-remove-blocked",
+      "issue": "218",
+      "why": "The alias is defined INSIDE the tokenized command line, so nothing external needs reading or trusting to see it.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "git -c alias.wtr='worktree remove' wtr {wt:wt1}",
+      "expected": "blocked",
+      "reason_contains": "deregisters a worktree"
+    },
+    {
+      "id": "dash-c-alias-reset-hard-blocked",
+      "issue": "218",
+      "why": "The same shape defeats every handler, not just worktree.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "git -c alias.nuke='reset --hard' nuke",
+      "expected": "blocked"
+    },
+    {
+      "id": "dash-c-alias-interleaved-with-other-globals",
+      "issue": "218",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "git -c core.pager=cat -C {repo} -c alias.nuke='reset --hard' nuke",
+      "cwd": "{tmp}",
+      "expected": "blocked"
+    },
+    {
+      "id": "dash-c-alias-naming-another-alias",
+      "issue": "218",
+      "why": "Git expands an alias whose definition names another alias; the guard follows the same chain under a bound.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "git -c alias.a=worktree -c alias.b='a remove' b {wt:wt1}",
+      "expected": "blocked"
+    },
+    {
+      "id": "dash-c-shell-alias-blocked",
+      "issue": "218",
+      "why": "A `!shell` definition is fed through the same bounded shell recursion `bash -c` uses, rather than ignored.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "git -c alias.sh='!git worktree remove' sh {wt:wt1}",
+      "expected": "blocked"
+    },
+    {
+      "id": "dash-c-alias-defined-but-not-used",
+      "issue": "218",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        }
+      ],
+      "command": "git -c alias.wtr='worktree remove' status",
+      "expected": "allowed"
+    },
+    {
+      "id": "dash-c-alias-cannot-shadow-a-real-subcommand",
+      "issue": "218",
+      "why": "Verified against git 2.53.0 that an alias named after a builtin is ignored, so the REAL handler must still run -- expanding it here would allow a force push.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        }
+      ],
+      "command": "git -c alias.push=status push --force origin main",
+      "expected": "blocked",
+      "reason_contains": "force-with-lease"
+    },
+    {
+      "id": "dash-c-alias-loop-terminates",
+      "issue": "218",
+      "why": "Git reports 'alias loop detected'; the guard must terminate too, and allowing is the fail-open posture.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        }
+      ],
+      "command": "git -c alias.x=y -c alias.y=x x",
+      "expected": "allowed"
+    },
+    {
+      "id": "wrapper-timeout-blocked",
+      "issue": "219",
+      "why": "`timeout` is the wrapper a normal agent reaches for unprompted -- no adversarial intent required.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "timeout 10 git worktree remove {wt:wt1}",
+      "expected": "blocked"
+    },
+    {
+      "id": "wrapper-timeout-with-signal-flag-blocked",
+      "issue": "219",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "timeout -s KILL -k 5 10 git worktree remove {wt:wt1}",
+      "expected": "blocked"
+    },
+    {
+      "id": "wrapper-nice-blocked",
+      "issue": "219",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "nice -n 5 git worktree remove {wt:wt1}",
+      "expected": "blocked"
+    },
+    {
+      "id": "wrapper-stdbuf-blocked",
+      "issue": "219",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "stdbuf -oL git worktree remove {wt:wt1}",
+      "expected": "blocked"
+    },
+    {
+      "id": "wrapper-setsid-ionice-chained-blocked",
+      "issue": "219",
+      "why": "Wrappers nest, so the stripping loop must re-run against what the previous wrapper left behind.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "setsid ionice -c 3 git worktree remove {wt:wt1}",
+      "expected": "blocked"
+    },
+    {
+      "id": "wrapper-taskset-mask-positional-blocked",
+      "issue": "219",
+      "why": "`taskset <mask> <cmd>` supplies its value as a positional; `-c 0` supplies it as a flag. Both must land on git.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "taskset 0x1 git worktree remove {wt:wt1}",
+      "expected": "blocked"
+    },
+    {
+      "id": "wrapper-taskset-cpu-list-flag-blocked",
+      "issue": "219",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "taskset -c 0 git worktree remove {wt:wt1}",
+      "expected": "blocked"
+    },
+    {
+      "id": "wrapper-sudo-with-user-flag-blocked",
+      "issue": "219",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "sudo -u root git worktree remove {wt:wt1}",
+      "expected": "blocked"
+    },
+    {
+      "id": "wrapper-xargs-after-a-pipe-blocked",
+      "issue": "219",
+      "why": "`xargs` additionally survives the `|` split, since the post-pipe segment starts with it.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "echo {wt:wt1} | xargs -I{} git worktree remove {}",
+      "expected": "blocked"
+    },
+    {
+      "id": "find-exec-argument-position-blocked",
+      "issue": "219",
+      "why": "`find -exec` puts the command in argument position, so prefix stripping cannot reach it; the `\\;` also had to stop splitting the segment.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "find {repo}/.worktrees -maxdepth 1 -exec git worktree remove {} \\;",
+      "expected": "blocked"
+    },
+    {
+      "id": "wrapper-does-not-fire-on-quoted-text",
+      "issue": "219",
+      "why": "The prefix-stripping design is kept precisely so a literal mention of a destructive command as DATA does not match.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "echo 'timeout 10 git worktree remove {wt:wt1}'",
+      "expected": "allowed"
+    },
+    {
+      "id": "gc-with-a-prunable-aged-worktree-blocked",
+      "issue": "217",
+      "why": "Verified against git 2.53.0: once the worktree's administrative files age past gc.worktreePruneExpire (default 3.months.ago), plain `git gc` really does deregister it.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        },
+        {
+          "op": "detach-worktree",
+          "name": "wt1"
+        },
+        {
+          "op": "age-worktree",
+          "name": "wt1"
+        }
+      ],
+      "command": "git gc",
+      "expected": "blocked",
+      "reason_contains": "prunes worktrees as part of its own housekeeping"
+    },
+    {
+      "id": "gc-with-a-freshly-missing-worktree-allowed",
+      "issue": "217",
+      "why": "Verified against git 2.53.0 that plain `git gc` does NOT prune a just-moved worktree -- gc's expiry is not prune's immediate default. Blocking here would be friction with no safety.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        },
+        {
+          "op": "detach-worktree",
+          "name": "wt1"
+        }
+      ],
+      "command": "git gc",
+      "expected": "allowed"
+    },
+    {
+      "id": "gc-prune-now-does-not-reach-worktrees",
+      "issue": "217",
+      "why": "CONTRADICTS the issue's framing: `git gc --prune=now` and `--prune=all` left a just-moved worktree registered on git 2.53.0. gc's --prune governs loose OBJECT pruning.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        },
+        {
+          "op": "detach-worktree",
+          "name": "wt1"
+        }
+      ],
+      "command": "git gc --prune=now",
+      "expected": "allowed"
+    },
+    {
+      "id": "gc-worktree-prune-expire-override-blocked",
+      "issue": "217",
+      "why": "`git -c gc.worktreePruneExpire=now gc` DID deregister a just-moved worktree. Seeing it depends on the -c recording added for #218.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        },
+        {
+          "op": "detach-worktree",
+          "name": "wt1"
+        }
+      ],
+      "command": "git -c gc.worktreePruneExpire=now gc",
+      "expected": "blocked"
+    },
+    {
+      "id": "gc-in-a-clean-repository-allowed",
+      "issue": "217",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        }
+      ],
+      "command": "git gc",
+      "expected": "allowed"
+    },
+    {
+      "id": "rm-of-a-worktree-directory-remains-a-documented-gap",
+      "issue": "217",
+      "why": "PROMPT-ONLY by decision, in both guards: they inspect git invocations, and a guard that half-covers arbitrary `rm` targets is worse than a declared boundary.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        }
+      ],
+      "command": "rm -rf {wt:wt1}",
+      "expected": "allowed"
+    },
+    {
+      "id": "config-file-alias-remains-a-documented-gap",
+      "issue": "218",
+      "why": "Only the command-line `-c` spelling is closed; resolving a config-file alias would mean reading and trusting the invoking user's git config.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        },
+        {
+          "op": "config-alias",
+          "name": "wtr",
+          "definition": "worktree remove"
+        }
+      ],
+      "command": "git wtr {wt:wt1}",
+      "expected": "allowed"
+    },
+    {
+      "id": "shell-nesting-beyond-the-recursion-bound-remains-a-documented-gap",
+      "issue": "215",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "git reset --hard",
+      "wrap_in_bash_c": 4,
+      "expected": "allowed"
+    },
+    {
+      "id": "shell-nesting-at-the-recursion-bound-is-covered",
+      "issue": "215",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "git reset --hard",
+      "wrap_in_bash_c": 3,
+      "expected": "blocked"
+    },
+    {
+      "id": "env-wrapper-with-value-flag-blocked",
+      "issue": "129",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "env -u FOO -C . FOO=bar git reset --hard",
+      "expected": "blocked"
+    },
+    {
+      "id": "gc-expire-override-inside-an-alias-body-blocked",
+      "issue": "218",
+      "why": "Found by security review of the #218 fix. An alias definition may carry global flags of its own, and git honours them: verified on git 2.53.0 that `git -c alias.g='-c gc.worktreePruneExpire=now gc' g` deregisters a prunable worktree exactly as the direct spelling does. The expander folded the alias body's config into a local and dropped it on return, so `check_gc` resolved the default 3-months-ago expiry and allowed it. Both guards were wrong IDENTICALLY, so handler-table parity could not catch it -- only a behavioural case can.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "worktree",
+          "name": "wt1",
+          "branch": "wt1"
+        },
+        {
+          "op": "detach-worktree",
+          "name": "wt1"
+        }
+      ],
+      "command": "git -c alias.g='-c gc.worktreePruneExpire=now gc' g",
+      "expected": "blocked",
+      "reason_contains": "prunes worktrees as part of its own housekeeping"
+    },
+    {
+      "id": "bare-dash-ends-shell-option-processing-allowed",
+      "issue": "222",
+      "why": "Found by code review. A bare `-` ends option processing like `--`, so the following `-c` is an operand: `bash - -c \"...\"` makes bash treat `-c` as a script FILENAME and fail with 'No such file or directory' -- the git command never runs. Verified by execution. Python returned None here; the TypeScript loop fell through `-` and returned the script, blocking a command that does nothing. A real divergence, in the over-blocking direction.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "dirty",
+          "path": "a.txt",
+          "content": "uncommitted"
+        }
+      ],
+      "command": "bash - -c \"git reset --hard\"",
+      "expected": "allowed"
+    }
+  ]
+}
