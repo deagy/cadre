@@ -15,6 +15,16 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.17.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.17.0) - 2026-08-10
+
+### Changed
+
+- **The 28 read-only role wrappers are about 13% smaller.** Reviewers and authorities (`code-reviewer`, `security-reviewer`, the `*-aide` authority roles, and the rest) previously carried `roster/shared/workspace-isolation.md` in full — 331 lines of a roughly 1020-line wrapper — even though the file's own applicability header scopes most of itself to write-capable tiers. Their wrappers now embed the applicability header plus the four sections that bind every tier, and drop from 1020 to 883 lines on both runners. The 131 write-capable wrappers are unaffected by the mechanism. No rule that binds a read-only role was removed, and `cadre resolve-shared workspace-isolation.md` still returns the whole file to any caller at any tier.
+
+- **Every wrapper's embedded copy of `workspace-isolation.md` differs textually**, because the file's prose was reordered so that both the full and excerpted renderings read correctly standalone. No rule's meaning changed.
+
+- **A dispatch plan's `workflow` field takes a different value for many tasks.** See the [register changelog](https://github.com/deagy/cadre/blob/main/CHANGELOG.md) for the mechanism and the affected combinations. It selects which workflow document a plan points at and gates nothing.
+
 ## [0.16.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.16.0) - 2026-08-10
 
 ### Added
