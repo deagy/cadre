@@ -45,6 +45,50 @@ CLINE_AGENTS_DIR = REPOSITORY_ROOT / "cline-plugins" / "cline-agents"
 CLINE_AGENTS_PRESETS_DIR = CLINE_AGENTS_DIR / "agents"
 CLINE_AGENTS_INDEX_TS = CLINE_AGENTS_DIR / "index.ts"
 
+# The manifest's descriptive runner-divergence facts. No code may branch on
+# these (idea #8 OD-2). Distinct from capability_tiers/model_tiers/
+# allowed_reasoning_efforts, which code legitimately reads at both build and
+# dispatch time -- see MANIFEST_READERS below.
+RUNNER_DIVERGENCE_FIELDS = (
+    "native_workspace_isolation",
+    "prompt_hook_support",
+    "prompt_hook_mechanism",
+    "tool_gate_support",
+    "tool_gate_mechanism",
+)
+
+# Every module under roster/orchestration/ permitted to reference the manifest
+# at all, each with the reason. A new entry is the review checkpoint that the
+# field scan cannot be: loading the manifest by path and iterating a runner's
+# keys reaches the divergence facts without ever naming one, which is the only
+# way past RUNNER_DIVERGENCE_FIELDS.
+MANIFEST_READERS = {
+    "generate_global_plugin.py": "build time: capability_tiers/model_tiers/allowed_reasoning_efforts",
+    "generate_role_metadata.py": "build time: TIER_MAP derivation",
+    "validate_runner_capabilities.py": "the manifest's own schema check",
+    "role_fidelity.py": "model_tiers, for the packaged-vs-checkout fidelity report",
+    "provenance.py": "a comment recording that it deliberately reads nothing",
+    "dispatch_core.py": "dispatch time: model_tiers inversion",
+    "api_runner.py": "dispatch time: capability_tiers -> offered tools, fail-closed",
+}
+
+
+def _orchestration_modules() -> list[Path]:
+    """Every module under roster/orchestration/ that could run at dispatch time.
+
+    Walked rather than enumerated. The tuple this replaced named
+    dispatch_core.py, build_dispatch_plan.py and select_agents.py, and so could
+    not see mcp/api_runner.py -- which already reads this manifest at dispatch
+    time and is the likeliest place a future `tool_gate_support` branch would
+    land. Test modules are excluded because this one names the fields in order
+    to assert on them; nothing else is excluded, since no consumer of the
+    divergence facts is legitimate in either direction.
+    """
+    modules: list[Path] = []
+    for directory in ("src", "mcp"):
+        modules.extend(sorted((REPOSITORY_ROOT / "roster" / "orchestration" / directory).rglob("*.py")))
+    return modules
+
 
 def _strip_whole_line_comments(source: str) -> str:
     """Drop lines that are entirely a comment, keeping every code line intact.
@@ -338,8 +382,9 @@ class RunnerAdaptersStructuralFactCoverageTests(unittest.TestCase):
         # The distinction this value exists to record: Cline's UserPromptSubmit
         # hook runs and is then ignored. "dispatch_only", never "none" (it does
         # fire) and never "context_injection" (its stdout is discarded) --
-        # cline-plugins/cline/hook-surface.test.mts proves both halves against
-        # the real dispatcher.
+        # cline-plugins/cline/hook-surface.test.mts checks both halves against
+        # the real dispatcher: a sentinel file proves it ran, and `onEvent`
+        # returning nothing proves no output reaches the caller.
         self.assertEqual("dispatch_only", self.runners["cline"]["prompt_hook_support"])
         self.assertEqual("none", self.runners["api"]["prompt_hook_support"])
 
@@ -359,9 +404,20 @@ class RunnerAdaptersStructuralFactCoverageTests(unittest.TestCase):
         for runner in ("claude-code", "codex", "cline"):
             with self.subTest(runner=runner):
                 self.assertEqual("blocking", self.runners[runner]["tool_gate_support"])
-                self.assertTrue((self.runners[runner]["tool_gate_mechanism"] or "").strip())
         self.assertEqual("none", self.runners["api"]["tool_gate_support"])
-        self.assertIsNone(self.runners["api"]["tool_gate_mechanism"])
+
+        # The same paired-field invariant fact 10 enforces, over every runner
+        # rather than the four named above. Without the loop a fifth runner
+        # could ship `tool_gate_support: "none"` beside a leftover mechanism
+        # string, or a real gate with none -- and this field names an
+        # enforcement boundary, so it is the worse of the two to leave
+        # undocumented.
+        for runner, values in self.runners.items():
+            with self.subTest(runner=runner):
+                if values["tool_gate_support"] == "none":
+                    self.assertIsNone(values["tool_gate_mechanism"])
+                else:
+                    self.assertTrue((values["tool_gate_mechanism"] or "").strip())
 
     def test_prompt_and_tool_gate_facts_are_grounded_in_the_prose(self) -> None:
         """AC-5's rule applied to facts 10-11: the manifest owns the value,
@@ -371,52 +427,58 @@ class RunnerAdaptersStructuralFactCoverageTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.prose)
 
-    def test_prompt_hook_and_tool_gate_have_no_runtime_consumer(self) -> None:
-        """Same OD-2 disposition as every other field on this manifest: these
-        describe a runner at build time and must not become a dispatch-time
-        branch. Especially load-bearing here -- `tool_gate_support` names an
-        enforcement boundary, and code that silently skipped a check because a
-        manifest string said "none" would be a security control decided by a
-        data file.
+    def test_runner_divergence_facts_have_no_code_consumer(self) -> None:
+        """OD-2, applied to every descriptive runner-divergence fact at once:
+        these describe a runner at build time and must not become a
+        dispatch-time branch. Especially load-bearing for `tool_gate_support`,
+        which names an enforcement boundary -- code that silently skipped a
+        check because a manifest string said "none" would be a security
+        control decided by a data file.
+
+        Note what OD-2 does NOT say. The manifest as a whole has two
+        deliberate dispatch-time readers (dispatch_core.py's model_tiers
+        inversion, api_runner.py's capability_tiers -> offered tools); it is
+        the divergence facts specifically that no code may touch.
         """
-        runtime_consumers = (
-            REPOSITORY_ROOT / "roster" / "orchestration" / "mcp" / "dispatch_core.py",
-            REPOSITORY_ROOT / "roster" / "orchestration" / "src" / "build_dispatch_plan.py",
-            REPOSITORY_ROOT / "roster" / "orchestration" / "src" / "select_agents.py",
+        modules = _orchestration_modules()
+        # Guards the walk itself: a broken rglob would otherwise pass vacuously.
+        self.assertGreater(
+            len(modules), 20, f"module walk found only {len(modules)} files -- the walk is broken, not the code"
         )
-        for path in runtime_consumers:
-            self.assertTrue(path.is_file(), f"expected runtime-consumer file is missing: {path}")
+        for path in modules:
             source = path.read_text(encoding="utf-8")
-            for field in ("prompt_hook_support", "tool_gate_support"):
-                with self.subTest(path=path.name, field=field):
+            for field in RUNNER_DIVERGENCE_FIELDS:
+                with self.subTest(module=path.name, field=field):
                     self.assertNotIn(
                         field,
                         source,
-                        f"{path.name} branches on a build-time-only manifest field (idea #8 OD-2)",
+                        f"{path.name} references a build-time-only manifest field (idea #8 OD-2)",
                     )
 
-    def test_native_workspace_isolation_has_no_runtime_consumer(self) -> None:
-        """This field is build-time descriptive data only (see idea #8's
-        OD-2 disposition, matching every other field on this manifest) --
-        no dispatch-time code path may branch on it.
-
-        Covers all three plausible runtime consumers, not just one: the MCP
-        dispatch server, the dispatch-plan builder, and the selector CLI.
-        Grepping only dispatch_core.py would let a future branch in
-        build_dispatch_plan.py or select_agents.py regress OD-2 silently.
+    def test_no_undeclared_module_reads_the_manifest(self) -> None:
+        """The field scan above is a substring check, so a module that loads
+        the manifest by path and iterates a runner's keys reaches the
+        divergence facts without naming one. This closes that route the only
+        way a test can: every module referencing the manifest at all must be
+        declared in MANIFEST_READERS, which makes a new consumer a visible
+        diff in review rather than a silent addition.
         """
-        runtime_consumers = (
-            REPOSITORY_ROOT / "roster" / "orchestration" / "mcp" / "dispatch_core.py",
-            REPOSITORY_ROOT / "roster" / "orchestration" / "src" / "build_dispatch_plan.py",
-            REPOSITORY_ROOT / "roster" / "orchestration" / "src" / "select_agents.py",
-        )
-        for path in runtime_consumers:
-            self.assertTrue(path.is_file(), f"expected runtime-consumer file is missing: {path}")
-            self.assertNotIn(
-                "native_workspace_isolation",
-                path.read_text(encoding="utf-8"),
-                f"{path.name} branches on a build-time-only manifest field (idea #8 OD-2)",
-            )
+        for path in _orchestration_modules():
+            source = path.read_text(encoding="utf-8")
+            if "runner-capabilities.json" not in source and "RUNNER_CAPABILITIES_PATH" not in source:
+                continue
+            with self.subTest(module=path.name):
+                self.assertIn(
+                    path.name,
+                    MANIFEST_READERS,
+                    f"{path.name} reads runner-capabilities.json but is not declared in MANIFEST_READERS. "
+                    "If this is a deliberate new consumer, add it there with its reason -- and confirm it "
+                    "does not branch on the runner-divergence facts (idea #8 OD-2).",
+                )
+
+    # `native_workspace_isolation` had its own three-file OD-2 test here. It is
+    # now covered by test_runner_divergence_facts_have_no_code_consumer, which
+    # checks the same field across every orchestration module instead of three.
 
 
 class NarrativeContentUndisturbedTests(unittest.TestCase):

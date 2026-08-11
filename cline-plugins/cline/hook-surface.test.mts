@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { afterAll, describe, expect, it } from "vitest";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 
@@ -9,10 +9,13 @@ import {
   HOOK_CONFIG_FILE_EVENT_MAP,
   HookConfigFileName,
   listHookConfigFiles,
+  // Deliberately `@cline/core`'s re-export, not `@cline/shared/storage`'s. Both
+  // resolve here, but to DIFFERENT copies (see the version note below), and
+  // only this one is the resolver the dispatcher under test actually consults.
+  resolveHooksConfigSearchPaths,
   toHookConfigFileName,
 } from "@cline/core";
 import { HookEventNameSchema } from "@cline/shared";
-import { resolveHooksConfigSearchPaths } from "@cline/shared/storage";
 
 // Drift guard over the Cline runtime hook surface that a "route every request
 // in a Cadre-configured project through the orchestrator" design depends on.
@@ -29,11 +32,20 @@ import { resolveHooksConfigSearchPaths } from "@cline/shared/storage";
 // correction across an `@cline/*` version bump; this file can.
 //
 // Every assertion below was observed by executing the real dispatcher rather
-// than read off a `.d.ts`, against BOTH `@cline/core` 0.0.65 (what the
-// `cline-plugins/` dev workspace resolves, and what this file runs against) and
-// 0.0.71 (what CLI 3.0.51 shipped in the verifying environment) -- identical
-// behavior on both, 2026-08-11. A failure here means the runtime contract
-// genuinely moved, not that a type was renamed.
+// than read off a `.d.ts`, against BOTH `@cline/core` 0.0.65 and 0.0.71 --
+// identical behavior on both, 2026-08-11. A failure here means the runtime
+// contract genuinely moved, not that a type was renamed.
+//
+// What `npm test` actually resolves is MIXED, and the distinction matters when
+// a run disagrees with the paragraph above. The dispatcher under test comes
+// from `@cline/core` 0.0.65, hoisted, which this workspace pins in
+// `devDependencies`. The schema and path helpers (`HookEventNameSchema`,
+// `resolveHooksConfigSearchPaths`) come from `@cline/shared`, which all three
+// workspaces pin at 0.0.71 and npm installs NESTED, above the 0.0.65 copy
+// `@cline/sdk` hoists. So a green run here is core 0.0.65 + shared 0.0.71, not
+// a single-version check of either. The 0.0.71 dispatcher result was obtained
+// out-of-band against CLI 3.0.51's own install and is NOT reproduced by
+// `npm test`; re-verify it there, by hand, after an `@cline/*` bump.
 //
 // THE ASYMMETRY THIS FILE PINS, because it decides what is buildable on Cline:
 // a `PreToolUse` hook's stdout is consumed and can stop a tool call; a
@@ -72,9 +84,34 @@ import { resolveHooksConfigSearchPaths } from "@cline/shared/storage";
 
 const HOOKS_DIR_SEGMENTS = [".cline", "hooks"] as const;
 
+// One test below EXECUTES its `#!/bin/sh` fixtures through the real runner and
+// depends on the executable bit; neither survives Windows. The resulting
+// failure would be indistinguishable from a genuine contract regression, which
+// is why it skips explicitly rather than being left to fail. Every other test
+// here only writes or lists fixture files and runs anywhere. CI is
+// ubuntu-latest, so this costs no coverage there.
+const itOnPosix = process.platform === "win32" ? it.skip : it;
+
+/** Temp workspaces created by this file, removed in `afterAll`. */
+const tempWorkspaces: string[] = [];
+
+function makeTempWorkspace(prefix: string): string {
+  const workspace = mkdtempSync(join(tmpdir(), prefix));
+  tempWorkspaces.push(workspace);
+  return workspace;
+}
+
+afterAll(() => {
+  // Each workspace holds executable scripts under a 0700 mkdtemp directory;
+  // leaving them behind litters /tmp with one set per run.
+  for (const workspace of tempWorkspaces) {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 /** A temp workspace containing `.cline/hooks/<name>` for each name given. */
 function workspaceWithHookFiles(names: readonly string[]): string {
-  const workspace = mkdtempSync(join(tmpdir(), "cadre-cline-hook-surface-"));
+  const workspace = makeTempWorkspace("cadre-cline-hook-surface-");
   const hooksDir = join(workspace, ...HOOKS_DIR_SEGMENTS);
   mkdirSync(hooksDir, { recursive: true });
   for (const name of names) {
@@ -199,13 +236,42 @@ describe("extension-level hook composition", () => {
     expect(typeof extension?.hooks?.beforeTool).toBe("function");
   });
 
-  it("consumes a PreToolUse hook's output but discards a UserPromptSubmit hook's", async () => {
+  itOnPosix("consumes a PreToolUse hook's output but discards a UserPromptSubmit hook's", async () => {
     // The single most decision-relevant fact about auto-routing on Cline, and
     // the one that cannot be read off a type. Both hooks below emit valid
     // control JSON on stdout; only one of them is listened to.
-    const workspace = mkdtempSync(join(tmpdir(), "cadre-cline-hook-dispatch-"));
+    const workspace = makeTempWorkspace("cadre-cline-hook-dispatch-");
     const hooksDir = join(workspace, ...HOOKS_DIR_SEGMENTS);
     mkdirSync(hooksDir, { recursive: true });
+
+    // This test EXECUTES every hook the runner discovers, and the runner also
+    // searches two user-global locations. `test-setup.mts` redirects those into
+    // a sandbox; re-assert it here, because if that isolation ever silently
+    // stops working the failure mode is not a red test -- it is this suite
+    // quietly running a developer's own hook scripts and folding their output
+    // into the assertions below.
+    // Assert the sandbox positively, not just the absence of stray hooks: on a
+    // machine that happens to have no global hooks installed, an absence check
+    // passes whether or not the redirection works, and would keep passing right
+    // up until it ran on a machine that does.
+    const globalSearchPaths = resolveHooksConfigSearchPaths(workspace).filter(
+      (path) => !path.startsWith(workspace + sep),
+    );
+    expect(globalSearchPaths.length).toBeGreaterThan(0);
+    for (const path of globalSearchPaths) {
+      expect(
+        path.startsWith(tmpdir() + sep),
+        `user-global hook search path ${path} is outside ${tmpdir()} -- test-setup.mts's ` +
+          "HOME/CLINE_DIR sandboxing is not in effect, and this test would execute hook " +
+          "scripts installed on this machine",
+      ).toBe(true);
+    }
+
+    // ...and belt-and-braces, the discovered set really is workspace-only.
+    const strayHooks = listHookConfigFiles(workspace).filter(
+      (entry) => !entry.path.startsWith(workspace + sep),
+    );
+    expect(strayHooks.map((entry) => entry.path)).toEqual([]);
 
     // Proves the prompt hook RAN, separating "its output was discarded" from
     // "it was never dispatched" -- opposite conclusions for anyone designing
@@ -268,7 +334,7 @@ describe("extension-level hook composition", () => {
     // Opt-in, and free when unconfigured: a project that has not asked for
     // routing pays no hook dispatch at all. This is the property that lets a
     // Cadre hook be shipped without imposing itself on every Cline workspace.
-    const workspace = mkdtempSync(join(tmpdir(), "cadre-cline-hook-surface-bare-"));
+    const workspace = makeTempWorkspace("cadre-cline-hook-surface-bare-");
 
     expect(
       createHookConfigFileExtension({ cwd: workspace, workspacePath: workspace }),

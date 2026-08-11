@@ -2,7 +2,8 @@
   "name": "cadre-cline-plugins",
   "version": "0.1.1",
   "private": true,
-  "description": "Cline CLI plugins for Cadre role selection and Agentic SDLC lifecycle governance. Deliberately outside plugin/: an npm workspace root there made installing the Claude Code plugin run npm install and ship this tree's node_modules to every Claude Code user.",
+  "description": "Cline CLI plugins for Cadre role selection and Agentic SDLC lifecycle governance. Deliberately outside plugin/: an npm workspace root there made installing the Claude Code plugin run npm install and ship this tree's node_modules to every Claude Code user. REGENERATING package-lock.json: use the npm pinned in packageManager below, which is the version CI installs (.github/workflows/validate.yml sets node-version 22). An older npm rewrites this lock destructively even when no dependency changed -- it strips libc fields from optional platform packages and rewrites exact @cline/shared pins into ranges -- so a lock regenerated on npm 9 lands as a large unrelated diff. Corepack must be enabled for the pin to be enforced rather than advisory: `corepack enable`.",
+  "packageManager": "npm@10.9.2",
   "type": "module",
   "workspaces": [
     "cline",
