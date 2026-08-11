@@ -249,6 +249,13 @@ class DegenerateKeywordTests(unittest.TestCase):
 
 
 class RunProbesTests(unittest.TestCase):
+    class _Boom:
+        base_url = "stub://"
+        model = "m"
+
+        def complete(self, system_prompt: str, user_prompt: str) -> str:
+            raise rf.FidelityError("connection refused")
+
     class _StubClient:
         base_url = "stub://"
         model = "stub-model"
@@ -281,19 +288,45 @@ class RunProbesTests(unittest.TestCase):
         self.assertEqual(1.0, report["pass_rate"])
         self.assertEqual({"passed": 1, "failed": 0}, report["by_tier"]["high"])
 
-    def test_a_transport_error_is_recorded_as_a_failure_not_a_crash(self) -> None:
+    def test_a_transport_error_is_recorded_without_crashing_the_run(self) -> None:
         """One unreachable call must not discard the rest of the run."""
+        report = rf.run_probes([_preset("b")], [_probe()], client=self._Boom())
+        self.assertEqual(1, report["errored"])
+        self.assertIn("connection refused", report["results"][0]["error"])
 
-        class Boom:
+    def test_a_transport_error_is_not_scored_as_a_fidelity_failure(self) -> None:
+        """The distinction the whole report hangs on. A busy or dead endpoint
+        says nothing about whether a role's constraints landed, so it must not
+        move the pass rate -- otherwise a run against a loaded box reports a
+        low score that reads as evidence the catalog does not work."""
+        report = rf.run_probes([_preset("b")], [_probe()], client=self._Boom())
+        self.assertEqual(0, report["failed"])
+        self.assertEqual(0, report["scored"])
+        self.assertIsNone(report["pass_rate"])
+        self.assertEqual(0.0, report["coverage"])
+        self.assertNotIn("passed", report["results"][0])
+
+    def test_errors_do_not_dilute_the_pass_rate_of_answered_probes(self) -> None:
+        class HalfDead:
             base_url = "stub://"
             model = "m"
 
-            def complete(self, system_prompt: str, user_prompt: str) -> str:
-                raise rf.FidelityError("connection refused")
+            def __init__(self) -> None:
+                self.n = 0
 
-        report = rf.run_probes([_preset("b")], [_probe()], client=Boom())
-        self.assertEqual(1, report["failed"])
-        self.assertIn("connection refused", report["results"][0]["error"])
+            def complete(self, system_prompt: str, user_prompt: str) -> str:
+                self.n += 1
+                if self.n > 1:
+                    raise rf.FidelityError("timed out")
+                return "alpha"
+
+        presets = [_preset("b", name=f"r{i}") for i in range(4)]
+        report = rf.run_probes(presets, [_probe()], client=HalfDead())
+        # One answered and passed, three unanswered: the fidelity signal is
+        # 1/1, not 1/4.
+        self.assertEqual(1.0, report["pass_rate"])
+        self.assertEqual(3, report["errored"])
+        self.assertEqual(0.25, report["coverage"])
 
     def test_records_the_full_reply_for_human_review(self) -> None:
         # The score directs attention; the transcript is the finding.

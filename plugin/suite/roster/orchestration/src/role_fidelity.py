@@ -515,7 +515,14 @@ def run_probes(
             try:
                 reply = client.complete(preset.body, probe.prompt)
             except FidelityError as error:
-                record.update({"passed": False, "error": str(error), "reply": None})
+                # Deliberately *not* scored as a failure. A timeout or a
+                # refused connection says the endpoint was busy, not that the
+                # role's constraints stopped landing, and folding the two into
+                # one pass rate produces a number that reads as a fidelity
+                # verdict while partly measuring server load. Errors are
+                # counted and reported separately; the pass rate is computed
+                # over answered probes only.
+                record.update({"errored": True, "error": str(error), "reply": None})
                 results.append(record)
                 if on_progress:
                     on_progress(record)
@@ -537,6 +544,7 @@ def run_probes(
         bucket = by_tier.setdefault(record["tier"], {"passed": 0, "failed": 0})
         bucket["passed" if record["passed"] else "failed"] += 1
 
+    errored = [r for r in results if r.get("errored")]
     return {
         "mode": "probe",
         "model": client.model if client else None,
@@ -547,7 +555,12 @@ def run_probes(
         "scored": len(scored),
         "passed": len(passed),
         "failed": len(scored) - len(passed),
+        "errored": len(errored),
+        # Over answered probes only. A run where the endpoint died halfway
+        # must not report a low pass rate that reads as a fidelity verdict --
+        # `errored` and `coverage` are what say the run was incomplete.
         "pass_rate": round(len(passed) / len(scored), 3) if scored else None,
+        "coverage": round(len(scored) / len(results), 3) if results else None,
         "by_role": by_role,
         "by_tier": by_tier,
         "results": results,
@@ -625,13 +638,17 @@ def render_probe(report: dict[str, Any], limit: int = 20) -> str:
         "=" * 60,
         f"Model:      {report['model']}",
         f"Endpoint:   {report['base_url']}",
-        f"Scored:     {report['scored']} probe run(s) across {report['role_count']} role(s)",
+        f"Answered:   {report['scored']} probe run(s) across {report['role_count']} role(s)",
         f"Passed:     {report['passed']}",
         f"Failed:     {report['failed']}",
-        f"Pass rate:  {report['pass_rate']}",
-        "",
-        "By tier:",
+        f"Pass rate:  {report['pass_rate']}  (over answered probes only)",
     ]
+    if report.get("errored"):
+        lines += [
+            f"Unanswered: {report['errored']} (transport error -- NOT a fidelity result)",
+            f"Coverage:   {report['coverage']}",
+        ]
+    lines += ["", "By tier:"]
     for tier, counts in sorted(report["by_tier"].items()):
         total = counts["passed"] + counts["failed"]
         rate = round(100.0 * counts["passed"] / total, 1) if total else 0.0
@@ -641,10 +658,21 @@ def render_probe(report: dict[str, Any], limit: int = 20) -> str:
     if failures:
         lines += ["", f"Failures ({len(failures)}):", "-" * 60]
         for record in failures[:limit]:
-            detail = record.get("error") or "; ".join(record.get("failures", []))
-            lines.append(f"  {record['role']} / {record['probe']}: {detail}")
+            lines.append(f"  {record['role']} / {record['probe']}: {'; '.join(record.get('failures', []))}")
         if len(failures) > limit:
             lines.append(f"  ... {len(failures) - limit} more (use --json for all)")
+
+    errors = [r for r in report["results"] if r.get("errored")]
+    if errors:
+        lines += [
+            "",
+            f"Unanswered ({len(errors)}) -- endpoint problems, not fidelity findings:",
+            "-" * 60,
+        ]
+        for record in errors[:limit]:
+            lines.append(f"  {record['role']} / {record['probe']}: {record.get('error')}")
+        if len(errors) > limit:
+            lines.append(f"  ... {len(errors) - limit} more (use --json for all)")
 
     degenerate = [r for r in report["results"] if r.get("degenerate_keywords")]
     if degenerate:
