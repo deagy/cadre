@@ -56,6 +56,31 @@ check and reporting "nothing to do". See
 
 ### Added
 
+- **A role-fidelity model-validation notice on the `cline-agents` dispatch
+  path, recorded as a control** ([#234](https://github.com/deagy/cadre/issues/234)).
+  When the resolved model has no role-fidelity attestation on file, the plugin
+  prints a once-per-model-per-session stderr notice naming the model and the
+  `cadre role-fidelity --mode probe` command that would measure it. It is a
+  notice, not a gate: dispatch always proceeds. Suppression is an attestation
+  rather than a flag — `CLINE_AGENTS_ROLE_FIDELITY_ATTESTATIONS` must parse as
+  a JSON object carrying an own key exactly equal to the model string, so a
+  bare `=1` cannot silence it, and `cadre role-fidelity --attest-file` writes
+  that record (merging, never clobbering) while refusing a `--dry-run`, a
+  `--compare-condensed` run, or a run with zero scored results.
+
+  It is now entry-by-entry in the security-controls register, classified
+  **advisory** with its reach stated exactly: it covers the `cline-agents`
+  dispatch path only. It does not reach the MCP path, which takes the child's
+  model from the generated wrapper rather than operator environment, and
+  nothing reaches manual injection or the Claude Code plugin-subagent path.
+  The register also records the honest limit that the consumer never reads or
+  provenance-checks the record's contents, so a hand-written entry suppresses
+  the notice without a probe having run — attestation is not proof of
+  measurement. A blocking gate was **deferred, not rejected**, by the
+  accountable human control owner, with a named trigger to revisit: evidence
+  of unvalidated models on write-capable dispatch. Nothing currently detects
+  that trigger automatically, which the register says rather than implies.
+
 - **A `gc` handler covering worktree registrations** ([#217](https://github.com/deagy/cadre/issues/217)). `git gc` prunes worktree registrations as housekeeping and had no handler, so it reached the state `check_worktree` exists to protect through a subcommand nobody guarded.
 
   **The issue's premise turned out to be wrong, and the fix is not what it proposed.** On git 2.53.0, plain `git gc`, `gc --prune=now`, and `gc --prune=all` all left a prunable worktree registered: `--prune=<date>` governs loose *objects*, while registrations are governed by `gc.worktreePruneExpire` (default `3.months.ago`). `git -c gc.worktreePruneExpire=now gc` deregistered it immediately, and plain `gc` did so once the admin files aged past the default. The handler therefore probes `worktree prune -n -v --expire <effective>`, resolving the effective expiry as command-line `-c` > repository config > the default, which reproduced real `gc` behaviour in both directions. Scope is worktree registrations only; reflog expiry and `gc`'s object-pruning surface remain documented gaps.
@@ -93,6 +118,31 @@ check and reporting "nothing to do". See
   dispatched as.
 
 ### Changed
+
+- **The security-controls register is now repository-wide, and moved to match**
+  ([#234](https://github.com/deagy/cadre/issues/234)).
+  `roster/orchestration/mcp/SECURITY-CONTROLS.md` is now
+  `roster/orchestration/SECURITY-CONTROLS.md` (moved with `git mv`, so history
+  follows). It had grown its first non-MCP entry, and a register claiming
+  repository-wide scope while living in `mcp/` misrepresents itself — which is
+  the thing this file exists not to do.
+
+  The promotion is a reframing, not a rewrite: every pre-existing entry is
+  preserved with its enforcement classification unchanged, demoted one heading
+  level under a section scoped to the MCP servers. Nothing was reclassified or
+  dropped. New up front: a scope section naming the four dispatch paths (MCP
+  servers, the `cline-agents` plugin, Claude Code plugin subagents, and
+  manual/direct invocation), which controls reach each, and the two
+  disambiguations that reading needs — that "Claude Code" names both an
+  MCP-spawned child runner and an uncovered operator-facing path, and that "no
+  entries reach it" is a statement of fact rather than an assessment that the
+  path is safe.
+
+  Every in-repository reference was repointed. Historical records under
+  `roster/orchestration/runs/` and already-shipped changelog entries still cite
+  the old path and were deliberately left alone: a point-in-time record
+  describing what was true when it was written is correct, and editing it to
+  match today's layout would falsify it.
 
 - **`architecture-diagram-author` no longer names `architecture-authority` as a review handoff.** Its required checks said to "hand off to an independent `technical-writer`, `code-reviewer`, or `architecture-authority` when architectural claims require review". `architecture-authority` is a blocking boundary-conformance gate whose declared input is "code or configuration touching an infrastructure interface" and whose output is "a block on any change that reaches infrastructure without all required elements" — a Mermaid diagram is neither, and a routine review handoff is not how that gate is reached. The line now names `technical-writer` and `threat-modeler`, matching the review the artifact actually needs and the staffing `architecture-diagram-execution` already carries, and directs architectural claims to the escalation path that was already one bullet above. With this, no route's primary names a reviewer its route does not staff.
 

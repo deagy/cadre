@@ -12,7 +12,7 @@ agents dispatch MCP server (`dispatch_server.py`, see
 "Register the MCP dispatch server" step) — different module, different token,
 different transport — and is documented separately here.
 
-Read `SECURITY-CONTROLS.md`'s "GitLab evidence MCP server" section for the
+Read `../SECURITY-CONTROLS.md`'s "GitLab evidence MCP server" section for the
 control-by-control (mechanically-enforced vs. advisory) detail before relying
 on this integration for anything beyond local development; this document
 does not repeat that detail, only cross-references it.
@@ -150,7 +150,7 @@ scoped to one MCP integration's one credential, not to a stack-wide standard.
   integration from the baseline secret-hygiene practice `team-profile.yaml`
   still requires regardless of framework applicability: the token must never
   appear in logs, audit records, or generated documentation (mechanically
-  enforced here — see `SECURITY-CONTROLS.md`'s "Token handling" entry), and
+  enforced here — see `../SECURITY-CONTROLS.md`'s "Token handling" entry), and
   must remain scoped to the single dedicated project described above.
 - **Compensating control:** residual risk is mitigated operationally, not
   in code — by isolating the token to a dedicated project with no CI/CD
@@ -174,13 +174,13 @@ oversight: containment is achieved entirely by the operator setup above
 project), not by an in-code gate here. If this integration is ever pointed at
 a project that also holds higher-classification content, this boundary must
 be revisited before that happens — see `gitlab_core.py`'s module docstring and
-`SECURITY-CONTROLS.md`'s matching entry for the same statement.
+`../SECURITY-CONTROLS.md`'s matching entry for the same statement.
 
 ## What the three tools do
 
 Full control-by-control detail (mechanically-enforced vs. advisory, retry/
 idempotency behavior, confirmation-gate mechanics) lives in
-`SECURITY-CONTROLS.md`'s "GitLab evidence MCP server" section — this is a
+`../SECURITY-CONTROLS.md`'s "GitLab evidence MCP server" section — this is a
 usage reference, not a restatement of that detail.
 
 - **`create_review_subtask(parent_issue_iid, title, description, gate_id, task_id)`**
@@ -255,7 +255,7 @@ wording is returned unwrapped.
 
 ## Related reading
 
-- `roster/orchestration/mcp/SECURITY-CONTROLS.md` — control-by-control
+- `roster/orchestration/SECURITY-CONTROLS.md` — control-by-control
   security detail for this module and the dispatch MCP server it shares
   `ConfirmationGate`/`wrap_untrusted_output`/audit-record machinery with.
 - `roster/orchestration/mcp/gitlab_core.py`'s module docstring — the settled

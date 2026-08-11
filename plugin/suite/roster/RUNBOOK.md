@@ -602,7 +602,7 @@ The accountable control or risk owner—not an agent—approves exceptions. Ever
 ### Record evidence in GitLab
 
 Follow `orchestration/mcp/GITLAB-EVIDENCE.md` and read
-`orchestration/mcp/SECURITY-CONTROLS.md`'s "GitLab evidence MCP server"
+`orchestration/SECURITY-CONTROLS.md`'s "GitLab evidence MCP server"
 section first. `orchestration/mcp/gitlab_server.py` exposes three create-only
 tools (`create_review_subtask`, `write_wiki_page`, `write_evidence_comment`)
 against a single, pre-configured, docs-only GitLab project, configured by
@@ -612,7 +612,7 @@ page it creates is evidence for, never a substitute for, the consuming
 project's own `.agentic-sdlc/` run record. `GITLAB-EVIDENCE.md` also records
 the accepted static-token exception to this org's normal OpenBao
 short-lived-credential standard for this specific integration. This is
-deliberately placed alongside `SECURITY-CONTROLS.md` under
+deliberately placed alongside the MCP server it documents, under
 `orchestration/mcp/`, not under `workflows/`, because `roster/workflows/*.md`
 is a closed set matched 1:1 against `orchestration/selection.schema.json`'s
 `workflow` enum (`test_repository_health.py` enforces the equality) — this is
@@ -970,7 +970,7 @@ non-null value, and is never a silent ignore.
 | Key | Env var | Scope | Notes |
 |---|---|---|---|
 | `gitlab.base_url` | `GITLAB_BASE_URL` | **global-only** | must be `https://`, no URL userinfo; trailing `/` stripped |
-| `gitlab.project_id` | `GITLAB_DOCS_PROJECT_ID` | **global-only** | must be a string (an unquoted numeric-looking YAML scalar like `007` is rejected). Global-only alongside `base_url`, not project-or-global: `roster/orchestration/mcp/SECURITY-CONTROLS.md` records a human-accepted residual-risk control for the GitLab integration that depends on *both* fields being operator-fixed (a single dedicated, docs-only project with a least-privilege service token) — a project-local file redirecting the destination project would silently weaken that control |
+| `gitlab.project_id` | `GITLAB_DOCS_PROJECT_ID` | **global-only** | must be a string (an unquoted numeric-looking YAML scalar like `007` is rejected). Global-only alongside `base_url`, not project-or-global: `roster/orchestration/SECURITY-CONTROLS.md` records a human-accepted residual-risk control for the GitLab integration that depends on *both* fields being operator-fixed (a single dedicated, docs-only project with a least-privilege service token) — a project-local file redirecting the destination project would silently weaken that control |
 | `gitlab.supports_work_item_hierarchy` | `GITLAB_SUPPORTS_WORK_ITEM_HIERARCHY` | project-or-global | tri-state: absent/`null` = unset, native YAML bool or `"true"`/`"false"` (case-insensitive) accepted. This is currently the only project-or-global field |
 | `runners.claude_bin` | `SECURE_CLOUD_AGENTS_CLAUDE_BIN` | **global-only** | default `"claude"` |
 | `runners.codex_bin` | `SECURE_CLOUD_AGENTS_CODEX_BIN` | **global-only** | default `"codex"` |

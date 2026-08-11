@@ -325,7 +325,7 @@ FIELDS: dict[str, FieldSpec] = {
         required=True,
     ),
     "gitlab.project_id": FieldSpec(
-        # global_only, not project_or_global: roster/orchestration/mcp/
+        # global_only, not project_or_global: roster/orchestration/
         # SECURITY-CONTROLS.md records a human-accepted residual-risk
         # control for this integration -- GitLab write scope is contained
         # operationally by pointing GITLAB_BASE_URL *and*

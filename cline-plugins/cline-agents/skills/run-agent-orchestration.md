@@ -374,7 +374,7 @@ authoritative for the *why*.
     enforces sandbox narrowing and a human confirmation gate for
     write-capable dispatch, and spawns the child in its own process group
     with an explicit wait/timeout/group-kill and a bounded concurrency
-    limiter (see the bundled MCP dispatch server's security-controls documentation for exactly
+    limiter (see the bundled security-controls register for exactly
     which of those guarantees are mechanically enforced and tested). Once
     registered, call it directly instead of `spawn_agent` — no per-file
     reading or manual `developer_instructions` injection needed. Setup:
@@ -409,7 +409,7 @@ authoritative for the *why*.
        distinguishable by `member_index`/`role_id`; a single team-wide
        `confirmation_required` round trip covers every write-capable member
        at once rather than one per member. See
-       the bundled MCP dispatch server's security-controls documentation's "Team dispatch"
+       the bundled security-controls register's "Team dispatch"
        section for exactly how each single-role control (classification/
        sandbox narrowing, the depth guard, confirmation gating, the
        concurrency limiter, audit logging) generalizes to a team.
@@ -418,7 +418,7 @@ authoritative for the *why*.
        only fully-verified option, or `"claude-code"`) for dispatching a
        role as a Claude Code child process instead of a Codex one. This is
        newer and only partially verified — read
-       the bundled MCP dispatch server's security-controls documentation's "Claude Code
+       the bundled security-controls register's "Claude Code
        runner" section before relying on it: in particular, a Claude Code
        role can currently only ever be dispatched read-only (there's no
        wrapper-format field yet to declare write-capability the way a Codex

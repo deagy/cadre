@@ -431,13 +431,16 @@ SKILL_PATH_SUBSTITUTIONS: list[tuple[str, str]] = [
     ),
     ("`roster/knowledge-store/test`", "the bundled knowledge-store test suite"),
     ("roster/knowledge-store/test", "the bundled knowledge-store test suite"),
+    # Promoted out of `mcp/` in the #234 follow-up: the register now covers
+    # every dispatch path, not only the MCP servers, so the replacement prose
+    # can no longer call it "the MCP dispatch server's" documentation.
     (
-        "`roster/orchestration/mcp/SECURITY-CONTROLS.md`",
-        "the bundled MCP dispatch server's security-controls documentation",
+        "`roster/orchestration/SECURITY-CONTROLS.md`",
+        "the bundled security-controls register",
     ),
     (
-        "roster/orchestration/mcp/SECURITY-CONTROLS.md",
-        "the bundled MCP dispatch server's security-controls documentation",
+        "roster/orchestration/SECURITY-CONTROLS.md",
+        "the bundled security-controls register",
     ),
     # Two literal runnable shell commands (Codex CLI MCP-server setup
     # instructions), not descriptive prose -- these describe a register

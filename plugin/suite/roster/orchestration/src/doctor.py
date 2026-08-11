@@ -50,7 +50,7 @@ _RUNNING_REPO_ROOT = _THIS_FILE.parents[3]
 MIN_PYTHON = (3, 10)
 
 # The one Claude Code plugin-cache path shape this repository documents
-# elsewhere (roster/orchestration/mcp/SECURITY-CONTROLS.md,
+# elsewhere (roster/orchestration/SECURITY-CONTROLS.md,
 # roster/orchestration/mcp/dispatch_core.py):
 #   ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/...
 # There is no known API or env var that reports "this process is running

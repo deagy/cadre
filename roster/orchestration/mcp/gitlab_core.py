@@ -53,7 +53,7 @@ human-accepted residual-risk decision for this integration is that scope
 containment is achieved operationally -- a dedicated, docs-only GitLab
 project and a least-privilege service token scoped to only that project --
 rather than by an in-code classification check here. See
-`SECURITY-CONTROLS.md`'s GitLab section for the same statement.
+`../SECURITY-CONTROLS.md`'s GitLab section for the same statement.
 """
 
 from __future__ import annotations
@@ -159,7 +159,7 @@ _TASK_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]+$")
 # list, so this module never needs to track GitLab's exact, version-specific
 # command set to stay safe -- a false-positive reject on a line that merely
 # *looks* like a quick action is an accepted, deliberate cost of that margin
-# (see SECURITY-CONTROLS.md's noted over-rejection follow-up). A `/`
+# (see ../SECURITY-CONTROLS.md's noted over-rejection follow-up). A `/`
 # appearing mid-line (a file path, a URL fragment) never matches, since
 # `re.MULTILINE` anchors `^` to line starts only.
 _QUICK_ACTION_LINE_PATTERN = re.compile(r"^\s*/[a-z][a-z_]*\b", re.MULTILINE | re.IGNORECASE)
@@ -341,7 +341,7 @@ def resolve_config() -> GitLabConfig:
     settable from a project-local file -- see settings.py's trust-scope
     table): `base_url` because it selects the exfiltration-sensitive
     network endpoint every write in this module talks to, and
-    `project_id` because `SECURITY-CONTROLS.md` records a human-accepted
+    `project_id` because `../SECURITY-CONTROLS.md` records a human-accepted
     residual-risk control for this integration that depends on both fields
     being operator-fixed (a single dedicated, docs-only project + a
     least-privilege token). `gitlab.supports_work_item_hierarchy` is the
@@ -444,7 +444,7 @@ def _build_opener() -> urllib.request.OpenerDirector:
     # Passing ProxyHandler({}) here means "use this exact proxy map (none)"
     # and disables proxying unconditionally, regardless of ambient
     # environment -- consistent with this module's "no escape hatch
-    # anywhere" TLS/redirect-hardening discipline (see SECURITY-CONTROLS.md).
+    # anywhere" TLS/redirect-hardening discipline (see ../SECURITY-CONTROLS.md).
     return urllib.request.build_opener(
         https_handler,
         _NoCrossHostRedirectHandler(),
@@ -800,7 +800,7 @@ def create_review_subtask(
     issue. This is a Python-call-graph guarantee only; it does not by itself
     prevent GitLab's own server-side quick-action interpretation of body
     text from causing a state transition (see the quick-action neutralization
-    note below, and `SECURITY-CONTROLS.md`'s GitLab section for the two-layer
+    note below, and `../SECURITY-CONTROLS.md`'s GitLab section for the two-layer
     explanation).
 
     Quick-action neutralization: `description` is checked with
