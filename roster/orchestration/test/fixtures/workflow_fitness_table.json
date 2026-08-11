@@ -19,9 +19,11 @@
     "copying the EXPECTED OUTPUT would defeat the point of this file.",
     "",
     "test_workflow_fitness_table.py runs build_dispatch_plan() against every",
-    "case here and asserts actual workflow == expected_workflow. Two cases are",
-    "deliberately expected to disagree with current code (see their 'reasoning'",
-    "this file: it is proof the table is independent, not a copy of the bug.",
+    "case here and asserts actual workflow == expected_workflow. No case is",
+    "currently marked known_mismatch -- see the closing note below for the two",
+    "that once were and why they were fixed in the code instead. Deliberate",
+    "disagreement with the code under test is the signal this table exists to",
+    "produce, so add the flag rather than bending a case to match behavior.",
     "",
     "Coverage: at least one case per selection.schema.json workflow enum value",
     "(new-service, product-intake, runtime-assurance, debugging,",
@@ -34,7 +36,33 @@
     "doc. If a case below implies the closed enum is genuinely missing a",
     "shape, that is Proposal 08's territory, not this file's -- see the PR",
     "description for which cases (if any) that applies to.",
-    "No case is currently marked known_mismatch. Both that once were have been fixed in the code (#154, #157) rather than weakened here; add the flag for a future disagreement rather than bending a case to match current behavior."
+    "No case is currently marked known_mismatch. Both that once were have been fixed in the code (#154, #157) rather than weakened here; add the flag for a future disagreement rather than bending a case to match current behavior.",
+    "",
+    "Five cases were added with #210, which replaced _select_workflow()'s",
+    "hardcoded four-route-id delivery-shape test with an explicit per-route",
+    "'workflow_shape' in routing.yaml. They cover what that change made",
+    "expressible and what it must not swallow: a narrow execution route",
+    "contributing new-service on its own; execution routes contributing",
+    "infrastructure-change and pipeline-change rather than the new-service",
+    "their primary role's 'build' catalog phase would have implied; and two",
+    "execution routes that must stay unclassified (verify-phase test",
+    "authoring, security-phase control work), which is the failure mode the",
+    "issue's rejected naive fix would have produced.",
+    "",
+    "Six 'WF-SHAPE-PIN-*' cases exist for a different reason than the rest of",
+    "this file. They are not here because their workflow was in doubt -- all",
+    "six are ordinary new-service delivery work -- but because",
+    "test_workflow_shape_coverage.py found their routes' workflow_shape",
+    "declarations pinned by nothing: every other fixture matching them also",
+    "matched a broad route already contributing new-service, so the",
+    "declaration could be edited to any legal value with a green suite. Each",
+    "one's input is constructed to match its route WITHOUT a broad route",
+    "co-matching, which is what makes the declaration decisive. Their",
+    "'reasoning' records both the shape judgment and the isolation technique,",
+    "since the latter is fragile: it depends on which keywords the broad",
+    "route currently claims. If one of these stops isolating, the coverage",
+    "test fails and names the route rather than the fixture silently",
+    "measuring nothing."
   ],
   "cases": [
     {
@@ -243,6 +271,124 @@
       "task_id": "FITNESS-NEW-SERVICE-3",
       "expected_workflow": "new-service",
       "reasoning": "Same reasoning as WF-NEW-SERVICE-1, extended to confirm a multi-route build case (frontend+backend) still resolves to the single new-service shape rather than being treated as ambiguous. Task/files reused verbatim from selection_golden_corpus.json's CROSS-STACK-1."
+    },
+    {
+      "id": "WF-NEW-SERVICE-EXECUTION-ONLY-1",
+      "description": "a single narrow execution route, no broad route co-matching -> new-service",
+      "task": "Implement Node TypeScript utility",
+      "changed_files": [
+        "tools/build.mts"
+      ],
+      "classification": "internal",
+      "task_id": "FITNESS-NEW-SERVICE-EXECUTION-1",
+      "expected_workflow": "new-service",
+      "reasoning": "new-service.md: 'covers work that proceeds beyond intake into design and delivery. Use product-intake.md when the task only captures intent or baselines requirements.' Writing a Node/TypeScript build utility is delivery of application code -- it is past intake, it is not a defect fix, it provisions no infrastructure, and it defines no pipeline -- so of the twelve documented shapes only new-service describes it. Derived from new-service.md and the node-typescript-implementer role's own scope, not from _select_workflow(): this case is here specifically because the same input returned 'unclassified' before #210, when only four hardcoded route ids could contribute a shape. Task/files reused verbatim from selection_golden_corpus.json's NODE-TYPESCRIPT-EXECUTION-1 to guarantee the route match."
+    },
+    {
+      "id": "WF-INFRASTRUCTURE-CHANGE-EXECUTION-1",
+      "description": "a single narrow infrastructure-shaped execution route -> infrastructure-change",
+      "task": "Implement ansible automation implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "FITNESS-INFRASTRUCTURE-CHANGE-EXECUTION-1",
+      "expected_workflow": "infrastructure-change",
+      "reasoning": "infrastructure-change.md's shape is Classify -> Provision+Plan -> Infrastructure Reviewer -> gated approval -> Apply. Ansible playbooks, roles, and inventories are declarative host configuration applied to real machines, and the ansible-automation-implementer role is accountable to infrastructure-provisioner with an independent infrastructure review -- that is the same review and apply shape, not application delivery. Distinguishes the declared shape from the primary role's catalog phase, which is 'build' here: a phase-derived rule would have called this new-service. Task reused verbatim from selection_golden_corpus.json's ANSIBLE_AUTOMATION_EXECUTION_GOLDEN_1 to guarantee the route match in isolation."
+    },
+    {
+      "id": "WF-PIPELINE-CHANGE-EXECUTION-1",
+      "description": "a single narrow delivery-automation execution route -> pipeline-change",
+      "task": "Implement gitops delivery implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "FITNESS-PIPELINE-CHANGE-EXECUTION-1",
+      "expected_workflow": "pipeline-change",
+      "reasoning": "pipeline-change.md's step 1 names the artifacts it governs: 'the execution graph, trust boundaries, runner types, triggers, permissions, secret exposure, artifact flow, environments, and rollback behavior.' Argo CD/Flux applications and sync waves are exactly artifact flow, environments, and rollback behavior; the gitops-delivery-implementer role's own escalation list ('promotion, environment approval, production sync, rollback') is that same vocabulary. It configures how releases reach an environment, not what the platform is made of, so pipeline-change rather than infrastructure-change. Task reused verbatim from selection_golden_corpus.json's GITOPS_DELIVERY_EXECUTION_GOLDEN_1."
+    },
+    {
+      "id": "WF-UNCLASSIFIED-TEST-EXECUTION-1",
+      "description": "a verify-phase execution route claims no delivery shape -> unclassified",
+      "task": "Implement typescript test implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "FITNESS-UNCLASSIFIED-TEST-EXECUTION-1",
+      "expected_workflow": "unclassified",
+      "reasoning": "unclassified.md: emitted when the selector 'matched at least one route or risk rule... but the matched combination does not fit any of this repository's recognized workflow shapes,' and 'unclassified means a statement about workflow-shape recognition, not about the task's actual impact.' Authoring TypeScript tests is real delivery work, but none of the twelve roster/workflows/*.md shapes is test authoring: new-service.md places Verification inside a full G1-G10 intent-to-runtime lifecycle, which a standalone test-writing task is not, and runtime-assurance.md is about observing deployed behavior. This case exists to hold the line against the naive fix the issue rejected (any '*-execution' route implies new-service, measured at 68 golden failures); it is the one of #210's three named fixtures whose 'unclassified' was correct all along, and it is correct now for a stated reason rather than because no route could contribute a shape. If a test-authoring workflow doc is ever added, this is the case to revisit."
+    },
+    {
+      "id": "WF-UNCLASSIFIED-SECURITY-EXECUTION-1",
+      "description": "a security-phase execution route claims no delivery shape -> unclassified",
+      "task": "Implement secure boot implementation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "FITNESS-UNCLASSIFIED-SECURITY-EXECUTION-1",
+      "expected_workflow": "unclassified",
+      "reasoning": "Secure-boot work is governed by the security review and G5 authority that new-service.md lists as one stage among ten, not by the intent-to-runtime lifecycle as a whole, and no roster/workflows/*.md describes a security-control change end to end. unclassified.md's step 3 is the correct disposition for that: proceed on the plan's own required_quality_gates and human_gates, and propose a new shape if the combination recurs. Recorded so a later broadening of new-service to 'anything a build-capable role implements' has to argue with this case rather than pass silently."
+    },
+    {
+      "id": "WF-SHAPE-PIN-PYTHON-AUTOMATION-1",
+      "description": "python-automation-execution in isolation -> new-service (pins its declared shape)",
+      "task": "Maintain the automation script",
+      "changed_files": [
+        "scripts/release_notes.py"
+      ],
+      "classification": "internal",
+      "task_id": "FITNESS-SHAPE-PIN-PYTHON-AUTOMATION-1",
+      "expected_workflow": "new-service",
+      "reasoning": "new-service.md covers 'work that proceeds beyond intake into design and delivery'. A Python automation script under scripts/ is a delivered code artifact: it is not infrastructure (it provisions no host, cluster, or network), not a pipeline definition (it is not a CI/CD execution graph), and not intake-only. Its input is constructed rather than reused, specifically so this route matches without a broad route (frontend/backend/ai-feature) co-matching -- otherwise the broad route already contributes new-service and this route's own declaration is decorative, which is what test_workflow_shape_coverage.py measures. `scripts/**` is in the frontend route's exclude_paths and matches no backend path glob, and the task text avoids backend's 'python' keyword, so the executor route stands alone."
+    },
+    {
+      "id": "WF-SHAPE-PIN-GO-SERVICE-1",
+      "description": "go-service-execution in isolation -> new-service (pins its declared shape)",
+      "task": "Implement the go implementation for the exporter",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "FITNESS-SHAPE-PIN-GO-SERVICE-1",
+      "expected_workflow": "new-service",
+      "reasoning": "Implementing a Go service is the archetypal new-service.md case -- design-and-delivery of service code, the same reasoning as WF-NEW-SERVICE-1's backend API. Its input is constructed rather than reused, specifically so this route matches without a broad route (frontend/backend/ai-feature) co-matching -- otherwise the broad route already contributes new-service and this route's own declaration is decorative, which is what test_workflow_shape_coverage.py measures. Matching by keyword with no changed files is what isolates it: any *.go path would also match the backend route, and the word 'golang' would match backend's keyword list, so the task says 'go implementation' and carries no files."
+    },
+    {
+      "id": "WF-SHAPE-PIN-REACT-COMPONENT-1",
+      "description": "react-component-execution in isolation -> new-service (pins its declared shape)",
+      "task": "Implement jsx component",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "FITNESS-SHAPE-PIN-REACT-COMPONENT-1",
+      "expected_workflow": "new-service",
+      "reasoning": "A React/JSX component is frontend application code, and the frontend route already resolves to new-service for exactly this kind of change (selection_golden_corpus.json's FRONTEND-1), so the narrow executor must agree rather than contradict it. Its input is constructed rather than reused, specifically so this route matches without a broad route (frontend/backend/ai-feature) co-matching -- otherwise the broad route already contributes new-service and this route's own declaration is decorative, which is what test_workflow_shape_coverage.py measures. The word 'jsx' avoids frontend's bare 'react' keyword, and frontend's keyword_groups need a typescript/javascript term alongside a UI term, so neither fires."
+    },
+    {
+      "id": "WF-SHAPE-PIN-POSTGRES-QUERY-1",
+      "description": "postgres-query-execution without the backend route -> new-service (pins its declared shape)",
+      "task": "Refine the stored query definitions",
+      "changed_files": [
+        "postgres/queries/sqlc.yaml"
+      ],
+      "classification": "internal",
+      "task_id": "FITNESS-SHAPE-PIN-POSTGRES-QUERY-1",
+      "expected_workflow": "new-service",
+      "reasoning": "Query implementation is backend delivery work: it produces code the service executes, not infrastructure and not a pipeline. Its input is constructed rather than reused, specifically so this route matches without a broad route (frontend/backend/ai-feature) co-matching -- otherwise the broad route already contributes new-service and this route's own declaration is decorative, which is what test_workflow_shape_coverage.py measures. Isolating this one is unusually narrow: every keyword the route declares ('postgres query', 'postgresql query', 'pgx query') contains a backend keyword, and any *.sql file matches backend's path globs, so the input is a non-SQL generator config under postgres/queries/ with a task naming neither product nor engine. The co-matched database-reliability route declares unclassified and contributes nothing, which is what leaves this route's declaration decisive."
+    },
+    {
+      "id": "WF-SHAPE-PIN-A11Y-REMEDIATION-1",
+      "description": "frontend-accessibility-remediation-execution without the frontend route -> new-service (pins its declared shape)",
+      "task": "Apply the a11y remediation",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "FITNESS-SHAPE-PIN-A11Y-REMEDIATION-1",
+      "expected_workflow": "new-service",
+      "reasoning": "Accessibility remediation edits frontend application code, which new-service.md's Implementation stage covers and which FRONTEND-1 already labels new-service for the same subject matter (keyboard accessibility). Its input is constructed rather than reused, specifically so this route matches without a broad route (frontend/backend/ai-feature) co-matching -- otherwise the broad route already contributes new-service and this route's own declaration is decorative, which is what test_workflow_shape_coverage.py measures. Both of the route's path globs sit under frontend/**, and two of its three keywords contain frontend's bare 'accessibility' keyword, so the only isolating input is the 'a11y remediation' phrasing with no changed files -- 'a11y' appears solely in frontend's second keyword_group, which cannot fire without a typescript/javascript term from the first."
+    },
+    {
+      "id": "WF-SHAPE-PIN-INFERENCE-GATEWAY-1",
+      "description": "inference-gateway-execution without the ai-feature route -> new-service (pins its declared shape)",
+      "task": "Update the gateway timeout configuration",
+      "changed_files": [
+        "ai/inference-gateway/config.yaml"
+      ],
+      "classification": "internal",
+      "task_id": "FITNESS-SHAPE-PIN-INFERENCE-GATEWAY-1",
+      "expected_workflow": "new-service",
+      "reasoning": "Model API adapters, timeouts, retries, and budgets are delivered service code -- the gateway is a service the product calls, so new-service.md's design-and-delivery shape applies, not infrastructure-change (it configures no platform) and not pipeline-change (it defines no delivery flow). Its input is constructed rather than reused, specifically so this route matches without a broad route (frontend/backend/ai-feature) co-matching -- otherwise the broad route already contributes new-service and this route's own declaration is decorative, which is what test_workflow_shape_coverage.py measures. The route's own keyword contains 'inference', an ai-feature keyword, so the isolating input matches by path instead, using a non-.go config file (a *.go path would pull in both backend and go-service-execution)."
     }
   ]
 }

@@ -439,9 +439,9 @@ ALLOWED_REASONING_EFFORTS = set(_RUNNER_CAPABILITIES["allowed_reasoning_efforts"
 # hardcoded tier names, so a future tier is picked up automatically (idea:
 # "write-capable Cadre roles work in a git worktree by default").
 #
-# No longer consulted here now that TIER_SCOPED_POLICIES is empty, but kept
-# as the single derivation of "which tiers can write": workspace-isolation.md
-# names it explicitly when scoping which of its sections apply to whom, and
+# The single derivation of "which tiers can write": UNIVERSAL_POLICY_SECTIONS
+# below excerpts for its complement, workspace-isolation.md names it
+# explicitly when scoping which of its sections apply to whom, and
 # `roster/orchestration/test/test_repository_health.py` reads it.
 WRITE_CAPABLE_TIERS = frozenset(
     name for name, profile in CAPABILITY_PROFILES.items() if profile["sandbox_mode"] != "read-only"
@@ -457,6 +457,216 @@ WRITE_CAPABLE_TIERS = frozenset(
 # kept because the tier-gating question recurs, and an empty dict is a
 # clearer answer than a deleted concept.
 TIER_SCOPED_POLICIES: dict[str, frozenset[str]] = {}
+
+# Section-granular excerpting, deliberately a *separate* mechanism from
+# TIER_SCOPED_POLICIES above rather than an extension of it (deagy/cadre#211).
+#
+# TIER_SCOPED_POLICIES answers "which tiers get this file at all", and that
+# file-granularity is exactly what made the earlier attempt at
+# workspace-isolation.md wrong: gating the whole file behind a write-capable
+# tier also dropped its "Never mutate a working tree you did not create"
+# section, which binds every tier. Overloading one dict with both meanings
+# would leave that mistake re-expressible by a one-line edit. This dict
+# instead answers a different question -- "when a file's own applicability
+# header excludes a tier, which of its sections still bind that tier" -- and
+# cannot express "drop the whole file", because an empty section tuple raises.
+#
+# Keys use the same repository-relative path convention as SHARED_POLICIES;
+# values are the exact `## ` headings (heading text, without the `## `) that
+# bind *every* tier. A role whose capability is not in WRITE_CAPABLE_TIERS
+# receives the file's preamble (everything above its first `## ` heading,
+# which is where the applicability header lives) plus these sections, in file
+# order. Every other role receives the file verbatim, byte for byte.
+#
+# This is not a general policy-envelope generator, and must not grow into one
+# -- see docs/investigations/policy-envelope-ceiling-2026-08.md, which
+# measured the general case and recommends against it. A file belongs here
+# only when it states its own tier applicability rule in its own text, so the
+# excerpt encodes the file's stated rule rather than a judgment call about
+# what some role might need.
+# The membership rule is NOT "can this role write files" (deagy/cadre#211
+# review). A read-only role still *creates* worktrees -- the never-mutate
+# section instructs it to make a `--detach` inspection worktree rather than
+# checking out a ref in someone else's tree -- so every rule about a worktree
+# a role creates, removes, or resolves configuration from inside binds it
+# too. Scoping by "has edits to isolate" alone once de-bound the
+# never-remove-or-prune rule from exactly the roles the excerpt tells to
+# create a worktree, which is how a reviewer ends up tidying up with
+# `git worktree prune` and deregistering a teammate's tree.
+UNIVERSAL_POLICY_SECTIONS: dict[str, tuple[str, ...]] = {
+    "roster/shared/workspace-isolation.md": (
+        "Never mutate a working tree you did not create",
+        "The security-relevant-resolver rule",
+        "Never remove or prune a worktree yourself",
+        "No runner names as behavioral conditions",
+    ),
+}
+
+
+class PolicyExcerptError(ValueError):
+    """Raised when a UNIVERSAL_POLICY_SECTIONS file cannot be excerpted as
+    declared.
+
+    Fails the build closed on purpose: the alternative is silently shipping
+    a read-only wrapper whose universally binding rule was renamed out from
+    under it, which looks like nothing happened.
+
+    What this raises on: a named `## ` heading missing; a named section whose
+    body is empty; a file with no preamble to carry its applicability header;
+    a preamble that does not name every universally binding section (so the
+    header and this dict cannot drift apart); an unbalanced code fence; and
+    an empty section tuple.
+
+    What it does NOT check, so do not read it as total protection: the
+    *content* of a kept section. A section gutted to a stub sentence still
+    excerpts cleanly here. `plugin/tools/test_workspace_isolation_excerpt.py`
+    asserts specific rule prose survives into the committed wrappers; that is
+    where body-level protection actually lives.
+    """
+
+
+def split_policy_sections(body: str) -> tuple[str, list[tuple[str, str]]]:
+    """Split a Markdown policy file into (preamble, [(heading, section)]).
+
+    Sections break on level-2 (`## `) headings only, and headings inside
+    fenced code blocks are ignored -- these files contain shell samples.
+    Both ``` and ~~~ fences count; an unbalanced fence raises rather than
+    silently swallowing every heading after it (which would truncate the
+    excerpt with no other signal).
+    """
+    preamble: list[str] = []
+    sections: list[tuple[str, list[str]]] = []
+    in_fence = False
+    fence_marker = ""
+    for line in body.splitlines():
+        stripped = line.lstrip()
+        for marker in ("```", "~~~"):
+            if stripped.startswith(marker) and (not in_fence or fence_marker == marker):
+                in_fence = not in_fence
+                fence_marker = marker if in_fence else ""
+                break
+        if not in_fence and line.startswith("## "):
+            sections.append((line[3:].strip(), [line]))
+        elif sections:
+            sections[-1][1].append(line)
+        else:
+            preamble.append(line)
+    if in_fence:
+        raise PolicyExcerptError(
+            f"unbalanced {fence_marker!r} code fence: every heading after it would be "
+            "swallowed into the preceding section, silently truncating the excerpt"
+        )
+    return (
+        "\n".join(preamble).strip(),
+        [(heading, "\n".join(lines).strip()) for heading, lines in sections],
+    )
+
+
+def excerpt_universal_sections(relative: str, body: str) -> str:
+    """Return `body` reduced to its preamble plus the sections that bind
+    every tier, for a role that the file's own applicability header excludes.
+    """
+    required = UNIVERSAL_POLICY_SECTIONS[relative]
+    if not required:
+        raise PolicyExcerptError(
+            f"{relative}: UNIVERSAL_POLICY_SECTIONS declares no universally binding "
+            "section; this mechanism cannot be used to drop a whole file (use "
+            "TIER_SCOPED_POLICIES if that is genuinely what is wanted)"
+        )
+    preamble, sections = split_policy_sections(body)
+    if not preamble:
+        raise PolicyExcerptError(
+            f"{relative}: no preamble above the first '## ' heading, so the excerpt "
+            "would carry no applicability header"
+        )
+    headings = [heading for heading, _ in sections]
+    # A *balanced* stray fence pair needs no parser bug to leak policy: it
+    # deletes the section boundaries between its markers, and whatever
+    # headings it swallows are absorbed into the preceding section. When that
+    # section is one of the kept universal ones, write-capable-only text
+    # ships to every read-only wrapper with no other signal -- the leak is
+    # silent in exactly the direction that matters, because swallowing a
+    # *dropped* section instead trips the missing-heading check above.
+    #
+    # Deliberately checked here and not in split_policy_sections(): that
+    # function is a general splitter whose documented behavior is to ignore
+    # fenced headings, and callers legitimately rely on it. The strict
+    # equality belongs on the path that ships policy text.
+    raw_heading_count = sum(1 for line in body.splitlines() if line.startswith("## "))
+    if raw_heading_count != len(sections):
+        raise PolicyExcerptError(
+            f"{relative}: parsed {len(sections)} section(s) but the file has "
+            f"{raw_heading_count} '## ' line(s). A code fence is swallowing a section "
+            "boundary, which silently merges sections and can leak write-capable-only "
+            "text into the read-only excerpt. If a fenced '## ' line is genuinely "
+            "needed here, add an explicit allow-list rather than removing this check."
+        )
+    missing = [heading for heading in required if heading not in headings]
+    if missing:
+        raise PolicyExcerptError(
+            f"{relative}: required universally binding section(s) not found: "
+            f"{', '.join(repr(heading) for heading in missing)}. Found: "
+            f"{', '.join(repr(heading) for heading in headings)}. A heading listed in "
+            "UNIVERSAL_POLICY_SECTIONS was renamed or removed -- update both together."
+        )
+    # The file's own applicability header must enumerate exactly the sections
+    # this dict names, so a reader of either can check it against the other.
+    # Symmetric on purpose: one-directional (`required` is named somewhere in
+    # the preamble) lets the header promise a section binds every tier while
+    # the dict silently drops it, which is the original #211 bug reached from
+    # the other side.
+    #
+    # Matched against the header's bullet list, not the whole preamble text:
+    # substring matching over prose both false-positives (the header names
+    # `Isolating your own edits (write-capable tiers)` in a sentence
+    # explaining what is excluded) and false-negatives on short headings
+    # (heading "A" is satisfied by any word containing "A").
+    promised = {
+        line[2:].strip()
+        for line in preamble.splitlines()
+        if line.startswith("- ")
+    } & set(headings)
+    if promised != set(required):
+        unlisted = sorted(set(required) - promised)
+        overpromised = sorted(promised - set(required))
+        detail = []
+        if unlisted:
+            detail.append(
+                "registered but not named in the header's list: "
+                + ", ".join(repr(heading) for heading in unlisted)
+            )
+        if overpromised:
+            detail.append(
+                "named in the header's list but not registered, so it would be "
+                "dropped from every read-only wrapper despite the header saying it "
+                "binds every tier: " + ", ".join(repr(heading) for heading in overpromised)
+            )
+        raise PolicyExcerptError(
+            f"{relative}: the applicability header and UNIVERSAL_POLICY_SECTIONS "
+            "disagree about which sections bind every tier (" + "; ".join(detail) + ")."
+        )
+    kept = []
+    for heading, text in sections:
+        if heading not in set(required):
+            continue
+        if not text.partition("\n")[2].strip():
+            raise PolicyExcerptError(
+                f"{relative}: universally binding section {heading!r} has an empty body; "
+                "the excerpt would ship the heading alone"
+            )
+        kept.append(text)
+    return "\n\n".join([preamble, *kept])
+
+
+_unreachable_excerpts = sorted(set(UNIVERSAL_POLICY_SECTIONS) - set(SHARED_POLICIES))
+if _unreachable_excerpts:
+    # A key naming a file no wrapper embeds is dead configuration that reads
+    # as protection. Fail at import rather than let it sit there looking
+    # load-bearing.
+    raise PolicyExcerptError(
+        "UNIVERSAL_POLICY_SECTIONS names file(s) absent from SHARED_POLICIES, so the "
+        f"excerpt would never be applied: {', '.join(_unreachable_excerpts)}"
+    )
 
 GENERATED_MARKER = "<!-- GENERATED FILE: edit the canonical source and regenerate; do not edit this copy. -->"
 GENERATED_TOP_LEVEL = {
@@ -706,6 +916,10 @@ def role_wrapper_inputs(agent_id: str, metadata: dict[str, Any]) -> dict[str, An
             body = path.read_text(encoding="utf-8").strip()
             if not body:
                 continue
+            # Section-granular excerpt for a tier the file's own applicability
+            # header excludes; raises rather than truncating silently.
+            if relative in UNIVERSAL_POLICY_SECTIONS and capability not in WRITE_CAPABLE_TIERS:
+                body = excerpt_universal_sections(relative, body)
             sections.append(f"# Shared policy: {relative}\n\n{body}")
         return sections
 

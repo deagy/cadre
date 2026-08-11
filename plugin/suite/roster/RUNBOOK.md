@@ -169,6 +169,8 @@ Add `--recipe <id>` to focus on one recipe, and `--format json` for a machine-re
 
 Edit `orchestration/routing.yaml` to add repository-specific path conventions. Although its extension is YAML, the Python selector parses its JSON-compatible content with the standard library; the standalone Agentic SDLC executable supplies lifecycle gate contracts separately. A planned knowledge invocation contains a host-neutral Python 3.10+ `launcher` contract and an argv array beginning with the knowledge-store CLI's absolute path (`src/cli.py`), runnable without changing directory — that also means `Path.cwd()` inside `cli.py` reflects wherever the caller actually is, which is what lets its project-local-vs-global config resolution work. `bin/cadre knowledge ...` runs the same script; the plan itself embeds the interpreter-agnostic launcher contract for callers that substitute their own probed interpreter path instead. The plan always carries an explicit `--source`. A caller-supplied value wins; otherwise it uses the target repository's lowercase `owner/repository` origin slug, falling back to `local-<basename>-<12-character canonical-path hash>`. Existing `secure-cloud-agents` records are not migrated automatically: pass that source explicitly for temporary retrieval, then re-ingest under the new repository key through the steward workflow. Selection rejects `--top` outside 1–20; required knowledge-store configuration must fail closed.
 
+**Every route declares a `workflow_shape`.** It is the delivery shape that route contributes to the plan's `workflow` field, and it takes one of four values: `infrastructure-change` (declarative platform, host, cluster, or network infrastructure), `pipeline-change` (CI/CD and release-delivery definitions), `new-service` (application, service, library, or product code), or `unclassified` (this route claims no delivery shape). Set it deliberately when adding a route — a route that omits it contributes nothing, which is exactly the defect the field replaced ([#210](https://github.com/deagy/cadre/issues/210): the previous rule tested a hardcoded set of four route ids, so all 86 `*-execution` routes fell through to `unclassified` by omission). `test_selector.py::WorkflowShapeDeclarationTests` fails the build when a route in this repository's `routing.yaml` leaves it off, and an unrecognized value raises from `validate_routing_config` rather than being silently ignored. Declare `unclassified` on purpose for advisory, assessment, review, governance, support, documentation, and evidence routes, and for any route whose shape is decided by one of `_select_workflow()`'s earlier precedence conditions (rollback, production-release, support-escalation, runtime-assurance, knowledge-ingestion, debugging, agent-suite-maintenance, product-intake) — those depend on route *combinations* and on whether a keyword actually fired, which no per-route constant can express. Do not derive the value from the primary role's catalog `phase`: phase is a capability and authority grouping, and several `build`-phase routes (`opentofu-module-execution`, `gitlab-ci-execution`) deliver infrastructure or pipeline artifacts rather than services. `workflow` is narration and a pointer into `workflows/*.md`; it gates nothing, and `required_quality_gates` continue to come from each route's own `quality_gates`.
+
 Before adding a *generic* path glob to a base route (one likely to exist, unrelated to Cadre, in an arbitrary consuming project — `**/go.mod`-style, not `roster/**`-style), read `orchestration/routing-doctrine.md`. Genericness of the filename alone is not the test for whether a base route may claim it; that document states the actual two-part test (domain-generality of the route's own design intent and scoping, and false-positive/false-negative cost asymmetry) and its `supply-chain`/`architecture-design` vs. `packaging` worked examples ([#201](https://github.com/deagy/cadre/issues/201)). The same document is one-directional: it also states the higher bar (reviewer sign-off plus evidence, not a re-run of the two prongs) required to *narrow* an existing security-relevant route, The overlay mechanism described just below *does* govern what `cadre select` dispatches against ([#202](https://github.com/deagy/cadre/issues/202)), so a base route that over-claims cannot be narrowed away by a consumer — an overlay may only widen.
 
 ### Customize routing.yaml with a project-local overlay
@@ -1121,10 +1123,18 @@ Every write-capable role follows `roster/shared/workspace-isolation.md`,
 which defaults to creating a `git worktree` under
 `<repository_root>/.worktrees/<task-id>/<role-id>/` before editing, rather
 than editing the caller's main working tree directly (advisory prompt
-policy, not mechanically enforced — see that file). Agents are explicitly
-instructed never to remove or prune their own worktree (`destructive_action:
-human_approval`), so this is operator-run cleanup, not something a task's
-dispatched role does for you.
+policy, not mechanically enforced — see that file). Read-only roles create
+worktrees too, just not for edits: the never-mutate rule tells them to make
+a `--detach` inspection worktree rather than check out a ref in a tree they
+did not create.
+
+Every role, at every capability tier, is explicitly instructed never to
+remove or prune a worktree (`destructive_action: human_approval`) — that
+instruction is one of the four sections of `workspace-isolation.md` that
+survive into a read-only role's generated wrapper, precisely because the
+roles told to create an inspection worktree are the ones most likely to
+tidy it up afterwards. So this is operator-run cleanup, not something a
+task's dispatched role does for you, whichever role it was.
 
 ```sh
 # List every worktree registered against this repository, including path,

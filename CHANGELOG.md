@@ -23,6 +23,28 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-08-10
+
+Shipped to users as plugin [v0.17.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.17.0).
+
+**One change alters output a consumer may depend on:** a dispatch plan's `workflow` field now takes a different value for many tasks. It is narration and gates nothing — `required_quality_gates` are unchanged — but anything keying on the string will see it move. Details under Changed.
+
+### Changed
+
+- **Every route now declares a `workflow_shape`, and the plan's `workflow` field is derived from those declarations** ([#210](https://github.com/deagy/cadre/issues/210)). `_select_workflow`'s final delivery-shape stage used to test a hardcoded set of four route ids (`frontend`, `backend`, `infrastructure`, `pipeline`). None of the 86 `*-execution` routes was in that set, so an execution route never contributed a shape: a task matching only a narrow executor fell through to `unclassified`. That stayed hidden while a broad route usually co-matched and supplied the label, and surfaced once the `frontend` route's bare `typescript`/`javascript` keywords were gated behind a browser corroborator in 0.19.0.
+
+  Each of the 146 routes now declares one of `new-service`, `infrastructure-change`, `pipeline-change`, or `unclassified` (88 declare `unclassified` deliberately — advisory, review, governance, and support routes, plus any route whose shape is decided by one of the earlier precedence conditions). **Consumer impact:** `workflow` changes value for many tasks, in two ways. A task matching only an execution route now gets a real shape instead of `unclassified`. And a task matching a narrow route alongside `infrastructure` or `pipeline` now resolves to `new-service` where it previously resolved to `infrastructure-change`/`pipeline-change` — 85 two-route combinations are affected, and the widening is deliberate: a plan matching both a service-code route and an infrastructure route is doing both. `workflow` selects which `roster/workflows/*.md` a plan points at; it does not gate anything, and `required_quality_gates` continue to come from each route's own `quality_gates` (verified at 0 differences across all 174 golden fixtures).
+
+  The field is **optional in `routing.schema.json`**, so a project-local routing overlay written before this release still validates and behaves exactly as it did. A route that omits it contributes no shape. Note this means an overlay-added route still inherits `unclassified` silently — the base catalog is guarded by a test, an overlay is not.
+
+- **Read-only roles' generated wrappers now carry `workspace-isolation.md` as a section-granular excerpt instead of in full** ([#211](https://github.com/deagy/cadre/issues/211)). The file states its own applicability rule — the worktree-isolation steps, the dirty-scope guard, the teams rule, escalation, and the end-of-task result block bind write-capable tiers only — so a reviewer's wrapper was carrying a substantial block describing a decision it cannot make. `generate_global_plugin.py`'s new `UNIVERSAL_POLICY_SECTIONS` embeds the applicability header plus the four sections that bind every tier for any capability outside `WRITE_CAPABLE_TIERS`, and the whole file for everyone else.
+
+  The four universal sections are `Never mutate a working tree you did not create`, `The security-relevant-resolver rule`, `Never remove or prune a worktree yourself`, and `No runner names as behavioral conditions`. **The membership rule is not "can this role write files":** a read-only role still creates worktrees, for inspection, so every rule about a worktree a role creates, removes, or resolves configuration from inside binds it. **Consumer impact:** a read-only role's Claude Code and Codex wrappers drop from 1020 to 883 lines; no rule that binds a read-only role was removed, and `cadre resolve-shared workspace-isolation.md` still returns the full file to any caller at any tier.
+
+  This is deliberately a *separate* mechanism from the existing (still empty) `TIER_SCOPED_POLICIES`, which decides whether a tier gets a file at all — that file granularity is what made the earlier attempt at this trim wrong, since dropping the file also dropped the never-mutate rule. The new mechanism fails closed: a renamed or removed heading raises `PolicyExcerptError` and breaks the build, and an empty section tuple is rejected, so it cannot express "drop the whole file". It is not a general policy-envelope generator and should not become one — [`docs/investigations/policy-envelope-ceiling-2026-08.md`](docs/investigations/policy-envelope-ceiling-2026-08.md) measured that case and recommends against it.
+
+  `workspace-isolation.md`'s own prose was reordered so both the full and excerpted renderings read correctly: the write-capable-only framing that used to sit in the preamble now lives in its own `## Isolating your own edits (write-capable tiers)` section. No rule's meaning changed, but every wrapper's copy of the file differs textually as a result.
+
 ## [0.19.0] - 2026-08-10
 
 Shipped to users as plugin [v0.16.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.16.0) — the packaged plugin is how register-side changes reach an installed runner.

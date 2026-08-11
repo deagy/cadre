@@ -189,7 +189,16 @@
         "primary": true,
         "reviewers": true,
         "support": true,
-        "quality_gates": true
+        "quality_gates": true,
+        "workflow_shape": {
+          "description": "The delivery shape this route contributes to build_dispatch_plan._select_workflow()'s final stage (#210), naming the kind of artifact the route's roles deliver: 'infrastructure-change' for declarative platform, host, cluster, or network infrastructure; 'pipeline-change' for CI/CD and release-delivery definitions; 'new-service' for application, service, library, or product code; 'unclassified' for a route that claims no delivery shape at all -- advisory, assessment, review, governance, support, documentation, and evidence routes, and routes whose shape is already decided by one of _select_workflow()'s earlier precedence conditions (rollback, production-release, support-escalation, runtime-assurance, knowledge-ingestion, debugging, agent-suite-maintenance, product-intake), which depend on route combinations and keyword evidence a per-route constant cannot express. Optional in this schema so a project-local routing overlay that predates the field still validates -- such a route contributes no shape, exactly as every route did before #210 -- but every route in this repository's own routing.yaml must declare it, which test_selector.py::WorkflowShapeDeclarationTests enforces. Never derived from the primary role's catalog phase: phase is a capability and authority grouping, and several build-phase routes (opentofu-module-execution, gitlab-ci-execution) deliver infrastructure or pipeline artifacts rather than services.",
+          "enum": [
+            "new-service",
+            "infrastructure-change",
+            "pipeline-change",
+            "unclassified"
+          ]
+        }
       }
     },
     "riskRule": {

@@ -71,8 +71,10 @@ silent fallback to the default.
 
 ### Tier-scoped shared policies
 
-Every file in this directory is currently embedded into *every* generated
-role wrapper (`SHARED_POLICIES` in `generate_global_plugin.py`).
+Every file in this directory is embedded into *every* generated role wrapper
+(`SHARED_POLICIES` in `generate_global_plugin.py`). One of them,
+`workspace-isolation.md`, is embedded in full for write-capable tiers and as
+a **section-granular excerpt** for the rest — see the next subsection.
 
 The module also has a `TIER_SCOPED_POLICIES` mechanism for embedding a file
 only into wrappers for the capability tiers it names. **It is empty today.**
@@ -96,6 +98,79 @@ whether `generate_global_plugin.py` embeds the section into a *specific
 role's* generated wrapper instructions. That asymmetry is why a tier-scoped
 file must state its own applicability in its own text: `cadre resolve-shared`
 cannot do that filtering for it.
+
+### Section-granular excerpts (`UNIVERSAL_POLICY_SECTIONS`)
+
+`UNIVERSAL_POLICY_SECTIONS` in `generate_global_plugin.py` is a *separate*
+mechanism from `TIER_SCOPED_POLICIES`, and the distinction is the whole point
+(deagy/cadre#211). `TIER_SCOPED_POLICIES` answers "which tiers get this file
+at all"; that file granularity is exactly what made tier-scoping
+`workspace-isolation.md` wrong the first time, because dropping the file also
+dropped its universally binding section. `UNIVERSAL_POLICY_SECTIONS` answers
+a narrower question: **when a file's own applicability header excludes a
+tier, which of its `## ` sections still bind that tier.**
+
+A role whose capability is not in `WRITE_CAPABLE_TIERS` receives the file's
+preamble (everything above its first `## ` heading — where the applicability
+header lives) plus the named sections, in file order. Every other role
+receives the file byte for byte. Today the only entry is
+`workspace-isolation.md`, whose four universally binding sections are
+`Never mutate a working tree you did not create`,
+`The security-relevant-resolver rule`,
+`Never remove or prune a worktree yourself`, and
+`No runner names as behavioral conditions`.
+
+**Membership is not "can this role write files."** A read-only role still
+*creates* worktrees — the never-mutate section tells it to make a `--detach`
+inspection worktree rather than check out a ref in someone else's tree — so
+every rule about a worktree a role creates, removes, or resolves
+configuration from inside binds it too. Scoping by "has edits to isolate"
+alone once de-bound the never-remove-or-prune rule from exactly the roles
+the excerpt instructs to create a worktree.
+
+It fails closed, raising `PolicyExcerptError` on: a renamed or removed
+heading; a named section with an empty body; a header bullet list that does
+not match the registered set **in both directions** (so the header cannot
+name a section the dict drops, nor the reverse); an unbalanced code fence; a
+parsed section count that disagrees with the file's raw `## ` line count; an
+empty section tuple (the mechanism therefore cannot be used to drop a whole
+file); and, at import, a key absent from `SHARED_POLICIES`.
+
+Two of those deserve their reasoning recorded, because both were found by
+mutation testing rather than by review, and neither needs any parsing bug to
+fire:
+
+- **The section-count cross-check.** A *balanced* stray fence pair deletes
+  the section boundaries between its markers, so a swallowed heading is
+  absorbed into the preceding section. When that section is one of the kept
+  universal ones, write-capable-only text ships to every read-only wrapper
+  and the generator still exits 0 — silent in exactly the direction that
+  matters, since swallowing a *dropped* section trips the missing-heading
+  check instead. Checked in `excerpt_universal_sections`, not in
+  `split_policy_sections`, which is a general splitter whose documented
+  behavior is to ignore fenced headings.
+- **The symmetric header check.** A one-directional check (every registered
+  heading appears in the header) lets a new section declare in its own body
+  that it binds every tier while going unregistered — the original bug
+  reached by *addition* rather than rename, which is what a future editor of
+  the file will actually do. The test suite closes the remaining half by
+  scanning section bodies for that claim.
+
+Section *content* is not checked here.
+`plugin/tools/test_workspace_isolation_excerpt.py` asserts specific rule
+prose survives into the committed wrappers on both runners. Note that its
+exact-excerpt test recomputes its expectation from the same function it
+validates, so it guards committed-output drift, not generator logic — do not
+count it as logic protection.
+
+**Do not grow this into a general policy-envelope generator.**
+`docs/investigations/policy-envelope-ceiling-2026-08.md` measured the general
+case and recommends against it. A file belongs here only when it states its
+own tier applicability rule in its own text, so the excerpt encodes the
+file's stated rule rather than a judgment call about what a role might need.
+As with tier scoping, this affects the generated wrapper only —
+`cadre resolve-shared workspace-isolation.md` still returns the full file to
+any caller at any tier.
 
 ## Where overlays live
 

@@ -105,6 +105,24 @@ is not a small-context prompt; it is the same prompt.
    ~240 lines off 28 reviewer wrappers. It does nothing for the execution
    specialists, and is worth doing only on its own merits.
 
+   **Implemented (deagy/cadre#211), and smaller than this estimate.**
+   `UNIVERSAL_POLICY_SECTIONS` in `generate_global_plugin.py` excerpts the
+   file section by section for tiers outside `WRITE_CAPABLE_TIERS`, raising
+   `PolicyExcerptError` rather than truncating if anything it names goes
+   missing. Review of the first attempt corrected the scope: **four**
+   sections bind every tier, not one. A read-only role creates worktrees
+   too — inspection worktrees — so `The security-relevant-resolver rule`,
+   `Never remove or prune a worktree yourself`, and `No runner names as
+   behavioral conditions` bind it alongside the never-mutate rule. Only the
+   steps about where *edits* land are write-capable-only.
+
+   The realised saving is therefore ~175 lines per read-only wrapper, not
+   the ~240 estimated above — which is the honest shape of this ceiling
+   generally: the excerptable fraction shrinks once you check each section
+   against what the role actually does rather than against its tool
+   allowlist. Recommendation 1 stands unchanged. See
+   `roster/shared/README.md`, "Section-granular excerpts".
+
 ## Reproducing
 
 ```sh
