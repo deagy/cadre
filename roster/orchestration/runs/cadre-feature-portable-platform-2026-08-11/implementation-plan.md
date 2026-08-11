@@ -1,8 +1,9 @@
 # Implementation Plan — A roster-neutral platform
 
 **Plan ID:** `PLAN-CADRE-PORTABLE-PLATFORM`
-**Revision:** 1 (initial)
-**Status:** draft — **not scheduled.** Blocked on OD-1, OD-2, OD-5.
+**Revision:** 2
+**Status:** draft — **not scheduled.** G1 approved 2026-08-11; blocked on OD-7
+and G2.
 **Date:** 2026-08-11
 **Implements:** `REQ-CADRE-PORTABLE-PLATFORM` (`requirements.md`, Revision 1)
 **Decomposes:** `INTENT-CADRE-PORTABLE-PLATFORM` (`product-intent.md`, Revision 1)
@@ -11,12 +12,25 @@
 
 ## 0. Read this first
 
-Three things determine whether this plan is worth executing at all, and none of
-them is an engineering question:
+Three decisions that gated this plan at Revision 1 were taken by the Product
+Owner on 2026-08-11 (`product-intent.md` §16):
 
-- **OD-1** asks whether to reverse a standing Product Owner deferral (2026-08-09).
-- **OD-2** fixes the `roster.root` trust scope. Phase A cannot start without it.
-- **OD-5** fixes the manifest shape. Phase A's design depends on it.
+- **OD-1 — resolved.** The 2026-08-09 deferral is reversed; this proceeds.
+- **OD-2 — resolved.** `roster.root` is **project-local, overlay-style**, on the
+  `routing_overlay.py` precedent, *conditional on the resolved roster's id and
+  digest surfacing in the dispatch plan* (PP-FR-1b). The visibility is the
+  control that made project-local acceptable — it is not an optional extra to be
+  dropped if Phase A runs long.
+- **OD-5 — resolved.** A **sibling `roster.json`** the kernel never reads.
+
+**One new blocker was created by OD-2's answer.** Surfacing roster identity in
+the plan is a new emitted field, forcing `selection.schema.json` 6 → 7
+(PP-NFR-3b). That is a change to a published, vendored contract, it is **OD-7**,
+and it blocks G2. Phases A–B can be built and reviewed before it is settled;
+they must not be merged with a bumped schema until it is.
+
+G2 itself remains unapproved and requires `product_owner` **and**
+`engineering_lead`.
 
 The phase order is chosen so the **cheapest falsification comes first**, which is
 also `docs/proposals/governance-as-product-2026-08.md`'s own recommendation:
@@ -33,14 +47,19 @@ it, so the sequence can stop at any point without stranding work.
 
 **Files:**
 - `roster/shared/src/settings.py` — new `roster.root` FieldSpec after
-  `context_store.home` (`:690-697`). Copy the shape of `knowledge_store.home`
-  (`:673-680`); the scope value is OD-2's answer, not the implementer's choice.
-  If OD-2 says `SCOPE_GLOBAL_ONLY`, carry over the reasoning comment at
-  `:681-689` rather than writing a new one.
+  `context_store.home` (`:690-697`), at **project tier**, per OD-2. It will be
+  the only path-like setting in the file that is not `SCOPE_GLOBAL_ONLY`, so
+  write a comment saying *why* — the three siblings at `:665-697` all carry
+  their reasoning, and an unexplained departure reads as an oversight. Point it
+  at PP-FR-1b: the redirect is permitted because it is made visible, not because
+  the objection at `:681-689` stopped applying.
 - New `roster/orchestration/roster.schema.json` + a `roster.json` at
   `provider/roster.json`. Validated by the existing
   `roster/orchestration/src/schema_validate.py` and its pre-commit hook — no new
   validation machinery.
+- Roster identity in the plan (PP-FR-1b) + `selection.schema.json` 6 → 7
+  (PP-NFR-3b). **Gated on OD-7.** Build it behind the decision; do not merge the
+  bump until OD-7 is answered.
 - `roster/orchestration/src/select_agents.py` — `:16-18` constants become a
   resolver call; `:203` (`catalog_path`) and `:204` (`routing_path`) consume it;
   add `--roster`.
@@ -55,11 +74,18 @@ semantic match but is across the boundary, so port the *logic*, not an import �
 `test_kernel_boundary.py:76-95` forbids importing kernel code and that guard must
 keep passing.
 
-**The trap.** Default resolution must be byte-identical to today. The golden
+**The trap.** Default *selection* must be byte-identical to today. The golden
 corpus (`roster/orchestration/test/fixtures/selection_golden_corpus.json`, 195 KB,
 ~60 hand-maintained blocks, **no generator script** — the loop is run-test,
 read-diff, hand-edit) is the detector. If it needs editing, default behaviour
 changed and the change is wrong.
+
+Verified that this detector survives the schema bump: the corpus pins
+`expected.primary`/`.reviewers`/`.support` and contains **zero** occurrences of
+`schema_version` or `dispatch_fingerprint`. Fingerprints *will* all change
+(`build_dispatch_plan.py:840` hashes the plan including `schema_version`) — that
+is PP-NFR-5's expected churn, not a corpus failure, and confusing the two will
+send someone hand-editing 60 blocks for no reason.
 
 ### Phase B — The second roster (PP-FR-3)
 
@@ -99,9 +125,16 @@ a guard that works from a guard that cannot fail.
 `:501` emits an absolute path into every plan's
 `knowledge_context.requests[].invocation.args`, and
 `cline-plugins/cline-agents/index.ts:247-259` executes it. **The emitted shape
-must not change** — only how the path is computed. A changed shape is a
-cross-language breaking change and a `selection.schema.json` bump (PP-NFR-3
-forbids one).
+must not change** — only how the path is computed. A changed shape would be a
+cross-language breaking change against a consumer in another language and
+another package.
+
+Note this is now a *narrower* constraint than at Revision 1, and the difference
+matters: PP-NFR-3b already bumps the schema for PP-FR-1b's roster identity, so
+"no bump" is no longer the reason to leave this field alone. The reason is the
+Cline consumer, which is unaffected by a version number and would break on a
+reshaped `invocation.args`. Do not let the bump already in flight license a
+second, unrelated contract change riding along with it.
 
 `roster/knowledge-store/src/` itself needs **no edit**: it is already stdlib-only
 and roster-free (`requirements.md` §0.4). The three `sys.path.append` sites into
@@ -161,10 +194,11 @@ defect, confirm it **fails** naming the real cause, revert, confirm clean.
 ## 4. What this plan does not do
 
 - No git repository split, no directory move, no rename.
-- No kernel edit. **If an implementation finds itself editing `kernel/`, OD-5 was
-  answered the other way and `requirements.md` must be revised before proceeding**
-  — not patched around in the implementation.
-- No `selection.schema.json` bump (PP-NFR-3).
+- No kernel or engine edit. **If an implementation finds itself editing
+  `kernel/` or `engine/`, it has silently reversed OD-5** — stop and revise
+  `requirements.md`, rather than patching around it in the implementation.
+- ~~No `selection.schema.json` bump.~~ **Reversed at Revision 2**: OD-2's
+  disposition forces 6 → 7 (PP-NFR-3b), gated on OD-7.
 - No fix for G-1 (`aides.yaml` authority duplication), G-2 (stray-copy check
   covers one contract file), or G-4 (`sample-selection-output.md` drift guard).
   All three are real, all three are adjacent, all three deserve their own change.

@@ -2,7 +2,7 @@
 
 **Intent ID:** `INTENT-CADRE-PORTABLE-PLATFORM`
 **Revision:** 1 (initial)
-**Status:** draft — awaiting human review
+**Status:** **G1 APPROVED** by `@deagy` (Product Owner) on 2026-08-11. See §16.
 **Author (agent):** product-intent-agent, consolidated by the orchestrating session
 **Date:** 2026-08-11
 **Repository:** `/home/deagy/sdk/cadre`
@@ -19,6 +19,15 @@ the sibling `requirements.md` and `implementation-plan.md`. Under this
 repository's authorship/approval separation invariant it carries **no approval
 authority**. A human decides G1. §11 lists the decisions a reviewer should
 specifically push back on, and §6 lists what a reviewer must not read as settled.
+
+**On §16's approval record.** The G1 approval and the OD dispositions in §16 were
+made by the human Product Owner and *transcribed* by the authoring session at
+their instruction. The authoring agent did not approve, could not
+(`roster/shared/agent-autonomy.yaml`: `approve_own_work: never`;
+`kernel/contracts/lifecycle-gates.json`: `author_cannot_review_or_approve_same_revision: true`),
+and the decision content in §16 originates entirely with the Product Owner. A
+transcription is weaker evidence than a countersigned record — see §16's own
+caveat on what this repository can and cannot attest.
 
 No code was changed by this work. The three documents in this directory are the
 entire deliverable.
@@ -314,14 +323,15 @@ supersedes that document rather than editing it.
 
 ## 13. Open-decision register
 
-| ID | Decision | Owner | Blocking? |
+| ID | Decision | Owner | Status |
 | --- | --- | --- | --- |
-| **OD-1** | Bring the parked `governance-as-product-2026-08` proposal forward, against the 2026-08-09 deferral? | Product Owner (`@deagy`) | **Yes — blocks G1 itself.** Nothing below matters if the deferral stands. |
-| **OD-2** | `roster.root` scope: `SCOPE_GLOBAL_ONLY` (mirroring `agentic_sdlc.bin_path`, so a cloned repo cannot redirect which role prose is dispatched) or project-local (so a project picks its own roster)? | Product Owner + Security Lead | **Yes.** These pull opposite ways: the whole feature is "a project uses its own roster," and the whole security precedent is "a project-local file must not choose what an agent executes." |
-| **OD-3** | `provider.json`'s `"id": "cadre"` names the *roster*; `README.md` names the repository. If the platform is a distinct thing, one of them needs a new name. | Product Owner | No — recording is enough; renaming is out of scope (§6). |
-| **OD-4** | Where does `roster/knowledge-store/AGENT.md` live? It is a *roster role definition* (`roster/catalog.yaml:596-597`) sitting inside what this work declares platform. | Engineering Lead | No — the seam works either way; it is a tidiness call. |
-| **OD-5** | Extend `provider.json` with roster-side keys, or add a sibling `roster.json` the kernel never reads? Extending requires a coordinated change to the kernel **and** the engine (A2); a sibling manifest requires neither. Recommendation: sibling manifest. | System Architect | **Yes.** It determines Phase A's shape. |
-| **OD-6** | Does the mirror boundary guard apply to `roster/context-store/` too? | Engineering Lead | No. |
+| **OD-1** | Bring the parked `governance-as-product-2026-08` proposal forward, against the 2026-08-09 deferral? | Product Owner (`@deagy`) | **RESOLVED** — yes, by the G1 approval itself (§16). |
+| **OD-2** | `roster.root` trust scope. | Product Owner | **RESOLVED** — project-local, overlay-style (§16). |
+| **OD-3** | `provider.json`'s `"id": "cadre"` names the *roster*; `README.md` names the repository. If the platform is a distinct thing, one of them needs a new name. | Product Owner | **OPEN**, non-blocking. Recording is enough; renaming is out of scope (§6). |
+| **OD-4** | Where does `roster/knowledge-store/AGENT.md` live? It is a *roster role definition* (`roster/catalog.yaml:596-597`) sitting inside what this work declares platform. | Engineering Lead | **OPEN**, non-blocking. The seam works either way; a tidiness call. |
+| **OD-5** | Extend `provider.json` with roster-side keys, or add a sibling `roster.json` the kernel never reads? | System Architect | **RESOLVED** — sibling manifest (§16). |
+| **OD-6** | Does the mirror boundary guard apply to `roster/context-store/` too? | Engineering Lead | **OPEN**, non-blocking. |
+| **OD-7** | *New, raised by OD-2's answer.* Surfacing the resolved roster id + digest in the dispatch plan adds an emitted field, forcing `selection.schema.json` 6 → 7. Accept the bump, or surface the identity outside the plan? | System Architect | **OPEN — blocking for G2.** See §16. |
 
 ## 14. Knowledge retrieval status
 
@@ -344,16 +354,66 @@ retrieval.
 ## 15. Handoff
 
 **To:** the human Product Owner (`@deagy`, per `.github/CODEOWNERS` and
-RUNBOOK:730), for a **G1** decision.
-
-**OD-1 blocks the gate itself** — it asks whether a standing Product Owner
-deferral should be reversed, which only the Product Owner may answer. OD-2 and
-OD-5 are blocking for the requirements baseline but not for G1.
+RUNBOOK:730), for a **G1** decision. **Discharged — see §16.**
 
 **Then to:** `requirements-agent`. The sibling `requirements.md` in this
-directory is drafted at Revision 1 **in anticipation**, not on the strength of a
+directory was drafted at Revision 1 **in anticipation**, not on the strength of a
 G1 approval; `roster/workflows/product-intake.md` step 4 places requirements
 decomposition *after* G1, and this ordering is disclosed rather than concealed.
+The approval in §16 arrives after the fact and does not retroactively make the
+sequencing correct — it makes the baseline reviewable, which is a weaker claim.
 Per that workflow, objective conflicts return to G1 rather than proceeding.
 
-Nothing in this directory is approved by its presence here.
+**G2 is not approved.** It requires `product_owner` **and** `engineering_lead`
+(`kernel/contracts/lifecycle-gates.json`), and OD-7 is blocking for it.
+
+## 16. Decisions taken
+
+Recorded per the house pattern (`docs/proposals/durable-knowledge-capture-2026-08.md`'s
+"Decisions taken"), so a later reader does not reopen them as oversights.
+
+**G1 — Intent: APPROVED.** By `@deagy`, Product Owner per `.github/CODEOWNERS`
+and `roster/RUNBOOK.md:730`, on 2026-08-11. Approving the intent gate *is* the
+answer to OD-1: the 2026-08-09 deferral is reversed and this work proceeds.
+
+**What this approval is not.** This repository runs no `.agentic-sdlc/` overlay
+and holds no run records — verified: no `.agentic-sdlc/` directory, no
+`run-record.json` anywhere in the tree. So there is no kernel gate state to
+transition and no `agentic-sdlc decide` invocation behind this line. It is a
+**prose record of a human decision, transcribed by the authoring agent**, and it
+carries exactly the weight of that: it is not a countersigned approval, not
+gate evidence in the kernel's sense, and not verifiable by any check in this
+repository. Anyone relying on it should read it as the Product Owner's recorded
+intent, which is what it is.
+
+**OD-2 — `roster.root` is project-local, on the overlay pattern.** A project may
+point at its own roster via `.agents/cadre.yaml`, under the fail-closed
+discipline `roster/orchestration/src/routing_overlay.py` already establishes for
+project-local routing overlays. The security objection recorded at §13's original
+OD-2 — a project-local file "arrives with `git clone` and is editable by anyone
+who can open a pull request" (`settings.py:681-689`) — is answered by *visibility
+rather than prohibition*: **the resolved roster's id and digest surface in the
+dispatch plan**, so a redirected roster is legible to a human reading the plan
+rather than silent. Global-only was rejected because it would have removed most
+of the feature; unrestricted project-local was rejected because it makes the
+redirect invisible.
+
+**OD-5 — a sibling `roster.json` the kernel never reads.** Chosen precisely
+because it needs **zero** change to `kernel/` and `engine/`, which is what keeps
+the "leave Cadre alone" constraint (§7 C1) true rather than aspirational.
+Extending `provider.json` would have meant editing the kernel's closed
+`allowed_manifest_keys` (`__init__.py:197`) and the engine's duplicate
+`_ALLOWED_MANIFEST_KEYS`. The cost accepted: two manifests describing one bundle,
+and a second thing to keep in step.
+
+**OD-7 — raised by OD-2's answer, and left open.** Surfacing the roster id and
+digest in the dispatch plan **adds an emitted field**, which forces
+`selection.schema.json` from `const: 6` to `7`. That directly contradicts
+`requirements.md`'s PP-NFR-3 ("no bump"), which was written before OD-2 was
+answered. The contradiction is recorded rather than resolved by quietly amending
+one side: the schema is closed *and* vendored away from its producer into both
+the wheel and `plugin/`, so a pinned consumer copy rejects any plan carrying an
+unknown property while truthfully reporting the version it handles. The bump is
+therefore not cosmetic — it is what converts a silent rejection into an error
+naming the real cause. **Blocking for G2**, because it changes a published
+contract and that is not the authoring session's call.
