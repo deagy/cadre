@@ -82,6 +82,56 @@ check and reporting "nothing to do". See
 
 ### Added
 
+- **`cadre context` — an agent context store, sibling to the knowledge store,
+  for working material an agent needs to park outside its own context window**
+  ([#238](https://github.com/deagy/cadre/issues/238)). `init`, `put`, `get`,
+  `list`, `search`, `reindex`, `export`, and `promote`, plus four MCP tools on
+  `dispatch_server.py` that shell out to the same CLI. Entries are addressed by
+  handle, so a handoff can carry a reference where it previously had to carry
+  bulk content — `handoff-contracts.md` gains `context_handles`, with the rule
+  that a handle may replace bulk content but never a required audit field.
+
+  **This is not a second knowledge store, and the boundary is enforced by
+  construction rather than by convention.** The knowledge store is a curated
+  corpus: steward-dispositioned, retention-governed, deleted only with a reason
+  and an authorized human. Working context is agent-written, unreviewed, and
+  high-churn, and write authority is the only property that separates the two
+  once durability and semantic retrieval are in scope. So the stores get
+  separate database files (a cross-store JOIN cannot be written, making
+  "nothing reaches the corpus without a steward disposition" a property of the
+  deployment), separate config, resolution root, and module tree, with an AST
+  import guard (`test_context_boundary.py`) permitting exactly one coupling:
+  shared utilities in `roster/shared/src/`, which neither store owns.
+  `promote` writes nothing — it emits a document for `cadre knowledge propose
+  --from-finding -`, and the coupling is a shell pipe.
+
+  **`expires_at` is NOT NULL and there is no indefinite entry**, deliberately
+  inverting the knowledge store's null-means-indefinite default: there,
+  indefinite keeps an open retention decision visible over dispositioned
+  content; here it would make the store durable, accumulating unreviewed
+  content outside the gate. The TTL is a safety mechanism, not a retention
+  policy, and does not pre-empt the team-profile decision.
+
+  **Three mechanisms carry the anti-laundering rule**, each an existing
+  repository mechanism applied to the new surface: `untrusted_inputs` is
+  monotonic and non-clearable, propagating from every cited parent and failing
+  toward flagged for an unverifiable one — so a clean summary of poisoned
+  material stays flagged, which is what stops a summarization step from
+  laundering hostile content; a distinct trust label
+  (`untrusted_working_context`) rides the existing `wrap_untrusted_output()`
+  fence on the MCP path; and promotion hands a flagged entry to the knowledge
+  store's existing automatic-defer rule rather than duplicating that decision.
+  `roster/shared/context-use-policy.md` states the reading rules and is
+  embedded into every role — any role may be handed a handle, so it binds every
+  tier.
+
+  **Remote embeddings are refused structurally, not by config check.** The
+  offline half of the embedding code moved to
+  `roster/shared/src/text_embedding.py` and the `openai-compatible` path stayed
+  in the knowledge store, so this store has no import path to anything that
+  opens a socket. Whether unreviewed agent material may be transmitted off the
+  machine is an open security decision (OD-5).
+
 - **Dispatch to self-hosted models: a local-provider path for the `codex`
   runner, and a new `runner="api"` that needs no coding CLI at all.** Both
   MCP-dispatch-server features; neither changes behavior for an operator who

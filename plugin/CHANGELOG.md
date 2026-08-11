@@ -15,6 +15,18 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.20.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.20.0) - 2026-08-11
+
+### Added
+
+- **`cadre context` — a place for an agent to park working material outside its own context window.** `init`, `put`, `get`, `list`, `search`, `reindex`, `export`, and `promote`, backed by a store that is separate from the knowledge store in database file, config, resolution root, and module tree. Entries are addressed by handle, so a handoff between roles can carry a reference instead of bulk content. **Worth knowing before you use it:** this store is explicitly *not* a second knowledge store. Entries are agent-written and unreviewed, every entry has a mandatory expiry (there is no indefinite entry — the TTL is a safety mechanism, not a retention policy), and nothing crosses into the curated corpus without a steward: `promote` writes nothing, it emits a document you pipe into `cadre knowledge propose --from-finding -`. Content retrieved from it carries a distinct `untrusted_working_context` trust label and stays flagged through summarization, so a clean-looking summary of poisoned material cannot launder its way into the corpus. Embeddings are offline-only by construction — the store has no import path to anything that opens a socket. See `roster/context-store/README.md` and `SECURITY.md` in the packaged suite.
+
+- **Dispatch can now drive roles against your own OpenAI-compatible endpoint, with or without a coding CLI installed.** Two paths, both inert until configured — with none of the new settings present, every existing dispatch produces byte-identical behaviour. `runners.codex_profile` plus per-tier `runners.local_model_<tier>` points the existing `codex` runner at a local provider (typically `llama-server`), keeping one model per catalog tier rather than collapsing every role onto one. The new `runner="api"` needs no coding CLI at all: it drives `/chat/completions` directly with its own bounded agent loop and file/search/edit tools, reusing the same role wrappers. **Read the security posture before enabling the `api` runner:** it spawns no child process, so it has no OS-level sandbox — file access is confined in-process, which is strictly weaker than what Codex and Claude Code enforce. Writes are off by default (`runners.api_allow_writes`), command execution is absent unless you supply an allowlist and is advisory rather than a containment boundary, and the whole write path is documented as still needing accountable Security Lead review before use outside a local working copy. Your inference endpoint and credentials are never stored here — the `codex` path keeps them in `$CODEX_HOME`, and the `api` path reads a variable *name* from `runners.api_key_env`.
+
+### Changed
+
+- **Every dispatch audit record now carries a `runner` field**, so the trail can distinguish a Codex dispatch from a Claude Code one — it previously could not. A single-role dispatch to an unknown runner is now audited when denied, matching what team dispatch always did. `api`-runner records additionally carry `tool_calls`, `files_written` (paths only), and `commands_run`. **Required action:** if you parse audit records against a fixed set of keys, expect the new fields.
+
 ## [0.19.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.19.0) - 2026-08-11
 
 ### Fixed
