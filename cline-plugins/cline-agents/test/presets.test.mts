@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -724,6 +724,145 @@ describe("destructive-git guard (deagy/cadre#129): subcommand-level restriction 
         // silent regression either way.
         const nested = wrapInBashC(wrapInBashC(wrapInBashC(wrapInBashC("git reset --hard HEAD"))));
         expect(await evaluateGitCommand(nested, repoDir)).toBeNull();
+      });
+    });
+
+    // -----------------------------------------------------------------
+    // git worktree (deagy/cadre#215) -- mirrors WorktreeTests /
+    // WorktreeDocumentedGapTests in plugin/tools/
+    // test_guard_workspace_mutation.py. Kept in sync deliberately.
+    // -----------------------------------------------------------------
+    describe("git worktree (deagy/cadre#215)", () => {
+      let wtRoot: string;
+
+      beforeEach(() => {
+        wtRoot = mkdtempSync(join(tmpdir(), "cline-agents-git-guard-wt-"));
+      });
+
+      afterEach(() => {
+        rmSync(wtRoot, { recursive: true, force: true });
+      });
+
+      const addWorktree = (name: string, branch: string): string => {
+        const path = join(wtRoot, name);
+        execFileSync("git", ["worktree", "add", "-q", path, "-b", branch], { cwd: repoDir });
+        return path;
+      };
+
+      it("blocks `git worktree remove`, including --force and the bare-name spelling", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        expect((await evaluateGitCommand(`git worktree remove ${wt}`, repoDir))?.reason).toMatch(
+          /deregisters a worktree/,
+        );
+        expect(await evaluateGitCommand(`git worktree remove --force ${wt}`, repoDir)).not.toBeNull();
+        // Verified against git 2.53.0: the bare basename really does remove
+        // it, which is why the handler refuses flat rather than matching the
+        // target against `git worktree list`.
+        expect(await evaluateGitCommand("git worktree remove wt1", repoDir)).not.toBeNull();
+      });
+
+      it("blocks `git worktree remove` of a worktree this session created (the policy is absolute)", async () => {
+        const wt = addWorktree("mine", "mine");
+        const decision = await evaluateGitCommand(`git worktree remove ${wt}`, repoDir);
+        expect(decision?.reason).toMatch(/including one you created/);
+      });
+
+      it("blocks `git worktree move`", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        const decision = await evaluateGitCommand(`git worktree move ${wt} ${join(wtRoot, "wt1b")}`, repoDir);
+        expect(decision?.reason).toMatch(/relocates the registered worktree/);
+      });
+
+      it("blocks `git worktree prune` when its dry run shows something would be deregistered", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        // Make it unreachable without touching git metadata -- the
+        // "teammate's worktree on a momentarily unavailable path" case.
+        renameSync(wt, join(wtRoot, "wt1-relocated"));
+        const decision = await evaluateGitCommand("git worktree prune", repoDir);
+        expect(decision?.reason).toMatch(/would deregister/);
+        expect(decision?.reason).toMatch(/names no target/);
+      });
+
+      it("allows `git worktree prune` when nothing would be deregistered", async () => {
+        // The rejected stricter policy (block whenever any worktree this
+        // session did not create is registered) would block this. A prune
+        // that removes nothing removes nothing.
+        addWorktree("wt1", "wt1");
+        expect(await evaluateGitCommand("git worktree prune", repoDir)).toBeNull();
+      });
+
+      it("allows an explicit prune dry run even when something is prunable", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        renameSync(wt, join(wtRoot, "wt1-relocated"));
+        expect(await evaluateGitCommand("git worktree prune -n", repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git worktree prune --dry-run", repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git worktree prune -nv", repoDir)).toBeNull();
+      });
+
+      it("passes --expire through to the dry run, so a prune scoped to remove nothing is allowed", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        renameSync(wt, join(wtRoot, "wt1-relocated"));
+        expect(await evaluateGitCommand("git worktree prune --expire never", repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git worktree prune --expire=never", repoDir)).toBeNull();
+      });
+
+      it("allows plain `git worktree add` -- the policy-endorsed isolation step", async () => {
+        const dest = join(wtRoot, "new-wt");
+        expect(await evaluateGitCommand(`git worktree add ${dest}`, repoDir)).toBeNull();
+        expect(await evaluateGitCommand(`git worktree add -b agent/task/role ${dest}`, repoDir)).toBeNull();
+        expect(await evaluateGitCommand(`git worktree add --detach ${dest} HEAD`, repoDir)).toBeNull();
+      });
+
+      it("blocks `git worktree add -B` only when it would move an existing branch", async () => {
+        const dest = join(wtRoot, "new-wt");
+        // Branch does not exist yet: `-B` behaves like `-b`, moves nothing.
+        expect(await evaluateGitCommand(`git worktree add -B brand-new ${dest}`, repoDir)).toBeNull();
+
+        execFileSync("git", ["branch", "existing"], { cwd: repoDir });
+        // Branch already points at the start point: still moves nothing.
+        expect(await evaluateGitCommand(`git worktree add -B existing ${dest}`, repoDir)).toBeNull();
+
+        writeFileSync(join(repoDir, "second.txt"), "second\n");
+        execFileSync("git", ["add", "."], { cwd: repoDir });
+        execFileSync("git", ["commit", "-q", "-m", "second"], { cwd: repoDir });
+        // Now HEAD has moved past `existing`, so -B would reset it.
+        const decision = await evaluateGitCommand(`git worktree add -B existing ${dest}`, repoDir);
+        expect(decision?.reason).toMatch(/force-resets the existing branch/);
+        // Attached short-flag spelling is the same operation, one space apart.
+        expect(await evaluateGitCommand(`git worktree add -Bexisting ${dest}`, repoDir)).not.toBeNull();
+      });
+
+      it("allows read-only and non-removing worktree verbs", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        expect(await evaluateGitCommand("git worktree list", repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git worktree list --porcelain", repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git worktree", repoDir)).toBeNull();
+        expect(await evaluateGitCommand(`git worktree lock ${wt}`, repoDir)).toBeNull();
+        expect(await evaluateGitCommand(`git worktree unlock ${wt}`, repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git worktree repair", repoDir)).toBeNull();
+      });
+
+      it("blocks `git worktree remove` through chaining, bash -c, env, and -C", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        expect(await evaluateGitCommand(`cd /tmp && git worktree remove ${wt}`, repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand(`bash -c "git worktree remove ${wt}"`, repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand(`env git worktree remove ${wt}`, repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand(`git -C ${repoDir} worktree remove ${wt}`, repoDir)).not.toBeNull();
+      });
+
+      it("documented known gaps: rm -rf of a worktree directory, git gc, and an aliased spelling", async () => {
+        // This guard only inspects `git` invocations, so an `rm` reaching
+        // the same outcome is invisible to it; `git gc` prunes worktrees as
+        // part of its own housekeeping and has no handler; and
+        // GIT_GUARD_HANDLERS matches literal subcommand names only, so an
+        // alias is invisible. All three assert the current (permissive)
+        // behaviour so closing a gap is a visible, intentional change.
+        const wt = addWorktree("wt1", "wt1");
+        expect(await evaluateGitCommand(`rm -rf ${wt}`, repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git gc", repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git gc --prune=now", repoDir)).toBeNull();
+        execFileSync("git", ["config", "alias.wtr", "worktree remove"], { cwd: repoDir });
+        expect(await evaluateGitCommand("git wtr wt1", repoDir)).toBeNull();
       });
     });
   });

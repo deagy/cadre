@@ -23,6 +23,19 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+### Added
+
+- **The workspace-mutation guard hook now covers `git worktree`** ([#215](https://github.com/deagy/cadre/issues/215)). `workspace-isolation.md`'s "Never remove or prune a worktree yourself" reaches all 159 role wrappers since [#211](https://github.com/deagy/cadre/issues/211) but had no structural enforcement: `_HANDLERS` in `.claude/hooks/guard_workspace_mutation.py` had no `worktree` entry, so every spelling passed unexamined. A new `check_worktree` handler (and its Cline mirror in `cline-plugins/cline-agents/index.ts`) refuses:
+
+  - `git worktree remove`, including `--force` and the bare-basename spelling, unconditionally. There is no state in which policy permits it and no non-destructive variant to steer toward, so no state check is performed — one would buy no safety and only add a bypass surface.
+  - `git worktree move`, unconditionally: it rewrites a registration in place, so a session whose working directory is the old path loses its tree mid-task with no error at the moment of the move.
+  - `git worktree prune`, but only when its own dry run (`git worktree prune -n -v`, with any caller-supplied `--expire` passed through) shows a registration would actually be removed. Prune names no target, so "is this my worktree?" is unanswerable from the command line; the dry run covers the dangerous case exactly — including a teammate's worktree on a momentarily unavailable path — while leaving a no-op prune unblocked. An explicit `-n`/`--dry-run` from the caller is always allowed.
+  - `git worktree add -B <branch>`, but only when `<branch>` already exists and points somewhere other than the resolved start point. This is the one guarded spelling of an otherwise explicitly allowed verb: `-B` force-resets the branch, reporting it only as a "resetting branch" note, which is `agent-autonomy.yaml`'s `discard_uncommitted_work_or_move_branches: never`. Plain `add`, `-b`, `--detach`, `list`, `lock`, `unlock`, and `repair` are never blocked.
+
+  Three spellings remain deliberately uncovered and are pinned by tests asserting they are *not* blocked, alongside the alias and recursion-bound gaps already recorded: deleting a worktree directory with `rm` (not a git subcommand, so the hook never sees it), `git gc` (which prunes worktrees as part of its own housekeeping and has no handler), and an aliased spelling of the subcommand.
+
+  `roster/shared/workspace-isolation.md` gains `move` to its prohibition and a note on what the hook does and does not enforce. The `CADRE_DISABLE_WORKSPACE_MUTATION_GUARD` opt-out is unchanged and still short-circuits ahead of all of it.
+
 ## [0.20.0] - 2026-08-10
 
 Shipped to users as plugin [v0.17.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.17.0).

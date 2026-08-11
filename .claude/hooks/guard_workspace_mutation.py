@@ -111,7 +111,97 @@ where practical -- see `git status --porcelain`/`git clean -n` use below):
     alternative, refusing itself when the remote has moved since the last
     fetch.
 
+  * `git worktree remove [--force] <worktree>` and `git worktree move
+    <source> <destination>` -- unconditionally, tracks deagy/cadre#215.
+    `workspace-isolation.md`'s "Never remove or prune a worktree yourself"
+    is absolute: it covers every worktree, including an inspection worktree
+    the agent created itself, because a worktree that holds work IS the
+    deliverable location until a human decides otherwise, and deregistering
+    one is a destructive git-metadata operation
+    (`destructive_action: human_approval`). Unlike `reset --hard` there is
+    no state in which policy permits either verb and no non-destructive
+    variant to steer toward, so no state check is performed: adding one
+    would buy no safety and would only add a bypass surface. In
+    particular, no attempt is made to match the target against
+    `git worktree list` -- verified against git 2.53.0 that
+    `git worktree remove` accepts a bare basename (`git worktree remove
+    wt2`) as well as a path, so path matching would miss that spelling
+    while a flat refusal does not. Blocking a `remove` whose target isn't
+    a registered worktree costs nothing either: git itself exits 128
+    ("is not a working tree") on that input. `move` is included because it
+    silently rewrites another session's registration -- an agent whose cwd
+    is the old path loses its tree mid-task with no error at the moment of
+    the move.
+
+  * `git worktree prune` -- but only when a dry run (`git worktree prune
+    -n -v`, run automatically before deciding, with any caller-supplied
+    `--expire` passed through) shows it would actually deregister
+    something. This is the same shape as the `git clean -n` check above,
+    with one behavioral difference confirmed against git 2.53.0: prune's
+    dry-run report goes to STDERR, not stdout, so both streams are
+    considered. `prune` is the sharper of the two removal verbs precisely
+    because it names no target -- it deregisters whatever git currently
+    considers unreachable, which can include a teammate's worktree sitting
+    on a momentarily unavailable path. "Is this my worktree?" is therefore
+    not answerable from the command line at all.
+      The stricter alternative considered and rejected: refuse `prune`
+    whenever any worktree this session did not create is registered. That
+    over-blocks the case where nothing is prunable (a no-op refusal is
+    pure friction, and friction is what gets a guard disabled) while
+    gaining nothing -- a prune that would remove nothing removes nothing.
+    The dry run covers the dangerous case exactly, including the
+    unavailable-path teammate case, which is precisely when prune finds
+    something prunable. An explicit `-n`/`--dry-run` from the caller is
+    inherently non-destructive and always allowed.
+      Known race, accepted: the dry run and the real command are separate
+    invocations, so a worktree path that becomes unavailable in between is
+    reported as nothing-to-prune and allowed through. Consistent with this
+    module's fail-open stance; it is defense-in-depth, not the only
+    control.
+
+  * `git worktree add -B <branch> ...` when `<branch>` already exists as a
+    local branch AND resolves to a commit other than the resolved start
+    point. This is the one guarded spelling of an otherwise explicitly
+    allowed verb (`agent-autonomy.yaml`'s
+    `repository.create_local_branch_or_worktree: allowed`), and it is
+    guarded because `-B` force-resets the branch: verified against git
+    2.53.0 that `git worktree add -B existing <path>` moved `existing`
+    from 523bf6b to 23a851c, reporting it only as "Preparing worktree
+    (resetting branch 'existing'; was at 523bf6b)". That is exactly
+    `agent-autonomy.yaml`'s `discard_uncommitted_work_or_move_branches:
+    never`, and `workspace-isolation.md` names the flag
+    ("Never `-B` (force-create/reset the branch)"). Plain `-b` is always
+    allowed -- git itself refuses when the branch already exists -- and so
+    is `-B` naming a branch that does not exist yet or that already points
+    at the start point, since neither moves anything.
+      Note the deliberate asymmetry with `check_checkout`, which allows
+    `git checkout -B` unconditionally (see its bullet above): there the
+    start point is overwhelmingly the implicit current HEAD and resolving
+    arbitrary start points was judged out of scope. Here the start point
+    is a plain positional argument that `git rev-parse` resolves cheaply,
+    so the check is taken. Whether `check_checkout` should adopt the same
+    check is a separate question, deliberately not changed under #215.
+
 Deliberately NOT covered, with reasoning:
+
+  * Deleting a worktree's directory directly (`rm -rf .worktrees/foo`)
+    rather than through `git worktree remove`.
+    `workspace-isolation.md` forbids this in the same sentence as the git
+    verbs, but this hook only inspects `git` invocations -- an `rm` is not
+    a git subcommand and `_HANDLERS` never sees it. Deciding whether an
+    arbitrary `rm` target is a registered worktree (and doing it for every
+    `rm` the model runs) is a materially different and much broader
+    check than anything else here. Left as a known gap, pinned by
+    `test_rm_of_a_worktree_directory_is_a_documented_gap`.
+  * `git worktree prune` reached indirectly through `git gc`, which runs
+    worktree pruning as part of its own housekeeping. `gc` has no handler
+    (see the reflog/`gc --prune=now` gap below), so this spelling is not
+    intercepted. Pinned by `test_git_gc_is_a_documented_gap`.
+  * `git worktree unlock` (which makes a locked worktree prunable again)
+    and `git worktree repair` (which rewrites registration metadata).
+    Neither deregisters or relocates a worktree on its own; each would
+    need its own state-check design to distinguish routine repair from
+    setup for a later removal. Left as known gaps.
 
   * `git stash drop`/`git stash clear` -- also destructive to uncommitted
     work, but out of the explicit "dangerous cases" list in the task brief
@@ -668,6 +758,172 @@ def check_restore(sub_args: list[str], cwd: str):
     return _check_ref_into_paths(cwd, source, paths, cmd="restore")
 
 
+# `git worktree add` flags that consume the following token as their value,
+# so it must not be mistaken for a positional (the new worktree's path, or
+# its start point). Conservative, not exhaustive -- an unrecognized flag
+# falls through to the generic `startswith("-")` skip below without
+# consuming a value. The failure mode of getting this wrong is a
+# mis-resolved start point, which `git rev-parse` then fails to resolve,
+# which fails open. See check_worktree.
+_WORKTREE_ADD_FLAGS_WITH_VALUE = {"-b", "-B", "--reason"}
+
+
+def _worktree_positionals(args: list[str], flags_with_value: set[str]) -> list[str]:
+    positional: list[str] = []
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--":
+            positional.extend(args[i + 1 :])
+            break
+        if a in flags_with_value:
+            i += 2
+            continue
+        if a.startswith("-") and a != "-":
+            i += 1
+            continue
+        positional.append(a)
+        i += 1
+    return positional
+
+
+def _worktree_flag_value(args: list[str], flag: str) -> Optional[str]:
+    """Value of `<flag> <value>`, `<flag>=<value>`, or -- for a short flag
+    only -- git's attached spelling `-Bvalue`.
+
+    The attached short form is not a nicety: verified against git 2.53.0
+    that `git worktree add -Bexisting <path>` resets `existing` exactly as
+    the detached `-B existing` spelling does, so missing it would leave the
+    same destructive operation unguarded behind a one-space difference.
+    """
+    is_short = flag.startswith("-") and not flag.startswith("--")
+    for i, a in enumerate(args):
+        if a == flag:
+            return args[i + 1] if i + 1 < len(args) else None
+        if a.startswith(f"{flag}="):
+            return a.split("=", 1)[1]
+        if is_short and len(flag) == 2 and a.startswith(flag) and len(a) > 2:
+            return a[2:]
+    return None
+
+
+def check_worktree(sub_args: list[str], cwd: str):
+    """`git worktree` -- see the module docstring for what each verb does and
+    does not block, and why `prune` is state-checked while `remove`/`move`
+    are refused flat. Tracks deagy/cadre#215.
+    """
+    verb_index = next((i for i, a in enumerate(sub_args) if not a.startswith("-")), None)
+    if verb_index is None:
+        return None  # bare `git worktree`: prints usage, mutates nothing
+    verb = sub_args[verb_index]
+    rest = sub_args[verb_index + 1 :]
+
+    if verb == "remove":
+        target = next((a for a in rest if not a.startswith("-")), "<worktree>")
+        return {
+            "reason": (
+                f"Blocked: `git worktree remove` on '{target}' deregisters a worktree, which "
+                "is a destructive git-metadata operation requiring human approval "
+                "(`agent-autonomy.yaml`: destructive_action: human_approval). "
+                "`workspace-isolation.md` says never remove or prune a worktree yourself -- "
+                "including one you created, and including an inspection worktree you are done "
+                "with: the worktree IS the deliverable location until a human or the "
+                "dispatching process decides otherwise. Leave it in place and say in your "
+                "result that it can be cleaned up, or ask the operator to remove it themselves."
+            )
+        }
+
+    if verb == "move":
+        positional = [a for a in rest if not a.startswith("-")]
+        source = positional[0] if positional else "<worktree>"
+        return {
+            "reason": (
+                f"Blocked: `git worktree move` relocates the registered worktree '{source}'. "
+                "Any session whose working directory is the old path loses its tree mid-task, "
+                "with no error at the moment of the move. Rewriting another session's worktree "
+                "registration is a destructive git-metadata operation "
+                "(`agent-autonomy.yaml`: destructive_action: human_approval) and "
+                "`workspace-isolation.md` reserves worktree cleanup and relocation to the "
+                "operator. Create a new worktree at the path you want instead, or ask the "
+                "operator to move this one."
+            )
+        }
+
+    if verb == "prune":
+        short_chars: set[str] = set()
+        long_opts: set[str] = set()
+        for a in rest:
+            if a.startswith("--"):
+                long_opts.add(a.split("=", 1)[0])
+            elif a.startswith("-") and len(a) > 1:
+                short_chars.update(a[1:])
+        if "n" in short_chars or "--dry-run" in long_opts:
+            return None  # caller's own dry run: reports, removes nothing
+
+        dry_args = ["worktree", "prune", "-n", "-v"]
+        expire = _worktree_flag_value(rest, "--expire")
+        if expire:
+            dry_args += ["--expire", expire]
+
+        rc, out, err = run_git(dry_args, cwd)
+        if rc != 0:
+            # Can't confirm state (not a repo, git missing, bad --expire);
+            # the real command fails the same way. Don't block on that.
+            return None
+        # git 2.53.0 reports prune's dry run on stderr, not stdout -- both
+        # are considered so a future/older git writing to either is caught.
+        report = "\n".join(part for part in (out.strip(), err.strip()) if part)
+        if not report:
+            return None  # nothing prunable: the command would be a no-op
+
+        entries = [line.strip() for line in report.splitlines() if line.strip()]
+        example = entries[0] if entries else "a registered worktree"
+        return {
+            "reason": (
+                f"Blocked: `git worktree prune` would deregister {len(entries)} worktree(s) "
+                f"(e.g. {example}). Prune names no target -- it removes whatever git currently "
+                "considers unreachable, which can include a teammate's worktree sitting on a "
+                "momentarily unavailable path, so you cannot tell from this command that only "
+                "your own worktrees are affected. `workspace-isolation.md` says never remove or "
+                "prune a worktree yourself. Inspect what would go with "
+                "`git worktree prune -n -v` (allowed, it removes nothing) and report it, or ask "
+                "the operator to prune themselves."
+            )
+        }
+
+    if verb == "add":
+        forced = _worktree_flag_value(rest, "-B")
+        if not forced:
+            return None  # plain `add`/`-b`: explicitly allowed, creates only
+        if not is_local_branch(cwd, forced):
+            return None  # `-B` on a new name behaves like `-b`: nothing to move
+        positional = _worktree_positionals(rest, _WORKTREE_ADD_FLAGS_WITH_VALUE)
+        # positional[0] is the new worktree's path; positional[1], if
+        # present, is the start point. Default start point is HEAD.
+        start = positional[1] if len(positional) > 1 else "HEAD"
+        rc1, current, _ = run_git(["rev-parse", "--verify", forced], cwd)
+        rc2, target, _ = run_git(["rev-parse", "--verify", start], cwd)
+        if rc1 != 0 or rc2 != 0:
+            return None  # indeterminate; git will error on its own
+        if current.strip() == target.strip():
+            return None  # branch already points there: `-B` moves nothing
+        return {
+            "reason": (
+                f"Blocked: `git worktree add -B {forced}` force-resets the existing branch "
+                f"'{forced}' to '{start}', moving it off the commits it points at now -- git "
+                "reports this only as a 'resetting branch' note, and any commit no other ref "
+                "reaches is then recoverable from `git reflog` alone. That is "
+                "`agent-autonomy.yaml`'s `discard_uncommitted_work_or_move_branches: never`. "
+                f"Creating a worktree is allowed: use `git worktree add -b <new-branch>` with a "
+                f"name that doesn't exist yet (git refuses `-b` if it does), or check out "
+                f"'{forced}' into the new worktree without -B if you want it where it already is."
+            )
+        }
+
+    # list / lock / unlock / repair and anything else: no opinion.
+    return None
+
+
 _HANDLERS = {
     "reset": check_reset,
     "checkout": check_checkout,
@@ -675,6 +931,7 @@ _HANDLERS = {
     "clean": check_clean,
     "branch": check_branch,
     "push": check_push,
+    "worktree": check_worktree,
 }
 
 

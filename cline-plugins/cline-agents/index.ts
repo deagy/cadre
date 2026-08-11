@@ -1213,8 +1213,10 @@ async function isLocalBranch(cwd: string, name: string): Promise<boolean> {
 // Per-subcommand checks -- each returns a decision to deny, or `null` to
 // express no opinion (allow). Ports guard_workspace_mutation.py's
 // check_reset/check_clean/check_branch/check_push/check_checkout/
-// check_restore, same scope and same deliberate exclusions (see that file's
-// module docstring for what is and isn't covered, and why).
+// check_restore/check_worktree, same scope and same deliberate exclusions
+// (see that file's module docstring for what is and isn't covered, and
+// why). This mirror is kept in sync deliberately, not by coincidence:
+// #215 landed `check_worktree` in both files in the same change.
 // ---------------------------------------------------------------------------
 
 async function checkReset(subArgs: string[], cwd: string): Promise<GitGuardDecision | null> {
@@ -1435,6 +1437,166 @@ async function checkRestore(subArgs: string[], cwd: string): Promise<GitGuardDec
   return checkRefIntoPaths(cwd, source, paths, "restore");
 }
 
+// `git worktree add` flags that consume the following token as their value,
+// so it must not be mistaken for a positional (the new worktree's path, or
+// its start point). Conservative, not exhaustive -- an unrecognized flag
+// falls through to the generic `startsWith("-")` skip without consuming a
+// value. Getting this wrong mis-resolves the start point, which `git
+// rev-parse` then fails to resolve, which fails open.
+const WORKTREE_ADD_FLAGS_WITH_VALUE = new Set(["-b", "-B", "--reason"]);
+
+function worktreePositionals(args: string[], flagsWithValue: Set<string>): string[] {
+  const positional: string[] = [];
+  let i = 0;
+  while (i < args.length) {
+    const a = args[i];
+    if (a === "--") {
+      positional.push(...args.slice(i + 1));
+      break;
+    }
+    if (flagsWithValue.has(a)) {
+      i += 2;
+      continue;
+    }
+    if (a.startsWith("-") && a !== "-") {
+      i += 1;
+      continue;
+    }
+    positional.push(a);
+    i += 1;
+  }
+  return positional;
+}
+
+/**
+ * Value of `<flag> <value>`, `<flag>=<value>`, or -- for a two-character
+ * short flag only -- git's attached spelling `-Bvalue`. The attached form
+ * is not a nicety: verified against git 2.53.0 that `git worktree add
+ * -Bexisting <path>` resets `existing` exactly as `-B existing` does.
+ */
+function worktreeFlagValue(args: string[], flag: string): string | undefined {
+  const isShort = flag.startsWith("-") && !flag.startsWith("--");
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (a === flag) return args[i + 1];
+    if (a.startsWith(`${flag}=`)) return a.split("=", 2)[1];
+    if (isShort && flag.length === 2 && a.startsWith(flag) && a.length > 2) return a.slice(2);
+  }
+  return undefined;
+}
+
+/**
+ * `git worktree` (deagy/cadre#215). Ports guard_workspace_mutation.py's
+ * `check_worktree` -- same verbs, same state checks, same deliberate
+ * exclusions. See that file's module docstring for the full reasoning,
+ * including why `prune` is state-checked via its own dry run while
+ * `remove`/`move` are refused flat, and why `add` is guarded only in the
+ * `-B`-moves-an-existing-branch case.
+ */
+async function checkWorktree(subArgs: string[], cwd: string): Promise<GitGuardDecision | null> {
+  const verbIndex = subArgs.findIndex((a) => !a.startsWith("-"));
+  if (verbIndex === -1) return null; // bare `git worktree`: prints usage
+  const verb = subArgs[verbIndex];
+  const rest = subArgs.slice(verbIndex + 1);
+
+  if (verb === "remove") {
+    const target = rest.find((a) => !a.startsWith("-")) ?? "<worktree>";
+    return {
+      reason:
+        `Blocked: \`git worktree remove\` on '${target}' deregisters a worktree, which ` +
+        "is a destructive git-metadata operation requiring human approval " +
+        "(`agent-autonomy.yaml`: destructive_action: human_approval). " +
+        "`workspace-isolation.md` says never remove or prune a worktree yourself -- " +
+        "including one you created, and including an inspection worktree you are done " +
+        "with: the worktree IS the deliverable location until a human or the " +
+        "dispatching process decides otherwise. Leave it in place and say in your " +
+        "result that it can be cleaned up, or ask the operator to remove it themselves.",
+    };
+  }
+
+  if (verb === "move") {
+    const source = rest.find((a) => !a.startsWith("-")) ?? "<worktree>";
+    return {
+      reason:
+        `Blocked: \`git worktree move\` relocates the registered worktree '${source}'. ` +
+        "Any session whose working directory is the old path loses its tree mid-task, " +
+        "with no error at the moment of the move. Rewriting another session's worktree " +
+        "registration is a destructive git-metadata operation " +
+        "(`agent-autonomy.yaml`: destructive_action: human_approval) and " +
+        "`workspace-isolation.md` reserves worktree cleanup and relocation to the " +
+        "operator. Create a new worktree at the path you want instead, or ask the " +
+        "operator to move this one.",
+    };
+  }
+
+  if (verb === "prune") {
+    const shortChars = new Set<string>();
+    const longOpts = new Set<string>();
+    for (const a of rest) {
+      if (a.startsWith("--")) longOpts.add(a.split("=", 1)[0]);
+      else if (a.startsWith("-") && a.length > 1) for (const c of a.slice(1)) shortChars.add(c);
+    }
+    if (shortChars.has("n") || longOpts.has("--dry-run")) return null; // caller's own dry run
+
+    const dryArgs = ["worktree", "prune", "-n", "-v"];
+    const expire = worktreeFlagValue(rest, "--expire");
+    if (expire) dryArgs.push("--expire", expire);
+
+    const result = await runGit(dryArgs, cwd);
+    if (!result || result.code !== 0) return null; // can't confirm state; fail open
+    // git 2.53.0 reports prune's dry run on STDERR, not stdout (unlike
+    // `git clean -n`) -- both are considered so a git writing to either
+    // stream is caught.
+    const report = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n");
+    if (!report) return null; // nothing prunable: the command would be a no-op
+
+    const entries = report
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const example = entries[0] ?? "a registered worktree";
+    return {
+      reason:
+        `Blocked: \`git worktree prune\` would deregister ${entries.length} worktree(s) ` +
+        `(e.g. ${example}). Prune names no target -- it removes whatever git currently ` +
+        "considers unreachable, which can include a teammate's worktree sitting on a " +
+        "momentarily unavailable path, so you cannot tell from this command that only " +
+        "your own worktrees are affected. `workspace-isolation.md` says never remove or " +
+        "prune a worktree yourself. Inspect what would go with " +
+        "`git worktree prune -n -v` (allowed, it removes nothing) and report it, or ask " +
+        "the operator to prune themselves.",
+    };
+  }
+
+  if (verb === "add") {
+    const forced = worktreeFlagValue(rest, "-B");
+    if (!forced) return null; // plain `add`/`-b`: explicitly allowed, creates only
+    if (!(await isLocalBranch(cwd, forced))) return null; // `-B` on a new name behaves like `-b`
+    const positional = worktreePositionals(rest, WORKTREE_ADD_FLAGS_WITH_VALUE);
+    // positional[0] is the new worktree's path; positional[1], if present,
+    // is the start point. Default start point is HEAD.
+    const start = positional[1] ?? "HEAD";
+    const current = await runGit(["rev-parse", "--verify", forced], cwd);
+    const target = await runGit(["rev-parse", "--verify", start], cwd);
+    if (!current || current.code !== 0 || !target || target.code !== 0) return null; // fail open
+    if (current.stdout.trim() === target.stdout.trim()) return null; // moves nothing
+    return {
+      reason:
+        `Blocked: \`git worktree add -B ${forced}\` force-resets the existing branch ` +
+        `'${forced}' to '${start}', moving it off the commits it points at now -- git ` +
+        "reports this only as a 'resetting branch' note, and any commit no other ref " +
+        "reaches is then recoverable from `git reflog` alone. That is " +
+        "`agent-autonomy.yaml`'s `discard_uncommitted_work_or_move_branches: never`. " +
+        "Creating a worktree is allowed: use `git worktree add -b <new-branch>` with a " +
+        "name that doesn't exist yet (git refuses `-b` if it does), or check out " +
+        `'${forced}' into the new worktree without -B if you want it where it already is.`,
+    };
+  }
+
+  // list / lock / unlock / repair and anything else: no opinion.
+  return null;
+}
+
 type GitGuardHandler = (subArgs: string[], cwd: string) => Promise<GitGuardDecision | null> | GitGuardDecision | null;
 
 const GIT_GUARD_HANDLERS: Record<string, GitGuardHandler> = {
@@ -1444,6 +1606,7 @@ const GIT_GUARD_HANDLERS: Record<string, GitGuardHandler> = {
   clean: checkClean,
   branch: (subArgs) => checkBranch(subArgs),
   push: (subArgs) => checkPush(subArgs),
+  worktree: checkWorktree,
 };
 
 function resolveGitGuardCwd(baseCwd: string, explicitCwd: string | undefined): string {

@@ -850,8 +850,11 @@ boundary, security- or classification-relevant result), not only this one.
 
 ## Never remove or prune a worktree yourself
 
-Never run `git worktree remove` or `git worktree prune` (or delete a
-worktree directory directly) as part of your own task. This covers every
+Never run `git worktree remove`, `git worktree prune`, or `git worktree
+move` (or delete a worktree directory directly) as part of your own task.
+`move` belongs here for the same reason: it rewrites a registration in
+place, so a session whose working directory is the old path loses its tree
+mid-task with no error at the moment of the move. This covers every
 worktree, including an inspection worktree you created yourself and are
 finished with: tidying up afterwards is exactly the reasoning to refuse,
 because `git worktree prune` is not scoped to your worktree -- it
@@ -866,6 +869,16 @@ registrations is a destructive git-metadata operation
 cleanup to the operator; see `roster/RUNBOOK.md`'s worktree-operations
 section. If a leftover inspection worktree is untidy, say so in your result
 and let the operator remove it.
+
+On Claude Code this rule is also enforced structurally, not by prompt text
+alone: the `PreToolUse` hook `.claude/hooks/guard_workspace_mutation.py`
+(shipped enabled in the packaged plugin) refuses `git worktree remove` and
+`git worktree move` outright, and refuses `git worktree prune` whenever its
+own dry run shows a registration would actually be removed. `git worktree
+add` and `git worktree list` are never blocked -- creating a worktree is
+explicitly allowed. Two things that hook cannot see, so they remain on you:
+deleting a worktree directory with `rm` instead of a git verb, and
+`git gc`, which prunes worktrees as part of its own housekeeping.
 
 ## No runner names as behavioral conditions
 
