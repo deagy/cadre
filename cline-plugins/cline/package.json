@@ -23,6 +23,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@cline/core": "0.0.65",
     "typescript": "5.9.3",
     "vitest": "4.1.10"
   },

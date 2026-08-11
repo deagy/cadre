@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/schemas/cadre-runner-capabilities.schema.json",
   "title": "Cadre runner capability manifest (roster/runner-capabilities.json)",
-  "description": "Declarative, build-time source of truth for the data idea #8 (REQ-CADRE-BACKLOG-8) found hardcoded across generate_global_plugin.py's CAPABILITY_PROFILES/ALLOWED_MODELS/ALLOWED_CODEX_MODELS/ALLOWED_REASONING_EFFORTS, generate_role_metadata.py's TIER_MAP, and eight structural runner-divergence facts from .agents/skills/run-agent-orchestration/references/runner-adapters.md (CM-FR-1..8). Consumed at build time only (roster/orchestration/src/generate_global_plugin.py and generate_role_metadata.py load capability_tiers/model_tiers/allowed_reasoning_efforts directly with stdlib json, so those Python constants can never drift from this file); there is no dispatch-time runtime consumer (see requirements.md OD-2 disposition). This schema validates the manifest's own shape/type/enum content in isolation, matching roster/catalog.schema.json's precedent (Draft 2020-12, validated by a jsonschema-guarded standalone check, never a required runtime dependency of the generators themselves).",
+  "description": "Declarative, build-time source of truth for the data idea #8 (REQ-CADRE-BACKLOG-8) found hardcoded across generate_global_plugin.py's CAPABILITY_PROFILES/ALLOWED_MODELS/ALLOWED_CODEX_MODELS/ALLOWED_REASONING_EFFORTS, generate_role_metadata.py's TIER_MAP, and the structural runner-divergence facts from .agents/skills/run-agent-orchestration/references/runner-adapters.md (CM-FR-1..8, plus native_workspace_isolation and the prompt_hook_*/tool_gate_* pair added later). Consumed at build time only (roster/orchestration/src/generate_global_plugin.py and generate_role_metadata.py load capability_tiers/model_tiers/allowed_reasoning_efforts directly with stdlib json, so those Python constants can never drift from this file); there is no dispatch-time runtime consumer (see requirements.md OD-2 disposition). This schema validates the manifest's own shape/type/enum content in isolation, matching roster/catalog.schema.json's precedent (Draft 2020-12, validated by a jsonschema-guarded standalone check, never a required runtime dependency of the generators themselves).",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "capability_tiers", "model_tiers", "allowed_reasoning_efforts", "runners"],
@@ -82,7 +82,11 @@
         "named_agent_dispatch_supported",
         "named_agent_dispatch_workaround",
         "concurrency_bound_config_key",
-        "native_workspace_isolation"
+        "native_workspace_isolation",
+        "prompt_hook_support",
+        "prompt_hook_mechanism",
+        "tool_gate_support",
+        "tool_gate_mechanism"
       ],
       "properties": {
         "has_generated_wrapper": { "type": "boolean" },
@@ -106,6 +110,22 @@
         "native_workspace_isolation": {
           "description": "Which runner-native mechanism, if any, isolates a dispatched role's edits into a separate workspace before it runs (see roster/shared/workspace-isolation.md, which every write-capable role follows regardless of this value). Build-time descriptive data only -- no dispatch-time code currently reads this field (matching this manifest's own OD-2 disposition for its other fields).",
           "enum": ["worktree", null]
+        },
+        "prompt_hook_support": {
+          "description": "Whether the runner can run something on every user prompt BEFORE the model sees it, and whether that thing can put text into the model's context. \"context_injection\": the hook's output reaches the model. \"dispatch_only\": a hook fires but its output is discarded, so it can observe and act out-of-band but cannot steer the turn -- distinguished from \"none\" because the two look identical from inside a hook script, which runs and exits 0 either way. \"none\": no per-prompt hook surface at all. Descriptive only; nothing branches on it at dispatch time.",
+          "enum": ["context_injection", "dispatch_only", "none"]
+        },
+        "prompt_hook_mechanism": {
+          "description": "The concrete per-prompt surface named in runner-adapters.md, or null when prompt_hook_support is \"none\". For \"dispatch_only\" this must say what is discarded, not just what exists.",
+          "type": ["string", "null"]
+        },
+        "tool_gate_support": {
+          "description": "Whether a hook can refuse a tool call in the user's OWN session (not merely in a subagent session the suite itself starts). \"blocking\": the runner awaits the hook and honors a refusal. \"advisory\": a hook observes the call but cannot stop it. \"none\": no pre-tool hook surface. This is the field that decides whether an orchestration policy is enforceable on a runner or is only a strong suggestion.",
+          "enum": ["blocking", "advisory", "none"]
+        },
+        "tool_gate_mechanism": {
+          "description": "The concrete pre-tool surface and the shape of a refusal, or null when tool_gate_support is \"none\".",
+          "type": ["string", "null"]
         }
       }
     }

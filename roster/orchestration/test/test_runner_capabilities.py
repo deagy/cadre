@@ -330,6 +330,71 @@ class RunnerAdaptersStructuralFactCoverageTests(unittest.TestCase):
         self.assertIsNone(self.runners["cline"]["native_workspace_isolation"])
         self.assertIn("native_workspace_isolation", self.prose)
 
+    # Fact 10: per-prompt hook surface (can something run before the model
+    # sees the prompt, and can its output reach the model).
+    def test_fact_10_prompt_hook_support(self) -> None:
+        self.assertEqual("context_injection", self.runners["claude-code"]["prompt_hook_support"])
+        self.assertEqual("context_injection", self.runners["codex"]["prompt_hook_support"])
+        # The distinction this value exists to record: Cline's UserPromptSubmit
+        # hook runs and is then ignored. "dispatch_only", never "none" (it does
+        # fire) and never "context_injection" (its stdout is discarded) --
+        # cline-plugins/cline/hook-surface.test.mts proves both halves against
+        # the real dispatcher.
+        self.assertEqual("dispatch_only", self.runners["cline"]["prompt_hook_support"])
+        self.assertEqual("none", self.runners["api"]["prompt_hook_support"])
+
+        # A mechanism string is required exactly when there is a surface to
+        # describe, so "none" can never hide behind an explanatory sentence and
+        # a real surface can never ship undocumented.
+        for runner, values in self.runners.items():
+            with self.subTest(runner=runner):
+                if values["prompt_hook_support"] == "none":
+                    self.assertIsNone(values["prompt_hook_mechanism"])
+                else:
+                    self.assertTrue((values["prompt_hook_mechanism"] or "").strip())
+
+    # Fact 11: host-session tool gate (can a hook refuse a tool call in the
+    # user's own session, as opposed to a subagent session the suite starts).
+    def test_fact_11_tool_gate_support(self) -> None:
+        for runner in ("claude-code", "codex", "cline"):
+            with self.subTest(runner=runner):
+                self.assertEqual("blocking", self.runners[runner]["tool_gate_support"])
+                self.assertTrue((self.runners[runner]["tool_gate_mechanism"] or "").strip())
+        self.assertEqual("none", self.runners["api"]["tool_gate_support"])
+        self.assertIsNone(self.runners["api"]["tool_gate_mechanism"])
+
+    def test_prompt_and_tool_gate_facts_are_grounded_in_the_prose(self) -> None:
+        """AC-5's rule applied to facts 10-11: the manifest owns the value,
+        runner-adapters.md owns the why, and neither may exist alone.
+        """
+        for marker in ("UserPromptSubmit", "PreToolUse", "prompt_submit", "tool_call"):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.prose)
+
+    def test_prompt_hook_and_tool_gate_have_no_runtime_consumer(self) -> None:
+        """Same OD-2 disposition as every other field on this manifest: these
+        describe a runner at build time and must not become a dispatch-time
+        branch. Especially load-bearing here -- `tool_gate_support` names an
+        enforcement boundary, and code that silently skipped a check because a
+        manifest string said "none" would be a security control decided by a
+        data file.
+        """
+        runtime_consumers = (
+            REPOSITORY_ROOT / "roster" / "orchestration" / "mcp" / "dispatch_core.py",
+            REPOSITORY_ROOT / "roster" / "orchestration" / "src" / "build_dispatch_plan.py",
+            REPOSITORY_ROOT / "roster" / "orchestration" / "src" / "select_agents.py",
+        )
+        for path in runtime_consumers:
+            self.assertTrue(path.is_file(), f"expected runtime-consumer file is missing: {path}")
+            source = path.read_text(encoding="utf-8")
+            for field in ("prompt_hook_support", "tool_gate_support"):
+                with self.subTest(path=path.name, field=field):
+                    self.assertNotIn(
+                        field,
+                        source,
+                        f"{path.name} branches on a build-time-only manifest field (idea #8 OD-2)",
+                    )
+
     def test_native_workspace_isolation_has_no_runtime_consumer(self) -> None:
         """This field is build-time descriptive data only (see idea #8's
         OD-2 disposition, matching every other field on this manifest) --
