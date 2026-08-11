@@ -338,9 +338,17 @@ supersedes that document rather than editing it.
 **Performed, and immaterial.** Query ID `2ab218a2b25bba60`, retrieved
 2026-08-11T21:30:42Z, agent `product-intent-agent`, classification `internal`,
 project-local tier (`.agents/knowledge-store/config.json`). One result returned,
-score **0.144** — `SAMPLE-001-compose-runtime-lessons`, concerning Docker Compose
-volume layout and PostgreSQL 18 mount paths. It has no bearing on this work and
-is not relied upon. `untrusted_instruction_risk: false`.
+score **0.144** — the single committed sample record under
+`roster/knowledge-store/proposed-knowledge/`, concerning Docker Compose volume
+layout and PostgreSQL 18 mount paths. It has no bearing on this work and is not
+relied upon. `untrusted_instruction_risk: false`.
+
+Its identifier is deliberately not written out here:
+`test_repository_health.py::test_sample_references_are_limited_to_allowed_archives`
+fails any tracked file outside the allowlist that names the sample task id
+literally, so this record describes it instead of citing it — the same
+accommodation `docs/proposals/governance-as-product-2026-08.md` and the
+2026-08-08 sibling record both make.
 
 This is itself corroborating evidence for
 `docs/proposals/durable-knowledge-capture-2026-08.md`'s central observation: the
