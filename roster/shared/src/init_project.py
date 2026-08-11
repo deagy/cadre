@@ -555,20 +555,27 @@ def build_platform_overlay(target_root: Path, fragment: dict[str, Any]) -> tuple
         if not overrides and section not in existing:
             continue
         id_key = "id" if section == "impact_categories" else "type"
-        # Start from whatever this overlay already has for the section
-        # (list-of-mappings, same shape as the template); fall back to a
-        # bare id/type skeleton per template entry so untouched entries
-        # aren't invented, only referenced.
-        existing_by_id = {entry[id_key]: dict(entry) for entry in existing.get(section, [])}
-        base_ids = [entry[id_key] for entry in base.get(section, [])]
+        # Start from the SHIPPED entries, not just the ones this run touches.
+        # resolve.py replaces lists wholesale rather than merging them by id
+        # (see its deep_merge docstring), so an overlay listing only the
+        # overridden entries silently deletes every other category/BOM from
+        # the resolved profile -- including the `unknown` ones that are
+        # supposed to block gates. The overlay has to carry the complete list
+        # for "shipped defaults plus my overrides" to be what actually
+        # resolves.
+        entries_by_id = {entry[id_key]: dict(entry) for entry in base.get(section, [])}
+        base_ids = list(entries_by_id)
+        # Then this project's existing overlay, then this run's overrides.
+        for entry in existing.get(section, []):
+            entry_id = entry.get(id_key)
+            if entry_id in entries_by_id:
+                entries_by_id[entry_id] = deep_merge(entries_by_id[entry_id], dict(entry))
         for entry_id, entry_fragment in overrides.items():
-            if entry_id not in base_ids:
+            if entry_id not in entries_by_id:
                 raise InitError(f"platform-impact-profile.yaml {section} has no entry {entry_id!r} to override")
-            current = existing_by_id.get(entry_id, {id_key: entry_id})
-            existing_by_id[entry_id] = deep_merge(current, entry_fragment)
-        if existing_by_id:
-            # Preserve template order.
-            merged[section] = [existing_by_id[i] for i in base_ids if i in existing_by_id]
+            entries_by_id[entry_id] = deep_merge(entries_by_id[entry_id], entry_fragment)
+        # Preserve template order.
+        merged[section] = [entries_by_id[i] for i in base_ids]
     return _dump_yaml(merged), merged
 
 
@@ -1042,11 +1049,22 @@ def resolve_set_region(path: str, explicit: str | None) -> str:
 
 def _parse_set_value(text: str) -> Any:
     """Same permissive scalar parse the interactive collector uses for a
-    typed-in stack value: YAML scalar if it parses, otherwise the raw string."""
+    typed-in stack value: YAML scalar if it parses, otherwise the raw string.
+
+    Mappings are refused. Every field `--set` can address is a scalar or a
+    list, so a mapping value does not override the named leaf -- it grafts new
+    leaf paths *below* it that no shipped default defines, which would defeat
+    the whole point of validating the path against the shipped files first."""
     try:
-        return _require_yaml().safe_load(text)
+        parsed = _require_yaml().safe_load(text)
     except Exception:  # noqa: BLE001
         return text
+    if isinstance(parsed, dict):
+        raise InitError(
+            "--set values must be scalars or lists; a mapping would add leaf "
+            "paths below the named field that no shipped default defines"
+        )
+    return parsed
 
 
 def _set_decision_path(region: str, path: str) -> str:
@@ -1081,13 +1099,32 @@ def apply_set_overrides(
             raise InitError(f"cannot apply --set {path}: {answers_key} is not a mapping")
         _set_by_path(fragment, path, value)
         decisions = answers.setdefault("field_decisions", {})
-        decisions[_set_decision_path(region, path)] = {
-            "status": "overridden",
-            # Derived from the region, never from operator input.
-            "category": category,
-            "source_value": region_leaf_values(region)[path],
-            "new_value": value,
-        }
+        decision_path = _set_decision_path(region, path)
+        if region == "platform":
+            # RG-C decisions are tracked per entry, so several `--set`s on one
+            # entry are facets of ONE decision, not competing ones. Record the
+            # applicability (what the decision is actually about) and let the
+            # supporting fields land in the fragment without clobbering it --
+            # overwriting here is how `--set ...applicability=X --set
+            # ...rationale=Y` used to leave no record of X at all. Mirrors the
+            # interactive RG-C collector, which reports `source_value:
+            # "unknown"` because that is what the template always ships.
+            previous = decisions.get(decision_path) or {}
+            new_value = value if path.split(".")[-1] == "applicability" else previous.get("new_value")
+            decisions[decision_path] = {
+                "status": "overridden",
+                "category": category,
+                "source_value": "unknown",
+                "new_value": new_value,
+            }
+        else:
+            decisions[decision_path] = {
+                "status": "overridden",
+                # Derived from the region, never from operator input.
+                "category": category,
+                "source_value": region_leaf_values(region)[path],
+                "new_value": value,
+            }
     return answers
 
 
@@ -1098,9 +1135,12 @@ def synthesize_preset_field_decisions(answers: dict[str, Any]) -> dict[str, Any]
     Only ever called on a defaults-mode run, where the sole way an unrecorded
     leaf can be present is a `--stack` preset (`load_stack_preset` structurally
     forbids a preset from touching anything but RG-A, so this can never
-    fabricate a governance decision). A hand-authored `--answers` file still
-    fails closed on a missing decision, which is the A-006 rev 2 contract for
-    answer files."""
+    fabricate a governance decision). A `--set` records its own decision
+    against the exact path it names, and refuses mapping values precisely so
+    it cannot graft unrecorded leaves *below* that path -- without that rule
+    this invariant would already be false. A hand-authored `--answers` file
+    still fails closed on a missing decision, which is the A-006 rev 2
+    contract for answer files."""
     decisions = answers.setdefault("field_decisions", {})
     for region in ("stack", "libraries"):
         answers_key, _filename, category, _section = SET_REGIONS[region]

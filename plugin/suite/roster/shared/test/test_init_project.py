@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import itertools
 import json
 import os
 import shutil
@@ -33,6 +34,7 @@ from init_project import (  # noqa: E402
     validate_autonomy_overlay_content,
     validate_platform_fragment,
 )
+import init_project_interactive as init_interactive_mod  # noqa: E402
 from init_project_interactive import run_interactive_flow  # noqa: E402
 
 
@@ -1577,6 +1579,171 @@ class InteractiveGroupGatingTests(unittest.TestCase):
         for entry in decisions.values():
             self.assertEqual(entry["status"], "kept")
             self.assertEqual(entry["category"], "governance")
+
+
+class PlatformOverlayCompletenessTests(unittest.TestCase):
+    """`resolve.py` replaces lists wholesale rather than merging them by id, so
+    a platform overlay listing only the entries a run touched deletes every
+    other category/BOM from the resolved profile — including the `unknown`
+    ones that are supposed to block gates."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory(prefix="agents-init-platform-")
+        self.root = _make_project(Path(self.temporary.name))
+        self.audit = tempfile.TemporaryDirectory(prefix="agents-init-platform-audit-")
+        os.environ["AGENTS_INIT_AUDIT_LOG"] = str(Path(self.audit.name) / "audit.jsonl")
+        self.shipped = init_mod._load_structured(
+            init_mod.SHARED_DEFAULTS_DIR / init_mod.PLATFORM_FILENAME
+        )
+
+    def tearDown(self) -> None:
+        os.environ.pop("AGENTS_INIT_AUDIT_LOG", None)
+        self.audit.cleanup()
+        self.temporary.cleanup()
+
+    def _run(self, set_values: list[str]) -> int:
+        args = argparse.Namespace(
+            target=self.root,
+            stack=None,
+            answers=None,
+            interactive=False,
+            set_values=set_values,
+            sections=",".join(init_mod.ALL_SECTIONS),
+            dry_run=False,
+            force=True,
+            print_answers=False,
+        )
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            return run_init(args)
+
+    def test_overriding_one_entry_keeps_every_other_entry(self) -> None:
+        target = self.shipped["impact_categories"][0]["id"]
+        self._run([f"platform:impact_categories.{target}.applicability=not-applicable"])
+        resolved = resolve_mod.resolve_shared_config(
+            init_mod.PLATFORM_FILENAME, start=self.root
+        )
+        self.assertEqual(
+            [entry["id"] for entry in resolved["impact_categories"]],
+            [entry["id"] for entry in self.shipped["impact_categories"]],
+        )
+        by_id = {entry["id"]: entry for entry in resolved["impact_categories"]}
+        self.assertEqual(by_id[target]["applicability"], "not-applicable")
+        # Every entry the run did not touch keeps its blocking `unknown`.
+        for entry in self.shipped["impact_categories"]:
+            if entry["id"] != target:
+                self.assertEqual(by_id[entry["id"]]["applicability"], "unknown")
+
+    def test_untouched_section_is_preserved_too(self) -> None:
+        target = self.shipped["impact_categories"][0]["id"]
+        self._run([f"platform:impact_categories.{target}.applicability=not-applicable"])
+        resolved = resolve_mod.resolve_shared_config(
+            init_mod.PLATFORM_FILENAME, start=self.root
+        )
+        self.assertEqual(
+            len(resolved["specialized_boms"]), len(self.shipped["specialized_boms"])
+        )
+
+    def test_repeated_sets_on_one_entry_record_the_applicability_decision(self) -> None:
+        """RG-C tracks one decision per entry, so a second `--set` on the same
+        entry must not overwrite the applicability the first one recorded."""
+        target = self.shipped["impact_categories"][0]["id"]
+        answers = init_mod.apply_set_overrides(
+            {"schema_version": 1, "field_decisions": {}},
+            [
+                f"platform:impact_categories.{target}.applicability=not-applicable",
+                f"platform:impact_categories.{target}.rationale=Not relevant here",
+            ],
+            list(init_mod.ALL_SECTIONS),
+        )
+        decision = answers["field_decisions"][f"rg_c_platform.impact_categories.{target}"]
+        self.assertEqual(decision["new_value"], "not-applicable")
+        # Matches what the interactive RG-C collector records for the same key.
+        self.assertEqual(decision["source_value"], "unknown")
+
+    def test_mapping_values_are_refused(self) -> None:
+        """A mapping does not override the named leaf — it grafts new leaves
+        below it, which would sidestep the shipped-path check entirely."""
+        with self.assertRaises(InitError) as caught:
+            init_mod.apply_set_overrides(
+                {"schema_version": 1, "field_decisions": {}},
+                ["platform.hosting_model={a: 1}"],
+                list(init_mod.ALL_SECTIONS),
+            )
+        self.assertIn("must be scalars or lists", str(caught.exception))
+
+
+class InteractiveGroupGatingRegressionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory(prefix="agents-init-gating-regress-")
+        self.root = _make_project(Path(self.temporary.name))
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_fixed_policy_keys_are_never_offered_as_groups(self) -> None:
+        """`_AUTONOMY_FIXED_KEYS` hold a version number and a prose rule, not
+        permission words, so `autonomy_allowed_choices` raises OverlayError on
+        them — and `build_autonomy_overlay` refuses them anyway. Accepting
+        every group must not reach either outcome."""
+        # "y" accepts every group gate; the trailing blanks are what ends the
+        # guardrail-bullet loop, which only stops on an empty line.
+        answers = itertools.chain(["y"] * 100, itertools.repeat(""))
+        with contextlib.redirect_stdout(io.StringIO()):
+            result, decisions = init_interactive_mod.collect_governance_answers(
+                lambda _prompt: next(answers)
+            )
+        for fixed_key in resolve_mod._AUTONOMY_FIXED_KEYS:
+            self.assertNotIn(fixed_key, result["rg_b_autonomy"])
+            self.assertFalse(
+                [path for path in decisions if path.split(".")[0] == fixed_key],
+                f"{fixed_key} is fixed policy and must not be offered",
+            )
+
+    def test_declining_every_platform_group_plans_no_write(self) -> None:
+        """Declining is the defaults outcome, and keeping defaults means
+        writing no overlay — not writing an empty one."""
+        with contextlib.redirect_stdout(io.StringIO()):
+            platform, decisions = init_interactive_mod.collect_platform_answers(
+                lambda _prompt: ""
+            )
+        self.assertEqual(platform["rg_c_platform"], {})
+        answers = {"schema_version": 1, "field_decisions": decisions, **platform}
+        result, errors = plan_writes(self.root, answers, ["rg-c-platform"])
+        self.assertEqual([], errors)
+        self.assertEqual([], result.planned)
+
+    def test_declined_group_records_the_preset_value_it_kept(self) -> None:
+        """What a declined group keeps is whatever would have been shown, and
+        with a preset loaded that is the preset's value — which is also what
+        reaches the overlay through the caller's merge."""
+        preset_id = "golang-postgres-k8s"
+        preset = init_mod.load_stack_preset(preset_id)
+        with contextlib.redirect_stdout(io.StringIO()):
+            _answers, decisions = init_interactive_mod.collect_stack_answers(
+                lambda _prompt: "", preset=preset, preset_id=preset_id
+            )
+        for path, expected in init_mod._leaf_values(preset["rg_a_stack"]).items():
+            self.assertEqual(decisions[path]["status"], "kept")
+            self.assertEqual(decisions[path]["source_value"], expected)
+
+    def test_accepted_group_prompts_its_fields_before_the_next_gate(self) -> None:
+        """RG-B interleaves like RG-A: opting into one group must not make the
+        operator answer every remaining gate question first."""
+        seen: list[int] = []
+
+        def input_func(_prompt: str) -> str:
+            seen.append(len(seen))
+            return "y" if len(seen) == 1 else ""
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            init_interactive_mod.collect_governance_answers(input_func)
+        text = output.getvalue()
+        first_gate = text.index("Review")
+        first_field = text.index("(current default:")
+        second_gate = text.index("Review", first_gate + 1)
+        self.assertLess(first_gate, first_field)
+        self.assertLess(first_field, second_gate)
 
 
 if __name__ == "__main__":
