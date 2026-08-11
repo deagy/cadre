@@ -86,11 +86,19 @@ where practical -- see `git status --porcelain`/`git clean -n` use below):
     strands uncommitted edits across branches and is exactly the "switched
     another session's worktree off its branch" shape from today. A clean
     tree switch is always allowed. `git checkout -b`/`-B <new>` (creating,
-    or forcing, a branch pointer) is always allowed: it does not overwrite
-    working-tree content when the (implicit or explicit) start point is
-    the current HEAD, which is overwhelmingly the common case, and
-    tightening this further would mean parsing/resolving arbitrary start
-    points for a workflow explicitly called out as should-stay-allowed.
+    or forcing, a branch pointer) is always allowed -- a SCOPE decision,
+    not a safety claim. `-b` is genuinely safe: git refuses it when the
+    branch already exists. `-B` is NOT safe, and the earlier version of
+    this paragraph argued the mechanics backwards. `git checkout -B
+    feature` with the implicit HEAD start point is precisely the
+    destructive case when `feature` already exists and points elsewhere:
+    it moves the branch off its commits with no warning. An implicit start
+    point makes the check EASIER to perform, not the operation safer, and
+    `workspace-isolation.md` prohibits `git checkout -B`/`git switch -C`
+    by name. `check_worktree` performs exactly this check for
+    `git worktree add -B` (see below); extending it here means changing an
+    existing handler's behavior, which is out of scope for deagy/cadre#215
+    and tracked separately.
 
   * `git clean -f`/`-fd`/`-fdx` (any force-clean), but only when a dry run
     (`git clean -n[dx]`, run automatically before deciding) shows it would
@@ -111,7 +119,101 @@ where practical -- see `git status --porcelain`/`git clean -n` use below):
     alternative, refusing itself when the remote has moved since the last
     fetch.
 
+  * `git worktree remove [--force] <worktree>` and `git worktree move
+    <source> <destination>` -- unconditionally, tracks deagy/cadre#215.
+    `workspace-isolation.md`'s "Never remove or prune a worktree yourself"
+    is absolute: it covers every worktree, including an inspection worktree
+    the agent created itself, because a worktree that holds work IS the
+    deliverable location until a human decides otherwise, and deregistering
+    one is a destructive git-metadata operation
+    (`destructive_action: human_approval`). Unlike `reset --hard` there is
+    no state in which policy permits either verb and no non-destructive
+    variant to steer toward, so no state check is performed: adding one
+    would buy no safety and would only add a bypass surface. In
+    particular, no attempt is made to match the target against
+    `git worktree list` -- verified against git 2.53.0 that
+    `git worktree remove` accepts a bare basename (`git worktree remove
+    wt2`) as well as a path, so path matching would miss that spelling
+    while a flat refusal does not. Blocking a `remove` whose target isn't
+    a registered worktree costs nothing either: git itself exits 128
+    ("is not a working tree") on that input. `move` is included because it
+    silently rewrites another session's registration -- an agent whose cwd
+    is the old path loses its tree mid-task with no error at the moment of
+    the move.
+
+  * `git worktree prune` -- but only when a dry run (`git worktree prune
+    -n -v`, run automatically before deciding, with any caller-supplied
+    `--expire` passed through) shows it would actually deregister
+    something. This is the same shape as the `git clean -n` check above,
+    with one behavioral difference confirmed against git 2.53.0: prune's
+    dry-run report goes to STDERR, not stdout, so both streams are
+    considered. `prune` is the sharper of the two removal verbs precisely
+    because it names no target -- it deregisters whatever git currently
+    considers unreachable, which can include a teammate's worktree sitting
+    on a momentarily unavailable path. "Is this my worktree?" is therefore
+    not answerable from the command line at all.
+      The stricter alternative considered and rejected: refuse `prune`
+    whenever any worktree this session did not create is registered. That
+    over-blocks the case where nothing is prunable (a no-op refusal is
+    pure friction, and friction is what gets a guard disabled) while
+    gaining nothing -- a prune that would remove nothing removes nothing.
+    The dry run covers the dangerous case exactly, including the
+    unavailable-path teammate case, which is precisely when prune finds
+    something prunable. An explicit `-n`/`--dry-run` from the caller is
+    inherently non-destructive and always allowed.
+      Known race, accepted: the dry run and the real command are separate
+    invocations, so a worktree path that becomes unavailable in between is
+    reported as nothing-to-prune and allowed through. Consistent with this
+    module's fail-open stance; it is defense-in-depth, not the only
+    control.
+
+  * `git worktree add -B <branch> ...` when `<branch>` already exists as a
+    local branch AND resolves to a commit other than the resolved start
+    point. This is the one guarded spelling of an otherwise explicitly
+    allowed verb (`agent-autonomy.yaml`'s
+    `repository.create_local_branch_or_worktree: allowed`), and it is
+    guarded because `-B` force-resets the branch: verified against git
+    2.53.0 that `git worktree add -B existing <path>` moved `existing`
+    from 523bf6b to 23a851c, reporting it only as "Preparing worktree
+    (resetting branch 'existing'; was at 523bf6b)". That is exactly
+    `agent-autonomy.yaml`'s `discard_uncommitted_work_or_move_branches:
+    never`, and `workspace-isolation.md` names the flag
+    ("Never `-B` (force-create/reset the branch)"). Plain `-b` is always
+    allowed -- git itself refuses when the branch already exists -- and so
+    is `-B` naming a branch that does not exist yet or that already points
+    at the start point, since neither moves anything.
+      Note the deliberate asymmetry with `check_checkout`, which allows
+    `git checkout -B` unconditionally (see its bullet above): that is a
+    SCOPE decision under #215, not a claim that `checkout -B` is safe. It
+    is not safe -- `git checkout -B feature` with the implicit HEAD start
+    point is precisely the destructive case when `feature` already exists
+    and points elsewhere, and `workspace-isolation.md` lists
+    `git checkout -B` in its own prohibition list alongside this one. An
+    implicit start point makes the check EASIER to perform, not the
+    operation safer. `check_checkout` was left unchanged here only because
+    altering an existing handler's behavior is outside this issue; closing
+    it is tracked separately.
+
 Deliberately NOT covered, with reasoning:
+
+  * Deleting a worktree's directory directly (`rm -rf .worktrees/foo`)
+    rather than through `git worktree remove`.
+    `workspace-isolation.md` forbids this in the same sentence as the git
+    verbs, but this hook only inspects `git` invocations -- an `rm` is not
+    a git subcommand and `_HANDLERS` never sees it. Deciding whether an
+    arbitrary `rm` target is a registered worktree (and doing it for every
+    `rm` the model runs) is a materially different and much broader
+    check than anything else here. Left as a known gap, pinned by
+    `test_rm_of_a_worktree_directory_is_a_documented_gap`.
+  * `git worktree prune` reached indirectly through `git gc`, which runs
+    worktree pruning as part of its own housekeeping. `gc` has no handler
+    (see the reflog/`gc --prune=now` gap below), so this spelling is not
+    intercepted. Pinned by `test_git_gc_is_a_documented_gap`.
+  * `git worktree unlock` (which makes a locked worktree prunable again)
+    and `git worktree repair` (which rewrites registration metadata).
+    Neither deregisters or relocates a worktree on its own; each would
+    need its own state-check design to distinguish routine repair from
+    setup for a later removal. Left as known gaps.
 
   * `git stash drop`/`git stash clear` -- also destructive to uncommitted
     work, but out of the explicit "dangerous cases" list in the task brief
@@ -156,6 +258,50 @@ Deliberately NOT covered, with reasoning:
     destructive subcommand is invisible to it, and resolving aliases would
     require reading and trusting the invoking user's git config. Left as a
     known gap.
+      That justification does NOT extend to the `-c` spelling, and saying
+    so was the gap's own blind spot: `git -c alias.wtr='worktree remove'
+    wtr <path>` defines the alias INSIDE the command line this hook has
+    already tokenized, so no config file needs to be read or trusted to
+    see it. `parse_git_invocation` skips `-c <value>` as a global flag
+    with a value and then reads `wtr` as the subcommand, which matches no
+    handler, so the command is allowed. Confirmed by running the hook.
+    Recognizing this would mean expanding an alias value and re-parsing
+    the result -- tractable, but a parser change affecting every handler
+    rather than a `worktree` one, so it is recorded here rather than
+    fixed under #215. Pinned by
+    `test_dash_c_alias_injection_is_a_documented_gap`.
+
+  * Wrapper commands outside `_WRAPPER_TOKENS`. That set
+    (`sudo`, `command`, `exec`, `nohup`, `time`, `env`) is NOT exhaustive
+    and was never claimed to be complete; anything else leading the line
+    leaves `tokens[0]` as a non-`git` program, so `parse_git_invocation`
+    returns None and the wrapped command is allowed. Confirmed by running
+    the hook: `timeout 10 git worktree remove <path>` is allowed, as are
+    `nice`, `stdbuf -o0`, `setsid`, and `ionice`. `timeout` is the one a
+    normal agent would plausibly reach for on its own. Also not covered:
+    `xargs` and `find -exec`, which take the command in argument position
+    rather than as a prefix. Widening the set is easy but open-ended (each
+    entry needs its own flag-arity handling, as `env` already
+    demonstrates), so it is recorded rather than guessed at. Pinned by
+    `test_unrecognized_wrapper_commands_are_a_documented_gap`.
+
+  * `git worktree add --force <path>` (and `-f -f`) pointed at a path a
+    registered-but-currently-missing worktree occupies. Verified against
+    git 2.53.0: plain `add` refuses this outright ("fatal: '<path>' is a
+    missing but already registered worktree; use 'add -f' to override, or
+    'prune' or 'remove' to clear"), `--force` overrides it and silently
+    re-registers the path onto the new branch (the registration flipped
+    from `[victim]` to `[intruder2]` in the probe), and `-f -f` does the
+    same even when the original worktree is LOCKED ("fatal: ... is a
+    missing but locked worktree; use 'add -f -f' to override"). That is
+    the same hazard `check_worktree`'s own `prune` refusal describes --
+    losing a teammate's registration on a momentarily unavailable path --
+    reached through the one verb otherwise treated as safe. It is not
+    guarded because a correct check means resolving the target path
+    against `git worktree list` and so re-introduces the path-vs-basename
+    matching problem that `remove`'s flat refusal deliberately avoids;
+    getting that half-right would be worse than recording it. Pinned by
+    `test_worktree_add_force_over_a_registered_path_is_a_documented_gap`.
 
 Opt-out (env var, not a command-line flag): if `CADRE_DISABLE_WORKSPACE_
 MUTATION_GUARD` is set to `1` or `true` (case-insensitive) in the
@@ -190,18 +336,110 @@ from typing import Iterable, Optional
 # ---------------------------------------------------------------------------
 
 
-def split_top_level(command: str) -> list[str]:
-    """Split a shell command line into top-level segments on `&&`, `||`,
-    `;`, and `|`, respecting single/double quoting. Not a full shell
-    parser -- good enough to find each independent `git ...` invocation in
-    a chained command line without being fooled by an operator sitting
-    inside a quoted string.
+# The delimiter of a heredoc redirection, matched at the position just past
+# the `<<`: an optional `-` (the tab-stripping form), optional whitespace,
+# then a quoted or bare word. Applied only where the scanner has already
+# established that the `<<` is a real redirection -- outside quotes, outside
+# arithmetic expansion, and not part of a `<<<` here-string. That context is
+# NOT re-derivable from segment text after the fact, which is why detection
+# happens during the scan rather than by searching finished segments.
+_HEREDOC_DELIMITER_RE = re.compile(
+    r"(-?)[ \t]*(?:'([^']*)'|\"([^\"]*)\"|([A-Za-z0-9_.\-]+))"
+)
+
+
+def _join_line_continuations(command: str) -> str:
+    """Remove backslash-newline line continuations, as the shell does.
+
+    `git push \\<newline> origin main --force` is one command, not two.
+    Without this the newline splitting below turns it into `git push \\`
+    (no `--force`, allowed) and `origin main --force` (not a git
+    invocation at all, ignored), so a force-push sails through a guard
+    that catches the single-line spelling. Long commands are written this
+    way routinely; this is not a corner case.
+
+    Quote-aware, because the shell is: inside SINGLE quotes a
+    backslash-newline is literal text and must be preserved, while
+    unquoted and inside double quotes it is a continuation and is removed.
+    Handles CRLF. A backslash that is itself escaped (`\\\\<newline>`
+    inside double quotes) is a known edge this does not model.
     """
-    segments: list[str] = []
-    buf: list[str] = []
+    out: list[str] = []
     quote: Optional[str] = None
     i = 0
     n = len(command)
+    while i < n:
+        ch = command[i]
+        # Single quotes first: inside them a backslash is literal, so the
+        # continuation branch below must not see it.
+        if quote == "'":
+            out.append(ch)
+            if ch == "'":
+                quote = None
+            i += 1
+            continue
+        if ch == "\\" and command[i + 1 : i + 2] == "\n":
+            i += 2
+            continue
+        if ch == "\\" and command[i + 1 : i + 3] == "\r\n":
+            i += 3
+            continue
+        if quote == '"':
+            out.append(ch)
+            if ch == '"' and (i == 0 or command[i - 1] != "\\"):
+                quote = None
+            i += 1
+            continue
+        if ch in ("'", '"'):
+            quote = ch
+            out.append(ch)
+            i += 1
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _scan_segments(command: str) -> list[dict]:
+    """Split into segments, recording for each one what the shell knew at
+    the time and this module used to throw away:
+
+      * `raw` -- the segment text, NOT stripped. Leading/trailing
+        whitespace is load-bearing for heredoc terminator matching (a
+        terminator line must be exactly the delimiter, unless the `<<-`
+        form allows leading tabs), so stripping happens only on the way
+        out of `split_top_level`.
+      * `newline_before` -- whether this segment began a new LINE, rather
+        than following `&&`/`||`/`;`/`|` on the previous one. A heredoc
+        body starts on the next line, so a command chained onto the
+        opener's own line is a command, not body.
+      * `heredocs` -- delimiters opened by this segment, in order, each
+        recorded only when the `<<` was seen outside quote state and
+        outside arithmetic expansion.
+
+    Discarding those three facts and re-deriving them from segment text is
+    what produced findings F7 (`cat > f <<EOF && git ...` swallowed the
+    chained command), F8 (`echo "see <<EOF"; git ...` treated a quoted
+    mention as a real redirection) and the `$(( x << 2 ))` shift case.
+    """
+    segments: list[dict] = []
+    buf: list[str] = []
+    heredocs: list[tuple[str, bool]] = []
+    quote: Optional[str] = None
+    arithmetic_depth = 0
+    newline_before = False
+    i = 0
+    n = len(command)
+
+    def flush(next_starts_a_line: bool) -> None:
+        nonlocal buf, heredocs, newline_before
+        segments.append(
+            {"raw": "".join(buf), "newline_before": newline_before, "heredocs": heredocs}
+        )
+        buf = []
+        heredocs = []
+        newline_before = next_starts_a_line
+
     while i < n:
         ch = command[i]
         if quote:
@@ -215,20 +453,150 @@ def split_top_level(command: str) -> list[str]:
             buf.append(ch)
             i += 1
             continue
+        # `$(( ... ))`: `<<` in here is a left-shift operator, not a
+        # redirection. Other arithmetic contexts (a bare `(( ))` command,
+        # `let`) are not modelled -- a known limit, in the fail-open
+        # direction only.
+        if command[i : i + 3] == "$((":
+            arithmetic_depth += 1
+            buf.append("$((")
+            i += 3
+            continue
+        if arithmetic_depth and command[i : i + 2] == "))":
+            arithmetic_depth -= 1
+            buf.append("))")
+            i += 2
+            continue
         if command[i : i + 2] in ("&&", "||"):
-            segments.append("".join(buf))
-            buf = []
+            flush(False)
             i += 2
             continue
         if ch in (";", "|"):
-            segments.append("".join(buf))
-            buf = []
+            flush(False)
             i += 1
             continue
+        if ch == "\n":
+            flush(True)
+            i += 1
+            continue
+        if (
+            not arithmetic_depth
+            and command[i : i + 2] == "<<"
+            and command[i : i + 3] != "<<<"  # here-STRING: no body, no terminator
+            and (i == 0 or command[i - 1] != "<")  # not the tail of a `<<<`
+        ):
+            match = _HEREDOC_DELIMITER_RE.match(command, i + 2)
+            delimiter = None
+            if match:
+                # Explicit first-non-None selection rather than `or`, so
+                # this and the TypeScript mirror's `??` mean the same thing
+                # for an empty delimiter (`<<''`), which `or` would treat
+                # as "no match" and `??` would not.
+                for group in (match.group(2), match.group(3), match.group(4)):
+                    if group is not None:
+                        delimiter = group
+                        break
+            if delimiter is not None:
+                heredocs.append((delimiter, match.group(1) == "-"))
+                buf.append(command[i : match.end()])
+                i = match.end()
+                continue
         buf.append(ch)
         i += 1
-    segments.append("".join(buf))
-    return [s for s in (seg.strip() for seg in segments) if s]
+    flush(False)
+    return segments
+
+
+def _strip_heredoc_bodies(records: list[dict]) -> list[dict]:
+    """Drop heredoc body lines (and their terminator line) from `records`.
+
+    Needed because `split_top_level` splits on newlines: without this, the
+    BODY of `cat > note.md <<'EOF' / git reset --hard / EOF` would be
+    parsed as if it were a command and blocked, even though it is text
+    being written to a file. That would be a false positive of exactly the
+    kind this module's design stance treats as the real risk -- writing
+    documentation that quotes a destructive command is routine, and in
+    this repository especially so.
+
+    Three things are deliberately KEPT, each of which a naive
+    consume-forward-to-the-delimiter pass gets wrong (finding F7):
+
+      * the heredoc-opening segment (`cat > note.md`), a real command;
+      * every remaining segment on the opener's OWN line -- `cat > f
+        <<EOF && git worktree remove <path>` runs that `git` command
+        before a single body line is read, so it must still be checked;
+      * everything after the terminator line.
+
+    Terminator matching is exact against the unstripped segment text,
+    which is what the shell requires: `EOF` terminates, `    EOF` does
+    not, and only the `<<-` form accepts leading TABS (not spaces). A
+    trailing `\\r` is tolerated so CRLF input behaves the same as LF.
+
+    Best-effort, consistent with the rest of this module: an unterminated
+    heredoc swallows the remainder, which is what the shell itself would
+    do. A delimiter containing `;`/`|`/`&` (only reachable via a quoted
+    spelling like `<<';'`) is not matched, because the terminator line is
+    split before this pass sees it -- the heredoc then reads as
+    unterminated, i.e. fails open.
+    """
+    out: list[dict] = []
+    i = 0
+    while i < len(records):
+        record = records[i]
+        out.append(record)
+        i += 1
+        if not record["heredocs"]:
+            continue
+
+        # The rest of the opener's own line is commands, not body.
+        while i < len(records) and not records[i]["newline_before"]:
+            out.append(records[i])
+            i += 1
+
+        # Bodies begin on the following line, one per delimiter, in order.
+        for delimiter, allows_leading_tabs in record["heredocs"]:
+            while i < len(records):
+                segment = records[i]
+                alone_on_its_line = segment["newline_before"] and (
+                    i + 1 >= len(records) or records[i + 1]["newline_before"]
+                )
+                i += 1
+                if not alone_on_its_line:
+                    continue
+                candidate = segment["raw"].rstrip("\r")
+                if allows_leading_tabs:
+                    candidate = candidate.lstrip("\t")
+                if candidate == delimiter:
+                    break
+    return out
+
+
+def split_top_level(command: str) -> list[str]:
+    """Split a shell command line into top-level segments on `&&`, `||`,
+    `;`, `|`, and NEWLINES, respecting single/double quoting. Not a full
+    shell parser -- good enough to find each independent `git ...`
+    invocation in a chained command line without being fooled by an
+    operator sitting inside a quoted string.
+
+    Newline is a separator for the same reason `;` is: the shell treats
+    them identically as command terminators. Omitting it (as this function
+    did until deagy/cadre#215) silently defeated EVERY handler, not just
+    one -- `shlex.split` treats a newline as ordinary whitespace, so a
+    two-line command collapsed into a single token list whose `tokens[0]`
+    was the first line's program, `parse_git_invocation` returned None,
+    and the destructive second line was never inspected. That needed no
+    adversarial intent at all: multi-line `Bash` tool calls are routine,
+    and the guard's behavior flipped on a keystroke nobody would think
+    about.
+
+    A newline inside quotes is NOT a separator (the scanner's `quote`
+    branch consumes it), so a quoted multi-line string stays one segment.
+    Backslash-newline continuations are joined first, so a command written
+    across several lines -- how long commands are normally written -- is
+    still seen as the single invocation it is.
+    """
+    records = _strip_heredoc_bodies(_scan_segments(_join_line_continuations(command)))
+    return [s for s in (record["raw"].strip() for record in records) if s]
 
 
 _ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
@@ -668,6 +1036,172 @@ def check_restore(sub_args: list[str], cwd: str):
     return _check_ref_into_paths(cwd, source, paths, cmd="restore")
 
 
+# `git worktree add` flags that consume the following token as their value,
+# so it must not be mistaken for a positional (the new worktree's path, or
+# its start point). Conservative, not exhaustive -- an unrecognized flag
+# falls through to the generic `startswith("-")` skip below without
+# consuming a value. The failure mode of getting this wrong is a
+# mis-resolved start point, which `git rev-parse` then fails to resolve,
+# which fails open. See check_worktree.
+_WORKTREE_ADD_FLAGS_WITH_VALUE = {"-b", "-B", "--reason"}
+
+
+def _worktree_positionals(args: list[str], flags_with_value: set[str]) -> list[str]:
+    positional: list[str] = []
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--":
+            positional.extend(args[i + 1 :])
+            break
+        if a in flags_with_value:
+            i += 2
+            continue
+        if a.startswith("-") and a != "-":
+            i += 1
+            continue
+        positional.append(a)
+        i += 1
+    return positional
+
+
+def _worktree_flag_value(args: list[str], flag: str) -> Optional[str]:
+    """Value of `<flag> <value>`, `<flag>=<value>`, or -- for a short flag
+    only -- git's attached spelling `-Bvalue`.
+
+    The attached short form is not a nicety: verified against git 2.53.0
+    that `git worktree add -Bexisting <path>` resets `existing` exactly as
+    the detached `-B existing` spelling does, so missing it would leave the
+    same destructive operation unguarded behind a one-space difference.
+    """
+    is_short = flag.startswith("-") and not flag.startswith("--")
+    for i, a in enumerate(args):
+        if a == flag:
+            return args[i + 1] if i + 1 < len(args) else None
+        if a.startswith(f"{flag}="):
+            return a.split("=", 1)[1]
+        if is_short and len(flag) == 2 and a.startswith(flag) and len(a) > 2:
+            return a[2:]
+    return None
+
+
+def check_worktree(sub_args: list[str], cwd: str):
+    """`git worktree` -- see the module docstring for what each verb does and
+    does not block, and why `prune` is state-checked while `remove`/`move`
+    are refused flat. Tracks deagy/cadre#215.
+    """
+    verb_index = next((i for i, a in enumerate(sub_args) if not a.startswith("-")), None)
+    if verb_index is None:
+        return None  # bare `git worktree`: prints usage, mutates nothing
+    verb = sub_args[verb_index]
+    rest = sub_args[verb_index + 1 :]
+
+    if verb == "remove":
+        target = next((a for a in rest if not a.startswith("-")), "<worktree>")
+        return {
+            "reason": (
+                f"Blocked: `git worktree remove` on '{target}' deregisters a worktree, which "
+                "is a destructive git-metadata operation requiring human approval "
+                "(`agent-autonomy.yaml`: destructive_action: human_approval). "
+                "`workspace-isolation.md` says never remove or prune a worktree yourself -- "
+                "including one you created, and including an inspection worktree you are done "
+                "with: the worktree IS the deliverable location until a human or the "
+                "dispatching process decides otherwise. Leave it in place and say in your "
+                "result that it can be cleaned up, or ask the operator to remove it themselves."
+            )
+        }
+
+    if verb == "move":
+        positional = [a for a in rest if not a.startswith("-")]
+        source = positional[0] if positional else "<worktree>"
+        return {
+            "reason": (
+                f"Blocked: `git worktree move` relocates the registered worktree '{source}'. "
+                "Any session whose working directory is the old path loses its tree mid-task, "
+                "with no error at the moment of the move. Rewriting another session's worktree "
+                "registration is a destructive git-metadata operation "
+                "(`agent-autonomy.yaml`: destructive_action: human_approval) and "
+                "`workspace-isolation.md` reserves worktree cleanup and relocation to the "
+                "operator. Create a new worktree at the path you want instead, or ask the "
+                "operator to move this one."
+            )
+        }
+
+    if verb == "prune":
+        short_chars: set[str] = set()
+        long_opts: set[str] = set()
+        for a in rest:
+            if a.startswith("--"):
+                long_opts.add(a.split("=", 1)[0])
+            elif a.startswith("-") and len(a) > 1:
+                short_chars.update(a[1:])
+        if "n" in short_chars or "--dry-run" in long_opts:
+            return None  # caller's own dry run: reports, removes nothing
+
+        dry_args = ["worktree", "prune", "-n", "-v"]
+        expire = _worktree_flag_value(rest, "--expire")
+        if expire:
+            dry_args += ["--expire", expire]
+
+        rc, out, err = run_git(dry_args, cwd)
+        if rc != 0:
+            # Can't confirm state (not a repo, git missing, bad --expire);
+            # the real command fails the same way. Don't block on that.
+            return None
+        # git 2.53.0 reports prune's dry run on stderr, not stdout -- both
+        # are considered so a future/older git writing to either is caught.
+        report = "\n".join(part for part in (out.strip(), err.strip()) if part)
+        if not report:
+            return None  # nothing prunable: the command would be a no-op
+
+        entries = [line.strip() for line in report.splitlines() if line.strip()]
+        example = entries[0] if entries else "a registered worktree"
+        return {
+            "reason": (
+                f"Blocked: `git worktree prune` would deregister {len(entries)} worktree(s) "
+                f"(e.g. {example}). Prune names no target -- it removes whatever git currently "
+                "considers unreachable, which can include a teammate's worktree sitting on a "
+                "momentarily unavailable path, so you cannot tell from this command that only "
+                "your own worktrees are affected. `workspace-isolation.md` says never remove or "
+                "prune a worktree yourself. Inspect what would go with "
+                "`git worktree prune -n -v` (allowed, it removes nothing) and report it, or ask "
+                "the operator to prune themselves."
+            )
+        }
+
+    if verb == "add":
+        forced = _worktree_flag_value(rest, "-B")
+        if not forced:
+            return None  # plain `add`/`-b`: explicitly allowed, creates only
+        if not is_local_branch(cwd, forced):
+            return None  # `-B` on a new name behaves like `-b`: nothing to move
+        positional = _worktree_positionals(rest, _WORKTREE_ADD_FLAGS_WITH_VALUE)
+        # positional[0] is the new worktree's path; positional[1], if
+        # present, is the start point. Default start point is HEAD.
+        start = positional[1] if len(positional) > 1 else "HEAD"
+        rc1, current, _ = run_git(["rev-parse", "--verify", forced], cwd)
+        rc2, target, _ = run_git(["rev-parse", "--verify", start], cwd)
+        if rc1 != 0 or rc2 != 0:
+            return None  # indeterminate; git will error on its own
+        if current.strip() == target.strip():
+            return None  # branch already points there: `-B` moves nothing
+        return {
+            "reason": (
+                f"Blocked: `git worktree add -B {forced}` force-resets the existing branch "
+                f"'{forced}' to '{start}', moving it off the commits it points at now -- git "
+                "reports this only as a 'resetting branch' note, and any commit no other ref "
+                "reaches is then recoverable from `git reflog` alone. That is "
+                "`agent-autonomy.yaml`'s `discard_uncommitted_work_or_move_branches: never`. "
+                f"Creating a worktree is allowed: use `git worktree add -b <new-branch>` with a "
+                f"name that doesn't exist yet (git refuses `-b` if it does), or check out "
+                f"'{forced}' into the new worktree without -B if you want it where it already is."
+            )
+        }
+
+    # list / lock / unlock / repair and anything else: no opinion.
+    return None
+
+
 _HANDLERS = {
     "reset": check_reset,
     "checkout": check_checkout,
@@ -675,6 +1209,7 @@ _HANDLERS = {
     "clean": check_clean,
     "branch": check_branch,
     "push": check_push,
+    "worktree": check_worktree,
 }
 
 

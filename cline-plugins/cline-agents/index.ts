@@ -985,19 +985,106 @@ type DestructiveGitGuardBeforeToolHook = (
   context: DestructiveGitGuardToolContext,
 ) => DestructiveGitGuardToolResult | undefined | Promise<DestructiveGitGuardToolResult | undefined>;
 
+// The delimiter of a heredoc redirection, matched at the position just past
+// the `<<`: an optional `-` (the tab-stripping form), optional whitespace,
+// then a quoted or bare word. Applied only where the scanner has already
+// established that the `<<` is a real redirection -- outside quotes,
+// outside arithmetic expansion, and not part of a `<<<` here-string. That
+// context is NOT re-derivable from segment text after the fact, which is
+// why detection happens during the scan. Ports
+// guard_workspace_mutation.py's _HEREDOC_DELIMITER_RE.
+const HEREDOC_DELIMITER_RE = /^(-?)[ \t]*(?:'([^']*)'|"([^"]*)"|([A-Za-z0-9_.\-]+))/;
+
 /**
- * Split a shell command line into top-level segments on `&&`, `||`, `;`,
- * and `|`, respecting single/double quoting. Not a full shell parser --
- * good enough to find each independent `git ...` invocation in a chained
- * command line without being fooled by an operator sitting inside a quoted
- * string. Ports `guard_workspace_mutation.py`'s `split_top_level`.
+ * Remove backslash-newline line continuations, as the shell does.
+ * `git push \<newline> origin main --force` is one command, not two --
+ * without this, newline splitting turns it into `git push \` and
+ * `origin main --force`, neither of which is a destructive git invocation,
+ * so a force push walks through the guard. Quote-aware: inside SINGLE
+ * quotes a backslash-newline is literal and preserved; unquoted and inside
+ * double quotes it is a continuation and removed. Ports
+ * guard_workspace_mutation.py's `_joinLineContinuations`.
  */
-function splitTopLevel(command: string): string[] {
-  const segments: string[] = [];
-  let buf = "";
+function joinLineContinuations(command: string): string {
+  let out = "";
   let quote: string | null = null;
   let i = 0;
   const n = command.length;
+  while (i < n) {
+    const ch = command[i];
+    // Single quotes first: inside them a backslash is literal, so the
+    // continuation branch below must not see it.
+    if (quote === "'") {
+      out += ch;
+      if (ch === "'") quote = null;
+      i += 1;
+      continue;
+    }
+    if (ch === "\\" && command.slice(i + 1, i + 2) === "\n") {
+      i += 2;
+      continue;
+    }
+    if (ch === "\\" && command.slice(i + 1, i + 3) === "\r\n") {
+      i += 3;
+      continue;
+    }
+    if (quote === '"') {
+      out += ch;
+      if (ch === '"' && (i === 0 || command[i - 1] !== "\\")) quote = null;
+      i += 1;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      out += ch;
+      i += 1;
+      continue;
+    }
+    out += ch;
+    i += 1;
+  }
+  return out;
+}
+
+interface CommandSegment {
+  /** Segment text, NOT trimmed -- whitespace is load-bearing for heredoc
+   * terminator matching. Trimming happens on the way out of splitTopLevel. */
+  raw: string;
+  /** Did this segment begin a new LINE, rather than follow `&&`/`||`/`;`/`|`
+   * on the previous one? A heredoc body starts on the next line, so a
+   * command chained onto the opener's own line is a command, not body. */
+  newlineBefore: boolean;
+  /** Delimiters opened by this segment, in order, recorded only when the
+   * `<<` was seen outside quotes and outside arithmetic expansion. */
+  heredocs: Array<{ delimiter: string; allowsLeadingTabs: boolean }>;
+}
+
+/**
+ * Split into segments while retaining what the shell knew and the previous
+ * implementation discarded: the separator that produced each break, and
+ * whether a `<<` was inside quote state. Re-deriving those from finished
+ * segment text produced findings F7 (`cat > f <<EOF && git ...` swallowed
+ * the chained command), F8 (a quoted `"<<EOF"` mention treated as a real
+ * redirection) and the `$(( x << 2 ))` shift case. Ports
+ * guard_workspace_mutation.py's `_scan_segments`.
+ */
+function scanSegments(command: string): CommandSegment[] {
+  const segments: CommandSegment[] = [];
+  let buf = "";
+  let heredocs: CommandSegment["heredocs"] = [];
+  let quote: string | null = null;
+  let arithmeticDepth = 0;
+  let newlineBefore = false;
+  let i = 0;
+  const n = command.length;
+
+  const flush = (nextStartsALine: boolean) => {
+    segments.push({ raw: buf, newlineBefore, heredocs });
+    buf = "";
+    heredocs = [];
+    newlineBefore = nextStartsALine;
+  };
+
   while (i < n) {
     const ch = command[i];
     if (quote) {
@@ -1012,24 +1099,122 @@ function splitTopLevel(command: string): string[] {
       i += 1;
       continue;
     }
+    // `$(( ... ))`: `<<` in here is a left-shift operator, not a
+    // redirection. Other arithmetic contexts (a bare `(( ))`, `let`) are
+    // not modelled -- a known limit, in the fail-open direction only.
+    if (command.slice(i, i + 3) === "$((") {
+      arithmeticDepth += 1;
+      buf += "$((";
+      i += 3;
+      continue;
+    }
+    if (arithmeticDepth > 0 && command.slice(i, i + 2) === "))") {
+      arithmeticDepth -= 1;
+      buf += "))";
+      i += 2;
+      continue;
+    }
     const pair = command.slice(i, i + 2);
     if (pair === "&&" || pair === "||") {
-      segments.push(buf);
-      buf = "";
+      flush(false);
       i += 2;
       continue;
     }
     if (ch === ";" || ch === "|") {
-      segments.push(buf);
-      buf = "";
+      flush(false);
       i += 1;
       continue;
+    }
+    if (ch === "\n") {
+      flush(true);
+      i += 1;
+      continue;
+    }
+    if (
+      arithmeticDepth === 0 &&
+      pair === "<<" &&
+      command.slice(i, i + 3) !== "<<<" && // here-STRING: no body, no terminator
+      (i === 0 || command[i - 1] !== "<") // not the tail of a `<<<`
+    ) {
+      const match = HEREDOC_DELIMITER_RE.exec(command.slice(i + 2));
+      // Explicit first-defined selection, matching the Python mirror's
+      // behaviour for an empty delimiter (`<<''`).
+      const delimiter = match ? (match[2] ?? match[3] ?? match[4]) : undefined;
+      if (match && delimiter !== undefined) {
+        heredocs.push({ delimiter, allowsLeadingTabs: match[1] === "-" });
+        buf += command.slice(i, i + 2 + match[0].length);
+        i += 2 + match[0].length;
+        continue;
+      }
     }
     buf += ch;
     i += 1;
   }
-  segments.push(buf);
-  return segments.map((s) => s.trim()).filter((s) => s.length > 0);
+  flush(false);
+  return segments;
+}
+
+/**
+ * Drop heredoc body lines (and their terminator line). Keeps three things
+ * a naive consume-forward pass gets wrong (F7): the opening segment (a
+ * real command), every remaining segment on the opener's OWN line, and
+ * everything after the terminator. Terminator matching is exact against
+ * untrimmed text, as the shell requires -- only the `<<-` form accepts
+ * leading TABS. Ports guard_workspace_mutation.py's
+ * `_strip_heredoc_bodies`.
+ */
+function stripHeredocBodies(records: CommandSegment[]): CommandSegment[] {
+  const out: CommandSegment[] = [];
+  let i = 0;
+  while (i < records.length) {
+    const record = records[i];
+    out.push(record);
+    i += 1;
+    if (record.heredocs.length === 0) continue;
+
+    // The rest of the opener's own line is commands, not body.
+    while (i < records.length && !records[i].newlineBefore) {
+      out.push(records[i]);
+      i += 1;
+    }
+
+    // Bodies begin on the following line, one per delimiter, in order.
+    for (const { delimiter, allowsLeadingTabs } of record.heredocs) {
+      while (i < records.length) {
+        const segment = records[i];
+        const aloneOnItsLine =
+          segment.newlineBefore && (i + 1 >= records.length || records[i + 1].newlineBefore);
+        i += 1;
+        if (!aloneOnItsLine) continue;
+        let candidate = segment.raw.replace(/\r+$/, "");
+        if (allowsLeadingTabs) candidate = candidate.replace(/^\t+/, "");
+        if (candidate === delimiter) break;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Split a shell command line into top-level segments on `&&`, `||`, `;`,
+ * `|`, and NEWLINES, respecting single/double quoting. Not a full shell
+ * parser -- good enough to find each independent `git ...` invocation in a
+ * chained command line without being fooled by an operator sitting inside
+ * a quoted string. Ports `guard_workspace_mutation.py`'s `split_top_level`.
+ *
+ * Newline is a separator for the same reason `;` is: the shell treats them
+ * identically as command terminators. Omitting it (as this function did
+ * until deagy/cadre#215) silently defeated EVERY handler -- the tokenizer
+ * treats a newline as ordinary whitespace, so a two-line command collapsed
+ * into one token list whose first token was the first line's program and
+ * `parseGitInvocation` returned null. No adversarial intent required:
+ * multi-line commands are routine. A newline inside quotes is NOT a
+ * separator, and backslash-newline continuations are joined first so a
+ * command written across several lines is still seen as one invocation.
+ */
+function splitTopLevel(command: string): string[] {
+  const records = stripHeredocBodies(scanSegments(joinLineContinuations(command)));
+  return records.map((r) => r.raw.trim()).filter((s) => s.length > 0);
 }
 
 /**
@@ -1213,8 +1398,10 @@ async function isLocalBranch(cwd: string, name: string): Promise<boolean> {
 // Per-subcommand checks -- each returns a decision to deny, or `null` to
 // express no opinion (allow). Ports guard_workspace_mutation.py's
 // check_reset/check_clean/check_branch/check_push/check_checkout/
-// check_restore, same scope and same deliberate exclusions (see that file's
-// module docstring for what is and isn't covered, and why).
+// check_restore/check_worktree, same scope and same deliberate exclusions
+// (see that file's module docstring for what is and isn't covered, and
+// why). This mirror is kept in sync deliberately, not by coincidence:
+// #215 landed `check_worktree` in both files in the same change.
 // ---------------------------------------------------------------------------
 
 async function checkReset(subArgs: string[], cwd: string): Promise<GitGuardDecision | null> {
@@ -1412,12 +1599,18 @@ async function checkRestore(subArgs: string[], cwd: string): Promise<GitGuardDec
   while (i < subArgs.length) {
     const a = subArgs[i];
     if (a === "--source" || a === "-s") {
-      source = subArgs[i + 1];
+      // Bounds-checked to match the Python mirror: a trailing `--source`
+      // with no value leaves `source` undefined rather than assigning
+      // `undefined` over a value a previous flag had set.
+      if (i + 1 < subArgs.length) source = subArgs[i + 1];
       i += 2;
       continue;
     }
     if (a.startsWith("--source=")) {
-      source = a.split("=", 2)[1];
+      // Same idiom slip as worktreeFlagValue below: a limited JS `split`
+      // truncates rather than keeping the remainder, so a ref containing
+      // `=` was silently cut short. Python's `split("=", 1)[1]` keeps it.
+      source = a.slice(a.indexOf("=") + 1);
       i += 1;
       continue;
     }
@@ -1435,6 +1628,176 @@ async function checkRestore(subArgs: string[], cwd: string): Promise<GitGuardDec
   return checkRefIntoPaths(cwd, source, paths, "restore");
 }
 
+// `git worktree add` flags that consume the following token as their value,
+// so it must not be mistaken for a positional (the new worktree's path, or
+// its start point). Conservative, not exhaustive -- an unrecognized flag
+// falls through to the generic `startsWith("-")` skip without consuming a
+// value. Getting this wrong mis-resolves the start point, which `git
+// rev-parse` then fails to resolve, which fails open.
+const WORKTREE_ADD_FLAGS_WITH_VALUE = new Set(["-b", "-B", "--reason"]);
+
+function worktreePositionals(args: string[], flagsWithValue: Set<string>): string[] {
+  const positional: string[] = [];
+  let i = 0;
+  while (i < args.length) {
+    const a = args[i];
+    if (a === "--") {
+      positional.push(...args.slice(i + 1));
+      break;
+    }
+    if (flagsWithValue.has(a)) {
+      i += 2;
+      continue;
+    }
+    if (a.startsWith("-") && a !== "-") {
+      i += 1;
+      continue;
+    }
+    positional.push(a);
+    i += 1;
+  }
+  return positional;
+}
+
+/**
+ * Value of `<flag> <value>`, `<flag>=<value>`, or -- for a two-character
+ * short flag only -- git's attached spelling `-Bvalue`. The attached form
+ * is not a nicety: verified against git 2.53.0 that `git worktree add
+ * -Bexisting <path>` resets `existing` exactly as `-B existing` does.
+ */
+function worktreeFlagValue(args: string[], flag: string): string | undefined {
+  const isShort = flag.startsWith("-") && !flag.startsWith("--");
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (a === flag) return args[i + 1];
+    // NOT `a.split("=", 2)[1]`: JS `split` with a limit TRUNCATES rather
+    // than keeping the remainder, so `--expire=a=b` would yield "a" where
+    // Python's `split("=", 1)[1]` yields "a=b". Slice past the first `=`.
+    if (a.startsWith(`${flag}=`)) return a.slice(a.indexOf("=") + 1);
+    if (isShort && flag.length === 2 && a.startsWith(flag) && a.length > 2) return a.slice(2);
+  }
+  return undefined;
+}
+
+/**
+ * `git worktree` (deagy/cadre#215). Ports guard_workspace_mutation.py's
+ * `check_worktree` -- same verbs, same state checks, same deliberate
+ * exclusions. See that file's module docstring for the full reasoning,
+ * including why `prune` is state-checked via its own dry run while
+ * `remove`/`move` are refused flat, and why `add` is guarded only in the
+ * `-B`-moves-an-existing-branch case.
+ *
+ * `checkCheckout` allows `git checkout -B` unconditionally. That is a
+ * SCOPE decision under #215, not a claim that it is safe: `checkout -B`
+ * with the implicit HEAD start point is precisely the destructive case
+ * when the branch already exists elsewhere, and `workspace-isolation.md`
+ * prohibits it by name. Changing an existing handler is tracked
+ * separately.
+ */
+async function checkWorktree(subArgs: string[], cwd: string): Promise<GitGuardDecision | null> {
+  const verbIndex = subArgs.findIndex((a) => !a.startsWith("-"));
+  if (verbIndex === -1) return null; // bare `git worktree`: prints usage
+  const verb = subArgs[verbIndex];
+  const rest = subArgs.slice(verbIndex + 1);
+
+  if (verb === "remove") {
+    const target = rest.find((a) => !a.startsWith("-")) ?? "<worktree>";
+    return {
+      reason:
+        `Blocked: \`git worktree remove\` on '${target}' deregisters a worktree, which ` +
+        "is a destructive git-metadata operation requiring human approval " +
+        "(`agent-autonomy.yaml`: destructive_action: human_approval). " +
+        "`workspace-isolation.md` says never remove or prune a worktree yourself -- " +
+        "including one you created, and including an inspection worktree you are done " +
+        "with: the worktree IS the deliverable location until a human or the " +
+        "dispatching process decides otherwise. Leave it in place and say in your " +
+        "result that it can be cleaned up, or ask the operator to remove it themselves.",
+    };
+  }
+
+  if (verb === "move") {
+    const source = rest.find((a) => !a.startsWith("-")) ?? "<worktree>";
+    return {
+      reason:
+        `Blocked: \`git worktree move\` relocates the registered worktree '${source}'. ` +
+        "Any session whose working directory is the old path loses its tree mid-task, " +
+        "with no error at the moment of the move. Rewriting another session's worktree " +
+        "registration is a destructive git-metadata operation " +
+        "(`agent-autonomy.yaml`: destructive_action: human_approval) and " +
+        "`workspace-isolation.md` reserves worktree cleanup and relocation to the " +
+        "operator. Create a new worktree at the path you want instead, or ask the " +
+        "operator to move this one.",
+    };
+  }
+
+  if (verb === "prune") {
+    const shortChars = new Set<string>();
+    const longOpts = new Set<string>();
+    for (const a of rest) {
+      if (a.startsWith("--")) longOpts.add(a.split("=", 1)[0]);
+      else if (a.startsWith("-") && a.length > 1) for (const c of a.slice(1)) shortChars.add(c);
+    }
+    if (shortChars.has("n") || longOpts.has("--dry-run")) return null; // caller's own dry run
+
+    const dryArgs = ["worktree", "prune", "-n", "-v"];
+    const expire = worktreeFlagValue(rest, "--expire");
+    if (expire) dryArgs.push("--expire", expire);
+
+    const result = await runGit(dryArgs, cwd);
+    if (!result || result.code !== 0) return null; // can't confirm state; fail open
+    // git 2.53.0 reports prune's dry run on STDERR, not stdout (unlike
+    // `git clean -n`) -- both are considered so a git writing to either
+    // stream is caught.
+    const report = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n");
+    if (!report) return null; // nothing prunable: the command would be a no-op
+
+    const entries = report
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const example = entries[0] ?? "a registered worktree";
+    return {
+      reason:
+        `Blocked: \`git worktree prune\` would deregister ${entries.length} worktree(s) ` +
+        `(e.g. ${example}). Prune names no target -- it removes whatever git currently ` +
+        "considers unreachable, which can include a teammate's worktree sitting on a " +
+        "momentarily unavailable path, so you cannot tell from this command that only " +
+        "your own worktrees are affected. `workspace-isolation.md` says never remove or " +
+        "prune a worktree yourself. Inspect what would go with " +
+        "`git worktree prune -n -v` (allowed, it removes nothing) and report it, or ask " +
+        "the operator to prune themselves.",
+    };
+  }
+
+  if (verb === "add") {
+    const forced = worktreeFlagValue(rest, "-B");
+    if (!forced) return null; // plain `add`/`-b`: explicitly allowed, creates only
+    if (!(await isLocalBranch(cwd, forced))) return null; // `-B` on a new name behaves like `-b`
+    const positional = worktreePositionals(rest, WORKTREE_ADD_FLAGS_WITH_VALUE);
+    // positional[0] is the new worktree's path; positional[1], if present,
+    // is the start point. Default start point is HEAD.
+    const start = positional[1] ?? "HEAD";
+    const current = await runGit(["rev-parse", "--verify", forced], cwd);
+    const target = await runGit(["rev-parse", "--verify", start], cwd);
+    if (!current || current.code !== 0 || !target || target.code !== 0) return null; // fail open
+    if (current.stdout.trim() === target.stdout.trim()) return null; // moves nothing
+    return {
+      reason:
+        `Blocked: \`git worktree add -B ${forced}\` force-resets the existing branch ` +
+        `'${forced}' to '${start}', moving it off the commits it points at now -- git ` +
+        "reports this only as a 'resetting branch' note, and any commit no other ref " +
+        "reaches is then recoverable from `git reflog` alone. That is " +
+        "`agent-autonomy.yaml`'s `discard_uncommitted_work_or_move_branches: never`. " +
+        "Creating a worktree is allowed: use `git worktree add -b <new-branch>` with a " +
+        "name that doesn't exist yet (git refuses `-b` if it does), or check out " +
+        `'${forced}' into the new worktree without -B if you want it where it already is.`,
+    };
+  }
+
+  // list / lock / unlock / repair and anything else: no opinion.
+  return null;
+}
+
 type GitGuardHandler = (subArgs: string[], cwd: string) => Promise<GitGuardDecision | null> | GitGuardDecision | null;
 
 const GIT_GUARD_HANDLERS: Record<string, GitGuardHandler> = {
@@ -1444,6 +1807,7 @@ const GIT_GUARD_HANDLERS: Record<string, GitGuardHandler> = {
   clean: checkClean,
   branch: (subArgs) => checkBranch(subArgs),
   push: (subArgs) => checkPush(subArgs),
+  worktree: checkWorktree,
 };
 
 function resolveGitGuardCwd(baseCwd: string, explicitCwd: string | undefined): string {
