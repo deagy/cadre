@@ -1,6 +1,6 @@
 {
   "name": "cadre-lifecycle-github",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "description": "GitHub-flavored Agentic SDLC gate governance: lifecycle-review-github records lifecycle gate decisions from a real GitHub PR review; link-source-issue-github records a real GitHub issue as the recorded source for a task's G1 (Intent) or G2 (Requirements Baseline) gate; create-github-gate-issues publishes GitHub tracking issues per applicable lifecycle gate plus linked approval issues assigned to each gate's authority; report-gate-reviewers-github reports (read-only, never requests) which GitHub logins would be requested as PR reviewers for a task's lifecycle gates; publish-gate-status-github posts (and idempotently updates) a one-way, read-only gate-status summary comment on a task's GitHub PR; publish-reviewer-nudge-github posts (and idempotently updates) an advisory, SUGGESTION-ONLY comment naming reviewer candidates -- never a review request and never notifies anyone. Bundles its own onboarding, generic gate-decision, pending-gates briefing, and kernel bootstrap skills (lifecycle-onboarding-github, lifecycle-review-generic-github, brief-pending-gates-github), so cadre-lifecycle-core is optional -- only needed for forge-agnostic-only use elsewhere. If you don't have a GitHub review to cite, the bundled generic lifecycle-review-generic-github skill covers that case.",
   "author": {
     "name": "Cadre maintainers",
