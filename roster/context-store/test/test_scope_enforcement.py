@@ -29,7 +29,7 @@ if str(_SHARED_TEST_DIR) not in sys.path:
 import cli  # noqa: E402
 from config import DEFAULTS, TIER_GLOBAL_FALLBACK, TIER_PROJECT_LOCAL, load_config  # noqa: E402
 from database import open_store  # noqa: E402
-from service import get_entry, list_entries, put_entry  # noqa: E402
+from service import ContextStoreError, drop_entry, get_entry, list_entries, put_entry  # noqa: E402
 from settings_test_helpers import isolate_settings  # noqa: E402
 
 
@@ -177,6 +177,80 @@ class DispatchIdentityVersusFilterTests(ScopeTestCase):
             "classification": "internal", "source": "demo",
         })
         self.assertEqual(without["results"], [])
+
+
+class DropIsGatedLikeAReadTests(ScopeTestCase):
+    """Regression: `drop` once took no identity at all.
+
+    It was the only command with no `_readable` check and no audit row -- and
+    the only irreversible one. Handles circulate by design (the handoff
+    contract tells agents to quote them), so any caller who learned one could
+    destroy any entry in the database, across agents, scopes, and
+    classifications, leaving no record of who did it.
+    """
+
+    def drop(self, handle: str, **caller: object) -> dict:
+        options = {
+            "handle": handle, "reason": "cleanup", "agent": "code-reviewer",
+            "task_id": "TASK-1", "classification": "internal", "source": "demo",
+        }
+        options.update(caller)
+        return drop_entry(self.db, options)
+
+    def test_the_owner_can_drop(self) -> None:
+        handle = self.put()
+        self.assertEqual(self.drop(handle)["handle"], handle)
+        self.assertFalse(self.can_read(handle))
+
+    def test_another_agent_cannot_drop(self) -> None:
+        handle = self.put()
+        with self.assertRaises(ContextStoreError):
+            self.drop(handle, agent="someone-else")
+        self.assertTrue(self.can_read(handle), "the entry must survive a refused drop")
+
+    def test_another_task_cannot_drop_an_agent_scoped_entry(self) -> None:
+        handle = self.put()
+        with self.assertRaises(ContextStoreError):
+            self.drop(handle, task_id="TASK-2")
+        self.assertTrue(self.can_read(handle))
+
+    def test_a_different_classification_cannot_drop(self) -> None:
+        handle = self.put(scope="project", classification="confidential")
+        with self.assertRaises(ContextStoreError):
+            self.drop(handle, classification="internal")
+        self.assertTrue(self.can_read(handle, classification="confidential"))
+
+    def test_another_project_cannot_drop(self) -> None:
+        handle = self.put(scope="project")
+        with self.assertRaises(ContextStoreError):
+            self.drop(handle, source="other-project")
+        self.assertTrue(self.can_read(handle))
+
+    def test_a_refused_drop_is_indistinguishable_from_an_absent_handle(self) -> None:
+        handle = self.put()
+        with self.assertRaises(ContextStoreError) as unreadable:
+            self.drop(handle, agent="someone-else")
+        with self.assertRaises(ContextStoreError) as absent:
+            self.drop("ctx_" + "0" * 32)
+        self.assertEqual(
+            str(unreadable.exception).replace(handle, "H"),
+            str(absent.exception).replace("ctx_" + "0" * 32, "H"),
+        )
+
+    def test_a_drop_is_audited(self) -> None:
+        self.drop(self.put())
+        row = self.db.execute("SELECT * FROM access_runs WHERE operation = 'drop'").fetchone()
+        self.assertIsNotNone(row, "an irreversible operation must be attributable")
+        self.assertEqual(row["agent"], "code-reviewer")
+
+    def test_a_refused_drop_writes_no_expiry_evidence(self) -> None:
+        handle = self.put()
+        with self.assertRaises(ContextStoreError):
+            self.drop(handle, agent="someone-else")
+        row = self.db.execute(
+            "SELECT COUNT(*) AS n FROM expiry_evidence WHERE handle = ?", (handle,)
+        ).fetchone()
+        self.assertEqual(row["n"], 0)
 
 
 class GlobalTierScopeTests(unittest.TestCase):

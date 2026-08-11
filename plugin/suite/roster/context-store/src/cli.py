@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 import sys
 from pathlib import Path
 from typing import Any
@@ -123,6 +124,10 @@ def _parser() -> argparse.ArgumentParser:
 
     promote = subparsers.add_parser("promote")
     promote.add_argument("--handle", required=True)
+    # Without this, `_readable` compares a dispatch-scoped entry's id against
+    # None and no such entry can ever be promoted -- silently excluding one of
+    # the three scopes from the promotion path.
+    promote.add_argument("--dispatch-id", dest="dispatch_id")
     promote.add_argument("--artifact", required=True, help="what the finding is about (repo-relative, never an absolute local path)")
     promote.add_argument("--revision", required=True, help="the source revision the observation was made against")
     promote.add_argument("--sensitivity-notes", required=True, dest="sensitivity_notes")
@@ -142,6 +147,8 @@ def _parser() -> argparse.ArgumentParser:
     drop = subparsers.add_parser("drop")
     drop.add_argument("--handle", required=True)
     drop.add_argument("--reason", required=True)
+    drop.add_argument("--dispatch-id", dest="dispatch_id")
+    add_caller(drop)
     add_config(drop)
 
     expire = subparsers.add_parser("expire")
@@ -234,12 +241,8 @@ def main(argv: list[str] | None = None) -> int:
             finally:
                 db.close()
 
-        if args.command == "drop":
-            db = open_store(config["database"])
-            try:
-                return _emit(drop_entry(db, {"handle": args.handle, "reason": args.reason}))
-            finally:
-                db.close()
+        # `drop` destroys an entry, so it is gated and scoped exactly like a
+        # read -- it sits below the scope enforcement, not above it.
 
         if args.command == "reindex":
             db = open_store(config["database"])
@@ -289,6 +292,16 @@ def main(argv: list[str] | None = None) -> int:
                     "classification": args.classification,
                     "source": source,
                 }))
+            if args.command == "drop":
+                return _emit(drop_entry(db, {
+                    "handle": args.handle,
+                    "reason": args.reason,
+                    "dispatch_id": args.dispatch_id,
+                    "agent": args.agent,
+                    "task_id": args.task_id,
+                    "classification": args.classification,
+                    "source": source,
+                }))
             if args.command == "promote":
                 result = promote_entry(db, {
                     "handle": args.handle,
@@ -297,6 +310,7 @@ def main(argv: list[str] | None = None) -> int:
                     "sensitivity_notes": args.sensitivity_notes,
                     "conflicts_or_staleness": args.conflicts_or_staleness,
                     "recommended_action": args.recommended_action,
+                    "dispatch_id": args.dispatch_id,
                     "agent": args.agent,
                     "task_id": args.task_id,
                     "classification": args.classification,
@@ -341,7 +355,14 @@ def main(argv: list[str] | None = None) -> int:
             db.close()
 
         raise ContextStoreError(f"Unknown command: {args.command}")
-    except (ContextStoreError, ExportError, SettingsError, FileNotFoundError, ValueError, OSError, json.JSONDecodeError) as error:
+    # sqlite3.Error is caught alongside the rest so a locked, corrupt, or
+    # full database exits cleanly rather than as a traceback. The store is
+    # written concurrently by design, which makes `database is locked` an
+    # ordinary outcome here rather than an exotic one.
+    except (
+        ContextStoreError, ExportError, SettingsError, FileNotFoundError,
+        ValueError, OSError, sqlite3.Error, json.JSONDecodeError,
+    ) as error:
         print(f"cadre context: {error}", file=sys.stderr)
         return 1
 

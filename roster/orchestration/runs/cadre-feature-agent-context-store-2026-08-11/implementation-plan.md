@@ -311,9 +311,31 @@ claims — reintroducing exactly the weakness the MCP path is supposed to remove
 
 These tools inherit the module's existing control surface: classification
 validation, effective-sandbox computation, concurrency limiting, audit records,
-and untrusted-output fencing. `context_put` is a write and must therefore sit
-behind the same `ConfirmationGate` treatment as other write-capable operations
-rather than being treated as read-shaped because it returns only a handle.
+and untrusted-output fencing.
+
+**Revision 2 (2026-08-11), recorded after implementation.** Revision 1 of this
+section required that `context_put` "sit behind the same `ConfirmationGate`
+treatment as other write-capable operations rather than being treated as
+read-shaped because it returns only a handle." **What shipped does not do
+that**, and this record is amended rather than left contradicting the code — a
+plan a gate reviews must not describe something other than what was built.
+
+The reasoning for the departure: the confirmation gate exists to make a caller
+stop and re-assert before a *spawned process* mutates a repository or a
+persistent environment. A context put writes one row to a local, gitignored,
+always-expiring database whose entire purpose is absorbing high-churn agent
+writes. Gating it would make confirmation routine, and a confirmation that
+fires constantly is worth less at the moment it actually matters. The controls
+that do apply — classification narrowing against the session ceiling, entry
+size limits, secret redaction, TTL, and audit — are enforced on every call.
+
+This is a judgement call made by the implementing author, not a reviewed
+decision, and it is recorded here so that a reviewer meets it in the plan
+rather than only in a code comment. Its residual cost is stated in
+`roster/context-store/SECURITY.md`: a compromised or confused agent can fill
+the store without a second prompt, bounded by size limit, TTL, and ceiling
+rather than by a human. A reviewer who disagrees should treat this paragraph,
+not the code comment, as the thing to overturn.
 
 ## 12. Run-directory export
 

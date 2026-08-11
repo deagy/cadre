@@ -29,6 +29,19 @@ Anything else -- a shared database file, an import in either direction, a
 config module that can resolve the other store's path -- collapses the
 distinction that makes the design safe.
 
+**What this guard is, and is not.** It is a set of AST and string-literal
+checks over the current source; it is *not a runtime sandbox*. It reliably
+catches the accidental crossing -- a copy-pasted `sys.path.append`, a plain
+`from database import ...`, a hardcoded sibling path, or the subtler move of
+resolving the other store's home through the sanctioned `settings` import. It
+does not stop a determined one: a literal split across two constants, an
+f-string assembled at runtime, or reading the other database's bytes with
+`open()` instead of `sqlite3` would all pass. The honest claim is that it
+raises an accidental crossing from one plausible-looking line to a deliberate
+workaround someone would have to explain in review. Overstating it would be
+worse than the gap, because a reader who believes the boundary is
+unbreakable stops checking whether it broke.
+
     python3 -m unittest discover -s roster/orchestration/test -p "test_*.py"
 """
 
@@ -179,25 +192,55 @@ class TestNeitherStoreImportsTheOther(unittest.TestCase):
         `sys.path` could make `config`, `database`, or `service` silently
         resolve to the wrong store -- an import-graph check would see nothing.
         """
-        pairs = ((CONTEXT_SRC, "knowledge-store"), (KNOWLEDGE_SRC, "context-store"))
+        # Both the hyphenated directory name and the underscored settings key
+        # that resolves to the same location. The key form is the subtler of
+        # the two: `settings` is a sanctioned shared import, and
+        # `settings.resolve_optional("knowledge_store.home")` would hand a
+        # context-store module the sibling's database directory without any
+        # forbidden import and without the string "knowledge-store" appearing
+        # anywhere -- enough to `ATTACH` that database and write exactly the
+        # cross-store JOIN this boundary exists to make unwritable.
+        pairs = (
+            (CONTEXT_SRC, ("knowledge-store", "knowledge_store", "knowledge.db")),
+            (KNOWLEDGE_SRC, ("context-store", "context_store", "context.db")),
+        )
         offenders: list[str] = []
-        for root, forbidden_directory in pairs:
+        for root, forbidden_tokens in pairs:
             for path in _python_files(root):
                 for literal in _non_docstring_string_literals(path):
-                    if forbidden_directory in literal.value:
-                        offenders.append(
-                            f"{path.relative_to(REPOSITORY_ROOT)}:{literal.lineno}: {literal.value!r}"
-                        )
+                    for token in forbidden_tokens:
+                        if token in literal.value:
+                            offenders.append(
+                                f"{path.relative_to(REPOSITORY_ROOT)}:{literal.lineno}: "
+                                f"{literal.value!r} (contains {token!r})"
+                            )
         self.assertEqual(
             offenders,
             [],
-            "Neither store may name the other's directory in a string literal used "
-            "by code. Both use flat module names, so putting the other store's src "
-            "on sys.path would silently redirect `config`/`database`/`service` with "
-            "nothing for an import-graph check to see. Prose in docstrings and "
-            "comments is exempt -- cross-referencing the sibling store while "
-            "explaining the boundary is the point.\n" + "\n".join(offenders),
+            "Neither store may name the other's directory, settings key, or database "
+            "file in a string literal used by code. Both use flat module names, so "
+            "putting the other store's src on sys.path would silently redirect "
+            "`config`/`database`/`service` with nothing for an import-graph check to "
+            "see; and resolving the other store's home through `settings` would hand "
+            "over a database path without any forbidden import at all. Prose in "
+            "docstrings and comments is exempt -- cross-referencing the sibling store "
+            "while explaining the boundary is the point.\n" + "\n".join(offenders),
         )
+
+    def test_the_guard_states_its_own_limits(self) -> None:
+        """This file's docstring must not oversell what it verifies.
+
+        These are pattern checks over current source, not a runtime sandbox. A
+        determined crossing can still be written -- a literal split across two
+        constants, an f-string, a path assembled at runtime, or reading the
+        other database's bytes with `open()` rather than `sqlite3`. The guard
+        raises the cost of an accidental or careless crossing from one line to
+        a deliberate workaround, which is worth having and is not the same as
+        making it impossible. Claiming otherwise in the docstring would be the
+        more dangerous error, because a reader would stop looking.
+        """
+        docstring = (Path(__file__).read_text(encoding="utf-8")).split('"""')[1]
+        self.assertIn("not a runtime sandbox", docstring)
 
     def test_the_only_cross_directory_imports_are_shared_utilities(self) -> None:
         """Positive statement of the permitted coupling, not just the forbidden one.

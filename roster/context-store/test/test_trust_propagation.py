@@ -115,6 +115,67 @@ class PropagationTests(TrustTestCase):
         self.assertTrue(stored["untrusted_inputs"])
 
 
+class DerivedFromIsNotAnOracleTests(TrustTestCase):
+    """Regression: citing a handle used to read it with no `_readable` check.
+
+    Handles circulate by design, so a caller who could not `get` an entry could
+    still name it in `--derived-from` and learn from the returned flag both
+    that it existed and whether its content tripped injection detection. That
+    is exactly the disclosure `get`'s absent/expired/unreadable
+    indistinguishability exists to prevent.
+    """
+
+    def put_as(self, agent: str, content: str, **overrides) -> str:
+        options = {
+            **CALLER, "agent": agent, "label": "entry", "scope": "agent", "content": content,
+        }
+        options.update(overrides)
+        return put_entry(self.db, self.config, options)["handle"]
+
+    def test_an_unreadable_poisoned_parent_reads_as_unverifiable(self) -> None:
+        foreign = self.put_as("someone-else", POISON)
+        stored = self.put(CLEAN, derived_from=[foreign])
+        # Flagged, but via the unverifiable path -- the caller learns nothing
+        # about whether the entry existed or what it contained.
+        self.assertTrue(stored["untrusted_inputs"])
+        self.assertEqual(stored["unverifiable_provenance"], [foreign])
+
+    def test_an_unreadable_clean_parent_is_indistinguishable_from_a_poisoned_one(self) -> None:
+        clean_foreign = self.put_as("someone-else", CLEAN)
+        poisoned_foreign = self.put_as("someone-else", POISON)
+        absent = mint_handle()
+
+        results = [
+            self.put(CLEAN, derived_from=[handle])
+            for handle in (clean_foreign, poisoned_foreign, absent)
+        ]
+        # All three identical: flagged, and reported as unverifiable. If the
+        # clean one came back unflagged, the flag would be an oracle.
+        for result in results:
+            self.assertTrue(result["untrusted_inputs"])
+            self.assertEqual(len(result["unverifiable_provenance"]), 1)
+
+    def test_a_different_classification_parent_is_not_readable_either(self) -> None:
+        foreign = self.put_as(CALLER["agent"], CLEAN, scope="project", classification="confidential")
+        stored = self.put(CLEAN, derived_from=[foreign])
+        self.assertEqual(stored["unverifiable_provenance"], [foreign])
+
+    def test_a_readable_clean_parent_still_does_not_flag(self) -> None:
+        # The positive counterpart: the check narrows, it does not flag
+        # everything indiscriminately.
+        own = self.put(CLEAN)["handle"]
+        stored = self.put(CLEAN, derived_from=[own])
+        self.assertFalse(stored["untrusted_inputs"])
+        self.assertEqual(stored["unverifiable_provenance"], [])
+
+    def test_a_dispatch_peer_can_still_cite_a_shared_parent(self) -> None:
+        shared = self.put_as(
+            "someone-else", CLEAN, scope="dispatch", dispatch_id="D-1"
+        )
+        stored = self.put(CLEAN, derived_from=[shared], dispatch_id="D-1")
+        self.assertEqual(stored["unverifiable_provenance"], [])
+
+
 class NonClearabilityTests(TrustTestCase):
     def test_an_agent_cannot_pass_the_flag_off_as_false(self) -> None:
         poisoned = self.put(POISON)["handle"]

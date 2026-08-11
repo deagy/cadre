@@ -142,7 +142,7 @@ def resolve_expires_at(config: dict[str, Any], scope: str, ttl_days_override: An
 
 
 def _resolve_untrusted_inputs(
-    db: Any, derived_from: list[str], own_injection_risk: bool
+    db: Any, derived_from: list[str], own_injection_risk: bool, options: dict[str, Any]
 ) -> tuple[bool, list[str]]:
     """Compute the entry's `untrusted_inputs` flag and validate its provenance.
 
@@ -160,17 +160,26 @@ def _resolve_untrusted_inputs(
     It is the same rule `roster/shared/knowledge-use-policy.md` already states
     for `untrusted_instruction_risk` ("an agent cannot clear it"), extended
     across a store boundary rather than newly invented.
+
+    A cited parent is resolved through `_readable` like any other read. Without
+    that, `--derived-from` was an oracle: handles circulate by design (the
+    handoff contract tells agents to quote them), so a caller who could not
+    `get` an entry could still cite it and learn from the resulting flag both
+    that it existed and whether its content tripped detection -- precisely the
+    disclosure `get`'s absent/expired/unreadable indistinguishability exists to
+    prevent. An unreadable parent is therefore treated exactly as an absent
+    one: unverifiable, and failing toward flagged.
     """
     flagged = bool(own_injection_risk)
     unknown: list[str] = []
     for reference in derived_from:
         if reference.startswith("ctx_"):
             parent = fetch_entry(db, reference)
-            if parent is None:
-                # An expired or never-existent parent cannot be checked, so it
-                # cannot be cleared either. Fail toward flagged: an unverifiable
-                # provenance claim is exactly the case where assuming clean
-                # would launder the signal.
+            if parent is None or not _readable(parent, options):
+                # Absent, expired, and out-of-scope are one case here, and the
+                # caller cannot tell which they hit. Failing toward flagged
+                # also means an unverifiable provenance claim never launders
+                # the signal by defaulting to clean.
                 unknown.append(reference)
                 flagged = True
                 continue
@@ -213,7 +222,9 @@ def put_entry(db: Any, config: dict[str, Any], options: dict[str, Any]) -> dict[
 
     protected = protect_content(content, config["ingestion"]["redact_secrets"])
     derived_from = list(options.get("derived_from") or [])
-    untrusted, unverifiable = _resolve_untrusted_inputs(db, derived_from, protected["injection_risk"])
+    untrusted, unverifiable = _resolve_untrusted_inputs(
+        db, derived_from, protected["injection_risk"], options
+    )
 
     stored = protected["content"]
     entry = {
@@ -236,8 +247,19 @@ def put_entry(db: Any, config: dict[str, Any], options: dict[str, Any]) -> dict[
         "created_at": now_iso(),
         "expires_at": resolve_expires_at(config, scope, options.get("ttl_days")),
     }
-    insert_entry(db, entry)
-    chunk_count = _index_entry(db, config, entry["handle"], stored)
+    # One transaction over both writes. Separately committed, an interruption
+    # between them leaves a committed entry with no chunks: fully visible to
+    # `get`/`list`/`export`/`promote`, silently absent from `search` until
+    # someone thinks to run `reindex`. The sibling store's `ingest_file` wraps
+    # its message and chunk writes the same way, for the same reason.
+    db.execute("BEGIN")
+    try:
+        insert_entry(db, entry)
+        chunk_count = _index_entry(db, config, entry["handle"], stored)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     record_access(db, {
         "operation": "put", "handle": entry["handle"], "task_id": entry["task_id"],
         "agent": entry["agent"], "classification": classification, "scope": scope,
@@ -632,11 +654,41 @@ def promote_entry(db: Any, options: dict[str, Any]) -> dict[str, Any]:
 
 
 def drop_entry(db: Any, options: dict[str, Any]) -> dict[str, Any]:
+    """Voluntary early release of an entry the caller can actually read.
+
+    Gated by `_readable` like every other operation, and audited like every
+    other operation. Both were missing when this was first written, which made
+    `drop` the one command that took no identity at all -- and the one command
+    whose effect is irreversible. Any caller who learned a handle (they are
+    quoted in handoffs and promotion pipes by design) could destroy any entry
+    in the database, across agents, scopes, and classifications, leaving no
+    record of who did it.
+    """
     handle = validate_handle(options.get("handle"))
     reason = options.get("reason")
     if not reason:
         raise ContextStoreError("--reason is required")
+    validate_classification(options.get("classification"))
+    for field in ("agent", "task_id", "source"):
+        if not options.get(field):
+            raise ContextStoreError(f"{field} is required")
+
+    row = fetch_entry(db, handle)
+    if row is None or not _readable(row, options):
+        # Same indistinguishability rule as `get` and `promote`: absent,
+        # expired, and unreadable must not be told apart, or a caller could
+        # probe for entries it may not read by trying to destroy them.
+        raise ContextStoreError(
+            f"No readable entry for handle {handle} under the supplied agent, task, "
+            "classification, and source."
+        )
+
     dropped = delete_entry(db, handle, f"dropped: {reason}")
-    if dropped is None:
+    if dropped is None:  # pragma: no cover - fetch and delete cannot disagree
         raise ContextStoreError(f"No such entry: {handle}")
+    record_access(db, {
+        "operation": "drop", "handle": handle, "task_id": options["task_id"],
+        "agent": options["agent"], "classification": options["classification"],
+        "scope": None, "source": options["source"], "result_count": 1,
+    })
     return dropped

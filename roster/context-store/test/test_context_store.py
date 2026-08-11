@@ -233,7 +233,7 @@ class StatsAndDropTests(ContextStoreTestCase):
 
     def test_drop_removes_the_entry_and_records_evidence(self) -> None:
         stored = self.put()
-        drop_entry(self.db, {"handle": stored["handle"], "reason": "no longer needed"})
+        drop_entry(self.db, {**CALLER, "handle": stored["handle"], "reason": "no longer needed"})
         bundle = get_entry(self.db, {**CALLER, "handle": stored["handle"]})
         self.assertEqual(bundle["results"], [])
         row = self.db.execute(
@@ -245,7 +245,7 @@ class StatsAndDropTests(ContextStoreTestCase):
 
     def test_evidence_never_retains_content(self) -> None:
         stored = self.put("a distinctive phrase worth not keeping")
-        drop_entry(self.db, {"handle": stored["handle"], "reason": "cleanup"})
+        drop_entry(self.db, {**CALLER, "handle": stored["handle"], "reason": "cleanup"})
         columns = {row["name"] for row in self.db.execute("PRAGMA table_info(expiry_evidence)")}
         self.assertNotIn("content", columns)
         dumped = "\n".join(line for line in self.db.iterdump())
@@ -253,7 +253,7 @@ class StatsAndDropTests(ContextStoreTestCase):
 
     def test_drop_of_an_unknown_handle_is_an_error(self) -> None:
         with self.assertRaises(ContextStoreError):
-            drop_entry(self.db, {"handle": mint_handle(), "reason": "x"})
+            drop_entry(self.db, {**CALLER, "handle": mint_handle(), "reason": "x"})
 
 
 class ListingTests(ContextStoreTestCase):

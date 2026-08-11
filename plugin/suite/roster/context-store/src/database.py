@@ -27,6 +27,7 @@ import hashlib
 import json
 import sqlite3
 import uuid
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -189,7 +190,12 @@ def sweep_expired(db: sqlite3.Connection, as_of: str | None = None, reason: str 
 
 
 def insert_entry(db: sqlite3.Connection, entry: dict[str, Any]) -> None:
-    with db:
+    # Joins an open transaction rather than committing its own, so a caller
+    # can make the entry row and its chunks atomic. Without this, an
+    # interrupted `put` commits a visible entry that `search` cannot see until
+    # someone thinks to run `reindex`. Same pattern as the sibling store's
+    # `save_message`.
+    with (nullcontext() if db.in_transaction else db):
         db.execute(
             """INSERT INTO entries (handle, scope, source, task_id, agent, dispatch_id, label,
                  tags_json, content, content_hash, byte_length, classification, injection_risk,
@@ -221,8 +227,12 @@ def replace_chunks(
     Replace rather than append so re-indexing under a changed chunking or
     embedding configuration cannot leave a mix of old and new vectors behind,
     scored against each other as if comparable.
+
+    Joins an open transaction rather than committing its own, for the same
+    reason `insert_entry` does: `put_entry` wraps both so an entry and its
+    chunks land together or not at all.
     """
-    with db:
+    with (nullcontext() if db.in_transaction else db):
         db.execute("DELETE FROM entry_chunks WHERE handle = ?", (handle,))
         for ordinal, chunk in enumerate(chunks):
             vector = vectors[ordinal]

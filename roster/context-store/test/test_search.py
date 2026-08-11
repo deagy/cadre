@@ -86,7 +86,7 @@ class IndexingTests(SearchTestCase):
         from service import drop_entry
 
         stored = self.put(DB_TEXT)
-        drop_entry(self.db, {"handle": stored["handle"], "reason": "cleanup"})
+        drop_entry(self.db, {**CALLER, "handle": stored["handle"], "reason": "cleanup"})
         remaining = self.db.execute(
             "SELECT COUNT(*) AS n FROM entry_chunks WHERE handle = ?", (stored["handle"],)
         ).fetchone()["n"]

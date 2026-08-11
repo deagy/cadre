@@ -45,12 +45,22 @@ agent. An unverifiable or expired parent fails *toward* flagged — closing the
 window where an attacker waits for a poisoned parent to expire and then claims
 a clean derivation because nothing can be checked.
 
-**Secret redaction before storage.** `protect_content()` from
+**Secret redaction runs before storage.** `protect_content()` from
 `roster/shared/src/content_protection.py` runs on every `put`. Redaction
 cascades and deliberately over-redacts. `content_hash` covers the stored,
 redacted text — not the original. Chunks are built from the redacted text, so a
 secret stripped from an entry cannot survive in the search index and come back
 out as a result.
+
+What is enforced is that the redactor *runs*, not that it *succeeds*. It
+catches common credential shapes and cannot prove content is free of secrets:
+a credential split across lines, base64-wrapped, embedded in a URI, a JWT
+without a `Bearer` prefix, or under a key name the patterns do not recognise
+passes through and is then persisted permanently — hashed, indexed, and
+exported if the entry is ever exported. Never assume automated redaction is
+complete. This is the same limit the knowledge store states about the same
+shared code path; it applies here identically and is repeated rather than
+cross-referenced because this store is written to far more often.
 
 **No remote embedding, by construction.** The `openai-compatible` provider
 lives in the knowledge store, which this store may not import. There is no code
