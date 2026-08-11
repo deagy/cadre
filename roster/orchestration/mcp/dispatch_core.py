@@ -1779,6 +1779,12 @@ def _run_async_role_dispatch(
             "duration_seconds": result["duration_seconds"],
             "stdout_truncated": result["stdout_truncated"],
             "output": wrap_untrusted_output(result.get("stdout_text", "")),
+            # Same activity fields the synchronous path returns. Omitting
+            # them here would mean a wait=False caller polling for its result
+            # never learns which files a dispatch wrote -- the one fact an
+            # auditor most needs, and invisible precisely because the async
+            # path is the one a caller cannot watch directly.
+            **runner_activity_fields(result),
         }
         _write_audit_record_best_effort(
             build_audit_record(
@@ -1797,6 +1803,7 @@ def _run_async_role_dispatch(
                 duration_seconds=result["duration_seconds"],
                 stdout_truncated=result["stdout_truncated"],
                 project_tier_git_clean=role.project_tier_git_clean,
+                **runner_activity_fields(result),
                 job_id=job_id,
             ),
             path=audit_path,

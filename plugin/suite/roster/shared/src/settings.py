@@ -336,7 +336,7 @@ def _is_private_host(host: str) -> bool:
     except ValueError:
         pass
     else:
-        return address.is_loopback or address.is_private or address.is_link_local
+        return _address_is_private(address)
     try:
         resolved = socket.getaddrinfo(host, None)
     except (socket.gaierror, UnicodeError, OSError):
@@ -348,9 +348,31 @@ def _is_private_host(host: str) -> bool:
             address = ipaddress.ip_address(entry[4][0])
         except ValueError:
             return False
-        if not (address.is_loopback or address.is_private or address.is_link_local):
+        if not _address_is_private(address):
             return False
     return True
+
+
+def _address_is_private(address: Any) -> bool:
+    """Private/loopback/link-local classification that does not depend on the
+    interpreter's patch level.
+
+    An IPv4-mapped IPv6 address (`::ffff:8.8.8.8`) is unwrapped and judged on
+    the address it actually maps to, rather than trusting `is_private`
+    directly. CPython's `ipaddress` used to classify the whole `::ffff:0:0/96`
+    range as private regardless of the mapped address -- CVE-2024-4032, fixed
+    in 3.12.4 / 3.13.0a6 and backported to earlier branches. This repository
+    supports Python 3.10+ and cannot control which patch release an operator
+    runs, so relying on `is_private` alone would make a security-relevant
+    classification depend on the interpreter build: on an unpatched one,
+    `http://[::ffff:8.8.8.8]/v1` would be accepted as "private" and ship an
+    API key in cleartext to a public host. Unwrapping explicitly is correct on
+    every version.
+    """
+    mapped = getattr(address, "ipv4_mapped", None)
+    if mapped is not None:
+        address = mapped
+    return address.is_loopback or address.is_private or address.is_link_local
 
 
 def _validate_endpoint_url(value: Any, spec: FieldSpec) -> str:

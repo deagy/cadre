@@ -37,9 +37,13 @@ additionally routes through `dispatch_core.spawn_and_wait` and
 timeout, output caps, the deny-by-default environment allowlist, and the
 re-dispatch depth counter for that one path.
 
-Recursive dispatch is structurally impossible here: no tool exposes dispatch,
-and `run_command` refuses the agent-launching binaries by name regardless of
-the operator's allowlist (see `_REFUSED_COMMANDS`).
+Recursive dispatch is *narrowed*, not structurally prevented -- an earlier
+version of this docstring claimed the latter and was wrong. No tool exposes
+dispatch; `run_command` refuses the agent-launching binaries by name (see
+`_REFUSED_COMMANDS`); and `_sanitized_child_path()` removes their directories
+from the child's PATH. But an allowlisted general-purpose interpreter can
+still exec one by absolute path, so `MAX_DISPATCH_DEPTH` remains the actual
+backstop. See SECURITY-CONTROLS.md's "API runner" section.
 
 Stdlib only, deliberately: `pyproject.toml` declares `dependencies = []`, and
 every HTTP client already in this repository (`gitlab_core.py`,
@@ -104,18 +108,37 @@ MAX_FILES_SCANNED = 20000
 
 MAX_SEARCH_MATCHES = 200
 
-# Per-HTTP-request timeout. The whole-dispatch deadline is separate and is
-# passed in by the caller as `timeout_seconds` (dispatch_core's
-# DEFAULT_TIMEOUT_SECONDS), so a slow endpoint cannot extend a dispatch past
-# the limit the caller asked for simply by answering each call slowly.
+# Ceiling for a single HTTP request. The effective per-call timeout is the
+# *smaller* of this and whatever remains of the caller's whole-dispatch
+# deadline -- see `run_api_dispatch`'s `client.complete(..., timeout=...)`
+# call, which computes that each turn exactly as `_tool_run_command` does for
+# its own child.
+#
+# An earlier revision passed this value unconditionally and checked the
+# deadline only *between* turns, which let a slow endpoint overrun the
+# caller's `timeout_seconds` by up to this much on the final in-flight call.
+# The whole surrounding pipeline (spawn_and_wait's group-kill, the
+# concurrency limiter, job/team TTLs) is built on that deadline being real.
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 120.0
 
 # Never runnable through `run_command`, whatever the operator allowlisted.
-# These are the binaries that would start another agent, which is how a
-# dispatched role could otherwise escape MAX_DISPATCH_DEPTH -- the depth
-# counter is carried in the environment and would be inherited, but there is
-# no reason to rely on that when the names can simply be refused.
+# These are the binaries that would start another agent.
+#
+# READ THE LIMIT OF THIS, and do not restate it more strongly elsewhere: this
+# is a check on the literal `command` argument only. It says nothing about
+# what an allowlisted command then does, so an operator who allowlists a
+# general-purpose interpreter (`python`, `bash`, `node`, `make`, `npm`) has
+# given the dispatched agent a way to exec one of these as a *grandchild*,
+# which this set never sees. `_command_child_path()` below narrows that, and
+# `MAX_DISPATCH_DEPTH` still backstops it, but the honest description is
+# "narrower attack surface", not "structurally impossible". An earlier
+# revision of SECURITY-CONTROLS.md claimed the latter; that was wrong and has
+# been corrected.
+#
+# Compared casefolded, so a `Codex` entry on a case-insensitive filesystem
+# cannot slip past a lowercase-only comparison.
 _REFUSED_COMMANDS = frozenset({"cadre", "codex", "claude", "cline", "agentic-sdlc"})
+_REFUSED_COMMANDS_FOLDED = frozenset(name.casefold() for name in _REFUSED_COMMANDS)
 
 
 class ApiRunnerError(core.DispatchUnavailable):
@@ -185,7 +208,11 @@ class ChatEndpoint:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None,
         temperature: float = 0.0,
+        timeout: float | None = None,
     ) -> dict[str, Any]:
+        """`timeout` overrides this endpoint's default for one call, so the
+        caller can bound a request by the dispatch budget still remaining
+        rather than by a fixed ceiling."""
         url = f"{self.base_url}/chat/completions"
         payload: dict[str, Any] = {
             "model": self.model,
@@ -201,7 +228,8 @@ class ChatEndpoint:
             headers["Authorization"] = f"Bearer {self.api_key}"
         request = urllib.request.Request(url, data=data, headers=headers, method="POST")
         try:
-            with _open_request(request, self.request_timeout) as response:
+            effective_timeout = self.request_timeout if timeout is None else min(timeout, self.request_timeout)
+            with _open_request(request, effective_timeout) as response:
                 raw = response.read(MAX_RESPONSE_BYTES + 1)
         except urllib.error.HTTPError as error:
             detail = error.read().decode("utf-8", "replace")[:500]
@@ -348,6 +376,46 @@ def _read_text_capped(path: Path) -> str:
     finally:
         os.close(descriptor)
     return b"".join(chunks).decode("utf-8", errors="replace")
+
+
+def _write_bytes_nofollow(path: Path, payload: bytes) -> None:
+    """Write `payload` to `path`, refusing a symlink at the final component.
+
+    The read path has always done this (`_read_text_capped`); the write path
+    originally used `Path.write_bytes`/`Path.write_text`, which call plain
+    `open()` and therefore *follow* a symlink at the final component. That
+    left containment for writes resting entirely on the `realpath` snapshot
+    taken by `resolve_within_project()` before the write -- a check-then-open
+    gap a symlink appearing in between would defeat, redirecting a write to
+    any path this process can reach. `dispatch_team()` runs members
+    concurrently against one project root, so that is not a theoretical
+    interleaving.
+
+    O_NOFOLLOW closes the gap at the kernel level: the open itself fails with
+    ELOOP if the final component is a symlink, whatever changed since the
+    containment check. The post-open `fstat`/`S_ISREG` check additionally
+    refuses a FIFO or device node that appeared at the same path, matching
+    `_read_text_capped`'s discipline exactly.
+
+    O_TRUNC (not O_EXCL) because `write_file` is documented as "create or
+    overwrite"; O_EXCL would break every legitimate overwrite.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags, 0o644)
+    except OSError as error:
+        # ELOOP here means the final component is a symlink -- report it as a
+        # policy refusal, not an I/O error, because that is what it is.
+        raise ToolDenied(f"cannot write {path.name}: {error.strerror or error}") from error
+    try:
+        file_stat = os.fstat(descriptor)
+        if not stat.S_ISREG(file_stat.st_mode):
+            raise ToolDenied(f"refusing to write a non-regular file: {path.name}")
+        written = 0
+        while written < len(payload):
+            written += os.write(descriptor, payload[written:])
+    finally:
+        os.close(descriptor)
 
 
 def _iter_project_files(base: Path, pattern: str) -> list[Path]:
@@ -581,7 +649,7 @@ class Toolbox:
         if len(encoded) > MAX_WRITE_BYTES:
             raise ToolDenied(f"content exceeds the {MAX_WRITE_BYTES}-byte write cap")
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(encoded)
+        _write_bytes_nofollow(path, encoded)
         relative = path.relative_to(self.project_root).as_posix()
         if relative not in self.files_written:
             self.files_written.append(relative)
@@ -604,7 +672,7 @@ class Toolbox:
             # means the model has not identified a unique site, and guessing
             # which one it meant is how an edit lands in the wrong place.
             raise ToolDenied(f"old_string occurs {occurrences} times; it must occur exactly once")
-        path.write_text(text.replace(old_string, new_string, 1), encoding="utf-8")
+        _write_bytes_nofollow(path, text.replace(old_string, new_string, 1).encode("utf-8"))
         relative = path.relative_to(self.project_root).as_posix()
         if relative not in self.files_written:
             self.files_written.append(relative)
@@ -616,7 +684,7 @@ class Toolbox:
         command = arguments.get("command")
         if not isinstance(command, str) or not command:
             raise ToolDenied("command must be a non-empty string")
-        if command in _REFUSED_COMMANDS:
+        if command.casefold() in _REFUSED_COMMANDS_FOLDED:
             raise ToolDenied(
                 f"{command!r} is never runnable from a dispatched role (it would start another agent)"
             )
@@ -639,16 +707,50 @@ class Toolbox:
         # timeout, output cap and deny-by-default environment that the rest
         # of this runner cannot inherit from a child CLI. shell=False is
         # implicit -- spawn_and_wait takes an argv list and never a string.
+        child_env = core.build_child_env(self.dispatch_depth, self.project_root)
+        child_env["PATH"] = _sanitized_child_path(child_env.get("PATH", ""))
         result = core.spawn_and_wait(
             [resolved, *raw_args],
             prompt="",
             cwd=self.project_root,
-            env=core.build_child_env(self.dispatch_depth, self.project_root),
+            env=child_env,
             timeout_seconds=min(remaining, core.DEFAULT_TIMEOUT_SECONDS),
         )
         self.commands_run.append(command)
         status = "timed out" if result["timed_out"] else f"exit {result['exit_code']}"
         return f"[{command} {status}]\n{result['stdout_text']}"
+
+
+def _sanitized_child_path(path_value: str) -> str:
+    """Drop from PATH every directory containing a refused agent binary.
+
+    Defense in depth for the gap `_REFUSED_COMMANDS` cannot close on its own:
+    that check sees only the literal `command` argument, so an allowlisted
+    interpreter could `exec codex` as a grandchild. Removing the directories
+    where those binaries actually live means a bare-name lookup inside the
+    child fails.
+
+    HONEST LIMIT -- do not describe this as containment. It defeats a
+    bare-name `exec`, nothing more. A child that hardcodes an absolute path,
+    or reconstructs one, is unaffected, and any allowlisted interpreter can
+    do that trivially. It narrows the surface; `MAX_DISPATCH_DEPTH` remains
+    the actual backstop, and that guard is itself documented as advisory
+    against an adversarial child.
+
+    Never returns an empty PATH: if stripping would remove everything, the
+    original is kept rather than handing the child a PATH so broken that
+    legitimate allowlisted commands fail in a way that looks like a bug
+    rather than a policy decision.
+    """
+    directories = [entry for entry in path_value.split(os.pathsep) if entry]
+    kept = [
+        directory
+        for directory in directories
+        if not any(
+            os.path.exists(os.path.join(directory, name)) for name in _REFUSED_COMMANDS
+        )
+    ]
+    return os.pathsep.join(kept) if kept else path_value
 
 
 def _truncate(text: str) -> str:
@@ -800,12 +902,36 @@ def run_api_dispatch(
     tool_call_count = 0
     timed_out = False
     completed = False
+    endpoint_failure: str | None = None
 
     for _ in range(MAX_TOOL_ITERATIONS):
-        if time.monotonic() >= deadline:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
             timed_out = True
             break
-        message = client.complete(messages, tools)
+        try:
+            # Bounded by whatever is left of the caller's deadline, not just
+            # by the endpoint's own ceiling -- otherwise one slow response
+            # can overrun a budget the rest of the pipeline treats as real.
+            message = client.complete(messages, tools, timeout=remaining)
+        except ApiRunnerError:
+            if not (toolbox.files_written or toolbox.commands_run):
+                # Nothing was mutated, so there is no accounting to preserve
+                # and the honest classification is the original one: an
+                # infrastructure failure, reported as `unavailable` by
+                # dispatch_core's existing DispatchUnavailable handling.
+                # Re-raised unchanged so a total endpoint outage does not
+                # start masquerading as a dispatch that ran and failed.
+                raise
+            # Past this point the workspace HAS been mutated. Letting the
+            # exception escape would discard that accounting and leave the
+            # audit trail reporting an "unavailable" dispatch that in fact
+            # wrote files -- the one outcome an auditor most needs to see.
+            # Fall through to normal result assembly instead, which reports
+            # exit_code=1 together with the partial
+            # files_written/commands_run/tool_calls.
+            endpoint_failure = str(sys.exc_info()[1])
+            break
         content = message.get("content")
         if isinstance(content, str) and content.strip():
             transcript.append(content)
@@ -838,6 +964,19 @@ def run_api_dispatch(
 
     if timed_out:
         transcript.append(f"\n[dispatch stopped at the {timeout_seconds:.0f}s deadline]")
+
+    if endpoint_failure is not None:
+        # Surfaced in the transcript rather than only as an exception, so the
+        # caller sees both that the endpoint failed *and* what was already
+        # done before it did. The mutations below are real and on disk; the
+        # audit record carries them via `files_written`/`commands_run`.
+        transcript.append(f"\n[dispatch stopped: endpoint failure: {endpoint_failure}]")
+        if toolbox.files_written or toolbox.commands_run:
+            transcript.append(
+                "[the endpoint failed partway through: this dispatch had already written "
+                f"{len(toolbox.files_written)} file(s) and run {len(toolbox.commands_run)} "
+                "command(s); those effects are on disk and are NOT rolled back]"
+            )
 
     stdout_text = "\n\n".join(transcript).strip()
     encoded = stdout_text.encode("utf-8")

@@ -812,27 +812,62 @@ written to be read before enabling it, not after.
   - *timeout*: one wall-clock deadline for the whole loop, plus
     `MAX_TOOL_ITERATIONS`. Tested by
     `ApiRunnerLoopTests.test_the_iteration_cap_terminates_a_looping_model`.
-  - *depth guard*: replaced by something stronger, not weaker -- no tool
-    exposes dispatch, and `_REFUSED_COMMANDS` refuses `cadre`/`codex`/
-    `claude`/`cline`/`agentic-sdlc` by name regardless of the operator's
-    allowlist, so recursive dispatch is structurally impossible rather than
-    merely capped. Tested by
-    `ApiRunnerCommandAllowlistTests.test_agent_launching_binaries_are_refused_even_if_allowlisted`.
+  - *depth guard*: **narrowed, not replaced -- and this entry previously
+    overclaimed it.** An earlier revision said recursive dispatch was
+    "structurally impossible rather than merely capped." That was wrong, and
+    it was the strongest-worded claim in this section. Three mechanisms
+    genuinely apply, and none of them is structural:
+      1. No tool exposes dispatch, so a role cannot re-dispatch directly.
+      2. `_REFUSED_COMMANDS` refuses `cadre`/`codex`/`claude`/`cline`/
+         `agentic-sdlc` — but **only as the literal `command` argument**. An
+         operator who allowlists any general-purpose interpreter (`python`,
+         `bash`, `node`, `make`, `npm`) has given the dispatched agent a way
+         to exec one of those as a *grandchild*, which this check never sees:
+         it is handed the string `"python"`, never `"codex"`. Tested by
+         `ApiRunnerCommandAllowlistTests.test_agent_launching_binaries_are_refused_even_if_allowlisted`,
+         which proves exactly the narrow claim and nothing wider.
+      3. `_sanitized_child_path()` strips from the child's `PATH` every
+         directory containing one of those binaries, so a bare-name `exec`
+         inside an allowlisted interpreter fails to resolve. This defeats
+         bare-name lookup only; an absolute path is unaffected, and any
+         interpreter can construct one.
+    So the honest statement is: **the attack surface is narrower than the CLI
+    runners', and `MAX_DISPATCH_DEPTH` remains the actual backstop** — a
+    guard this register already documents as advisory against an adversarial
+    child. If the structural property is wanted, `runners.api_command_allowlist`
+    must exclude general-purpose interpreters, and that is an operator
+    obligation this code does not enforce.
   On the `run_command` path all four are restored, because that tool routes
   through the real `spawn_and_wait()` and `build_child_env()`. Tested by
   `ApiRunnerCommandAllowlistTests.test_the_command_child_gets_the_deny_by_default_environment`.
 - **Path confinement: mechanically enforced, but in-process only.** Every
   file tool resolves its path with `os.path.realpath` and then
   `dispatch_core._ensure_contained` -- the same helper the role-file resolver
-  uses -- refuses `.git`, and opens with `O_NOFOLLOW`. Traversal, absolute
-  paths outside the root, and symlinks pointing out of the tree are all
-  denied, and a denied path is reported back to the model as a tool error so
-  it can correct a typo without aborting the dispatch; the refused operation
-  never happens either way. Tested by `ApiRunnerPathConfinementTests` (11
-  tests). **Read the limit precisely: this constrains the tool surface, not
-  the process.** The CLI runners get kernel-level confinement from Codex's
-  and Claude Code's own sandboxes; this runner has none. It holds against a
-  model asking for the wrong path. It would not hold against arbitrary code
+  uses -- and refuses `.git`. Traversal, absolute paths outside the root, and
+  symlinks pointing out of the tree are all denied, and a denied path is
+  reported back to the model as a tool error so it can correct a typo without
+  aborting the dispatch; the refused operation never happens either way.
+
+  Both reads *and* writes then open with `O_NOFOLLOW` plus a post-open
+  `fstat`/`S_ISREG` check -- reads via `_read_text_capped()`, writes via
+  `_write_bytes_nofollow()`. This matters more than it looks: a `realpath`
+  check proves containment at check time, and the write happens afterwards.
+  An earlier revision of this entry claimed universal `O_NOFOLLOW` coverage
+  while `write_file`/`edit_file` in fact used `Path.write_bytes`/`write_text`,
+  which follow a symlink at the final component -- leaving a check-then-open
+  window that a symlink appearing in between would defeat, redirecting a
+  write anywhere this process can reach. `dispatch_team()` runs members
+  concurrently against one project root, so that interleaving was reachable,
+  not theoretical. The claim is now true as written.
+
+  Tested by `ApiRunnerPathConfinementTests` (21 tests), including
+  `test_a_symlink_at_the_write_target_is_refused_by_o_nofollow`, which
+  exercises the write syscall's own guard rather than the resolve-time check.
+
+  **Read the limit precisely: this constrains the tool surface, not the
+  process.** The CLI runners get kernel-level confinement from Codex's and
+  Claude Code's own sandboxes; this runner has none. It holds against a model
+  asking for the wrong path. It would not hold against arbitrary code
   execution inside this process.
 - **Write gating: mechanically enforced.** A write requires all four of
   `mode="scoped-repository-edit"`, a write-capable `effective_sandbox` from
@@ -867,10 +902,37 @@ written to be read before enabling it, not after.
   configured; a response size cap; a request timeout; and a URL policy that
   accepts `https://` anywhere but `http://` only toward a loopback,
   link-local or RFC1918/ULA host, so a mistyped public endpoint cannot
-  receive an API key in the clear. URL userinfo is refused. Tested by
-  `SelfHostedProviderFieldTests` (`test_plaintext_http_toward_a_public_host_is_refused`,
-  `test_url_userinfo_is_refused`) and `ApiRunnerEndpointConfigTests`.
-  Honest limit: the private-host check resolves the name once, at
+  receive an API key in the clear. URL userinfo is refused.
+
+  **Two distinct halves, deliberately cited separately.** An earlier revision
+  cited only the configuration-time tests as proof of the whole bullet,
+  including redirect refusal -- which those tests do not touch at all. They
+  validate URL *strings* in `settings.py`; they never construct a
+  `ChatEndpoint` or open a socket. A runtime behavior needs a runtime test:
+  - *Configuration-time URL policy* (scheme, host class, userinfo): tested by
+    `SelfHostedProviderFieldTests.test_plaintext_http_toward_a_public_host_is_refused`,
+    `test_url_userinfo_is_refused`, `test_https_is_accepted_for_any_host`,
+    `test_plaintext_http_is_accepted_toward_a_private_host`, and
+    `ApiRunnerEndpointConfigTests`.
+  - *Runtime HTTP behavior* (redirect refusal, response cap, error handling):
+    tested by `ChatEndpointHttpTests`, which drives `ChatEndpoint.complete()`
+    over real loopback HTTP.
+    `test_a_redirect_is_refused_and_the_credential_never_reaches_the_new_host`
+    stands up the redirect *target* as well and asserts it received no
+    `Authorization` header. That test was verified mutation-sensitive:
+    making `_RejectRedirects` follow redirects makes it fail.
+
+  Host classification unwraps IPv4-mapped IPv6 (`::ffff:<v4>`) and judges the
+  mapped address, rather than trusting `ipaddress`'s `is_private` directly.
+  CPython classified the whole `::ffff:0:0/96` range as private until
+  CVE-2024-4032 (fixed in 3.12.4 / 3.13.0a6, backported); this repository
+  supports Python 3.10+ and cannot control an operator's patch release, so
+  trusting `is_private` would make a security-relevant decision depend on the
+  interpreter build -- on an unpatched one, `http://[::ffff:8.8.8.8]/v1`
+  would have been accepted as "private" and shipped a key in cleartext to a
+  public host.
+
+  Honest limit, unchanged: the private-host check resolves the name once, at
   configuration time. It is a guard against a typo, not against DNS
   rebinding.
 - **New trust boundary: the API key is read from this server process's own
@@ -900,11 +962,47 @@ written to be read before enabling it, not after.
   `parse_tool_calls` accepts both shapes). Confirm behavior against the real
   endpoint before relying on this runner for anything beyond local
   development.
+- **Deadline integrity.** Each model call is bounded by the *smaller* of the
+  endpoint ceiling and the dispatch budget still remaining, so a slow
+  endpoint cannot overrun the `timeout_seconds` the rest of the pipeline
+  (`spawn_and_wait`'s group-kill, the concurrency limiter, job/team TTLs) is
+  built around. An earlier revision checked the deadline only *between* turns
+  and passed a flat 120s to each call, letting a final in-flight request
+  overrun by up to that much. Tested by
+  `ApiRunnerLoopTests.test_each_call_is_bounded_by_the_remaining_dispatch_budget`
+  and `test_an_expired_deadline_stops_the_dispatch_before_any_model_call`.
+- **Partial-mutation reporting.** Tool side effects are **not transactional
+  and are never rolled back.** If the endpoint fails partway through a
+  write-capable dispatch, files already written stay written. What is
+  guaranteed is that this is *reported*: the result and the audit record
+  carry `files_written`/`commands_run`/`tool_calls` even on that failure
+  path, and the transcript states explicitly that the effects are not rolled
+  back. An earlier revision let the exception escape, producing an
+  `unavailable` verdict with no indication the workspace had been mutated --
+  the single worst outcome for an auditor. A mid-loop failure with *no*
+  mutations still raises `unavailable`, so a genuine outage is not disguised
+  as a dispatch that ran. Tested by
+  `ApiRunnerLoopTests.test_a_mid_loop_endpoint_failure_still_reports_what_was_written`
+  and `DispatchWithApiRunnerTests.test_async_dispatch_surfaces_the_api_runners_activity_fields`
+  (the `wait=False` path dropped these fields entirely until that test caught it).
 - **Accountable-review note.** Following the precedent set by the Claude Code
   runner's `--permission-mode` mapping, the `run_command` allowlist and the
   in-process path confinement are design choices that have not been reviewed
   by the accountable Security Lead. They must be, specifically before this
   runner's write-capable path is used anywhere but a local working copy.
+
+  Two items belong in that review specifically, both raised by an independent
+  security review of the change that introduced this runner and both
+  documented above rather than silently fixed:
+  1. The recursion claim under "which four do not, and why" was an overclaim
+     and is now stated honestly. Whether "narrower surface plus an advisory
+     `MAX_DISPATCH_DEPTH`" is *sufficient*, or whether
+     `runners.api_command_allowlist` needs a mechanical interpreter refusal,
+     is a Security Lead decision, not an author one.
+  2. The `run_command` allowlist's advisory status is accurately labelled,
+     but the consequence deserves an explicit accepted-risk decision:
+     enabling it grants the dispatched role the ability to run
+     repository-controlled code with this server process's own file access.
 
 ### GitLab evidence MCP server (`gitlab_core.py` / `gitlab_server.py`)
 

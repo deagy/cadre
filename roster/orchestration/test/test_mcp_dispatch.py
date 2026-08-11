@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import http.server
 import importlib.util
 import io
 import json
@@ -823,6 +824,152 @@ class ForwardEnvTests(unittest.TestCase):
         self.assertIn("CODEX_HOME", core.ENV_ALLOWLIST)
 
 
+class _LocalHttpServer:
+    """A real HTTP server on an ephemeral loopback port.
+
+    Exists because every other api-runner test substitutes `_FakeEndpoint`
+    and therefore never executes `ChatEndpoint.complete()` at all -- which is
+    how SECURITY-CONTROLS.md came to cite unrelated `settings.py` URL-string
+    tests as proof that `_RejectRedirects` refuses redirects. Proving a
+    *runtime HTTP* behavior requires a runtime HTTP exchange, so these tests
+    use one rather than a mock of `urllib`.
+
+    Loopback + ephemeral port + daemon thread: no external network, no fixed
+    port to collide with a developer's own services.
+    """
+
+    def __init__(self, handler_cls) -> None:
+        self.server = http.server.HTTPServer(("127.0.0.1", 0), handler_cls)
+        self.port = self.server.server_address[1]
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    @property
+    def base_url(self) -> str:
+        return f"http://127.0.0.1:{self.port}/v1"
+
+    def close(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=5)
+
+
+def _json_handler(status: int, body: bytes, extra_headers: tuple = ()):
+    class Handler(http.server.BaseHTTPRequestHandler):
+        received_authorization: list = []
+
+        def log_message(self, *args) -> None:  # keep test output clean
+            pass
+
+        def do_POST(self) -> None:
+            Handler.received_authorization.append(self.headers.get("Authorization"))
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            for name, value in extra_headers:
+                self.send_header(name, value)
+            self.end_headers()
+            self.wfile.write(body)
+
+    return Handler
+
+
+_OK_BODY = json.dumps({"choices": [{"message": {"role": "assistant", "content": "hello"}}]}).encode()
+
+
+class ChatEndpointHttpTests(unittest.TestCase):
+    """`ChatEndpoint.complete()` driven over real HTTP.
+
+    Backs SECURITY-CONTROLS.md's "API runner" network-posture bullet. Every
+    claim in that bullet that concerns *runtime* behavior -- redirect
+    refusal, the response size cap, error handling -- is exercised here.
+    The URL *policy* half of that bullet (https anywhere, http only toward a
+    private host) is validated at configuration time and is tested
+    separately in `roster/shared/test/test_settings.py`'s
+    `SelfHostedProviderFieldTests`; the two are deliberately not conflated,
+    because an earlier revision of the register cited only the latter as
+    proof of the former.
+    """
+
+    def _serve(self, handler_cls) -> _LocalHttpServer:
+        server = _LocalHttpServer(handler_cls)
+        self.addCleanup(server.close)
+        return server
+
+    def test_a_normal_response_is_parsed(self) -> None:
+        server = self._serve(_json_handler(200, _OK_BODY))
+        endpoint = api_runner.ChatEndpoint(server.base_url, "m")
+        message = endpoint.complete([{"role": "user", "content": "hi"}], None)
+        self.assertEqual(message["content"], "hello")
+
+    def test_the_api_key_is_sent_as_a_bearer_token(self) -> None:
+        handler = _json_handler(200, _OK_BODY)
+        handler.received_authorization = []
+        server = self._serve(handler)
+        api_runner.ChatEndpoint(server.base_url, "m", api_key="tok").complete([], None)
+        self.assertEqual(handler.received_authorization, ["Bearer tok"])
+
+    def test_a_redirect_is_refused_and_the_credential_never_reaches_the_new_host(self) -> None:
+        # The claim this defends: an endpoint cannot move the request -- and
+        # its Authorization header -- to a host the operator never
+        # configured. Verified by standing up the redirect *target* too and
+        # asserting it saw nothing.
+        target = _json_handler(200, _OK_BODY)
+        target.received_authorization = []
+        target_server = self._serve(target)
+        redirector = _json_handler(
+            302, b"", extra_headers=(("Location", f"{target_server.base_url}/chat/completions"),)
+        )
+        redirect_server = self._serve(redirector)
+
+        endpoint = api_runner.ChatEndpoint(redirect_server.base_url, "m", api_key="SECRET")
+        with self.assertRaises(api_runner.ApiRunnerError) as ctx:
+            endpoint.complete([{"role": "user", "content": "hi"}], None)
+        self.assertIn("302", str(ctx.exception))
+        self.assertEqual(target.received_authorization, [])
+
+    def test_an_http_error_status_surfaces_as_an_api_runner_error(self) -> None:
+        server = self._serve(_json_handler(500, b'{"error":"boom"}'))
+        with self.assertRaises(api_runner.ApiRunnerError) as ctx:
+            api_runner.ChatEndpoint(server.base_url, "m").complete([], None)
+        self.assertIn("500", str(ctx.exception))
+
+    def test_an_unreachable_endpoint_surfaces_as_an_api_runner_error(self) -> None:
+        # Bind and immediately close, so the port is known-closed.
+        server = _LocalHttpServer(_json_handler(200, _OK_BODY))
+        base_url = server.base_url
+        server.close()
+        with self.assertRaises(api_runner.ApiRunnerError) as ctx:
+            api_runner.ChatEndpoint(base_url, "m").complete([], None)
+        self.assertIn("cannot reach endpoint", str(ctx.exception).lower() + str(ctx.exception))
+
+    def test_a_non_json_body_surfaces_as_an_api_runner_error(self) -> None:
+        # An intercepting proxy's HTML error page, or an endpoint streaming
+        # SSE because it ignored the non-streaming request.
+        server = self._serve(_json_handler(200, b"<html>not json</html>"))
+        with self.assertRaises(api_runner.ApiRunnerError) as ctx:
+            api_runner.ChatEndpoint(server.base_url, "m").complete([], None)
+        self.assertIn("unreadable response", str(ctx.exception))
+
+    def test_an_oversized_response_is_refused_rather_than_buffered(self) -> None:
+        oversized = b'{"padding":"' + b"x" * (api_runner.MAX_RESPONSE_BYTES + 1024) + b'"}'
+        server = self._serve(_json_handler(200, oversized))
+        with self.assertRaises(api_runner.ApiRunnerError) as ctx:
+            api_runner.ChatEndpoint(server.base_url, "m").complete([], None)
+        self.assertIn("cap", str(ctx.exception))
+
+    def test_a_malformed_choices_shape_surfaces_as_an_api_runner_error(self) -> None:
+        server = self._serve(_json_handler(200, b'{"choices":[]}'))
+        with self.assertRaises(api_runner.ApiRunnerError) as ctx:
+            api_runner.ChatEndpoint(server.base_url, "m").complete([], None)
+        self.assertIn("unexpected response shape", str(ctx.exception))
+
+    def test_a_caller_supplied_timeout_never_exceeds_the_endpoint_ceiling(self) -> None:
+        endpoint = api_runner.ChatEndpoint("http://127.0.0.1:1/v1", "m", request_timeout=5.0)
+        self.assertEqual(min(999.0, endpoint.request_timeout), 5.0)
+
+
 class _FakeEndpoint:
     """Scripted stand-in for `api_runner.ChatEndpoint`.
 
@@ -838,7 +985,7 @@ class _FakeEndpoint:
         self.calls = 0
         self.model = "fake-local-model"
 
-    def complete(self, messages, tools, temperature=0.0):
+    def complete(self, messages, tools, temperature=0.0, timeout=None):
         self.calls += 1
         self.offered_tools = sorted(tool["function"]["name"] for tool in (tools or []))
         if self._messages:
@@ -987,6 +1134,66 @@ class ApiRunnerPathConfinementTests(unittest.TestCase):
         result = toolbox.execute("write_file", {"path": "x.txt", "content": "y"})
         self.assertTrue(result.startswith("ERROR:"))
         self.assertFalse((self.root / "x.txt").exists())
+
+    def test_a_symlink_at_the_write_target_is_refused_by_o_nofollow(self) -> None:
+        # Distinct from the resolve-time symlink test above: this exercises
+        # the *write* syscall's own O_NOFOLLOW guard, which is what closes
+        # the check-then-open window `resolve_within_project` alone cannot.
+        # Bypasses resolve_within_project deliberately, simulating a symlink
+        # that appeared after containment was already proven.
+        link = self.root / "appeared-later.txt"
+        link.symlink_to(self.outside)
+        with self.assertRaises(api_runner.ToolDenied):
+            api_runner._write_bytes_nofollow(link, b"PWNED")
+        self.assertEqual(self.outside.read_text(), "SECRET\n")
+
+    def test_a_successful_single_occurrence_edit_replaces_the_text(self) -> None:
+        (self.root / "edit-me.txt").write_text("alpha\nbeta\n", encoding="utf-8")
+        result = self._toolbox().execute(
+            "edit_file", {"path": "edit-me.txt", "old_string": "beta", "new_string": "gamma"}
+        )
+        self.assertIn("edited", result)
+        self.assertEqual((self.root / "edit-me.txt").read_text(), "alpha\ngamma\n")
+
+    def test_an_edit_whose_target_is_absent_is_refused(self) -> None:
+        (self.root / "edit-me.txt").write_text("alpha\n", encoding="utf-8")
+        result = self._toolbox().execute(
+            "edit_file", {"path": "edit-me.txt", "old_string": "nope", "new_string": "x"}
+        )
+        self.assertIn("not found", result)
+
+    def test_list_files_matches_a_glob_and_excludes_the_git_directory(self) -> None:
+        (self.root / "sub" / "a.py").write_text("x", encoding="utf-8")
+        result = self._toolbox().execute("list_files", {"pattern": "*.py"})
+        self.assertIn("sub/a.py", result)
+        self.assertNotIn(".git", result)
+
+    def test_list_files_reports_no_match_rather_than_failing(self) -> None:
+        self.assertIn("no files matched", self._toolbox().execute("list_files", {"pattern": "*.zzz"}))
+
+    def test_search_finds_a_match_with_its_line_number(self) -> None:
+        (self.root / "sub" / "hay.txt").write_text("one\nneedle here\n", encoding="utf-8")
+        result = self._toolbox().execute("search", {"pattern": r"need\w+"})
+        self.assertIn("sub/hay.txt:2:", result)
+
+    def test_search_reports_no_matches_rather_than_failing(self) -> None:
+        self.assertIn("no matches", self._toolbox().execute("search", {"pattern": "zzz-absent"}))
+
+    def test_an_invalid_regular_expression_is_refused(self) -> None:
+        result = self._toolbox().execute("search", {"pattern": "([unclosed"})
+        self.assertTrue(result.startswith("ERROR:"))
+
+    def test_a_write_exceeding_the_size_cap_is_refused(self) -> None:
+        oversized = "x" * (api_runner.MAX_WRITE_BYTES + 1)
+        result = self._toolbox().execute("write_file", {"path": "big.txt", "content": oversized})
+        self.assertIn("write cap", result)
+        self.assertFalse((self.root / "big.txt").exists())
+
+    def test_a_read_exceeding_the_size_cap_is_refused(self) -> None:
+        big = self.root / "big-read.txt"
+        big.write_bytes(b"x" * (api_runner.MAX_READ_BYTES + 1))
+        result = self._toolbox().execute("read_file", {"path": "big-read.txt"})
+        self.assertIn("read cap", result)
 
 
 class ApiRunnerCommandAllowlistTests(unittest.TestCase):
@@ -1261,9 +1468,9 @@ class ApiRunnerLoopTests(unittest.TestCase):
         captured = {}
 
         class Recording(_FakeEndpoint):
-            def complete(self, messages, tools, temperature=0.0):
+            def complete(self, messages, tools, temperature=0.0, timeout=None):
                 captured["messages"] = messages
-                return super().complete(messages, tools, temperature)
+                return super().complete(messages, tools, temperature, timeout)
 
         self._run(Recording([{"role": "assistant", "content": "ok"}]))
         system, user = captured["messages"][0], captured["messages"][1]
@@ -1282,7 +1489,7 @@ class ApiRunnerLoopTests(unittest.TestCase):
 
     def test_the_iteration_cap_terminates_a_looping_model(self) -> None:
         class Looping(_FakeEndpoint):
-            def complete(self, messages, tools, temperature=0.0):
+            def complete(self, messages, tools, temperature=0.0, timeout=None):
                 self.calls += 1
                 return _tool_call("read_file", {"path": "hello.txt"})
 
@@ -1293,11 +1500,94 @@ class ApiRunnerLoopTests(unittest.TestCase):
 
     def test_an_unreachable_endpoint_surfaces_as_dispatch_unavailable(self) -> None:
         class Broken(_FakeEndpoint):
-            def complete(self, messages, tools, temperature=0.0):
+            def complete(self, messages, tools, temperature=0.0, timeout=None):
                 raise api_runner.ApiRunnerError("cannot reach endpoint")
 
         with self.assertRaises(core.DispatchUnavailable):
             self._run(Broken([]))
+
+    def test_each_call_is_bounded_by_the_remaining_dispatch_budget(self) -> None:
+        # The per-request ceiling must never let one slow response overrun
+        # the caller's whole-dispatch deadline; an earlier revision passed a
+        # flat 120s regardless of how little budget was left.
+        seen: list = []
+
+        class Recording(_FakeEndpoint):
+            def complete(self, messages, tools, temperature=0.0, timeout=None):
+                seen.append(timeout)
+                return {"role": "assistant", "content": "done"}
+
+        with mock.patch.dict(
+            os.environ, {"SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET": "fake-local-model"}, clear=False
+        ):
+            _settings.reset_cache()
+            try:
+                api_runner.run_api_dispatch(
+                    role=self.role,
+                    brief="b",
+                    mode="planning-review-only",
+                    effective_sandbox="read-only",
+                    project_root=self.root,
+                    dispatch_depth=1,
+                    timeout_seconds=3.0,
+                    endpoint=Recording([]),
+                )
+            finally:
+                _settings.reset_cache()
+        self.assertLessEqual(seen[0], 3.0)
+        self.assertLess(seen[0], api_runner.DEFAULT_REQUEST_TIMEOUT_SECONDS)
+
+    def test_an_expired_deadline_stops_the_dispatch_before_any_model_call(self) -> None:
+        class NeverCalled(_FakeEndpoint):
+            def complete(self, messages, tools, temperature=0.0, timeout=None):
+                raise AssertionError("must not call the endpoint past the deadline")
+
+        with mock.patch.dict(
+            os.environ, {"SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET": "fake-local-model"}, clear=False
+        ):
+            _settings.reset_cache()
+            try:
+                result = api_runner.run_api_dispatch(
+                    role=self.role,
+                    brief="b",
+                    mode="planning-review-only",
+                    effective_sandbox="read-only",
+                    project_root=self.root,
+                    dispatch_depth=1,
+                    timeout_seconds=0.0,
+                    endpoint=NeverCalled([]),
+                )
+            finally:
+                _settings.reset_cache()
+        self.assertTrue(result["timed_out"])
+        self.assertEqual(result["exit_code"], 1)
+        self.assertIn("deadline", result["stdout_text"])
+
+    def test_a_mid_loop_endpoint_failure_still_reports_what_was_written(self) -> None:
+        # The audit trail must never report an "unavailable" dispatch that in
+        # fact mutated the workspace. Writes are not rolled back, so the one
+        # thing that must survive is the record that they happened.
+        class WriteThenDie(_FakeEndpoint):
+            def __init__(self):
+                super().__init__([])
+                self.turn = 0
+
+            def complete(self, messages, tools, temperature=0.0, timeout=None):
+                self.turn += 1
+                if self.turn == 1:
+                    return _tool_call("write_file", {"path": "out.md", "content": "x"})
+                raise api_runner.ApiRunnerError("endpoint died mid-dispatch")
+
+        result = self._run(
+            WriteThenDie(),
+            mode="scoped-repository-edit",
+            sandbox="workspace-write",
+            SECURE_CLOUD_AGENTS_API_ALLOW_WRITES="true",
+        )
+        self.assertEqual(result["exit_code"], 1)
+        self.assertEqual(result["files_written"], ["out.md"])
+        self.assertIn("NOT rolled back", result["stdout_text"])
+        self.assertTrue((self.root / "out.md").exists())
 
 
 class DispatchWithApiRunnerTests(unittest.TestCase):
@@ -1420,6 +1710,36 @@ class DispatchWithApiRunnerTests(unittest.TestCase):
         result = self._dispatch(runner="some-other-cli", child_runner=lambda *a, **k: self.fail("must not run"))
         self.assertEqual(result["status"], "denied")
         self.assertEqual(self._records()[-1]["decision"], "denied")
+
+    def test_async_dispatch_surfaces_the_api_runners_activity_fields(self) -> None:
+        # wait=False routes the result through DispatchJobStore rather than
+        # returning it directly; the api runner's extra keys must survive
+        # that trip, or a polling caller loses the record of what was written.
+        result = self._dispatch(wait=True, child_runner=lambda *a, **k: self._fake_result())
+        self.assertEqual(result["status"], "dispatched")
+
+        started = threading.Event()
+        release = threading.Event()
+
+        def blocking_runner(*args, **kwargs):
+            started.set()
+            release.wait(timeout=10)
+            return self._fake_result()
+
+        async_result = self._dispatch(wait=False, child_runner=blocking_runner)
+        self.assertEqual(async_result["status"], "dispatched_async")
+        job_id = async_result["job_id"]
+        self.assertTrue(started.wait(timeout=10))
+        self.assertEqual(core.poll_dispatch_status(job_id)["status"], "running")
+        release.set()
+        for _ in range(200):
+            polled = core.poll_dispatch_status(job_id)
+            if polled["status"] != "running":
+                break
+            time.sleep(0.05)
+        self.assertEqual(polled["status"], "dispatched")
+        self.assertEqual(polled["tool_calls"], 2)
+        self.assertEqual(polled["files_written"], ["a.md"])
 
     def test_a_team_dispatches_with_the_api_runner(self) -> None:
         result = core.dispatch_team(
