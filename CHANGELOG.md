@@ -23,6 +23,32 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+**`cadre init` is defaults-first.** It no longer requires `--answers` or `--interactive`; running with neither keeps every shipped default and writes nothing, which is a complete run rather than a skipped one (overlays are sparse, so keeping a default means writing no overlay for that field). See [`roster/shared/README.md`](roster/shared/README.md)'s "Generating overlays with `cadre init`" for the three levels of effort.
+
+### Added
+
+- **`cadre init --set [REGION:]PATH=VALUE`**, repeatable, overrides one field without an answer file and records the `field_decisions` entry the answer schema requires. The region (`stack`, `libraries`, `autonomy`, `platform`) is derived by looking the path up in the shipped defaults rather than taken from the caller — that is what keeps the `stack`/`governance` category honest, since that label drives `--print-answers` redaction. Unknown paths fail closed; a path ambiguous across regions (`policy_version`, which exists in both `library-standards.yaml` and `agent-autonomy.yaml`) requires a `REGION:` qualifier. Mapping values are refused, because a mapping does not override the named leaf — it grafts leaves below it that no shipped default defines. `--set` wins over `--answers` and `--stack`, and is mutually exclusive with `--interactive`.
+
+- A `--stack` preset no longer needs an answer file: on a defaults run the RG-A `field_decisions` a preset implies are synthesized. Safe because `load_stack_preset` structurally forbids a preset from touching governance. A hand-authored `--answers` file still fails closed on a missing decision.
+
+### Changed
+
+- **`cadre init --interactive` gates a group of fields behind one question** instead of prompting per leaf, taking the floor from ~160 questions to ~30. Declining a group keeps its shipped defaults, and declined groups still record a `kept` decision so a `--print-answers` echo replayed through `--answers` reproduces the run. Safe for RG-B because the autonomy check only ever permits narrowing.
+
+- **The `lifecycle-onboarding` skill resolves authorities at the gate that needs them** rather than interviewing for all 13 up front. It asks for `product_owner` and `engineering_lead` — enough to clear G1 and G2 — carries the gate/authority table from `kernel/contracts/lifecycle-gates.json`, and defers the rest. Unresolved roles are `blockers`, not `errors`: the project stays `valid`, tasks can be planned, and only the gate belonging to an unresolved role is held. The skill also now prefers `--set` over authoring an answer file, and documents that a run record captures authority applicability at creation time — so a role must be assigned before planning the task that needs its gate.
+
+### Fixed
+
+- **A `platform-impact-profile.yaml` overlay dropped every entry the run did not answer.** `deep_merge` replaces lists wholesale rather than merging by id, but `build_platform_overlay` emitted only the entries a run touched — collapsing the resolved profile from 14 impact categories to 1 after a single override, and taking the `applicability: unknown` entries that block G3/G4/G5/G7 with it. The overlay now carries the complete list: shipped entries, then the project's existing overlay, then the run's overrides.
+
+- RG-C tracked one decision per entry but repeated `--set`s on that entry overwrote each other, losing the applicability whenever a rationale followed it. `source_value` now reports `unknown`, matching the interactive collector.
+
+- The autonomy group gate offered the two B-003 fixed-policy keys as reviewable groups; accepting one raised an uncaught `OverlayError` mid-prompt, and `build_autonomy_overlay` refuses those keys regardless.
+
+- A declined stack group recorded the shipped default as `source_value` while a `--stack` preset's value was what actually reached the overlay.
+
+- Declining every RG-C group planned a write of an empty `{}` overlay instead of no file, contradicting the defaults-first premise.
+
 **The workspace-mutation guard hook again blocks `git` commands it previously allowed.** Five separate bypasses are closed below. If a workflow of yours depends on one of these spellings passing — most plausibly `timeout ... git ...`, or `git checkout -B` onto a branch that already exists elsewhere — it will now be refused. `CADRE_DISABLE_WORKSPACE_MUTATION_GUARD` remains the escape hatch.
 
 ### Fixed
