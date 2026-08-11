@@ -202,25 +202,53 @@ If the target project also wants this suite's own `.agents/shared/*`
 policy overlays (team profile, library/technology standards, cloud
 guardrails, autonomy policy), separately ask if they want that. This
 subcommand takes `--target <path>` (not `--root`), and always previews by
-default — it only writes when `--force` is also passed:
+default — it only writes when `--force` is also passed.
+
+Start from the defaults. `cadre init` keeps every shipped default unless
+told otherwise, so the common case needs no answers at all:
 
 ```sh
-./bin/cadre init --target <path> --answers <file> --force
+./bin/cadre init --target <path>
 ```
 
-`--interactive` (prompt-flow mode) exists as an alternative to `--answers`,
-but it drives a live terminal prompt loop meant for a human typing
-directly at it — you cannot reliably drive it as an agent through
-non-interactive command execution. Instead, build the `--answers` file
-yourself from the conversation (see `cadre init --help` and
-`roster/shared/src/init_project.py` for the answer-file's `schema_version:
-1` shape and required `field_decisions` entries per touched field),
-translating whatever it validates against into plain questions for the
-human rather than showing them the file. Run once with `--dry-run` (which
-is the default without `--force`) to preview, then re-run with `--force`
-to actually write. This is a distinct, optional step from `agentic-sdlc
-init`; do not conflate the two internally, but you don't need to explain
-the distinction to the human unless they ask.
+That writes nothing, and it is not a half-finished run: the shared overlays
+are sparse, so "keep the default" means "write no overlay for that field",
+and a project with no overlay resolves to exactly the shipped values. Say so
+plainly ("nothing to change — it'll use the standard policy") rather than
+implying a step was skipped.
+
+When the human does want something different, override just those fields
+with `--set [REGION:]PATH=VALUE`, which is repeatable:
+
+```sh
+./bin/cadre init --target <path> --set platform.hosting_model=cloud --force
+```
+
+Prefer `--set` over authoring an `--answers` file. It needs no file, and it
+records the required `field_decisions` entry for you with the category
+derived from the field's own home file rather than from something you
+assert. If a path is ambiguous the command names the regions that
+matched — qualify it (`autonomy:policy_version=...`) instead of guessing.
+
+Reach for `--answers <file>` (`schema_version: 1`; see `cadre init --help`
+and `roster/shared/src/init_project.py` for its shape and the
+`field_decisions` entry required per touched field) only when there are
+enough overrides that a file is genuinely clearer. `--interactive`
+(prompt-flow mode) drives a live terminal prompt loop meant for a human
+typing directly at it — you cannot reliably drive it as an agent through
+non-interactive command execution, so do not try.
+
+Whatever you use, run once with `--dry-run` (the default without `--force`)
+to preview, then re-run with `--force` to actually write, translating
+whatever `cadre init` rejects into plain questions for the human rather than
+showing them the file or the flags. One rejection worth recognizing: a
+`--set` on an `agent-autonomy.yaml` field can only ever *narrow* the shipped
+policy, so if one is refused, tell the human their request would have
+loosened the governance baseline — do not retry it a different way.
+
+This is a distinct, optional step from `agentic-sdlc init`; do not
+conflate the two internally, but you don't need to explain the
+distinction to the human unless they ask.
 
 ## Step 9 — Validate and loop
 
