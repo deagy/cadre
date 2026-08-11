@@ -3,7 +3,7 @@
 This walks through one real, committed `cadre select` plan so a reader can see
 what the selector actually produces before running it themselves. The
 authoritative shape is [`roster/orchestration/selection.schema.json`](../roster/orchestration/selection.schema.json)
-(`schema_version: 5`); if this page and the schema ever disagree, the schema
+(`schema_version: 6`); if this page and the schema ever disagree, the schema
 wins.
 
 See the [glossary](terminology.md) for definitions of the terms used below
@@ -53,7 +53,7 @@ comment).
 
 ```json
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "task_id": "GOLDEN-CROSS-STACK-1",
   "generated_at": "2026-08-10T18:57:46.976Z",
   "status": "ready",
@@ -439,7 +439,7 @@ comment).
     "git_dirty_paths": [],
     "agentic_sdlc_contract_version": 2
   },
-  "dispatch_fingerprint": "sha256:572e7aab4cc97050c75f08a59530fc19290f809793e13c3fe23e593dda5249bf"
+  "dispatch_fingerprint": "sha256:5cbc395c71ece85feda27529422361eaa1f7193072f5bd4a6201e7d597a0369b"
 }
 ```
 

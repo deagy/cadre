@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["schema_version", "task_id", "dispatch_fingerprint", "generated_at", "status", "workflow", "inputs", "matched_routes", "matched_risks", "context_packs", "agents", "dispatch_disposition", "teams", "lifecycle_tracking", "required_quality_gates", "ignored_quality_gates", "human_gates", "knowledge_context"],
   "properties": {
-    "schema_version": { "const": 5 },
+    "schema_version": { "const": 6 },
     "task_id": { "$ref": "#/$defs/nonempty" },
     "dispatch_fingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "generated_at": { "type": "string", "format": "date-time" },
@@ -33,6 +33,10 @@
     "matched_risks": {
       "description": "Risk rules that matched, in the same shape as matched_routes.",
       "$ref": "#/$defs/idWithReasonsArray"
+    },
+    "undeclared_workflow_shape_routes": {
+      "description": "Optional signal (#214, finishing #210): the ids of matched routes that declared no 'workflow_shape' at all, in match order -- the order routing matched them, NOT sorted. Such a route contributes no delivery shape to the plan's 'workflow' field, so the plan can fall back to 'unclassified' by omission rather than by judgment -- exactly the defect #210 fixed for this repository's own routing.yaml. routing.schema.json deliberately keeps 'workflow_shape' OPTIONAL so a project-local routing overlay (.agents/orchestration/routing-overlay.json) written before #210 still validates, and validate_routing_config checks only the value, never the presence; requiring it would break every existing overlay that adds a route, a trade considered and rejected. This reports instead. 'unclassified' is a declaration and never appears here -- only a missing, null, or empty field does. Only MATCHED routes appear; a configured route that did not match is never listed. Adding this field incremented schema_version 5 -> 6. It is optional and omitted when empty, but that is NOT the 'optional and not emitted by default' carve-out RUNBOOK.md's 'When schema_version increments' rule grants 'provenance': the carve-out works because the consumer never sees the field, whereas an overlay consumer -- the exact population this signal exists for -- sees this one unconditionally, and their pinned copy of this closed schema would reject the plan while it truthfully reported the version that copy claims to handle. At 6 they fail on this const instead, an error naming the real cause.",
+      "$ref": "#/$defs/nonemptyStringArray"
     },
     "context_packs": {
       "type": "array",

@@ -829,7 +829,7 @@ class SelectorTests(unittest.TestCase):
             task="Deploy to production with Terraform",
             changed_files=["terraform/service/main.tf"],
         )
-        self.assertEqual(result["schema_version"], 5)
+        self.assertEqual(result["schema_version"], 6)
         self.assertEqual(result["workflow"], "production-release")
         self.assertEqual(self.quality_gate_ids(result), ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9"])
         production_gate = next(
