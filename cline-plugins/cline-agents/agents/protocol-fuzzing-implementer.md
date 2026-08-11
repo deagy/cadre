@@ -1,7 +1,7 @@
 ---
 name: protocol-fuzzing-implementer
 description: "Secure cloud agent suite role for the verify phase (protocol-fuzzing-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/protocol-fuzzing-implementer/AGENT.md
 convertedFrom: agents/protocol-fuzzing-implementer.md

@@ -137,9 +137,18 @@ Presets carry a capability **tier** and nothing else about the model:
 
 | Source `model:` tier | Preset `modelTier` |
 |---|---|
-| `opus` | `opus` |
-| `sonnet` | `sonnet` |
-| `haiku` | `haiku` |
+| `opus` | `high` |
+| `sonnet` | `mid` |
+| `haiku` | `low` |
+
+The tier names are capability levels, not model lines. The source catalog was
+written against Claude Code and uses Anthropic's names; this suite is driven
+overwhelmingly against open-weight and locally hosted models, where `opus`
+names nothing you have and `CLINE_AGENTS_MODEL_OPUS=qwen3-coder:30b` is an
+absurd line to write. The tier *axis* survives that move intact — a rig with a
+large, a mid-size and a small model tiers exactly as well as a frontier API
+does — so only the labels change, and only here. Codex wrappers get the same
+treatment for the same reason, via their own `codex_model` value.
 
 The tier is this suite's own domain knowledge — `roster/catalog.yaml`'s header
 documents the heuristic that assigns it. Which provider and which concrete
@@ -152,17 +161,27 @@ retrieved into a role's instructions — to it. Earlier versions defaulted to
 Anthropic and requested `ANTHROPIC_API_KEY` regardless of how Cline itself was
 configured (issue #142).
 
-Configure at least a provider and one model:
+Configure at least a provider and one model. A local rig with three models:
 
 ```sh
-export CLINE_AGENTS_PROVIDER_ID=your-provider
-export CLINE_AGENTS_MODEL_OPUS=your/opus-class-model
-export CLINE_AGENTS_MODEL_SONNET=your/sonnet-class-model
-export CLINE_AGENTS_MODEL_HAIKU=your/haiku-class-model
+export CLINE_AGENTS_PROVIDER_ID=ollama
+export CLINE_AGENTS_MODEL_HIGH=qwen3-coder:30b
+export CLINE_AGENTS_MODEL_MID=qwen3-coder:14b
+export CLINE_AGENTS_MODEL_LOW=qwen3:8b
+```
+
+Running a single model — the common case on one box — needs one variable, and
+every tier collapses onto it:
+
+```sh
+export CLINE_AGENTS_PROVIDER_ID=ollama
+export CLINE_AGENTS_MODEL_DEFAULT=qwen3-coder:30b
 ```
 
 `CLINE_AGENTS_MODEL_DEFAULT` sets one model for every tier if you would rather not
-map them individually; the per-tier variables take precedence where set.
+map them individually; the per-tier variables take precedence where set. The
+provider id is whatever your Cline installation calls it (`ollama`,
+`lmstudio`, `openrouter`, `anthropic`, …) — this suite does not constrain it.
 
 Resolution order, most specific first: a per-call `providerId`/`modelId` on
 `start_subagent` or `dispatch_selected_roles` → an explicit `providerId`/
@@ -178,8 +197,17 @@ overrides are honoured, because both are you speaking. `list_agent_presets`
 reports what a dispatch would actually use, so a project preset naming a
 vendor will not show it.
 
-`modelTier` must be `opus`, `sonnet`, or `haiku`. Any other value is treated
+`modelTier` must be `high`, `mid`, or `low`. Any other value is treated
 as no tier at all rather than deriving an environment variable name from it.
+
+### Migrating from the opus/sonnet/haiku tier names
+
+Both the old `modelTier` values and the old `CLINE_AGENTS_MODEL_OPUS`/
+`_SONNET`/`_HAIKU` variables are still honoured, mapped onto `high`/`mid`/
+`low`, so an existing shell and your own existing presets keep working. Each
+warns on stderr naming the current spelling, and the current variable wins
+where both are set. The old names are read, never recommended — rename when
+convenient.
 
 If nothing resolves, dispatch **fails before any session starts**, naming the
 missing variable. It does not fall back to a vendor.
@@ -190,9 +218,9 @@ Prior versions behaved as though these were set. To reproduce that exactly:
 
 ```sh
 export CLINE_AGENTS_PROVIDER_ID=anthropic
-export CLINE_AGENTS_MODEL_OPUS=anthropic/claude-opus-4.6
-export CLINE_AGENTS_MODEL_SONNET=anthropic/claude-sonnet-4.6
-export CLINE_AGENTS_MODEL_HAIKU=anthropic/claude-haiku-4.6
+export CLINE_AGENTS_MODEL_HIGH=anthropic/claude-opus-4.6
+export CLINE_AGENTS_MODEL_MID=anthropic/claude-sonnet-4.6
+export CLINE_AGENTS_MODEL_LOW=anthropic/claude-haiku-4.6
 ```
 
 There is no transition period during which the old default still applies —
@@ -218,8 +246,9 @@ stores, or forwards an API key, endpoint, or provider setting. Configure the
 credential for your chosen provider in Cline's own provider configuration, the
 same way you would for any other Cline session.
 
-**Caveat carried forward:** those model ids were never independently verified
-against Cline's supported model catalog, `haiku` least of all. Confirm the ids
+**Caveat carried forward:** those Anthropic model ids were never independently
+verified against Cline's supported model catalog, the `low`-tier one least of
+all — and the same caution applies to any local model id. Confirm the ids
 you configure resolve in your own installation; a wrong id now fails at
 session start rather than silently selecting something else.
 
@@ -446,8 +475,9 @@ copy. See `package.json` for the exact pinned version.
 |---|---|
 | `CLINE_AGENTS_BACKEND_MODE` | `auto` (`auto` \| `hub` \| `local`) — see caveat below |
 | `CLINE_AGENTS_PROVIDER_ID` | *(none — required, see above)* |
-| `CLINE_AGENTS_MODEL_OPUS` / `_SONNET` / `_HAIKU` | *(none — per-tier model id)* |
+| `CLINE_AGENTS_MODEL_HIGH` / `_MID` / `_LOW` | *(none — per-tier model id)* |
 | `CLINE_AGENTS_MODEL_DEFAULT` | *(none — one model for every tier)* |
+| `CLINE_AGENTS_MODEL_OPUS` / `_SONNET` / `_HAIKU` | *(retired spellings of the three above; read with a warning)* |
 | `CLINE_DATA_DIR` | `~/.cline/data` |
 | `CLINE_DIR` | `~/.cline` |
 

@@ -1,7 +1,7 @@
 ---
 name: helm-chart-implementer
 description: "Secure cloud agent suite role for the build phase (helm-chart-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/helm-chart-implementer/AGENT.md
 convertedFrom: agents/helm-chart-implementer.md

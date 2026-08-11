@@ -1,7 +1,7 @@
 ---
 name: approval-router
 description: "Secure cloud agent suite role for the review phase (approval-router)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/governance/approval-router/AGENT.md
 convertedFrom: agents/approval-router.md

@@ -1,7 +1,7 @@
 ---
 name: secrets-identity-engineer
 description: "Secure cloud agent suite role for the security phase (secrets-identity-engineer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/security/secrets-identity-engineer/AGENT.md
 convertedFrom: agents/secrets-identity-engineer.md

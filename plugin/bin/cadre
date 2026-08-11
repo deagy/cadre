@@ -45,6 +45,7 @@ case "$command_name" in
   gitlab-evidence) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/orchestration/mcp/gitlab_cli.py" "$@" ;;
   config) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/shared/src/settings.py" "$@" ;;
   doctor) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/orchestration/src/doctor.py" "$@" ;;
-  help|-h|--help) echo "Usage: cadre [--interactive] {select|selection-telemetry|knowledge|bootstrap-codex|resolve-shared|mcp-dispatch-server|init|profile|gitlab-evidence|config|doctor|sdlc} [args...]" ;;
+  role-fidelity) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/orchestration/src/role_fidelity.py" "$@" ;;
+  help|-h|--help) echo "Usage: cadre [--interactive] {select|selection-telemetry|knowledge|bootstrap-codex|resolve-shared|mcp-dispatch-server|init|profile|gitlab-evidence|config|doctor|role-fidelity|sdlc} [args...]" ;;
   *) echo "cadre: unknown subcommand $command_name" >&2; exit 1 ;;
 esac

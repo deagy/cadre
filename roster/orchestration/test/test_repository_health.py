@@ -549,9 +549,14 @@ class RepositoryHealthTests(unittest.TestCase):
           `run_commands` or `editor` (the tools `port_cline_agents.TOOL_MAP`
           maps Bash/Edit/Write onto). All three must agree.
         - All three: model tier. Claude Code's `model:` frontmatter value,
-          Cline's `modelTier:` frontmatter value, and Codex's `model` TOML
-          value resolved back to a tier through `MODEL_TIERS` must all be
-          the same tier string.
+          Codex's `model` TOML value resolved back to a tier through
+          `MODEL_TIERS`, and Cline's `modelTier:` frontmatter value resolved
+          through the manifest's `cline_tier` must all denote the same tier.
+          Cline is the one that does not compare as a bare string: its
+          vocabulary is capability-neutral (high/mid/low) rather than the
+          catalog's opus/sonnet/haiku, for the same reason Codex has its own
+          `codex_model` -- a runner whose model namespace does not share
+          Claude's naming gets its own mapped value, never a reused one.
 
         Explicit limitation, stated rather than silently skipped: Cline
         presets carry no `sandbox_mode`-equivalent field and no verbatim
@@ -605,6 +610,12 @@ class RepositoryHealthTests(unittest.TestCase):
         codex_model_to_tier = {
             data["codex_model"]: tier for tier, data in ggp.MODEL_TIERS.items()
         }
+        # Cline presets carry the capability-neutral tier name (high/mid/low),
+        # not the catalog's Anthropic-derived one, so its tier is compared
+        # after mapping through the manifest -- the same treatment Codex's
+        # `model` value already gets above. Both mappings come from
+        # roster/runner-capabilities.json, so neither can drift from it.
+        cline_tier_by_catalog_tier = dict(pca.MODEL_TIERS)
 
         def _frontmatter_field(text: str, prefix: str) -> str | None:
             for line in text.splitlines():
@@ -676,10 +687,11 @@ class RepositoryHealthTests(unittest.TestCase):
             cline_path = cline_root / "cline-agents" / "agents" / f"{role_id}.md"
             cline_text = cline_path.read_text(encoding="utf-8")
             cline_model_tier = _frontmatter_field(cline_text, "modelTier:")
-            if cline_model_tier != expected_model_tier:
+            expected_cline_tier = cline_tier_by_catalog_tier.get(expected_model_tier)
+            if cline_model_tier != expected_cline_tier:
                 divergences.append(
-                    f"{role_id}: Cline modelTier {cline_model_tier!r} != catalog model "
-                    f"{expected_model_tier!r}"
+                    f"{role_id}: Cline modelTier {cline_model_tier!r} != {expected_cline_tier!r} "
+                    f"(the cline_tier of catalog model {expected_model_tier!r})"
                 )
             allowed_tools_raw = _frontmatter_field(cline_text, "allowedTools:")
             allowed_tools = {

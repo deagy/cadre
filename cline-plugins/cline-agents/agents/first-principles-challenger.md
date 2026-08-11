@@ -1,7 +1,7 @@
 ---
 name: first-principles-challenger
 description: "Secure cloud agent suite role for the design phase (first-principles-challenger)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/architecture/first-principles-challenger/AGENT.md
 convertedFrom: agents/first-principles-challenger.md

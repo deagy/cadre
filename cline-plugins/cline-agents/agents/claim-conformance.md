@@ -1,7 +1,7 @@
 ---
 name: claim-conformance
 description: "Secure cloud agent suite role for the release phase (claim-conformance)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/claim-conformance/AGENT.md
 convertedFrom: agents/claim-conformance.md

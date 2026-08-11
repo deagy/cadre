@@ -1,7 +1,7 @@
 ---
 name: pkcs11-hsm-integration-implementer
 description: "Secure cloud agent suite role for the security phase (pkcs11-hsm-integration-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/security/pkcs11-hsm-integration-implementer/AGENT.md
 convertedFrom: agents/pkcs11-hsm-integration-implementer.md

@@ -1,7 +1,7 @@
 ---
 name: cost-capacity-planner
 description: "Secure cloud agent suite role for the planning phase (cost-capacity-planner)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/operations/cost-capacity-planner/AGENT.md
 convertedFrom: agents/cost-capacity-planner.md

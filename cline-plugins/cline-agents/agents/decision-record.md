@@ -1,7 +1,7 @@
 ---
 name: decision-record
 description: "Secure cloud agent suite role for the document phase (decision-record)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/documentation/decision-record/AGENT.md
 convertedFrom: agents/decision-record.md

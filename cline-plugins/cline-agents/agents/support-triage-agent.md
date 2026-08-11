@@ -1,7 +1,7 @@
 ---
 name: support-triage-agent
 description: "Secure cloud agent suite role for the support phase (support-triage-agent)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/support/support-triage-agent/AGENT.md
 convertedFrom: agents/support-triage-agent.md

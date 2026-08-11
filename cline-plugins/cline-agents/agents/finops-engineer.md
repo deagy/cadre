@@ -1,7 +1,7 @@
 ---
 name: finops-engineer
 description: "Secure cloud agent suite role for the operations phase (finops-engineer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/operations/finops-engineer/AGENT.md
 convertedFrom: agents/finops-engineer.md

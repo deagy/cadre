@@ -1,7 +1,7 @@
 ---
 name: c-systems-implementer
 description: "Secure cloud agent suite role for the build phase (c-systems-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/c-systems-implementer/AGENT.md
 convertedFrom: agents/c-systems-implementer.md

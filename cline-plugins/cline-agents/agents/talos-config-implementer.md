@@ -1,7 +1,7 @@
 ---
 name: talos-config-implementer
 description: "Secure cloud agent suite role for the build phase (talos-config-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/talos-config-implementer/AGENT.md
 convertedFrom: agents/talos-config-implementer.md

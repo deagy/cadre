@@ -1,7 +1,7 @@
 ---
 name: requirements-agent
 description: "Secure cloud agent suite role for the planning phase (requirements-agent)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/planning/requirements-agent/AGENT.md
 convertedFrom: agents/requirements-agent.md

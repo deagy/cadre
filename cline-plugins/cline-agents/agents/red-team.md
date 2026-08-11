@@ -1,7 +1,7 @@
 ---
 name: red-team
 description: "Secure cloud agent suite role for the verify phase (red-team)."
-modelTier: opus
+modelTier: high
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/red-team/AGENT.md
 convertedFrom: agents/red-team.md

@@ -1,7 +1,7 @@
 ---
 name: data-transformation-implementer
 description: "Secure cloud agent suite role for the build phase (data-transformation-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/data-transformation-implementer/AGENT.md
 convertedFrom: agents/data-transformation-implementer.md

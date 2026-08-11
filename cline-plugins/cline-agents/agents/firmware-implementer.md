@@ -1,7 +1,7 @@
 ---
 name: firmware-implementer
 description: "Secure cloud agent suite role for the build phase (firmware-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/firmware-implementer/AGENT.md
 convertedFrom: agents/firmware-implementer.md

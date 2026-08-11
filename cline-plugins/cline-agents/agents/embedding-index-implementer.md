@@ -1,7 +1,7 @@
 ---
 name: embedding-index-implementer
 description: "Secure cloud agent suite role for the build phase (embedding-index-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/embedding-index-implementer/AGENT.md
 convertedFrom: agents/embedding-index-implementer.md

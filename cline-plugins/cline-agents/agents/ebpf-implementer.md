@@ -1,7 +1,7 @@
 ---
 name: ebpf-implementer
 description: "Secure cloud agent suite role for the build phase (ebpf-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/ebpf-implementer/AGENT.md
 convertedFrom: agents/ebpf-implementer.md

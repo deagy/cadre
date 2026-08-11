@@ -1,7 +1,7 @@
 ---
 name: frontend-accessibility-remediator
 description: "Secure cloud agent suite role for the build phase (frontend-accessibility-remediator)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/frontend-accessibility-remediator/AGENT.md
 convertedFrom: agents/frontend-accessibility-remediator.md

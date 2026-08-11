@@ -1,7 +1,7 @@
 ---
 name: typescript-test-implementer
 description: "Secure cloud agent suite role for the verify phase (typescript-test-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/typescript-test-implementer/AGENT.md
 convertedFrom: agents/typescript-test-implementer.md

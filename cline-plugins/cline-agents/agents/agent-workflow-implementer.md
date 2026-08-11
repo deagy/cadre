@@ -1,7 +1,7 @@
 ---
 name: agent-workflow-implementer
 description: "Secure cloud agent suite role for the build phase (agent-workflow-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/agent-workflow-implementer/AGENT.md
 convertedFrom: agents/agent-workflow-implementer.md

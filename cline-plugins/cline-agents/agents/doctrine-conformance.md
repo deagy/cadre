@@ -1,7 +1,7 @@
 ---
 name: doctrine-conformance
 description: "Secure cloud agent suite role for the review phase (doctrine-conformance)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/doctrine-conformance/AGENT.md
 convertedFrom: agents/doctrine-conformance.md

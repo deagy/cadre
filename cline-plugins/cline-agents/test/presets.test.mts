@@ -119,16 +119,16 @@ const startConfigs: Array<Record<string, unknown>> = [];
 // a leaked provider would mask a fail-closed regression elsewhere.
 beforeAll(() => {
   process.env.CLINE_AGENTS_PROVIDER_ID = "test-provider";
-  process.env.CLINE_AGENTS_MODEL_OPUS = "test/opus-model";
-  process.env.CLINE_AGENTS_MODEL_SONNET = "test/sonnet-model";
-  process.env.CLINE_AGENTS_MODEL_HAIKU = "test/haiku-model";
+  process.env.CLINE_AGENTS_MODEL_HIGH = "test/high-model";
+  process.env.CLINE_AGENTS_MODEL_MID = "test/mid-model";
+  process.env.CLINE_AGENTS_MODEL_LOW = "test/low-model";
 });
 
 afterAll(() => {
   delete process.env.CLINE_AGENTS_PROVIDER_ID;
-  delete process.env.CLINE_AGENTS_MODEL_OPUS;
-  delete process.env.CLINE_AGENTS_MODEL_SONNET;
-  delete process.env.CLINE_AGENTS_MODEL_HAIKU;
+  delete process.env.CLINE_AGENTS_MODEL_HIGH;
+  delete process.env.CLINE_AGENTS_MODEL_MID;
+  delete process.env.CLINE_AGENTS_MODEL_LOW;
 });
 
 describe("cline-agents plugin manifest", () => {
@@ -185,13 +185,21 @@ describe("preset discovery", () => {
     for (const d of defs) {
       expect(d.name, `${d.name} name`).toBeTruthy();
       expect(d.description, `${d.name} description`).toBeTruthy();
-      expect(["opus", "sonnet", "haiku"], `${d.name} modelTier`).toContain(d.modelTier);
+      expect(["high", "mid", "low"], `${d.name} modelTier`).toContain(d.modelTier);
       expect(d.providerId, `${d.name} must not carry a provider`).toBeUndefined();
       expect(d.modelId, `${d.name} must not carry a vendor model id`).toBeUndefined();
     }
   });
 
   it("carries the same tier the role catalog assigns, so the port cannot drift from it", () => {
+    // Mirrors the generator manifest's model_tiers[].cline_tier. Duplicated
+    // here rather than read: this suite tests a standalone distributable,
+    // which must not reach into the generating repository.
+    const CLINE_TIER_BY_CATALOG_TIER: Record<string, string> = {
+      opus: "high",
+      sonnet: "mid",
+      haiku: "low",
+    };
     // modelTier is a pass-through of roster/catalog.yaml's `model:`. Nothing
     // in CI re-runs port_cline_agents.py against the committed presets (see
     // issue #144), so this is currently the only thing tying the two
@@ -213,7 +221,10 @@ describe("preset discovery", () => {
     expect(tierByRole.size).toBe(SOURCE_ROLE_COUNT);
 
     for (const def of readAgentDefinitions(REPO_ROOT).filter((d) => d.source === "bundled")) {
-      expect(def.modelTier, `${def.name} tier vs catalog.yaml`).toBe(tierByRole.get(def.name));
+      // The catalog speaks opus/sonnet/haiku; a preset speaks high/mid/low.
+      // Mapped, not compared raw -- see CLINE_TIER_BY_CATALOG_TIER.
+      const expected = CLINE_TIER_BY_CATALOG_TIER[tierByRole.get(def.name) ?? ""];
+      expect(def.modelTier, `${def.name} tier vs catalog.yaml`).toBe(expected);
     }
   });
 
@@ -1167,9 +1178,9 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
     await tool.execute({ label: "tiered", task: "t", preset: "security-reviewer" }, FAKE_TOOL_CTX);
     const config = startConfigs[before];
     expect(config.providerId).toBe("test-provider");
-    // security-reviewer is a sonnet-tier role, so it must resolve the sonnet
+    // security-reviewer is a mid-tier role, so it must resolve the mid
     // model rather than whatever a single shared setting would give.
-    expect(config.modelId).toBe("test/sonnet-model");
+    expect(config.modelId).toBe("test/mid-model");
   });
 
   it("lets an explicit per-call override beat the configured default", async () => {
@@ -1213,10 +1224,10 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
     // to name both the tier-specific variable and the fallback, or the
     // operator cannot tell which one to set.
     const saved = {
-      sonnet: process.env.CLINE_AGENTS_MODEL_SONNET,
+      mid: process.env.CLINE_AGENTS_MODEL_MID,
       fallback: process.env.CLINE_AGENTS_MODEL_DEFAULT,
     };
-    delete process.env.CLINE_AGENTS_MODEL_SONNET;
+    delete process.env.CLINE_AGENTS_MODEL_MID;
     delete process.env.CLINE_AGENTS_MODEL_DEFAULT;
     try {
       const tools = await registerTools(REPO_ROOT);
@@ -1225,10 +1236,10 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
       // security-reviewer is a sonnet-tier role.
       await expect(
         tool.execute({ label: "no-model", task: "t", preset: "security-reviewer" }, FAKE_TOOL_CTX),
-      ).rejects.toThrow(/CLINE_AGENTS_MODEL_SONNET.*CLINE_AGENTS_MODEL_DEFAULT/s);
+      ).rejects.toThrow(/CLINE_AGENTS_MODEL_MID.*CLINE_AGENTS_MODEL_DEFAULT/s);
       expect(startConfigs.length).toBe(before);
     } finally {
-      if (saved.sonnet !== undefined) process.env.CLINE_AGENTS_MODEL_SONNET = saved.sonnet;
+      if (saved.mid !== undefined) process.env.CLINE_AGENTS_MODEL_MID = saved.mid;
       if (saved.fallback !== undefined) process.env.CLINE_AGENTS_MODEL_DEFAULT = saved.fallback;
     }
   });
@@ -1248,7 +1259,7 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
         "description: ships its own vendor",
         "providerId: repo-chosen-provider",
         "modelId: repo-chosen/model",
-        "modelTier: sonnet",
+        "modelTier: mid",
         "allowedTools: [read_files]",
         "---",
         "",
@@ -1265,7 +1276,7 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
     // The operator's configuration wins on both axes; the repository's
     // choices are ignored rather than merged.
     expect(startConfigs[before].providerId).toBe("test-provider");
-    expect(startConfigs[before].modelId).toBe("test/sonnet-model");
+    expect(startConfigs[before].modelId).toBe("test/mid-model");
   });
 
   it("warns when a global preset pins a provider that differs from the operator's configuration", async () => {
@@ -1394,6 +1405,120 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
     }
   });
 
+  it("honours a retired tier variable so an existing shell keeps dispatching", async () => {
+    // The tier vocabulary moved from opus/sonnet/haiku to high/mid/low. An
+    // operator whose shell still exports the old variables must not have a
+    // working dispatch turn into "no model provider is configured" -- that is
+    // the same fail-closed surprise this rename exists to reduce.
+    const savedHigh = process.env.CLINE_AGENTS_MODEL_HIGH;
+    delete process.env.CLINE_AGENTS_MODEL_HIGH;
+    process.env.CLINE_AGENTS_MODEL_OPUS = "legacy/opus-model";
+    const globalDir = mkdtempSync(join(tmpdir(), "cline-legacy-var-"));
+    mkdirSync(join(globalDir, ".cline", "agents"), { recursive: true });
+    writeFileSync(
+      join(globalDir, ".cline", "agents", "high-role.md"),
+      [
+        "---",
+        "name: high-role",
+        "description: high tier",
+        "modelTier: high",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+      errors.push(a.join(" "));
+    });
+    try {
+      const tools = await registerTools(globalDir);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      await tool.execute({ label: "legacy", task: "t", preset: "high-role" }, FAKE_TOOL_CTX);
+      expect(startConfigs[before].modelId).toBe("legacy/opus-model");
+      // Honoured, but never silently -- and the warning names the current
+      // spelling, so following it moves the operator forward, not sideways.
+      expect(errors.join("\n")).toMatch(/CLINE_AGENTS_MODEL_OPUS.*CLINE_AGENTS_MODEL_HIGH/s);
+    } finally {
+      spy.mockRestore();
+      delete process.env.CLINE_AGENTS_MODEL_OPUS;
+      if (savedHigh !== undefined) process.env.CLINE_AGENTS_MODEL_HIGH = savedHigh;
+    }
+  });
+
+  it("prefers the current tier variable over the retired one where both are set", async () => {
+    process.env.CLINE_AGENTS_MODEL_OPUS = "legacy/opus-model";
+    const globalDir = mkdtempSync(join(tmpdir(), "cline-both-vars-"));
+    mkdirSync(join(globalDir, ".cline", "agents"), { recursive: true });
+    writeFileSync(
+      join(globalDir, ".cline", "agents", "high-role.md"),
+      [
+        "---",
+        "name: high-role",
+        "description: high tier",
+        "modelTier: high",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    try {
+      const tools = await registerTools(globalDir);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      await tool.execute({ label: "both", task: "t", preset: "high-role" }, FAKE_TOOL_CTX);
+      // CLINE_AGENTS_MODEL_HIGH is set file-wide in beforeAll.
+      expect(startConfigs[before].modelId).toBe("test/high-model");
+    } finally {
+      delete process.env.CLINE_AGENTS_MODEL_OPUS;
+    }
+  });
+
+  it("reads a retired modelTier in an operator's own preset, warning rather than failing", async () => {
+    // An operator's global presets were written against the old vocabulary
+    // and nothing regenerates them. Distinct from `modelTier: garbage` above:
+    // a retired name is a known translation, a typo is not.
+    const globalDir = mkdtempSync(join(tmpdir(), "cline-legacy-tier-"));
+    mkdirSync(join(globalDir, ".cline", "agents"), { recursive: true });
+    writeFileSync(
+      join(globalDir, ".cline", "agents", "old-tier.md"),
+      [
+        "---",
+        "name: old-tier",
+        "description: retired tier name",
+        "modelTier: sonnet",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+      errors.push(a.join(" "));
+    });
+    try {
+      const tools = await registerTools(globalDir);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      await tool.execute({ label: "old", task: "t", preset: "old-tier" }, FAKE_TOOL_CTX);
+      // Resolved as `mid`, i.e. through CLINE_AGENTS_MODEL_MID.
+      expect(startConfigs[before].modelId).toBe("test/mid-model");
+      expect(errors.join("\n")).toMatch(/retired modelTier "sonnet".*"mid"/s);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("names the missing setting so the error is actionable, not just a refusal", async () => {
     const saved = process.env.CLINE_AGENTS_PROVIDER_ID;
     delete process.env.CLINE_AGENTS_PROVIDER_ID;
@@ -1518,7 +1643,7 @@ describe("dispatch_selected_roles", () => {
     for (const config of startConfigs.slice(before)) {
       expect(config.providerId).toBe("test-provider");
       // Resolved from each role's own tier, never a shipped vendor default.
-      expect(String(config.modelId)).toMatch(/^test\/(opus|sonnet|haiku)-model$/);
+      expect(String(config.modelId)).toMatch(/^test\/(high|mid|low)-model$/);
     }
   });
 

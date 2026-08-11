@@ -1,7 +1,7 @@
 ---
 name: qkd-qkms-integration-implementer
 description: "Secure cloud agent suite role for the build phase (qkd-qkms-integration-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/qkd-qkms-integration-implementer/AGENT.md
 convertedFrom: agents/qkd-qkms-integration-implementer.md

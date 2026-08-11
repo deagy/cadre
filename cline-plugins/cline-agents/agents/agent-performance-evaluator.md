@@ -1,7 +1,7 @@
 ---
 name: agent-performance-evaluator
 description: "Secure cloud agent suite role for the operations phase (agent-performance-evaluator)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/operations/agent-performance-evaluator/AGENT.md
 convertedFrom: agents/agent-performance-evaluator.md

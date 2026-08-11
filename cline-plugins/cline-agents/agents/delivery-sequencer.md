@@ -1,7 +1,7 @@
 ---
 name: delivery-sequencer
 description: "Secure cloud agent suite role for the planning phase (delivery-sequencer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/planning/delivery-sequencer/AGENT.md
 convertedFrom: agents/delivery-sequencer.md

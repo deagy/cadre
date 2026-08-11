@@ -1,7 +1,7 @@
 ---
 name: react-component-implementer
 description: "Secure cloud agent suite role for the build phase (react-component-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/react-component-implementer/AGENT.md
 convertedFrom: agents/react-component-implementer.md

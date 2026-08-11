@@ -1,7 +1,7 @@
 ---
 name: gitlab-ci-implementer
 description: "Secure cloud agent suite role for the build phase (gitlab-ci-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/gitlab-ci-implementer/AGENT.md
 convertedFrom: agents/gitlab-ci-implementer.md

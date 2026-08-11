@@ -1,7 +1,7 @@
 ---
 name: debugging-engineer
 description: "Secure cloud agent suite role for the build phase (debugging-engineer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/debugging-engineer/AGENT.md
 convertedFrom: agents/debugging-engineer.md

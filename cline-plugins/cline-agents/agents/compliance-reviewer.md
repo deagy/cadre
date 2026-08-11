@@ -1,7 +1,7 @@
 ---
 name: compliance-reviewer
 description: "Secure cloud agent suite role for the review phase (compliance-reviewer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/compliance-reviewer/AGENT.md
 convertedFrom: agents/compliance-reviewer.md

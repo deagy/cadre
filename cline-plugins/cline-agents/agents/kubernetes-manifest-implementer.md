@@ -1,7 +1,7 @@
 ---
 name: kubernetes-manifest-implementer
 description: "Secure cloud agent suite role for the build phase (kubernetes-manifest-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/kubernetes-manifest-implementer/AGENT.md
 convertedFrom: agents/kubernetes-manifest-implementer.md

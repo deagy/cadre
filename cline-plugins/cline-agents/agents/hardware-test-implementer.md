@@ -1,7 +1,7 @@
 ---
 name: hardware-test-implementer
 description: "Secure cloud agent suite role for the verify phase (hardware-test-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/hardware-test-implementer/AGENT.md
 convertedFrom: agents/hardware-test-implementer.md

@@ -1,7 +1,7 @@
 ---
 name: supply-chain-remediation-implementer
 description: "Secure cloud agent suite role for the security phase (supply-chain-remediation-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/security/supply-chain-remediation-implementer/AGENT.md
 convertedFrom: agents/supply-chain-remediation-implementer.md

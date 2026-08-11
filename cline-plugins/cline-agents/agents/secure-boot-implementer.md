@@ -1,7 +1,7 @@
 ---
 name: secure-boot-implementer
 description: "Secure cloud agent suite role for the security phase (secure-boot-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/security/secure-boot-implementer/AGENT.md
 convertedFrom: agents/secure-boot-implementer.md

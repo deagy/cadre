@@ -304,7 +304,7 @@ authoritative for the *why*.
     silently defaulted to Anthropic and required `ANTHROPIC_API_KEY`
     regardless of how Cline itself was configured (issue #142). A dispatch
     needs `CLINE_AGENTS_PROVIDER_ID` plus at least one of
-    `CLINE_AGENTS_MODEL_OPUS`/`_SONNET`/`_HAIKU` or
+    `CLINE_AGENTS_MODEL_HIGH`/`_MID`/`_LOW` or
     `CLINE_AGENTS_MODEL_DEFAULT` set in the process environment before
     calling `start_subagent`/`dispatch_selected_roles`; if nothing resolves
     for a role's tier, the call fails before any session starts, naming the
@@ -536,7 +536,10 @@ it's a fixed statement of what's actually possible:
   `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` set. Spawn the team's members as an
   Agent Team exactly as described above.
 - **`fallback: orchestrator-relayed`** applies everywhere else — Codex always,
-  and Claude Code whenever the experimental flag isn't set. Dispatch the same
+  Cline in practice (its `start_subagent` sessions run with agent teams
+  disabled, so treat `peer` there as best-effort and assume this fallback
+  unless you have positively confirmed otherwise), and Claude Code whenever
+  the experimental flag isn't set. Dispatch the same
   member list as an ordinary parallel wave and perform all reconciliation
   yourself as the orchestrating session. Never report that agents "discussed"
   or "challenged" each other's findings when this fallback was actually used —
@@ -550,10 +553,10 @@ selector can't know either in advance.
 
 ## Choosing between an ordinary wave and a team
 
-Default to an ordinary parallel wave — it's cheaper and works identically on
-both runners. Reach for a Claude Code Agent Team only when the recipe's value
+Default to an ordinary parallel wave — it's cheaper and works the same way on
+every runner. Reach for a Claude Code Agent Team only when the recipe's value
 specifically comes from teammates challenging or building on each other's
 findings before you synthesize (see [team-recipes.md](team-recipes.md)), and
-only when `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is available. On Codex, or on
-Claude Code without that flag, run the same recipe as an ordinary wave and
-perform the synthesis step yourself.
+only when `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is available. On Codex, on
+Cline, or on Claude Code without that flag, run the same recipe as an ordinary
+wave and perform the synthesis step yourself.

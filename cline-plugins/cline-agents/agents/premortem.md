@@ -1,7 +1,7 @@
 ---
 name: premortem
 description: "Secure cloud agent suite role for the planning phase (premortem)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/planning/premortem/AGENT.md
 convertedFrom: agents/premortem.md

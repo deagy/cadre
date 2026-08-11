@@ -1,7 +1,7 @@
 ---
 name: selector-test-implementer
 description: "Secure cloud agent suite role for the verify phase (selector-test-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/selector-test-implementer/AGENT.md
 convertedFrom: agents/selector-test-implementer.md

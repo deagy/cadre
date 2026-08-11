@@ -1,7 +1,7 @@
 ---
 name: api-contract-engineer
 description: "Secure cloud agent suite role for the design phase (api-contract-engineer)."
-modelTier: opus
+modelTier: high
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/architecture/api-contract-engineer/AGENT.md
 convertedFrom: agents/api-contract-engineer.md

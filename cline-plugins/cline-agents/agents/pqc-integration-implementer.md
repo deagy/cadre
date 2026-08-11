@@ -1,7 +1,7 @@
 ---
 name: pqc-integration-implementer
 description: "Secure cloud agent suite role for the security phase (pqc-integration-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/security/pqc-integration-implementer/AGENT.md
 convertedFrom: agents/pqc-integration-implementer.md

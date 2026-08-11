@@ -1,7 +1,7 @@
 ---
 name: release-authority-aide
 description: "Secure cloud agent suite role for the authority phase (release-authority-aide)."
-modelTier: opus
+modelTier: high
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/authority/release-authority-aide/AGENT.md
 convertedFrom: agents/release-authority-aide.md

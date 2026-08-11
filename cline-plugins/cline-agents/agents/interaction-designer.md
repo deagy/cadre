@@ -1,7 +1,7 @@
 ---
 name: interaction-designer
 description: "Secure cloud agent suite role for the design phase (interaction-designer)."
-modelTier: opus
+modelTier: high
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/architecture/interaction-designer/AGENT.md
 convertedFrom: agents/interaction-designer.md

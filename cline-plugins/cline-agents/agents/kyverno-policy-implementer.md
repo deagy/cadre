@@ -1,7 +1,7 @@
 ---
 name: kyverno-policy-implementer
 description: "Secure cloud agent suite role for the build phase (kyverno-policy-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/kyverno-policy-implementer/AGENT.md
 convertedFrom: agents/kyverno-policy-implementer.md

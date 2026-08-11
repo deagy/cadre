@@ -1,7 +1,7 @@
 ---
 name: supply-chain-security-reviewer
 description: "Secure cloud agent suite role for the review phase (supply-chain-security-reviewer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/supply-chain-security-reviewer/AGENT.md
 convertedFrom: agents/supply-chain-security-reviewer.md

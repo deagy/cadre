@@ -1,7 +1,7 @@
 ---
 name: node-typescript-implementer
 description: "Secure cloud agent suite role for the build phase (node-typescript-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/node-typescript-implementer/AGENT.md
 convertedFrom: agents/node-typescript-implementer.md

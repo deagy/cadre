@@ -24,9 +24,9 @@
     }
   },
   "model_tiers": {
-    "opus": { "codex_model": "gpt-5.6-sol", "reasoning_effort": "high" },
-    "sonnet": { "codex_model": "gpt-5.6-terra", "reasoning_effort": "medium" },
-    "haiku": { "codex_model": "gpt-5.6-luna", "reasoning_effort": "low" }
+    "opus": { "codex_model": "gpt-5.6-sol", "reasoning_effort": "high", "cline_tier": "high" },
+    "sonnet": { "codex_model": "gpt-5.6-terra", "reasoning_effort": "medium", "cline_tier": "mid" },
+    "haiku": { "codex_model": "gpt-5.6-luna", "reasoning_effort": "low", "cline_tier": "low" }
   },
   "allowed_reasoning_efforts": ["low", "medium", "high", "xhigh"],
   "runners": {

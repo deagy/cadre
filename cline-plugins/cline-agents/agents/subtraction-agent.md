@@ -1,7 +1,7 @@
 ---
 name: subtraction-agent
 description: "Secure cloud agent suite role for the review phase (subtraction-agent)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/subtraction-agent/AGENT.md
 convertedFrom: agents/subtraction-agent.md

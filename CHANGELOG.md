@@ -23,6 +23,54 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+### Added
+
+- **`cadre role-fidelity`** — measures whether a role brief survives a given
+  model, for operators running this suite against open-weight or locally
+  hosted models. `--mode static` needs no model or network and reports each
+  role's payload against a context budget, split into role-specific content
+  versus the shared-policy block embedded verbatim into every role.
+  `--mode probe` sends each role's real brief plus a probe task to any
+  OpenAI-compatible `/chat/completions` endpoint (Ollama, LM Studio, vLLM,
+  llama.cpp, hosted providers) and scores replies against declarative checks
+  in `role-fidelity-probes.yaml`. `--dry-run` inspects a run without sending
+  anything. It is a screening instrument, not a judge: it detects a brief
+  that has stopped steering the output, and its results may never stand in
+  for a human review, gate approval, or risk acceptance.
+
+### Changed
+
+- **Cline model tiers are now `high`/`mid`/`low`, not `opus`/`sonnet`/`haiku`,**
+  and the per-tier variables are `CLINE_AGENTS_MODEL_HIGH`/`_MID`/`_LOW`. The
+  Cline distribution is driven overwhelmingly against open-weight and local
+  models, where the old names denoted models the operator does not have and
+  asked them to write `CLINE_AGENTS_MODEL_OPUS=<a local model>`. The tier axis
+  is unchanged, as is the catalog (`roster/catalog.yaml` still assigns
+  `opus`/`sonnet`/`haiku`), the Claude Code plugin, and the Codex wrappers —
+  only Cline's surface is renamed, from a new `cline_tier` field in
+  `roster/runner-capabilities.json`.
+
+  **Backwards compatible.** Both the retired `modelTier` values in your own
+  presets and the retired `CLINE_AGENTS_MODEL_OPUS`/`_SONNET`/`_HAIKU`
+  variables are still honoured, mapped onto the new names, each warning on
+  stderr; the current variable wins where both are set.
+
+### Fixed
+
+- The `run-agent-orchestration` skill's **Bootstrap Local Setup** had no Cline
+  row, so nothing told a Cline session that dispatch fails closed until
+  `CLINE_AGENTS_PROVIDER_ID` and a model variable are set. Because
+  `dispatch_selected_roles` catches the per-role failure and returns each role
+  as `skipped`, the visible symptom was a correct, fully staffed plan and zero
+  started agents. Added, including the note that
+  `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is a Claude Code peer-messaging flag
+  with no effect on Cline.
+- `references/runner-adapters.md` described team-communication fallback for a
+  two-runner world, enumerating "Codex always, and Claude Code whenever the
+  experimental flag isn't set" and calling an ordinary wave one that "works
+  identically on both runners" — omitting Cline from both. Cline is now named
+  in the fallback rule.
+
 ## [0.20.0] - 2026-08-10
 
 Shipped to users as plugin [v0.17.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.17.0).

@@ -1,7 +1,7 @@
 ---
 name: browser-test-implementer
 description: "Secure cloud agent suite role for the verify phase (browser-test-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/browser-test-implementer/AGENT.md
 convertedFrom: agents/browser-test-implementer.md

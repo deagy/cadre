@@ -1,7 +1,7 @@
 ---
 name: proxmox-opentofu-implementer
 description: "Secure cloud agent suite role for the build phase (proxmox-opentofu-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/proxmox-opentofu-implementer/AGENT.md
 convertedFrom: agents/proxmox-opentofu-implementer.md

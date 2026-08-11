@@ -1,7 +1,7 @@
 ---
 name: css-layout-implementer
 description: "Secure cloud agent suite role for the build phase (css-layout-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/css-layout-implementer/AGENT.md
 convertedFrom: agents/css-layout-implementer.md

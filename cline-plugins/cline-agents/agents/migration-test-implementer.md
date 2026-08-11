@@ -1,7 +1,7 @@
 ---
 name: migration-test-implementer
 description: "Secure cloud agent suite role for the verify phase (migration-test-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/migration-test-implementer/AGENT.md
 convertedFrom: agents/migration-test-implementer.md

@@ -1,7 +1,7 @@
 ---
 name: postgres-query-implementer
 description: "Secure cloud agent suite role for the build phase (postgres-query-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/postgres-query-implementer/AGENT.md
 convertedFrom: agents/postgres-query-implementer.md

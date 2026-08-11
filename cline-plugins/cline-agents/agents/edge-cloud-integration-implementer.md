@@ -1,7 +1,7 @@
 ---
 name: edge-cloud-integration-implementer
 description: "Secure cloud agent suite role for the build phase (edge-cloud-integration-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/edge-cloud-integration-implementer/AGENT.md
 convertedFrom: agents/edge-cloud-integration-implementer.md

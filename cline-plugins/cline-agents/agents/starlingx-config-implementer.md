@@ -1,7 +1,7 @@
 ---
 name: starlingx-config-implementer
 description: "Secure cloud agent suite role for the build phase (starlingx-config-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/starlingx-config-implementer/AGENT.md
 convertedFrom: agents/starlingx-config-implementer.md

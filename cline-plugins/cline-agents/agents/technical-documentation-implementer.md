@@ -1,7 +1,7 @@
 ---
 name: technical-documentation-implementer
 description: "Secure cloud agent suite role for the document phase (technical-documentation-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/documentation/technical-documentation-implementer/AGENT.md
 convertedFrom: agents/technical-documentation-implementer.md

@@ -1,7 +1,7 @@
 ---
 name: dependency-remediation-implementer
 description: "Secure cloud agent suite role for the build phase (dependency-remediation-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/dependency-remediation-implementer/AGENT.md
 convertedFrom: agents/dependency-remediation-implementer.md

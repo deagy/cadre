@@ -1,7 +1,7 @@
 ---
 name: evidence-curator
 description: "Secure cloud agent suite role for the evidence phase (evidence-curator)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/documentation/evidence-curator/AGENT.md
 convertedFrom: agents/evidence-curator.md

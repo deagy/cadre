@@ -1,7 +1,7 @@
 ---
 name: security-lead-aide
 description: "Secure cloud agent suite role for the authority phase (security-lead-aide)."
-modelTier: opus
+modelTier: high
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/authority/security-lead-aide/AGENT.md
 convertedFrom: agents/security-lead-aide.md

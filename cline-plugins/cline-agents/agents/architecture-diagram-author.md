@@ -1,7 +1,7 @@
 ---
 name: architecture-diagram-author
 description: "Secure cloud agent suite role for the document phase (architecture-diagram-author)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/documentation/architecture-diagram-author/AGENT.md
 convertedFrom: agents/architecture-diagram-author.md

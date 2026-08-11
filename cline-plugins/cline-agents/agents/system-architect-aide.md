@@ -1,7 +1,7 @@
 ---
 name: system-architect-aide
 description: "Secure cloud agent suite role for the authority phase (system-architect-aide)."
-modelTier: opus
+modelTier: high
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/authority/system-architect-aide/AGENT.md
 convertedFrom: agents/system-architect-aide.md

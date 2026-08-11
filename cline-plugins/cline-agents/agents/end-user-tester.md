@@ -1,7 +1,7 @@
 ---
 name: end-user-tester
 description: "Secure cloud agent suite role for the verify phase (end-user-tester)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/end-user-tester/AGENT.md
 convertedFrom: agents/end-user-tester.md

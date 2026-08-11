@@ -1,7 +1,7 @@
 ---
 name: product-intent-agent
 description: "Secure cloud agent suite role for the planning phase (product-intent-agent)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/planning/product-intent-agent/AGENT.md
 convertedFrom: agents/product-intent-agent.md

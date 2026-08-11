@@ -1,7 +1,7 @@
 ---
 name: retention-and-deletion-executor
 description: "Secure cloud agent suite role for the operations phase (retention-and-deletion-executor)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/operations/retention-and-deletion-executor/AGENT.md
 convertedFrom: agents/retention-and-deletion-executor.md

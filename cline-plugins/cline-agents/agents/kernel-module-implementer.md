@@ -1,7 +1,7 @@
 ---
 name: kernel-module-implementer
 description: "Secure cloud agent suite role for the build phase (kernel-module-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/kernel-module-implementer/AGENT.md
 convertedFrom: agents/kernel-module-implementer.md

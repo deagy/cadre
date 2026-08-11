@@ -1,7 +1,7 @@
 ---
 name: product-owner-aide
 description: "Secure cloud agent suite role for the authority phase (product-owner-aide)."
-modelTier: opus
+modelTier: high
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/authority/product-owner-aide/AGENT.md
 convertedFrom: agents/product-owner-aide.md

@@ -1,7 +1,7 @@
 ---
 name: knowledge-store-steward
 description: "Secure cloud agent suite role for the knowledge phase (knowledge-store-steward)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/knowledge-store/AGENT.md
 convertedFrom: agents/knowledge-store-steward.md

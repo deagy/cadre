@@ -1,7 +1,7 @@
 ---
 name: prompt-artifact-implementer
 description: "Secure cloud agent suite role for the build phase (prompt-artifact-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/prompt-artifact-implementer/AGENT.md
 convertedFrom: agents/prompt-artifact-implementer.md

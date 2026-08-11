@@ -1,7 +1,7 @@
 ---
 name: kubernetes-networking-implementer
 description: "Secure cloud agent suite role for the build phase (kubernetes-networking-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/kubernetes-networking-implementer/AGENT.md
 convertedFrom: agents/kubernetes-networking-implementer.md
