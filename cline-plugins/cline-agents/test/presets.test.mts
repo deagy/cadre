@@ -779,12 +779,73 @@ describe("destructive-git guard (deagy/cadre#129): subcommand-level restriction 
         ).not.toBeNull();
       });
 
-      it("handles the `<<-` tab-indented-terminator form", async () => {
+      it("handles the `<<-` tab-indented-terminator form, and only that form", async () => {
+        // The two spellings must DIFFER or the `<<-` branch is dead code.
         writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
-        expect(await evaluateGitCommand("cat <<-'EOF' > note.md\ngit reset --hard HEAD\n\tEOF", repoDir)).toBeNull();
+        // `<<-` accepts the tab-indented terminator: heredoc ends, the
+        // trailing command is real.
         expect(
           await evaluateGitCommand("cat <<-'EOF' > note.md\ntext\n\tEOF\ngit reset --hard HEAD", repoDir),
         ).not.toBeNull();
+        // Plain `<<` does not: unterminated heredoc swallows the trailing
+        // command, exactly as the shell would.
+        expect(
+          await evaluateGitCommand("cat <<'EOF' > note.md\ntext\n\tEOF\ngit reset --hard HEAD", repoDir),
+        ).toBeNull();
+        // Only TABS are stripped by `<<-`, never spaces.
+        expect(
+          await evaluateGitCommand("cat <<-'EOF' > note.md\ntext\n    EOF\ngit reset --hard HEAD", repoDir),
+        ).toBeNull();
+      });
+
+      it("keeps a command chained onto the heredoc opener's own line (F7)", async () => {
+        // `cat > f <<EOF && git ...` runs that git command before a single
+        // body line is read. Consuming forward to the delimiter swallowed
+        // it.
+        writeFileSync(join(repoDir, "untracked.txt"), "junk\n");
+        for (const sep of ["&&", ";", "|"]) {
+          expect(
+            await evaluateGitCommand(`cat > note.md <<EOF ${sep} git clean -fd`, repoDir),
+            sep,
+          ).not.toBeNull();
+        }
+        // ...while the body, which starts on the NEXT line, is still
+        // skipped: the false positive stays prevented.
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(
+          await evaluateGitCommand("cat > note.md <<EOF && echo started\ngit reset --hard HEAD\nEOF", repoDir),
+        ).toBeNull();
+      });
+
+      it("does not treat a quoted mention of `<<EOF` as a redirection (F8)", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(
+          await evaluateGitCommand('echo "see <<EOF for details"; git reset --hard HEAD', repoDir),
+        ).not.toBeNull();
+        expect(await evaluateGitCommand("echo 'see <<EOF'; git reset --hard HEAD", repoDir)).not.toBeNull();
+      });
+
+      it("does not treat `<<` in arithmetic expansion as a heredoc", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(await evaluateGitCommand("echo $(( 1 << 2 ))\ngit reset --hard HEAD", repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand("echo $(( x << shift ))\ngit reset --hard HEAD", repoDir)).not.toBeNull();
+      });
+
+      it("joins backslash-newline continuations (F9)", async () => {
+        // How long commands are normally written. Once newline became a
+        // separator, `git push \` / `origin main --force` split into two
+        // segments, neither a destructive git invocation.
+        expect(await evaluateGitCommand("git push --force origin main", repoDir)).not.toBeNull(); // control
+        expect(await evaluateGitCommand("git push \\\n  origin main --force", repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand("git push \\\r\n  origin main --force", repoDir)).not.toBeNull();
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(await evaluateGitCommand("git reset \\\n  --hard HEAD", repoDir)).not.toBeNull();
+      });
+
+      it("leaves a backslash-newline inside single quotes literal", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(await evaluateGitCommand("echo 'a\\\nb'", repoDir)).toBeNull();
+        expect(await evaluateGitCommand("echo 'git reset \\\n--hard'", repoDir)).toBeNull();
       });
 
       it("does not mistake a here-string (`<<<`) for a heredoc", async () => {

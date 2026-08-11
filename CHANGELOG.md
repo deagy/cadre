@@ -27,7 +27,15 @@ check and reporting "nothing to do". See
 
 - **A newline in a `Bash` command bypassed the workspace-mutation guard entirely** (found reviewing [#215](https://github.com/deagy/cadre/issues/215)). `split_top_level` split on `&&`, `||`, `;`, and `|` but not on newlines, and `shlex.split` treats a newline as ordinary whitespace — so a two-line command collapsed into a single token list whose `tokens[0]` was the first line's program, `parse_git_invocation` returned `None`, and the destructive second line was never inspected. This defeated **every** handler (`reset`, `checkout`, `restore`, `clean`, `branch`, `push`, and the new `worktree`), not just one, and it predates #215. It needed no adversarial intent: multi-line Bash tool calls are routine, so the guard's behaviour flipped on a keystroke nobody would think about.
 
-  Newline is now a separator in both the Python hook and the Cline mirror. Because that alone would make a heredoc *body* parse as if it were a command — blocking `cat <<'EOF' > note.md` / `git reset --hard` / `EOF`, which is just text being written to a file — the fix also skips heredoc bodies and their terminators, while still checking the command that *follows* the terminator. A newline inside quotes is not a separator, and `<<<` here-strings are not mistaken for heredocs.
+  Newline is now a separator in both the Python hook and the Cline mirror. Making that safe took more shell context than the splitter previously kept, since a newline means different things in different places:
+
+  - **Backslash-newline continuations are joined first.** `git push \` / `origin main --force` is one command, and splitting it into two segments — neither of which is a destructive git invocation — would have let a force push through a guard that has caught the single-line spelling since [#129](https://github.com/deagy/cadre/issues/129). Quote-aware: inside single quotes a backslash-newline is literal and is preserved.
+  - **Heredoc bodies are skipped**, so `cat <<'EOF' > note.md` / `git reset --hard` / `EOF` is not blocked — that body is text being written to a file, and writing documentation that quotes a destructive command is routine. The command *after* the terminator is still checked.
+  - **A heredoc opening is recorded only where the `<<` is a real redirection**: outside quote state (so `echo "see <<EOF"; git ...` does not start swallowing commands), outside `$(( ))` arithmetic (so `$(( x << 2 ))` is a shift, not a redirection), and not part of a `<<<` here-string.
+  - **A command chained onto the opener's own line is still checked.** `cat > f <<EOF && git worktree remove <path>` runs that `git` before a single body line is read; only the following lines are body.
+  - **Terminator matching is exact**, as the shell requires: `EOF` terminates, `    EOF` does not, and only the `<<-` form accepts leading tabs (never spaces). An unterminated heredoc swallows the remainder, which is what the shell itself does.
+
+  A newline inside quotes remains non-separating, and newlines inside `$(...)` or `for`/`if` blocks now yield more checking, not less.
 
 ### Added
 

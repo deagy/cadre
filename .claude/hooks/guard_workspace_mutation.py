@@ -336,19 +336,179 @@ from typing import Iterable, Optional
 # ---------------------------------------------------------------------------
 
 
-# A heredoc redirection: `<<DELIM`, `<<-DELIM`, `<<'DELIM'`, `<< "DELIM"`.
-# `(?<!<)` and `(?!<)` together rule out `<<<` (a here-STRING, which has no
-# body and so no terminator line to skip). BOTH are required: with only the
-# trailing `(?!<)`, `<<<word` still matches starting at the second `<`,
-# which would make the guard swallow everything after a here-string as if
-# it were heredoc body. See `_strip_heredoc_bodies`.
-_HEREDOC_RE = re.compile(
-    r"(?<!<)<<(?!<)-?\s*(?:'([^']*)'|\"([^\"]*)\"|([A-Za-z_][A-Za-z0-9_]*))"
+# The delimiter of a heredoc redirection, matched at the position just past
+# the `<<`: an optional `-` (the tab-stripping form), optional whitespace,
+# then a quoted or bare word. Applied only where the scanner has already
+# established that the `<<` is a real redirection -- outside quotes, outside
+# arithmetic expansion, and not part of a `<<<` here-string. That context is
+# NOT re-derivable from segment text after the fact, which is why detection
+# happens during the scan rather than by searching finished segments.
+_HEREDOC_DELIMITER_RE = re.compile(
+    r"(-?)[ \t]*(?:'([^']*)'|\"([^\"]*)\"|([A-Za-z0-9_.\-]+))"
 )
 
 
-def _strip_heredoc_bodies(segments: list[str]) -> list[str]:
-    """Drop heredoc body lines (and their terminator) from `segments`.
+def _join_line_continuations(command: str) -> str:
+    """Remove backslash-newline line continuations, as the shell does.
+
+    `git push \\<newline> origin main --force` is one command, not two.
+    Without this the newline splitting below turns it into `git push \\`
+    (no `--force`, allowed) and `origin main --force` (not a git
+    invocation at all, ignored), so a force-push sails through a guard
+    that catches the single-line spelling. Long commands are written this
+    way routinely; this is not a corner case.
+
+    Quote-aware, because the shell is: inside SINGLE quotes a
+    backslash-newline is literal text and must be preserved, while
+    unquoted and inside double quotes it is a continuation and is removed.
+    Handles CRLF. A backslash that is itself escaped (`\\\\<newline>`
+    inside double quotes) is a known edge this does not model.
+    """
+    out: list[str] = []
+    quote: Optional[str] = None
+    i = 0
+    n = len(command)
+    while i < n:
+        ch = command[i]
+        # Single quotes first: inside them a backslash is literal, so the
+        # continuation branch below must not see it.
+        if quote == "'":
+            out.append(ch)
+            if ch == "'":
+                quote = None
+            i += 1
+            continue
+        if ch == "\\" and command[i + 1 : i + 2] == "\n":
+            i += 2
+            continue
+        if ch == "\\" and command[i + 1 : i + 3] == "\r\n":
+            i += 3
+            continue
+        if quote == '"':
+            out.append(ch)
+            if ch == '"' and (i == 0 or command[i - 1] != "\\"):
+                quote = None
+            i += 1
+            continue
+        if ch in ("'", '"'):
+            quote = ch
+            out.append(ch)
+            i += 1
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _scan_segments(command: str) -> list[dict]:
+    """Split into segments, recording for each one what the shell knew at
+    the time and this module used to throw away:
+
+      * `raw` -- the segment text, NOT stripped. Leading/trailing
+        whitespace is load-bearing for heredoc terminator matching (a
+        terminator line must be exactly the delimiter, unless the `<<-`
+        form allows leading tabs), so stripping happens only on the way
+        out of `split_top_level`.
+      * `newline_before` -- whether this segment began a new LINE, rather
+        than following `&&`/`||`/`;`/`|` on the previous one. A heredoc
+        body starts on the next line, so a command chained onto the
+        opener's own line is a command, not body.
+      * `heredocs` -- delimiters opened by this segment, in order, each
+        recorded only when the `<<` was seen outside quote state and
+        outside arithmetic expansion.
+
+    Discarding those three facts and re-deriving them from segment text is
+    what produced findings F7 (`cat > f <<EOF && git ...` swallowed the
+    chained command), F8 (`echo "see <<EOF"; git ...` treated a quoted
+    mention as a real redirection) and the `$(( x << 2 ))` shift case.
+    """
+    segments: list[dict] = []
+    buf: list[str] = []
+    heredocs: list[tuple[str, bool]] = []
+    quote: Optional[str] = None
+    arithmetic_depth = 0
+    newline_before = False
+    i = 0
+    n = len(command)
+
+    def flush(next_starts_a_line: bool) -> None:
+        nonlocal buf, heredocs, newline_before
+        segments.append(
+            {"raw": "".join(buf), "newline_before": newline_before, "heredocs": heredocs}
+        )
+        buf = []
+        heredocs = []
+        newline_before = next_starts_a_line
+
+    while i < n:
+        ch = command[i]
+        if quote:
+            buf.append(ch)
+            if ch == quote and (i == 0 or command[i - 1] != "\\"):
+                quote = None
+            i += 1
+            continue
+        if ch in ("'", '"'):
+            quote = ch
+            buf.append(ch)
+            i += 1
+            continue
+        # `$(( ... ))`: `<<` in here is a left-shift operator, not a
+        # redirection. Other arithmetic contexts (a bare `(( ))` command,
+        # `let`) are not modelled -- a known limit, in the fail-open
+        # direction only.
+        if command[i : i + 3] == "$((":
+            arithmetic_depth += 1
+            buf.append("$((")
+            i += 3
+            continue
+        if arithmetic_depth and command[i : i + 2] == "))":
+            arithmetic_depth -= 1
+            buf.append("))")
+            i += 2
+            continue
+        if command[i : i + 2] in ("&&", "||"):
+            flush(False)
+            i += 2
+            continue
+        if ch in (";", "|"):
+            flush(False)
+            i += 1
+            continue
+        if ch == "\n":
+            flush(True)
+            i += 1
+            continue
+        if (
+            not arithmetic_depth
+            and command[i : i + 2] == "<<"
+            and command[i : i + 3] != "<<<"  # here-STRING: no body, no terminator
+            and (i == 0 or command[i - 1] != "<")  # not the tail of a `<<<`
+        ):
+            match = _HEREDOC_DELIMITER_RE.match(command, i + 2)
+            delimiter = None
+            if match:
+                # Explicit first-non-None selection rather than `or`, so
+                # this and the TypeScript mirror's `??` mean the same thing
+                # for an empty delimiter (`<<''`), which `or` would treat
+                # as "no match" and `??` would not.
+                for group in (match.group(2), match.group(3), match.group(4)):
+                    if group is not None:
+                        delimiter = group
+                        break
+            if delimiter is not None:
+                heredocs.append((delimiter, match.group(1) == "-"))
+                buf.append(command[i : match.end()])
+                i = match.end()
+                continue
+        buf.append(ch)
+        i += 1
+    flush(False)
+    return segments
+
+
+def _strip_heredoc_bodies(records: list[dict]) -> list[dict]:
+    """Drop heredoc body lines (and their terminator line) from `records`.
 
     Needed because `split_top_level` splits on newlines: without this, the
     BODY of `cat > note.md <<'EOF' / git reset --hard / EOF` would be
@@ -358,35 +518,56 @@ def _strip_heredoc_bodies(segments: list[str]) -> list[str]:
     documentation that quotes a destructive command is routine, and in
     this repository especially so.
 
-    The heredoc-opening segment itself is kept (it is a real command, e.g.
-    `cat > note.md`), and anything after the terminator is kept, which is
-    the point: the command FOLLOWING a heredoc is a real invocation and
-    must still be checked.
+    Three things are deliberately KEPT, each of which a naive
+    consume-forward-to-the-delimiter pass gets wrong (finding F7):
+
+      * the heredoc-opening segment (`cat > note.md`), a real command;
+      * every remaining segment on the opener's OWN line -- `cat > f
+        <<EOF && git worktree remove <path>` runs that `git` command
+        before a single body line is read, so it must still be checked;
+      * everything after the terminator line.
+
+    Terminator matching is exact against the unstripped segment text,
+    which is what the shell requires: `EOF` terminates, `    EOF` does
+    not, and only the `<<-` form accepts leading TABS (not spaces). A
+    trailing `\\r` is tolerated so CRLF input behaves the same as LF.
 
     Best-effort, consistent with the rest of this module: an unterminated
-    heredoc swallows the remainder, which matches what the shell itself
-    would do with that input. A body line containing an unquoted `;`/`|`
-    is split into more than one segment before this pass sees it, so the
-    terminator is still found but the intervening pieces are dropped
-    together -- the same outcome.
+    heredoc swallows the remainder, which is what the shell itself would
+    do. A delimiter containing `;`/`|`/`&` (only reachable via a quoted
+    spelling like `<<';'`) is not matched, because the terminator line is
+    split before this pass sees it -- the heredoc then reads as
+    unterminated, i.e. fails open.
     """
-    out: list[str] = []
+    out: list[dict] = []
     i = 0
-    while i < len(segments):
-        seg = segments[i]
-        out.append(seg)
+    while i < len(records):
+        record = records[i]
+        out.append(record)
         i += 1
-        match = _HEREDOC_RE.search(seg)
-        if not match:
+        if not record["heredocs"]:
             continue
-        delimiter = match.group(1) or match.group(2) or match.group(3)
-        allows_leading_tabs = "<<-" in seg
-        while i < len(segments):
-            body = segments[i]
+
+        # The rest of the opener's own line is commands, not body.
+        while i < len(records) and not records[i]["newline_before"]:
+            out.append(records[i])
             i += 1
-            candidate = body.lstrip("\t") if allows_leading_tabs else body
-            if candidate.strip() == delimiter:
-                break
+
+        # Bodies begin on the following line, one per delimiter, in order.
+        for delimiter, allows_leading_tabs in record["heredocs"]:
+            while i < len(records):
+                segment = records[i]
+                alone_on_its_line = segment["newline_before"] and (
+                    i + 1 >= len(records) or records[i + 1]["newline_before"]
+                )
+                i += 1
+                if not alone_on_its_line:
+                    continue
+                candidate = segment["raw"].rstrip("\r")
+                if allows_leading_tabs:
+                    candidate = candidate.lstrip("\t")
+                if candidate == delimiter:
+                    break
     return out
 
 
@@ -408,41 +589,14 @@ def split_top_level(command: str) -> list[str]:
     and the guard's behavior flipped on a keystroke nobody would think
     about.
 
-    A newline inside quotes is NOT a separator (the `quote` branch below
-    consumes it), so a quoted multi-line string stays one segment.
+    A newline inside quotes is NOT a separator (the scanner's `quote`
+    branch consumes it), so a quoted multi-line string stays one segment.
+    Backslash-newline continuations are joined first, so a command written
+    across several lines -- how long commands are normally written -- is
+    still seen as the single invocation it is.
     """
-    segments: list[str] = []
-    buf: list[str] = []
-    quote: Optional[str] = None
-    i = 0
-    n = len(command)
-    while i < n:
-        ch = command[i]
-        if quote:
-            buf.append(ch)
-            if ch == quote and (i == 0 or command[i - 1] != "\\"):
-                quote = None
-            i += 1
-            continue
-        if ch in ("'", '"'):
-            quote = ch
-            buf.append(ch)
-            i += 1
-            continue
-        if command[i : i + 2] in ("&&", "||"):
-            segments.append("".join(buf))
-            buf = []
-            i += 2
-            continue
-        if ch in (";", "|", "\n"):
-            segments.append("".join(buf))
-            buf = []
-            i += 1
-            continue
-        buf.append(ch)
-        i += 1
-    segments.append("".join(buf))
-    return _strip_heredoc_bodies([s for s in (seg.strip() for seg in segments) if s])
+    records = _strip_heredoc_bodies(_scan_segments(_join_line_continuations(command)))
+    return [s for s in (record["raw"].strip() for record in records) if s]
 
 
 _ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")

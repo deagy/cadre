@@ -536,6 +536,14 @@ class WorktreeDocumentedGapTests(GuardTestCase):
         # re-registers it, and `-f -f` does so even when it is locked. Not
         # guarded -- see the module docstring for why the fix would
         # re-introduce the path-matching problem `remove` avoids.
+        #
+        # NOTE ON WHAT THIS TEST DOES AND DOES NOT SHOW: it calls
+        # `evaluate_command` only, and never runs git, so the `shutil.move`
+        # below does not affect the assertion -- the guard has no handler
+        # branch for `add --force` at all, so it would return None either
+        # way. The setup is here to describe the scenario, not to prove it.
+        # The empirical claim about git's behaviour rests on the separate
+        # probe recorded in the module docstring, not on this test.
         self.commit_file("a.txt", "one")
         wt = Path(self._tmp) / "victim"
         _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "victim")
@@ -634,10 +642,29 @@ class NewlineSeparatorTests(GuardTestCase):
         self.assert_allowed("cat <<'EOF' > note.md\ngit clean -fd\ngit push --force\nEOF")
 
     def test_heredoc_dash_form_allows_tab_indented_terminator(self) -> None:
+        # The two spellings must DIFFER, or the `<<-` branch is dead code.
+        # An earlier version of this test asserted only the `<<-` case and
+        # passed identically with the non-dash spelling, because segments
+        # were stripped before terminator matching -- a test that could
+        # not fail for its stated reason. The pair below discriminates.
         self.commit_file("a.txt", "one")
         self.dirty_file("a.txt", "uncommitted-edit")
-        self.assert_allowed("cat <<-'EOF' > note.md\ngit reset --hard\n\tEOF")
-        self.assert_blocked("cat <<-'EOF' > note.md\nsome text\n\tEOF\ngit reset --hard")
+        # `<<-` accepts the tab-indented terminator, so the heredoc ends
+        # and the trailing command is a real command.
+        self.assert_blocked("cat <<-'EOF' > note.md\ntext\n\tEOF\ngit reset --hard")
+        # Plain `<<` does NOT: bash requires the terminator line to be
+        # exactly the delimiter, so this heredoc is unterminated and
+        # swallows the trailing command, exactly as the shell would.
+        self.assert_allowed("cat <<'EOF' > note.md\ntext\n\tEOF\ngit reset --hard")
+        # Only TABS are stripped by `<<-`, never spaces.
+        self.assert_allowed("cat <<-'EOF' > note.md\ntext\n    EOF\ngit reset --hard")
+
+    def test_terminator_must_be_exactly_the_delimiter(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked("cat <<'EOF' > note.md\ntext\nEOF\ngit reset --hard")
+        # A near-miss terminator leaves the heredoc open (fails open).
+        self.assert_allowed("cat <<'EOF' > note.md\ntext\nEOFX\ngit reset --hard")
 
     def test_here_string_is_not_mistaken_for_a_heredoc(self) -> None:
         # `<<<` is a here-STRING: no body, no terminator line. Treating it
@@ -651,6 +678,92 @@ class NewlineSeparatorTests(GuardTestCase):
             ["echo one", "echo two", "git status"],
             guard.split_top_level("echo one\necho two\ngit status"),
         )
+
+
+class HeredocContextTests(GuardTestCase):
+    """Regressions F7/F8 (issue #215 re-review).
+
+    The first newline-splitting fix searched finished segment text for a
+    heredoc opener, by which point two facts the scanner knew had been
+    discarded: which separator produced each break, and whether the `<<`
+    was inside quotes. Both are now recorded during the scan.
+    """
+
+    def test_command_chained_onto_the_heredoc_opener_line_is_still_checked(self) -> None:
+        # F7. `cat > f <<EOF && git worktree remove <path>` runs that git
+        # command before a single body line is read. Consuming forward to
+        # the delimiter swallowed it.
+        self.commit_file("a.txt", "one")
+        wt = Path(self._tmp) / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
+        self.assert_blocked(f"cat > note.md <<EOF && git worktree remove {wt}")
+        self.assert_blocked(f"cat > note.md <<EOF; git worktree remove {wt}")
+        self.assert_blocked(f"cat > note.md <<EOF | git worktree remove {wt}")
+
+    def test_heredoc_body_after_a_chained_opener_is_still_skipped(self) -> None:
+        # The body still starts on the NEXT line, so the false positive
+        # the heredoc handling exists to prevent stays prevented even when
+        # the opener's line carries a second command.
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_allowed("cat > note.md <<EOF && echo started\ngit reset --hard\nEOF")
+
+    def test_quoted_mention_of_a_heredoc_is_not_a_redirection(self) -> None:
+        # F8. A `<<EOF` inside quotes is text, not a redirection, so it
+        # must not start swallowing subsequent commands.
+        self.commit_file("a.txt", "one")
+        wt = Path(self._tmp) / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
+        self.assert_blocked(f'echo "see <<EOF for details"; git worktree remove {wt}')
+        self.assert_blocked(f"echo 'see <<EOF'; git worktree remove {wt}")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked('echo "docs mention <<EOF"\ngit reset --hard')
+
+    def test_left_shift_in_arithmetic_expansion_is_not_a_heredoc(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked("echo $(( 1 << 2 ))\ngit reset --hard")
+        self.assert_blocked("echo $(( x << shift ))\ngit reset --hard")
+
+    def test_fd_prefixed_heredoc_is_still_recognized(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_allowed("cat 2<<'EOF'\ngit reset --hard\nEOF")
+
+
+class LineContinuationTests(GuardTestCase):
+    """Regression F9 (issue #215 re-review).
+
+    Backslash-newline is how long commands are normally written. Once
+    newline became a separator, `git push \\` / `origin main --force`
+    split into two segments -- neither of which is a destructive git
+    invocation -- and a force push walked through a guard that had caught
+    the single-line spelling since #129.
+    """
+
+    def test_force_push_split_across_lines_is_blocked(self) -> None:
+        self.assert_blocked("git push --force origin main")  # control
+        self.assert_blocked("git push \\\n  origin main --force")
+        self.assert_blocked("git push \\\n  --force \\\n  origin main")
+
+    def test_continuation_inside_other_handlers(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        wt = Path(self._tmp) / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
+        self.assert_blocked("git reset \\\n  --hard")
+        self.assert_blocked(f"git worktree \\\n  remove {wt}")
+
+    def test_crlf_continuation(self) -> None:
+        self.assert_blocked("git push \\\r\n  origin main --force")
+
+    def test_continuation_inside_single_quotes_stays_literal(self) -> None:
+        # Inside single quotes a backslash-newline is literal text, not a
+        # continuation, so this must not be joined into a command.
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_allowed("echo 'a\\\nb'")
+        self.assert_allowed("echo 'git reset \\\n--hard'")
 
 
 class CommandShapeTests(GuardTestCase):

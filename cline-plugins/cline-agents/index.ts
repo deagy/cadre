@@ -985,41 +985,211 @@ type DestructiveGitGuardBeforeToolHook = (
   context: DestructiveGitGuardToolContext,
 ) => DestructiveGitGuardToolResult | undefined | Promise<DestructiveGitGuardToolResult | undefined>;
 
-// A heredoc redirection: `<<DELIM`, `<<-DELIM`, `<<'DELIM'`, `<< "DELIM"`.
-// `(?<!<)` and `(?!<)` together rule out `<<<` (a here-STRING, which has no
-// body and so no terminator line to skip). BOTH are required: with only the
-// trailing `(?!<)`, `<<<word` still matches starting at the second `<`,
-// which would make the guard swallow everything after a here-string as if
-// it were heredoc body. Ports guard_workspace_mutation.py's _HEREDOC_RE.
-const HEREDOC_RE = /(?<!<)<<(?!<)-?\s*(?:'([^']*)'|"([^"]*)"|([A-Za-z_][A-Za-z0-9_]*))/;
+// The delimiter of a heredoc redirection, matched at the position just past
+// the `<<`: an optional `-` (the tab-stripping form), optional whitespace,
+// then a quoted or bare word. Applied only where the scanner has already
+// established that the `<<` is a real redirection -- outside quotes,
+// outside arithmetic expansion, and not part of a `<<<` here-string. That
+// context is NOT re-derivable from segment text after the fact, which is
+// why detection happens during the scan. Ports
+// guard_workspace_mutation.py's _HEREDOC_DELIMITER_RE.
+const HEREDOC_DELIMITER_RE = /^(-?)[ \t]*(?:'([^']*)'|"([^"]*)"|([A-Za-z0-9_.\-]+))/;
 
 /**
- * Drop heredoc body lines (and their terminator) from `segments`. Needed
- * because `splitTopLevel` splits on newlines: without this, the BODY of
- * `cat > note.md <<'EOF' / git reset --hard / EOF` would be parsed as if
- * it were a command and blocked, even though it is text being written to a
- * file -- a false positive of exactly the kind this guard's design stance
- * treats as the real risk. The opening segment is kept (it is a real
- * command) and so is anything after the terminator, which is the point:
- * the command FOLLOWING a heredoc is a real invocation. Ports
- * guard_workspace_mutation.py's `_strip_heredoc_bodies`.
+ * Remove backslash-newline line continuations, as the shell does.
+ * `git push \<newline> origin main --force` is one command, not two --
+ * without this, newline splitting turns it into `git push \` and
+ * `origin main --force`, neither of which is a destructive git invocation,
+ * so a force push walks through the guard. Quote-aware: inside SINGLE
+ * quotes a backslash-newline is literal and preserved; unquoted and inside
+ * double quotes it is a continuation and removed. Ports
+ * guard_workspace_mutation.py's `_joinLineContinuations`.
  */
-function stripHeredocBodies(segments: string[]): string[] {
-  const out: string[] = [];
+function joinLineContinuations(command: string): string {
+  let out = "";
+  let quote: string | null = null;
   let i = 0;
-  while (i < segments.length) {
-    const seg = segments[i];
-    out.push(seg);
-    i += 1;
-    const match = HEREDOC_RE.exec(seg);
-    if (!match) continue;
-    const delimiter = match[1] ?? match[2] ?? match[3];
-    const allowsLeadingTabs = seg.includes("<<-");
-    while (i < segments.length) {
-      const body = segments[i];
+  const n = command.length;
+  while (i < n) {
+    const ch = command[i];
+    // Single quotes first: inside them a backslash is literal, so the
+    // continuation branch below must not see it.
+    if (quote === "'") {
+      out += ch;
+      if (ch === "'") quote = null;
       i += 1;
-      const candidate = allowsLeadingTabs ? body.replace(/^\t+/, "") : body;
-      if (candidate.trim() === delimiter) break;
+      continue;
+    }
+    if (ch === "\\" && command.slice(i + 1, i + 2) === "\n") {
+      i += 2;
+      continue;
+    }
+    if (ch === "\\" && command.slice(i + 1, i + 3) === "\r\n") {
+      i += 3;
+      continue;
+    }
+    if (quote === '"') {
+      out += ch;
+      if (ch === '"' && (i === 0 || command[i - 1] !== "\\")) quote = null;
+      i += 1;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      out += ch;
+      i += 1;
+      continue;
+    }
+    out += ch;
+    i += 1;
+  }
+  return out;
+}
+
+interface CommandSegment {
+  /** Segment text, NOT trimmed -- whitespace is load-bearing for heredoc
+   * terminator matching. Trimming happens on the way out of splitTopLevel. */
+  raw: string;
+  /** Did this segment begin a new LINE, rather than follow `&&`/`||`/`;`/`|`
+   * on the previous one? A heredoc body starts on the next line, so a
+   * command chained onto the opener's own line is a command, not body. */
+  newlineBefore: boolean;
+  /** Delimiters opened by this segment, in order, recorded only when the
+   * `<<` was seen outside quotes and outside arithmetic expansion. */
+  heredocs: Array<{ delimiter: string; allowsLeadingTabs: boolean }>;
+}
+
+/**
+ * Split into segments while retaining what the shell knew and the previous
+ * implementation discarded: the separator that produced each break, and
+ * whether a `<<` was inside quote state. Re-deriving those from finished
+ * segment text produced findings F7 (`cat > f <<EOF && git ...` swallowed
+ * the chained command), F8 (a quoted `"<<EOF"` mention treated as a real
+ * redirection) and the `$(( x << 2 ))` shift case. Ports
+ * guard_workspace_mutation.py's `_scan_segments`.
+ */
+function scanSegments(command: string): CommandSegment[] {
+  const segments: CommandSegment[] = [];
+  let buf = "";
+  let heredocs: CommandSegment["heredocs"] = [];
+  let quote: string | null = null;
+  let arithmeticDepth = 0;
+  let newlineBefore = false;
+  let i = 0;
+  const n = command.length;
+
+  const flush = (nextStartsALine: boolean) => {
+    segments.push({ raw: buf, newlineBefore, heredocs });
+    buf = "";
+    heredocs = [];
+    newlineBefore = nextStartsALine;
+  };
+
+  while (i < n) {
+    const ch = command[i];
+    if (quote) {
+      buf += ch;
+      if (ch === quote && (i === 0 || command[i - 1] !== "\\")) quote = null;
+      i += 1;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      buf += ch;
+      i += 1;
+      continue;
+    }
+    // `$(( ... ))`: `<<` in here is a left-shift operator, not a
+    // redirection. Other arithmetic contexts (a bare `(( ))`, `let`) are
+    // not modelled -- a known limit, in the fail-open direction only.
+    if (command.slice(i, i + 3) === "$((") {
+      arithmeticDepth += 1;
+      buf += "$((";
+      i += 3;
+      continue;
+    }
+    if (arithmeticDepth > 0 && command.slice(i, i + 2) === "))") {
+      arithmeticDepth -= 1;
+      buf += "))";
+      i += 2;
+      continue;
+    }
+    const pair = command.slice(i, i + 2);
+    if (pair === "&&" || pair === "||") {
+      flush(false);
+      i += 2;
+      continue;
+    }
+    if (ch === ";" || ch === "|") {
+      flush(false);
+      i += 1;
+      continue;
+    }
+    if (ch === "\n") {
+      flush(true);
+      i += 1;
+      continue;
+    }
+    if (
+      arithmeticDepth === 0 &&
+      pair === "<<" &&
+      command.slice(i, i + 3) !== "<<<" && // here-STRING: no body, no terminator
+      (i === 0 || command[i - 1] !== "<") // not the tail of a `<<<`
+    ) {
+      const match = HEREDOC_DELIMITER_RE.exec(command.slice(i + 2));
+      // Explicit first-defined selection, matching the Python mirror's
+      // behaviour for an empty delimiter (`<<''`).
+      const delimiter = match ? (match[2] ?? match[3] ?? match[4]) : undefined;
+      if (match && delimiter !== undefined) {
+        heredocs.push({ delimiter, allowsLeadingTabs: match[1] === "-" });
+        buf += command.slice(i, i + 2 + match[0].length);
+        i += 2 + match[0].length;
+        continue;
+      }
+    }
+    buf += ch;
+    i += 1;
+  }
+  flush(false);
+  return segments;
+}
+
+/**
+ * Drop heredoc body lines (and their terminator line). Keeps three things
+ * a naive consume-forward pass gets wrong (F7): the opening segment (a
+ * real command), every remaining segment on the opener's OWN line, and
+ * everything after the terminator. Terminator matching is exact against
+ * untrimmed text, as the shell requires -- only the `<<-` form accepts
+ * leading TABS. Ports guard_workspace_mutation.py's
+ * `_strip_heredoc_bodies`.
+ */
+function stripHeredocBodies(records: CommandSegment[]): CommandSegment[] {
+  const out: CommandSegment[] = [];
+  let i = 0;
+  while (i < records.length) {
+    const record = records[i];
+    out.push(record);
+    i += 1;
+    if (record.heredocs.length === 0) continue;
+
+    // The rest of the opener's own line is commands, not body.
+    while (i < records.length && !records[i].newlineBefore) {
+      out.push(records[i]);
+      i += 1;
+    }
+
+    // Bodies begin on the following line, one per delimiter, in order.
+    for (const { delimiter, allowsLeadingTabs } of record.heredocs) {
+      while (i < records.length) {
+        const segment = records[i];
+        const aloneOnItsLine =
+          segment.newlineBefore && (i + 1 >= records.length || records[i + 1].newlineBefore);
+        i += 1;
+        if (!aloneOnItsLine) continue;
+        let candidate = segment.raw.replace(/\r+$/, "");
+        if (allowsLeadingTabs) candidate = candidate.replace(/^\t+/, "");
+        if (candidate === delimiter) break;
+      }
     }
   }
   return out;
@@ -1039,46 +1209,12 @@ function stripHeredocBodies(segments: string[]): string[] {
  * into one token list whose first token was the first line's program and
  * `parseGitInvocation` returned null. No adversarial intent required:
  * multi-line commands are routine. A newline inside quotes is NOT a
- * separator.
+ * separator, and backslash-newline continuations are joined first so a
+ * command written across several lines is still seen as one invocation.
  */
 function splitTopLevel(command: string): string[] {
-  const segments: string[] = [];
-  let buf = "";
-  let quote: string | null = null;
-  let i = 0;
-  const n = command.length;
-  while (i < n) {
-    const ch = command[i];
-    if (quote) {
-      buf += ch;
-      if (ch === quote && (i === 0 || command[i - 1] !== "\\")) quote = null;
-      i += 1;
-      continue;
-    }
-    if (ch === "'" || ch === '"') {
-      quote = ch;
-      buf += ch;
-      i += 1;
-      continue;
-    }
-    const pair = command.slice(i, i + 2);
-    if (pair === "&&" || pair === "||") {
-      segments.push(buf);
-      buf = "";
-      i += 2;
-      continue;
-    }
-    if (ch === ";" || ch === "|" || ch === "\n") {
-      segments.push(buf);
-      buf = "";
-      i += 1;
-      continue;
-    }
-    buf += ch;
-    i += 1;
-  }
-  segments.push(buf);
-  return stripHeredocBodies(segments.map((s) => s.trim()).filter((s) => s.length > 0));
+  const records = stripHeredocBodies(scanSegments(joinLineContinuations(command)));
+  return records.map((r) => r.raw.trim()).filter((s) => s.length > 0);
 }
 
 /**
@@ -1463,7 +1599,10 @@ async function checkRestore(subArgs: string[], cwd: string): Promise<GitGuardDec
   while (i < subArgs.length) {
     const a = subArgs[i];
     if (a === "--source" || a === "-s") {
-      source = subArgs[i + 1];
+      // Bounds-checked to match the Python mirror: a trailing `--source`
+      // with no value leaves `source` undefined rather than assigning
+      // `undefined` over a value a previous flag had set.
+      if (i + 1 < subArgs.length) source = subArgs[i + 1];
       i += 2;
       continue;
     }
