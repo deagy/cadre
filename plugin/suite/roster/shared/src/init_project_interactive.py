@@ -26,9 +26,11 @@ from init_project import (
     PLATFORM_FILENAME,
     TECHNOLOGY_STANDARDS_FILENAME,
     _AUTONOMY_FILENAME,
+    _AUTONOMY_FIXED_KEYS,
     _leaf_paths,
     _load_structured,
     _require_yaml,
+    _set_by_path,
     autonomy_allowed_choices,
     existing_team_profile_deferrals,
     merge_answers_with_preset,
@@ -61,6 +63,25 @@ def _prompt(input_func: Callable[[str], str], message: str) -> str:
     sys.stdout.write(message)
     sys.stdout.flush()
     return input_func("")
+
+
+def _group_of(path: str) -> str:
+    return path.split(".")[0]
+
+
+def _ask_group(input_func: Callable[[str], str], group: str, count: int, noun: str) -> bool:
+    """Gate a whole group of fields behind one question.
+
+    The shipped defaults are the answer for anything not reviewed, so
+    declining a group is exactly the defaults-mode outcome for those fields --
+    which is why this is safe for governance groups too: resolve.py's autonomy
+    check only ever permits *narrowing*, so a field nobody looked at keeps the
+    most restrictive value it shipped with and can never end up loosened."""
+    answer = _prompt(
+        input_func,
+        f"\nReview {count} {noun} under {group!r}? [y/N] (Enter=keep shipped defaults): ",
+    ).strip().lower()
+    return answer in ("y", "yes")
 
 
 def _prompt_stack_leaf(
@@ -126,25 +147,51 @@ def collect_stack_answers(
     preset_stack = (preset or {}).get("rg_a_stack") or {}
     fragment: dict[str, Any] = {}
     decisions: dict[str, dict[str, Any]] = {}
-    for path in _leaf_paths(team_profile_base):
-        preset_found, preset_value = _try_get_by_path(preset_stack, path)
-        if preset_found:
-            default_value = preset_value
-            preset_note = preset_id
-        else:
-            default_value = _get_by_path(team_profile_base, path)
-            preset_note = None
-        new_value, status, source_value = _prompt_stack_leaf(
-            input_func, path, default_value, deferrals, preset_note
-        )
-        decisions[path] = {
-            "status": status,
-            "category": "stack",
-            "source_value": source_value,
-            "new_value": new_value if status == "overridden" else None,
-        }
-        if status == "overridden":
-            _set_by_path(fragment, path, new_value)
+    all_paths = _leaf_paths(team_profile_base)
+    grouped: dict[str, list[str]] = {}
+    for path in all_paths:
+        grouped.setdefault(_group_of(path), []).append(path)
+    print(
+        f"{len(all_paths)} field(s) in {len(grouped)} group(s); "
+        "decline a group to keep its shipped defaults."
+    )
+    for group, paths in grouped.items():
+        if not _ask_group(input_func, group, len(paths), "stack field(s)"):
+            # Not reviewed, so nothing is written for these -- but still
+            # recorded as `kept`, so a --print-answers echo replayed through
+            # --answers reproduces this run exactly. `source_value` has to
+            # prefer the preset for the same reason the reviewed branch below
+            # does: what is kept is whatever would have been SHOWN, and the
+            # preset value is what reaches the overlay via the caller's merge.
+            for path in paths:
+                preset_found, preset_value = _try_get_by_path(preset_stack, path)
+                default_value = preset_value if preset_found else _get_by_path(team_profile_base, path)
+                decisions[path] = {
+                    "status": "kept",
+                    "category": "stack",
+                    "source_value": default_value,
+                    "new_value": None,
+                }
+            continue
+        for path in paths:
+            preset_found, preset_value = _try_get_by_path(preset_stack, path)
+            if preset_found:
+                default_value = preset_value
+                preset_note = preset_id
+            else:
+                default_value = _get_by_path(team_profile_base, path)
+                preset_note = None
+            new_value, status, source_value = _prompt_stack_leaf(
+                input_func, path, default_value, deferrals, preset_note
+            )
+            decisions[path] = {
+                "status": status,
+                "category": "stack",
+                "source_value": source_value,
+                "new_value": new_value if status == "overridden" else None,
+            }
+            if status == "overridden":
+                _set_by_path(fragment, path, new_value)
 
     preset_prose = (preset or {}).get("rg_a_prose_addenda") or {}
     preset_addendum = preset_prose.get(TECHNOLOGY_STANDARDS_FILENAME)
@@ -165,26 +212,14 @@ def collect_stack_answers(
     return result, decisions
 
 
-def _set_by_path(node: dict[str, Any], path: str, value: Any) -> None:
-    parts = path.split(".")
-    current = node
-    for part in parts[:-1]:
-        current = current.setdefault(part, {})
-    current[parts[-1]] = value
-
-
-def collect_governance_answers(
-    input_func: Callable[[str], str] = input,
-) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
-    """RG-B: agent-autonomy.yaml (closed allowlist only, never free text) and
-    cloud-guardrails.md (additive bullets only, denylist-scanned). Visibly
-    distinct header/confirmation step from RG-A (B-005)."""
-    print("\n=== RG-B: GOVERNANCE / AUTONOMY POSTURE (agent-autonomy.yaml) — separate confirmation ===")
-    print("Every choice below is a closed list; no free text is ever accepted for governance fields.")
-    autonomy_base = _load_structured(SHARED_DEFAULTS_DIR / _AUTONOMY_FILENAME)
-    fragment: dict[str, Any] = {}
-    decisions: dict[str, dict[str, Any]] = {}
-    for path, default_value in _autonomy_leaf_paths(autonomy_base):
+def _collect_autonomy_group(
+    input_func: Callable[[str], str],
+    leaves: list[tuple[str, Any]],
+    fragment: dict[str, Any],
+    decisions: dict[str, dict[str, Any]],
+) -> None:
+    """Prompt one accepted group's autonomy fields, each as a closed choice."""
+    for path, default_value in leaves:
         choices = autonomy_allowed_choices(default_value)
         print(f"\n{path} (current default: {default_value!r})")
         for index, choice in enumerate(choices):
@@ -214,6 +249,51 @@ def collect_governance_answers(
         }
         if status == "overridden":
             _set_by_path(fragment, path, chosen)
+
+
+def collect_governance_answers(
+    input_func: Callable[[str], str] = input,
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    """RG-B: agent-autonomy.yaml (closed allowlist only, never free text) and
+    cloud-guardrails.md (additive bullets only, denylist-scanned). Visibly
+    distinct header/confirmation step from RG-A (B-005)."""
+    print("\n=== RG-B: GOVERNANCE / AUTONOMY POSTURE (agent-autonomy.yaml) — separate confirmation ===")
+    print("Every choice below is a closed list; no free text is ever accepted for governance fields.")
+    autonomy_base = _load_structured(SHARED_DEFAULTS_DIR / _AUTONOMY_FILENAME)
+    fragment: dict[str, Any] = {}
+    decisions: dict[str, dict[str, Any]] = {}
+    # B-003 fixed-policy keys are not offerable: `build_autonomy_overlay`
+    # refuses them outright, and they hold values (a version number, a prose
+    # default rule) that are not permission words, so `autonomy_allowed_choices`
+    # raises OverlayError on them -- which `main()` does not catch. Excluding
+    # them here is what stops the group gate presenting a choice that can only
+    # ever crash or be rejected.
+    autonomy_leaves = [
+        (path, default_value)
+        for path, default_value in _autonomy_leaf_paths(autonomy_base)
+        if _group_of(path) not in _AUTONOMY_FIXED_KEYS
+    ]
+    grouped: dict[str, list[tuple[str, Any]]] = {}
+    for path, default_value in autonomy_leaves:
+        grouped.setdefault(_group_of(path), []).append((path, default_value))
+    print(
+        f"{len(autonomy_leaves)} field(s) in {len(grouped)} group(s). Every choice only ever "
+        "narrows; declining a group keeps its shipped (most restrictive) default."
+    )
+    for group, leaves in grouped.items():
+        if not _ask_group(input_func, group, len(leaves), "autonomy field(s)"):
+            for path, default_value in leaves:
+                decisions[path] = {
+                    "status": "kept",
+                    "category": "governance",
+                    "source_value": default_value,
+                    "new_value": None,
+                }
+            continue
+        # Prompt this group's fields immediately, the same way RG-A does, so
+        # an operator who opts into one group is not made to answer every
+        # remaining gate question before seeing the fields they asked for.
+        _collect_autonomy_group(input_func, leaves, fragment, decisions)
 
     print("\nAdditive cloud-guardrails.md bullets (one per line, blank line to finish):")
     bullets: list[str] = []
@@ -287,12 +367,39 @@ def collect_platform_answers(
             "new_value": applicability,
         }
 
-    for item in base.get("impact_categories", []):
-        _one(item["id"], "id", categories, "rg_c_platform.impact_categories")
-    for item in base.get("specialized_boms", []):
-        _one(item["type"], "type", boms, "rg_c_platform.specialized_boms")
+    for section, id_key, target in (
+        ("impact_categories", "id", categories),
+        ("specialized_boms", "type", boms),
+    ):
+        items = base.get(section, []) or []
+        if not items:
+            continue
+        if not _ask_group(input_func, section, len(items), "entr(ies)"):
+            # Left at the template's own `unknown`, exactly as a defaults-mode
+            # run would leave them. `unknown` is a blocking state by design in
+            # whatever lifecycle enforces it, so this defers rather than
+            # silently resolves.
+            for item in items:
+                decisions[f"rg_c_platform.{section}.{item[id_key]}"] = {
+                    "status": "deferred",
+                    "category": "stack",
+                    "source_value": "unknown",
+                    "new_value": None,
+                }
+            continue
+        for item in items:
+            _one(item[id_key], id_key, target, f"rg_c_platform.{section}")
 
-    fragment = {"impact_categories": categories, "specialized_boms": boms}
+    # Omit empty sections rather than sending `{"impact_categories": {},
+    # "specialized_boms": {}}` downstream: that dict is truthy, so it defeats
+    # `build_platform_overlay`'s "nothing to write" short-circuit and plans a
+    # write of a literal `{}` overlay. Declining every group has to mean the
+    # same thing here as everywhere else -- no file.
+    fragment: dict[str, Any] = {}
+    if categories:
+        fragment["impact_categories"] = categories
+    if boms:
+        fragment["specialized_boms"] = boms
     return {"rg_c_platform": fragment}, decisions
 
 

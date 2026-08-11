@@ -69,13 +69,23 @@ SKILL_TRIPLES: dict[str, tuple[str, str, str]] = {
 KNOWN_DIVERGENT_SECTIONS: dict[tuple[str, str], str] = {
     (
         "lifecycle-onboarding",
-        "## Step 4 — Authorities interview",
+        "## Step 4 — Authorities: resolve what's needed now, defer the rest",
     ): (
         "GitHub's login lookup is exact-match; GitLab's can return multiple "
         "matches. Only the GitLab copy has a `gitlab-user-ambiguous` case to "
         "explain, and each copy names its own forge-write skill "
         "(create-github-gate-issues vs gitlab-gate-tracking) as the consumer "
         "of that reason-code vocabulary."
+    ),
+    (
+        "lifecycle-onboarding",
+        "## Resolving a deferred authority later",
+    ): (
+        "The forge plugins ship two review skills -- a generic one and a "
+        "PR/MR-backed one -- so their copies name both and say which to reach "
+        "for; the core plugin ships only lifecycle-review, so it names one. "
+        "Suffix normalization collapses both forge names onto the same token, "
+        "which is why the extra clause is what diverges rather than the name."
     ),
 }
 

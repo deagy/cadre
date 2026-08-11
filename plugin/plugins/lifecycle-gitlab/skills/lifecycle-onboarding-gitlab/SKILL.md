@@ -89,33 +89,67 @@ shown to the human), then run for real. Report the outcome in one sentence
 ("I've set up the basic lifecycle tracking — now I need a few decisions
 from you").
 
-## Step 4 — Authorities interview
+## Step 4 — Authorities: resolve what's needed now, defer the rest
 
-`.agentic-sdlc/authorities.json` has one entry per role. Ask one
-plain-language question per **required** role instead of the technical
-name:
+`.agentic-sdlc/authorities.json` has one entry per role, and `init` leaves
+all thirteen unresolved. Do **not** interview the human for all of them up
+front. That is the single biggest reason this conversation used to run long,
+and most of those roles cannot matter yet.
+
+An authority only ever gates the specific G-gate(s) that name it:
+
+| Gate | Authorities it needs |
+| --- | --- |
+| G1 Intent | `product_owner` |
+| G2 Requirements Baseline | `product_owner`, `engineering_lead` |
+| G3 Architecture | `system_architect` |
+| G4 Governance and Data | `governance_lead`, `data_control_owner` |
+| G5 Security and Crypto | `security_lead`, `human_key_owner` |
+| G6 Verification and Test | `engineering_lead`, `uat_product_owner` |
+| G7 Evidence | `release_owner` |
+| G8 Release Readiness | `release_owner` |
+| G9 Deployment Authorization | `release_authority` |
+| G10 Runtime Conformance | `service_owner`, `implicated_security_lead`, `implicated_governance_lead` |
+
+That table mirrors the kernel's own `kernel/contracts/lifecycle-gates.json`;
+re-read the contract rather than trusting this copy if the two disagree.
+
+An unresolved role is a supported state, not a broken one. The project still
+validates (`valid: true`), tasks can still be planned, and every gate whose
+authorities *are* resolved can still be approved. The only thing an
+unresolved role stops is approval of its own gate — which is the protection
+you want, not a defect.
+
+**Ask for two roles, then stop.**
 
 | Role | Plain-language question |
 | --- | --- |
 | `product_owner` | Who decides what this project should actually do — final word on scope and priorities? |
 | `engineering_lead` | Who has final technical sign-off on how it's built? |
-| `system_architect` | Who approves the overall design/architecture? |
-| `governance_lead` | Who's accountable for policy/compliance decisions here? |
-| `security_lead` | Who signs off on security-sensitive changes? |
-| `release_owner` | Who confirms a release is actually ready to ship? |
-| `release_authority` | Who has final say on whether this can go live? |
-| `service_owner` | Once it's running, who's responsible for it day-to-day? |
 
-For each, set `status: "assigned"` and `assignee` to the identity they give
-you (a name, email, or handle — whatever they naturally offer; ask for a
-GitHub login or GitLab username too only if they said they want
-GitHub/GitLab-review-backed approvals in Step 6).
+Those two clear G1 and G2, which is everything needed to start work. Set
+`status: "assigned"` and `assignee` to the identity they give you (a name,
+email, or handle — whatever they naturally offer; ask for a GitHub login or
+GitLab username too only if they said they want GitHub/GitLab-review-backed
+approvals in Step 6).
 
-If the human says the same person (often themselves) holds several or all
-of these roles, tell them explicitly that this is valid and normal for a
-solo maintainer or small team — the kernel's author/reviewer separation
-check applies to agent roles assigned to a route, not to which human holds
-which named authority.
+If the human volunteers that the same person (often themselves) holds
+several or all of the roles, take that as the answer for all of them and say
+so — it is valid and normal for a solo maintainer or small team, and the
+kernel's author/reviewer separation check applies to agent roles assigned to
+a route, not to which human holds which named authority. Offer it as a
+single yes/no ("same person for the rest too?"); do not walk the remaining
+eleven questions just because one answer would have covered them.
+
+Then tell the human plainly what you deferred and when it comes back, e.g.
+"I've recorded you as product owner and engineering lead, which covers the
+first two gates. I'll ask who signs off on architecture, security, and
+release when you first reach those — nothing to decide now."
+
+**One timing rule you must respect** (see "Resolving a deferred authority"
+below): a task's run record snapshots which authorities were assigned at the
+moment it was *planned*. Resolve a role before planning the task that will
+need its gate, not after.
 
 **Preflight-check every identity before writing it.** As soon as the human
 gives you an identity for a role — whether it's an explicit
@@ -151,8 +185,11 @@ account) or `gitlab-user-ambiguous` (more than one match) at that point even
 though this preflight looked fine. Tell the human this explicitly rather
 than implying the binding has been fully verified.
 
-Then, for the 5 **conditional** roles, ask a gating yes/no question first
-and only ask for an assignee if the answer is yes:
+The 5 **conditional** roles are deferred the same way — each belongs to a
+gate well past where onboarding ends, so do not ask these now. Keep the
+questions for when that gate comes into view (G4 for `data_control_owner`,
+G5 for `human_key_owner`, G6 for `uat_product_owner`, G10 for the two
+`implicated_*` roles):
 
 | Role | Gating question |
 | --- | --- |
@@ -162,10 +199,16 @@ and only ask for an assignee if the answer is yes:
 | `implicated_security_lead` | Is this itself a deployed, running service (not just a library/tool)? |
 | `implicated_governance_lead` | (same as above) |
 
-If no: set `applicability: "not-applicable"` with a short `rationale`
-sentence built from their answer (e.g. "Project holds no customer data").
-If yes: set `applicability: "applicable"`, `status: "assigned"`, and
-`assignee` to who they name.
+When you do ask — if no: set `applicability: "not-applicable"` with a short
+`rationale` sentence built from their answer (e.g. "Project holds no
+customer data"). If yes: set `applicability: "applicable"`, `status:
+"assigned"`, and `assignee` to who they name.
+
+The one time to settle a conditional role during onboarding is when the
+human has *already* answered it while discussing something else. If they
+said in Step 2 that the project holds no customer data, record
+`data_control_owner` as not-applicable with that rationale rather than
+making them say it twice.
 
 ## Step 5 — Environments
 
@@ -201,27 +244,55 @@ If the target project also wants this suite's own `.agents/shared/*`
 policy overlays (team profile, library/technology standards, cloud
 guardrails, autonomy policy), separately ask if they want that. This
 subcommand takes `--target <path>` (not `--root`), and always previews by
-default — it only writes when `--force` is also passed:
+default — it only writes when `--force` is also passed.
+
+Start from the defaults. `cadre init` keeps every shipped default unless
+told otherwise, so the common case needs no answers at all:
 
 ```sh
-./bin/cadre init --target <path> --answers <file> --force
+./bin/cadre init --target <path>
 ```
 
-`--interactive` (prompt-flow mode) exists as an alternative to `--answers`,
-but it drives a live terminal prompt loop meant for a human typing
-directly at it — you cannot reliably drive it as an agent through
-non-interactive command execution. Instead, build the `--answers` file
-yourself from the conversation (see `cadre init --help` and
-`roster/shared/src/init_project.py` for the answer-file's `schema_version:
-1` shape and required `field_decisions` entries per touched field),
-translating whatever it validates against into plain questions for the
-human rather than showing them the file. Run once with `--dry-run` (which
-is the default without `--force`) to preview, then re-run with `--force`
-to actually write. This is a distinct, optional step from `agentic-sdlc
-init`; do not conflate the two internally, but you don't need to explain
-the distinction to the human unless they ask.
+That writes nothing, and it is not a half-finished run: the shared overlays
+are sparse, so "keep the default" means "write no overlay for that field",
+and a project with no overlay resolves to exactly the shipped values. Say so
+plainly ("nothing to change — it'll use the standard policy") rather than
+implying a step was skipped.
 
-## Step 9 — Validate and loop
+When the human does want something different, override just those fields
+with `--set [REGION:]PATH=VALUE`, which is repeatable:
+
+```sh
+./bin/cadre init --target <path> --set platform.hosting_model=cloud --force
+```
+
+Prefer `--set` over authoring an `--answers` file. It needs no file, and it
+records the required `field_decisions` entry for you with the category
+derived from the field's own home file rather than from something you
+assert. If a path is ambiguous the command names the regions that
+matched — qualify it (`autonomy:policy_version=...`) instead of guessing.
+
+Reach for `--answers <file>` (`schema_version: 1`; see `cadre init --help`
+and `roster/shared/src/init_project.py` for its shape and the
+`field_decisions` entry required per touched field) only when there are
+enough overrides that a file is genuinely clearer. `--interactive`
+(prompt-flow mode) drives a live terminal prompt loop meant for a human
+typing directly at it — you cannot reliably drive it as an agent through
+non-interactive command execution, so do not try.
+
+Whatever you use, run once with `--dry-run` (the default without `--force`)
+to preview, then re-run with `--force` to actually write, translating
+whatever `cadre init` rejects into plain questions for the human rather than
+showing them the file or the flags. One rejection worth recognizing: a
+`--set` on an `agent-autonomy.yaml` field can only ever *narrow* the shipped
+policy, so if one is refused, tell the human their request would have
+loosened the governance baseline — do not retry it a different way.
+
+This is a distinct, optional step from `agentic-sdlc init`; do not
+conflate the two internally, but you don't need to explain the
+distinction to the human unless they ask.
+
+## Step 9 — Validate, and read blockers correctly
 
 Run:
 
@@ -229,23 +300,60 @@ Run:
 ./bin/cadre sdlc validate --root <path>
 ```
 
-Parse the `errors`/`blockers` JSON yourself. For each blocker, translate it
-back into a plain follow-up question or explanation instead of showing the
-raw message, for example:
+Parse the `errors`/`blockers` JSON yourself. They are not the same thing and
+must not be treated alike:
 
-- `"authority <role> is unresolved"` → re-ask that role's question (it was
-  likely skipped).
+- **`errors`** mean the configuration is genuinely wrong (`valid: false`).
+  These always have to be fixed before you finish.
+- **`blockers`** mean a decision is still open (`ready: false`). A deferred
+  authority lands here *by design*. It is not a failure and must not be
+  reported to the human as one.
+
+Translate each one into plain language rather than showing the raw message:
+
+- `"authority <role> is unresolved"` → if you deliberately deferred it, say
+  nothing and move on. Re-ask only if it is a role the human's own next gate
+  needs.
+- `"conditional authority applicability <role> is unresolved"` → same:
+  deferred until its gate comes into view.
 - `"environment persistence is unknown: <name>"` → "Is your `<name>`
   environment temporary/disposable, or does it stick around?"
 - `"impact applicability is unknown: <id>"` → re-ask the relevant Step 7
   question.
 - `"detected project commands are not confirmed"` → return to Step 6.
 
-Loop until `valid: true` and either `ready: true`, or the only remaining
-blockers are legitimately human/release-time-only (e.g. a specific G9
-deployment authorization pending an actual release) — explain those as
-"expected, and will resolve itself when you actually ship," not as
-something broken.
+Finish when `valid: true` and the only remaining blockers are deferred
+authorities or genuinely release-time decisions. Do **not** loop until
+`ready: true` — on a deliberately deferred setup that state is not reachable
+at onboarding time, and chasing it re-creates the thirteen-question
+interview this step exists to avoid.
+
+Report completion in prose: "Lifecycle tracking is set up and valid. Eleven
+sign-off roles are still open — that's expected, and I'll ask about each one
+when you first hit the gate that needs it."
+
+## Resolving a deferred authority later
+
+When a task reaches a gate whose authority is still unresolved, resolve it
+then: ask that gate's question from the Step 4 table, write `status:
+"assigned"` and `assignee` into `.agentic-sdlc/authorities.json`, and carry
+on. The `brief-pending-gates-gitlab` skill reports which gates are waiting
+and on whom; `lifecycle-review-generic-gitlab` records the decision once a
+human makes it (`lifecycle-review-gitlab` instead when the decision is
+backed by a real MR).
+
+**Assign the role before planning the task that needs it.** A run record
+snapshots each gate's authority applicability when the record is first
+created, so a role assigned afterwards does not retroactively unblock a task
+that was already planned. Neither re-running `plan` with the same task ID nor
+`reenter` refreshes that snapshot — that task needs a new task ID. Check
+before planning and this never comes up.
+
+Translate one error here carefully. Approving a gate whose authority was
+unresolved at plan time fails with `"<gate> authority role <role> is not
+applicable"`. That wording is misleading: it does *not* mean the gate is
+inapplicable to this project. It means the authority was not assigned when
+the task was planned. Tell the human the second thing.
 
 ## Throughout
 

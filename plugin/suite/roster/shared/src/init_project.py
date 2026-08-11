@@ -11,6 +11,13 @@ resolve.py` already knows how to resolve, and every generated overlay is
 validated by calling `resolve_shared_config()` against it in-process before
 success is reported.
 
+Defaults come first: a run with no answer source at all is legal and keeps
+every shipped default, planning no writes -- overlays are sparse, so "keep
+the default" means "write no overlay for that field", and a project with no
+overlay resolves to exactly the shipped values. `--set [REGION:]PATH=VALUE`
+overrides individual fields from there; `--answers` and `--interactive`
+remain available for a full pass, but neither is required.
+
 Nothing is written without `--force`; omitting it (the default) previews
 only. See roster/shared/README.md for the underlying overlay/merge rules this
 module builds on top of, and AGENT.md / REQ-SC-GENERIC-0001 rev 2 for the
@@ -548,20 +555,27 @@ def build_platform_overlay(target_root: Path, fragment: dict[str, Any]) -> tuple
         if not overrides and section not in existing:
             continue
         id_key = "id" if section == "impact_categories" else "type"
-        # Start from whatever this overlay already has for the section
-        # (list-of-mappings, same shape as the template); fall back to a
-        # bare id/type skeleton per template entry so untouched entries
-        # aren't invented, only referenced.
-        existing_by_id = {entry[id_key]: dict(entry) for entry in existing.get(section, [])}
-        base_ids = [entry[id_key] for entry in base.get(section, [])]
+        # Start from the SHIPPED entries, not just the ones this run touches.
+        # resolve.py replaces lists wholesale rather than merging them by id
+        # (see its deep_merge docstring), so an overlay listing only the
+        # overridden entries silently deletes every other category/BOM from
+        # the resolved profile -- including the `unknown` ones that are
+        # supposed to block gates. The overlay has to carry the complete list
+        # for "shipped defaults plus my overrides" to be what actually
+        # resolves.
+        entries_by_id = {entry[id_key]: dict(entry) for entry in base.get(section, [])}
+        base_ids = list(entries_by_id)
+        # Then this project's existing overlay, then this run's overrides.
+        for entry in existing.get(section, []):
+            entry_id = entry.get(id_key)
+            if entry_id in entries_by_id:
+                entries_by_id[entry_id] = deep_merge(entries_by_id[entry_id], dict(entry))
         for entry_id, entry_fragment in overrides.items():
-            if entry_id not in base_ids:
+            if entry_id not in entries_by_id:
                 raise InitError(f"platform-impact-profile.yaml {section} has no entry {entry_id!r} to override")
-            current = existing_by_id.get(entry_id, {id_key: entry_id})
-            existing_by_id[entry_id] = deep_merge(current, entry_fragment)
-        if existing_by_id:
-            # Preserve template order.
-            merged[section] = [existing_by_id[i] for i in base_ids if i in existing_by_id]
+            entries_by_id[entry_id] = deep_merge(entries_by_id[entry_id], entry_fragment)
+        # Preserve template order.
+        merged[section] = [entries_by_id[i] for i in base_ids]
     return _dump_yaml(merged), merged
 
 
@@ -589,6 +603,27 @@ def _leaf_paths(node: dict[str, Any], prefix: str = "") -> list[str]:
         else:
             paths.append(path)
     return paths
+
+
+def _leaf_values(node: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    """`_leaf_paths`, but keeping each leaf's value — used to show a `--set`
+    override the shipped default it is replacing (its `source_value`)."""
+    values: dict[str, Any] = {}
+    for key, value in node.items():
+        path = f"{prefix}{key}" if not prefix else f"{prefix}.{key}"
+        if isinstance(value, dict):
+            values.update(_leaf_values(value, path))
+        else:
+            values[path] = value
+    return values
+
+
+def _set_by_path(node: dict[str, Any], path: str, value: Any) -> None:
+    parts = path.split(".")
+    current = node
+    for part in parts[:-1]:
+        current = current.setdefault(part, {})
+    current[parts[-1]] = value
 
 
 def existing_team_profile_deferrals() -> dict[str, dict[str, Any]]:
@@ -907,6 +942,221 @@ def merge_answers_with_preset(answers: dict[str, Any], preset: dict[str, Any] | 
     return merged
 
 
+# --------------------------------------------------------------------------
+# `--set` flag-driven overrides.
+#
+# The defaults-first counterpart to `--interactive`: `cadre init --target X`
+# with no answer source at all is a legal, no-op run that leaves the project
+# on the shipped defaults (overlays are sparse, so "no overlay" and "an
+# overlay agreeing with every default" resolve identically), and `--set`
+# overrides individual fields from there without an answer file.
+#
+# The region a path belongs to is DERIVED by looking the path up in the
+# shipped default files; it is never supplied by the operator. That is what
+# keeps `field_decisions[...].category` honest — a `--set` can no more
+# mislabel a governance field as `stack` than the interactive collector can,
+# which matters because that label feeds `--print-answers` redaction (see
+# `_redact_answers_for_echo`'s round-4 note on why a claimed category is not
+# trusted as a sole signal).
+# --------------------------------------------------------------------------
+
+# region -> (answers key, shipped default filename, decision category, section)
+SET_REGIONS: dict[str, tuple[str, str, str, str]] = {
+    "stack": ("rg_a_stack", TEAM_PROFILE_FILENAME, "stack", "rg-a-stack"),
+    "libraries": ("rg_a_libraries", LIBRARY_STANDARDS_FILENAME, "stack", "rg-a-stack"),
+    "autonomy": ("rg_b_autonomy", _AUTONOMY_FILENAME, "governance", "rg-b-governance"),
+    "platform": ("rg_c_platform", PLATFORM_FILENAME, "stack", "rg-c-platform"),
+}
+
+# The per-entry fields an RG-C `--set` may address, mirroring what the
+# interactive RG-C collector fills in for one impact category / BOM entry.
+PLATFORM_ENTRY_FIELDS = ("applicability", "definition_reference", "owner", "rationale")
+
+
+def _shipped_default(filename: str) -> dict[str, Any]:
+    path = SHARED_DEFAULTS_DIR / filename
+    return _load_structured(path) if path.is_file() else {}
+
+
+def region_leaf_values(region: str) -> dict[str, Any]:
+    """Every field `--set` may address in `region`, mapped to its shipped
+    default value. `cadre init` only ever overrides fields that already exist
+    in a shipped default (it "never invents a new config format"), so this
+    doubles as the validity check for a `--set` path."""
+    _answers_key, filename, _category, _section = SET_REGIONS[region]
+    base = _shipped_default(filename)
+    if region == "autonomy":
+        # resolve.py owns what counts as an autonomy leaf (fixed keys, list
+        # handling); never re-derive it here.
+        return dict(_autonomy_leaf_paths(base))
+    if region == "platform":
+        values: dict[str, Any] = {}
+        for section, id_key in (("impact_categories", "id"), ("specialized_boms", "type")):
+            for entry in base.get(section, []) or []:
+                entry_id = entry.get(id_key)
+                if not entry_id:
+                    continue
+                for entry_field in PLATFORM_ENTRY_FIELDS:
+                    values[f"{section}.{entry_id}.{entry_field}"] = entry.get(entry_field)
+        return values
+    return _leaf_values(base)
+
+
+def parse_set_override(raw: str) -> tuple[str | None, str, str]:
+    """Split one `--set` argument into (explicit region or None, path, raw
+    value text). Accepts `PATH=VALUE` and `REGION:PATH=VALUE`."""
+    if "=" not in raw:
+        raise InitError(f"--set {raw!r} must be of the form [REGION:]PATH=VALUE")
+    lhs, _, value_text = raw.partition("=")
+    lhs = lhs.strip()
+    region: str | None = None
+    if ":" in lhs:
+        region_text, _, lhs = (part.strip() for part in lhs.partition(":"))
+        if region_text not in SET_REGIONS:
+            raise InitError(
+                f"--set {raw!r}: unknown region {region_text!r}; known regions: {sorted(SET_REGIONS)}"
+            )
+        region = region_text
+    if not lhs:
+        raise InitError(f"--set {raw!r} must name a field path before '='")
+    return region, lhs, value_text
+
+
+def resolve_set_region(path: str, explicit: str | None) -> str:
+    """Derive which shipped default file owns `path`, failing closed on a
+    field no shipped default defines and on a path that is ambiguous across
+    regions (rather than silently picking one, which could land a governance
+    field in a `stack`-categorized fragment)."""
+    if explicit is not None:
+        if path not in region_leaf_values(explicit):
+            raise InitError(
+                f"--set {explicit}:{path}: no such field in shipped {SET_REGIONS[explicit][1]}"
+            )
+        return explicit
+    matches = [region for region in SET_REGIONS if path in region_leaf_values(region)]
+    if not matches:
+        raise InitError(
+            f"--set {path}: no shipped default under roster/shared/ defines this field; "
+            "`cadre init` only overrides fields that already exist"
+        )
+    if len(matches) > 1:
+        raise InitError(
+            f"--set {path}: ambiguous across regions {sorted(matches)}; "
+            f"qualify it as <region>:{path}"
+        )
+    return matches[0]
+
+
+def _parse_set_value(text: str) -> Any:
+    """Same permissive scalar parse the interactive collector uses for a
+    typed-in stack value: YAML scalar if it parses, otherwise the raw string.
+
+    Mappings are refused. Every field `--set` can address is a scalar or a
+    list, so a mapping value does not override the named leaf -- it grafts new
+    leaf paths *below* it that no shipped default defines, which would defeat
+    the whole point of validating the path against the shipped files first."""
+    try:
+        parsed = _require_yaml().safe_load(text)
+    except Exception:  # noqa: BLE001
+        return text
+    if isinstance(parsed, dict):
+        raise InitError(
+            "--set values must be scalars or lists; a mapping would add leaf "
+            "paths below the named field that no shipped default defines"
+        )
+    return parsed
+
+
+def _set_decision_path(region: str, path: str) -> str:
+    """The key `plan_writes`' `touched` list will use for this field. RG-C is
+    tracked per *entry*, not per entry field, so a `--set` on
+    `impact_categories.<id>.owner` records its decision against
+    `rg_c_platform.impact_categories.<id>`."""
+    if region == "platform":
+        section, _, remainder = path.partition(".")
+        entry_id = remainder.split(".")[0]
+        return f"rg_c_platform.{section}.{entry_id}"
+    return path
+
+
+def apply_set_overrides(
+    answers: dict[str, Any], raw_overrides: list[str], sections: list[str]
+) -> dict[str, Any]:
+    """Fold each `--set` into `answers`, recording the `field_decisions` entry
+    the answer schema requires. Applied last, so a `--set` wins over both an
+    answer file and a `--stack` preset."""
+    for raw in raw_overrides:
+        explicit, path, value_text = parse_set_override(raw)
+        region = resolve_set_region(path, explicit)
+        answers_key, _filename, category, section = SET_REGIONS[region]
+        if section not in sections:
+            raise InitError(
+                f"--set {path} targets {section}, which is excluded by --sections"
+            )
+        value = _parse_set_value(value_text)
+        fragment = answers.setdefault(answers_key, {})
+        if not isinstance(fragment, dict):
+            raise InitError(f"cannot apply --set {path}: {answers_key} is not a mapping")
+        _set_by_path(fragment, path, value)
+        decisions = answers.setdefault("field_decisions", {})
+        decision_path = _set_decision_path(region, path)
+        if region == "platform":
+            # RG-C decisions are tracked per entry, so several `--set`s on one
+            # entry are facets of ONE decision, not competing ones. Record the
+            # applicability (what the decision is actually about) and let the
+            # supporting fields land in the fragment without clobbering it --
+            # overwriting here is how `--set ...applicability=X --set
+            # ...rationale=Y` used to leave no record of X at all. Mirrors the
+            # interactive RG-C collector, which reports `source_value:
+            # "unknown"` because that is what the template always ships.
+            previous = decisions.get(decision_path) or {}
+            new_value = value if path.split(".")[-1] == "applicability" else previous.get("new_value")
+            decisions[decision_path] = {
+                "status": "overridden",
+                "category": category,
+                "source_value": "unknown",
+                "new_value": new_value,
+            }
+        else:
+            decisions[decision_path] = {
+                "status": "overridden",
+                # Derived from the region, never from operator input.
+                "category": category,
+                "source_value": region_leaf_values(region)[path],
+                "new_value": value,
+            }
+    return answers
+
+
+def synthesize_preset_field_decisions(answers: dict[str, Any]) -> dict[str, Any]:
+    """Record an `overridden` decision for every RG-A leaf that reached the
+    answer set without one.
+
+    Only ever called on a defaults-mode run, where the sole way an unrecorded
+    leaf can be present is a `--stack` preset (`load_stack_preset` structurally
+    forbids a preset from touching anything but RG-A, so this can never
+    fabricate a governance decision). A `--set` records its own decision
+    against the exact path it names, and refuses mapping values precisely so
+    it cannot graft unrecorded leaves *below* that path -- without that rule
+    this invariant would already be false. A hand-authored `--answers` file
+    still fails closed on a missing decision, which is the A-006 rev 2
+    contract for answer files."""
+    decisions = answers.setdefault("field_decisions", {})
+    for region in ("stack", "libraries"):
+        answers_key, _filename, category, _section = SET_REGIONS[region]
+        shipped = region_leaf_values(region)
+        for path, value in _leaf_values(answers.get(answers_key) or {}).items():
+            if path in decisions:
+                continue
+            decisions[path] = {
+                "status": "overridden",
+                "category": category,
+                "source_value": shipped.get(path),
+                "new_value": value,
+            }
+    return answers
+
+
 def plan_writes(
     target_root: Path, answers: dict[str, Any], sections: list[str]
 ) -> tuple[InitResult, list[str]]:
@@ -1043,7 +1293,25 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--target", required=True, type=Path, help="Project root to write overlays into (required, no cwd default)")
     parser.add_argument("--stack", help="Named starter preset id from roster/shared/init-presets/*.yaml")
     parser.add_argument("--answers", type=Path, help="Non-interactive answer file (schema_version: 1)")
-    parser.add_argument("--interactive", action="store_true", help="Prompt-flow mode")
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help=(
+            "Prompt-flow mode. Optional: with no answer source at all, init keeps every "
+            "shipped default and writes nothing"
+        ),
+    )
+    parser.add_argument(
+        "--set",
+        action="append",
+        dest="set_values",
+        metavar="[REGION:]PATH=VALUE",
+        help=(
+            "Override one shipped-default field without an answer file, repeatable "
+            f"(regions: {', '.join(sorted(SET_REGIONS))}; the region is derived from the "
+            "path unless ambiguous). Wins over --answers and --stack"
+        ),
+    )
     parser.add_argument(
         "--sections",
         default=",".join(ALL_SECTIONS),
@@ -1067,8 +1335,12 @@ def run_init(args: argparse.Namespace) -> int:
     if args.answers and args.interactive:
         print("cadre init: --answers and --interactive are mutually exclusive", file=sys.stderr)
         return 2
-    if not args.answers and not args.interactive:
-        print("cadre init: one of --answers or --interactive is required", file=sys.stderr)
+    set_overrides = list(getattr(args, "set_values", None) or [])
+    if args.interactive and set_overrides:
+        # A prompt loop shows each field's shipped default, so a --set value
+        # would either be invisible or silently overwritten by whatever the
+        # operator typed; refuse rather than pick one of those for them.
+        print("cadre init: --set and --interactive are mutually exclusive", file=sys.stderr)
         return 2
 
     target_root = args.target
@@ -1089,12 +1361,25 @@ def run_init(args: argparse.Namespace) -> int:
 
     preset = load_stack_preset(args.stack) if args.stack else None
 
+    defaults_mode = not args.interactive and not args.answers
     if args.interactive:
         from init_project_interactive import run_interactive_flow  # local import: optional prompt UI
 
         answers = run_interactive_flow(
             target_root=target_root, sections=sections, preset=preset, preset_id=args.stack
         )
+    elif defaults_mode:
+        # No answer source: keep every shipped default. Sparse overlays make
+        # this a genuine no-op rather than a run that writes out the defaults
+        # again -- resolve.py falls back to the shipped file for any leaf a
+        # project overlay does not mention.
+        answers = {
+            "schema_version": 1,
+            "target_project": str(target_root),
+            "stack_preset": args.stack,
+            "field_decisions": {},
+        }
+        answers = merge_answers_with_preset(answers, preset)
     else:
         try:
             answers = load_answers(args.answers)
@@ -1102,6 +1387,15 @@ def run_init(args: argparse.Namespace) -> int:
             print(f"cadre init: {error}", file=sys.stderr)
             return 1
         answers = merge_answers_with_preset(answers, preset)
+
+    try:
+        if set_overrides:
+            answers = apply_set_overrides(answers, set_overrides, sections)
+        if defaults_mode:
+            answers = synthesize_preset_field_decisions(answers)
+    except InitError as error:
+        print(f"cadre init: {error}", file=sys.stderr)
+        return 1
 
     result, errors = plan_writes(target_root, answers, sections)
 
@@ -1245,7 +1539,16 @@ def run_init(args: argparse.Namespace) -> int:
         log_path = append_audit_entries(audit_entries)
         result.audit_log_path = log_path
 
-    if force:
+    if not result.planned:
+        # Distinguish "nothing to do" from "something went wrong": a
+        # defaults-only run legitimately plans no writes, because keeping a
+        # shipped default means writing no overlay for it at all.
+        print(
+            f"cadre init: no overlays needed -- {target_root} keeps every shipped default "
+            "(override individual fields with --set, or answer the full flow with "
+            f"--interactive); audit log: {log_path}"
+        )
+    elif force:
         print(f"cadre init: wrote {len(result.written)} file(s); audit log: {log_path}")
     else:
         print(
