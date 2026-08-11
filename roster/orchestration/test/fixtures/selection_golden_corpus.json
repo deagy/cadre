@@ -52,7 +52,71 @@
     "the point: a route that claims no delivery shape (advisory, assessment,",
     "review, governance, support, documentation, evidence, and the",
     "security-, verify-, and operations-phase execution routes) now declares",
-    "'unclassified' deliberately."
+    "'unclassified' deliberately.",
+    "",
+    "11 fixtures changed their expected 'support' in the #223 change that",
+    "removed application-engineer from the execution routes carrying a target",
+    "project's artifacts. application-engineer's own AGENT.md scopes it to",
+    "this suite's own tooling and explicitly directs a target project's",
+    "capability work elsewhere, so those routes dispatched an agent as support",
+    "on work its role definition tells it to decline -- the same defect #213",
+    "fixed for linux-systems-execution, found to be systemic afterwards. Each",
+    "changed expectation carries its own justification in that fixture's",
+    "'description', under the prefix 'Support staffing (#223):', derived route",
+    "by route from the artifact the route matches and from the accountability",
+    "the route's own primary names -- never from the shape or from the other",
+    "routes' staffing. Ten resolved to backend-engineer and one",
+    "(mcp-server-execution) to ai-engineer; that convergence is the catalog's",
+    "existing vocabulary, not a bulk replace -- go-service-execution,",
+    "python-automation-execution, and node-typescript-execution already staff",
+    "backend-engineer for implementers naming that same",
+    "backend-engineer-or-application-engineer pair, and",
+    "javascript-maintenance-execution already resolves its",
+    "'frontend-engineer or application-engineer' pair to frontend-engineer. Two of #223's opening hypotheses did not survive the",
+    "derivation and are recorded where they failed: kernel-module-execution",
+    "and the other on-device routes are not infrastructure-provisioner work",
+    "(the host-platform counterparts linux-systems-execution and",
+    "embedded-linux-platform-execution exist separately and already carry it),",
+    "and mcp-server-execution is not backend-engineer work (its implementer's",
+    "AGENT.md does not offer that role, and the artifact is the model-facing",
+    "surface). No workflow shape and no reviewers slot changed; the six",
+    "execution routes whose artifacts are this suite's own tooling",
+    "(selector-test, agent-workflow, git-operations, dependency-remediation,",
+    "shell-automation, supply-chain-remediation) keep application-engineer",
+    "deliberately, each confirmed against its primary's AGENT.md.",
+    "",
+    "Four fixtures changed in the #227/#228/#229 follow-up pass, and one was",
+    "added. #227: ebpf-execution, kernel-module-execution, and",
+    "mcp-server-execution each gained `security-reviewer`, because each",
+    "primary's own AGENT.md commits to an independent security handoff its",
+    "route staffed nobody to perform. Two of the three name the role",
+    "literally, so no alternative was weighed there; ebpf-implementer named",
+    "none, so `pipeline-security-reviewer` and `supply-chain-security-reviewer`",
+    "were weighed against the artifact and rejected, and that implementer's",
+    "prose was tightened to name the role the route now staffs. test-engineer",
+    "and code-reviewer stay on all three -- the missing half was security, not",
+    "code or test review -- and no support staffing or workflow_shape moved.",
+    "The convergence on one role is a per-route result, not a bulk replace:",
+    "the catalog carries three security-specific reviewers",
+    "(security-reviewer, pipeline-security-reviewer,",
+    "supply-chain-security-reviewer) and supply-chain-remediation-execution",
+    "keeps a different one of them.",
+    "#229: supply-chain-remediation-execution's support moved from",
+    "application-engineer to cicd-engineer. Its primary names no",
+    "accountability, so the derivation runs from the artifact; #223's reading",
+    "of this route as this suite's own tooling does not survive it, since",
+    "`security/supply-chain-remediation/**` is a target-project path and this",
+    "repository's own supply-chain surface is matched by the separate",
+    "`supply-chain` and `packaging` routes. Its reviewers were already correct",
+    "and did not change. dependency-remediation-execution shares the shape and",
+    "the same objection to application-engineer, but no replacement is",
+    "derivable from its own primary, so it was left alone rather than moved on",
+    "a guess.",
+    "#228: agent-workflow-execution gained `roster/workflows/**` next to its",
+    "pre-#84 `agents/workflows/**`. No existing expectation moved, because the",
+    "existing fixture matches on keywords; AGENT-WORKFLOW-ROSTER-PATH-1 was",
+    "added to pin the path signal, and it is the only fixture added by this",
+    "pass."
   ],
   "cases": [
     {
@@ -2217,7 +2281,7 @@
     },
     {
       "id": "ARCHITECTURE-DIAGRAM-EXECUTION-1",
-      "description": "architecture-diagram execution route keeps cloud-architect accountable while selecting the specialist; the documentation and architecture-design overlap comes from the diagram's .mmd architecture path.",
+      "description": "architecture-diagram execution route keeps cloud-architect accountable while selecting the specialist; the documentation and architecture-design overlap comes from the diagram's .mmd architecture path. Reviewer staffing -- examined and deliberately NOT changed, recorded so a future sweep does not re-litigate it. The #227-class sweep (a primary's AGENT.md naming a read_only role the route's own `reviewers` does not staff) flags this route for `architecture-authority` and `code-reviewer`, and both are false positives of that heuristic. (1) The naming sentence is not a handoff commitment. Every other primary the sweep flags uses the same unconditional conjunction -- hand off to independent X *and* Y review. `architecture-diagram-author` alone reads \"Hand off to an independent `technical-writer`, `code-reviewer`, or `architecture-authority` when architectural claims require review\": three alternatives joined by \"or\", gated on a condition that holds for a subset of diagrams. A route staffs the review a plan always needs; a conditional alternative-set is not that, and staffing all three would dispatch two reviewers the sentence never asks for together. (2) `architecture-authority` is specifically wrong here, and would be wrong even if the sentence were unconditional. Its AGENT.md scopes its Inputs to \"The change under review, specifically any code or configuration touching an infrastructure interface\" and its finding is \"absolute -- a missing boundary element blocks the change unconditionally\". A Mermaid or drawio diagram is neither code nor configuration touching an infrastructure interface, and putting a gate-holding authority whose finding is unconditionally blocking into a routine `reviewers` slot would attach a blocking boundary gate to every diagram edit. Routing already reflects this: `architecture-authority` appears exactly once across all routes, as the `primary` of its own `architecture-authority-review` route, and is staffed as a reviewer nowhere. (3) The reviewer the route does staff is artifact-derived and correct. `threat-modeler` answers the hazard this primary's own Escalate-when clause names -- \"a diagram exposes sensitive infrastructure\" -- against an Authority that forbids it to \"publish sensitive details\". `cloud-architect` correctly holds `support`, matching the primary's escalation line. Nothing is changed; `primary`, `reviewers`, `support`, and `workflow_shape` all stand.",
       "task": "Create an architecture diagram",
       "changed_files": [
         "docs/architecture/diagrams/system.mmd"
@@ -2740,7 +2804,7 @@
     },
     {
       "id": "CSS-LAYOUT-EXECUTION-1",
-      "description": "CSS layout work selects the narrow implementer with frontend accountability and accessibility review. Workflow shape: CSS Modules layout work is frontend application code, which the frontend route already labels new-service for changes of exactly this kind.",
+      "description": "CSS layout work selects the narrow implementer with frontend accountability and accessibility review. Workflow shape: CSS Modules layout work is frontend application code, which the frontend route already labels new-service for changes of exactly this kind. Reviewer staffing (#227 class, generalized): `css-layout-implementer`'s AGENT.md commits unconditionally -- \"hand off to independent `accessibility-reviewer` and `code-reviewer` review\" -- while the route staffed only `accessibility-reviewer`, so the plan narrated a code review it dispatched nobody to perform. `code-reviewer` is added, derived from the artifact rather than from the primary's list: this route matches `frontend/**/*.module.css`, `frontend/**/*.module.scss`, `web/**/*.module.css`, and `web/**/*.module.scss` -- browser-facing source that `code-reviewer`'s own required checks name explicitly (\"For browser-facing code in this provider, review types, rendering safety, state or effect behavior, accessibility, browser storage, API boundaries, bundles, and dependencies\"). `accessibility-reviewer` cannot stand in for it: its AGENT.md scopes it to verifying conformance against a stated accessibility target and tells it \"Do not implement fixes; verify conformance separately from whoever wrote the change\", so correctness, bundle, and dependency effects of a stylesheet change sit outside its remit. The sibling frontend routes `frontend` and `react-component-execution` already staff `code-reviewer` alongside `accessibility-reviewer` over the same tree, so this brings the narrow route into line with the broad one rather than inventing a pattern. `accessibility-reviewer` stays -- layout and responsive states are where conformance actually breaks. `primary`, `support`, and `workflow_shape` are unchanged.",
       "task": "css layout",
       "changed_files": [],
       "classification": "internal",
@@ -2751,6 +2815,7 @@
           "css-layout-implementer"
         ],
         "reviewers": [
+          "code-reviewer",
           "accessibility-reviewer"
         ],
         "support": [
@@ -2818,7 +2883,7 @@
     },
     {
       "id": "FRONTEND-A11Y-REMEDIATION-EXECUTION-1",
-      "description": "Accessibility remediation retains frontend accountability and the independent accessibility reviewer.",
+      "description": "Accessibility remediation retains frontend accountability and the independent accessibility reviewer. Reviewer staffing (#227 class, generalized): `frontend-accessibility-remediator`'s AGENT.md commits unconditionally -- \"return fixes to independent `accessibility-reviewer` and `code-reviewer` review\" -- while `frontend-accessibility-remediation-execution` staffed only `accessibility-reviewer`. `code-reviewer` is added to the route, derived from the artifact: the route matches `frontend/accessibility/**` and `frontend/a11y/**`, and the primary's Authority is to \"edit assigned UI code and tests\" with \"Scoped remediation, regression tests, and independent-review handoff\" as its Outputs -- application source whose correctness and regression coverage `accessibility-reviewer` does not assess, since its AGENT.md restricts it to verifying conformance against a stated accessibility target and says \"Do not implement fixes\". This fixture's expected reviewers are deliberately unchanged: the co-matched broad `frontend` route already contributed `code-reviewer` here, so the route-level addition removes the dependence on that co-match rather than adding a name to this plan -- a task matching the narrow route alone previously got no code review at all. `primary`, `support`, and `workflow_shape` are unchanged.",
       "task": "accessibility remediation",
       "changed_files": [],
       "classification": "internal",
@@ -2920,7 +2985,7 @@
     },
     {
       "id": "PROMPT-ARTIFACT-EXECUTION-1",
-      "description": "Prompt artifact work remains under AI-engineer accountability and the existing AI review envelope. Workflow shape: versioned prompt artifacts are product AI-feature deliverables, and the co-matched ai-feature route declares the same shape.",
+      "description": "Prompt artifact work remains under AI-engineer accountability and the existing AI review envelope. Workflow shape: versioned prompt artifacts are product AI-feature deliverables, and the co-matched ai-feature route declares the same shape. Reviewer staffing (#227 class, generalized): `prompt-artifact-implementer`'s AGENT.md commits unconditionally -- \"hand off to independent `code-reviewer` and `test-engineer` review\" -- while `prompt-artifact-execution` staffed only `test-engineer`. `code-reviewer` is added to the route, derived from the artifact: the route matches `prompts/**` and `ai/prompts/**`, and the primary edits \"prompt artifacts, prompt tests, and prompt-version records\" -- versioned repository artifacts that change runtime behavior, whose input/output handling, secret exposure, and test quality are `code-reviewer`'s stated remit. The sibling `eval-harness-execution` route over `evals/**` already staffs `code-reviewer` for the same kind of AI-adjacent authored artifact. This fixture's expected reviewers are deliberately unchanged: the co-matched broad `ai-feature` route already contributed `code-reviewer` here, so the route-level addition removes the dependence on that co-match rather than adding a name to this plan -- a task matching the narrow route alone previously got no code review at all. `test-engineer` stays: prompt tests are the primary's own deliverable. `primary`, `support`, and `workflow_shape` are unchanged.",
       "task": "prompt artifact",
       "changed_files": [],
       "classification": "internal",
@@ -2999,7 +3064,7 @@
     },
     {
       "id": "RETRIEVAL-PIPELINE-EXECUTION-1",
-      "description": "Retrieval pipeline execution retains the knowledge-store route while adding AI accountability. Workflow shape: retrieval-pipeline code is service delivery; the co-matched knowledge-store route declares no shape of its own, and this is not knowledge ingestion, which the earlier knowledge-ingestion precedence rule correctly declined.",
+      "description": "Retrieval pipeline execution retains the knowledge-store route while adding AI accountability. Workflow shape: retrieval-pipeline code is service delivery; the co-matched knowledge-store route declares no shape of its own, and this is not knowledge ingestion, which the earlier knowledge-ingestion precedence rule correctly declined. Reviewer staffing (#227 class, generalized): `retrieval-pipeline-implementer`'s AGENT.md commits unconditionally -- \"hand off to independent `code-reviewer` and `security-reviewer` review\" -- while `retrieval-pipeline-execution` staffed only `test-engineer`. Both are added to the route, derived from the artifact: the route matches `retrieval/**`, `rag/**`, and `ai/retrieval/**`, and the primary's own required checks are to \"treat retrieved/model output as untrusted and preserve citation and classification controls\", escalating when \"The change alters data crossing a trust boundary\" -- an untrusted-content and classification surface that is a security disposition the primary is forbidden to make for itself, and pipeline code whose correctness (chunking, citation binding, prompt assembly) is a code-review question. Only `code-reviewer` moves this fixture's expectation: the co-matched `knowledge-store` route already contributed `security-reviewer`, so the route-level addition removes the dependence on that co-match rather than adding a name here. `test-engineer` stays -- the primary authors tests as its own deliverable (its Outputs are \"Scoped pipeline code, tests, provenance notes, and independent-review handoff\"), so independent test-adequacy review was never the missing half, and dropping it would be reasoning from list length. `primary`, `support`, and `workflow_shape` are unchanged.",
       "task": "retrieval chunking",
       "changed_files": [],
       "classification": "internal",
@@ -3012,6 +3077,7 @@
         ],
         "reviewers": [
           "test-engineer",
+          "code-reviewer",
           "security-reviewer",
           "compliance-reviewer"
         ],
@@ -3208,7 +3274,7 @@
     },
     {
       "id": "AGENT_WORKFLOW_EXECUTION_GOLDEN_1",
-      "description": "Narrow agent-workflow-execution route regression fixture. Workflow shape: agent orchestration flows, handoff contracts, and routing glue are delivered application code in the consuming project.",
+      "description": "Narrow agent-workflow-execution route regression fixture. Workflow shape: agent orchestration flows, handoff contracts, and routing glue are delivered application code in the consuming project. Route paths (#228): this fixture matches on the route's keyword, not its paths, so its expectation is unchanged by #228; AGENT-WORKFLOW-ROSTER-PATH-1 is the fixture that pins the added path. `agents/workflows/**` was the only `agents/`-prefixed path left in routing.yaml after #84 renamed `agents/` to `roster/`, so the path signal could not fire on this repository's own workflow documents even though the keyword signal still worked. `roster/workflows/**` is added rather than substituted, mirroring `example-fixture-execution`, which carries consumer-side patterns (`examples/fixtures/**`, `test-fixtures/**`) alongside this repository's own `roster/orchestration/test/fixtures/**`: nothing establishes that `agents/workflows/**` is wrong for a consumer tree, and narrowing a route's match conditions is the direction routing's own overlay merge rule treats as unsafe. Staffing and workflow_shape are unchanged.",
       "task": "Implement agent workflow implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3233,8 +3299,41 @@
       }
     },
     {
+      "id": "AGENT-WORKFLOW-ROSTER-PATH-1",
+      "description": "Pins #228's path fix: editing this repository's own workflow documents now reaches agent-workflow-execution. Before the fix this file matched agent-suite-governance and documentation only, because the route's single path was the pre-#84 `agents/workflows/**`. All three routes match on paths alone here (agent-suite-governance and agent-workflow-execution on `roster/workflows/**`, documentation on `**/*.md`), and the task text deliberately avoids the route's `agent workflow implementation` keyword so this fixture pins the path signal rather than restating what AGENT_WORKFLOW_EXECUTION_GOLDEN_1 already covers. `application-engineer` appears in `primary` rather than `support` because agent-suite-governance staffs it as a primary and build_dispatch_plan drops any primary from the support group; this route's own `support: [application-engineer]` is unchanged by #228. Reviewers are the union of agent-suite-governance's `test-engineer` and `code-reviewer` with this route's `code-reviewer`. Workflow shape: `agent-suite-maintenance` comes from agent-suite-governance, the pre-existing match, not from this route's `new-service` shape; the same multi-route overlap on a repository-internal execution route is already pinned by SELECTOR-TEST-EXECUTION-1.",
+      "task": "Update the agent workflow definition",
+      "changed_files": [
+        "roster/workflows/new-service.md"
+      ],
+      "classification": "internal",
+      "task_id": "AGENT-WORKFLOW-ROSTER-PATH-1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "application-engineer",
+          "debugging-engineer",
+          "technical-writer",
+          "agent-workflow-implementer"
+        ],
+        "reviewers": [
+          "test-engineer",
+          "code-reviewer"
+        ],
+        "support": [
+          "product-intent-agent",
+          "requirements-agent"
+        ],
+        "matched_routes": [
+          "agent-suite-governance",
+          "documentation",
+          "agent-workflow-execution"
+        ],
+        "workflow": "agent-suite-maintenance"
+      }
+    },
+    {
       "id": "AI_OBSERVABILITY_EXECUTION_GOLDEN_1",
-      "description": "Narrow ai-observability-execution route regression fixture.",
+      "description": "Narrow ai-observability-execution route regression fixture. Reviewer staffing (#227 class, generalized): `ai-observability-implementer`'s AGENT.md commits unconditionally -- \"hand off to independent `security-reviewer` and `code-reviewer` review\" -- while the route staffed only `security-reviewer`. `code-reviewer` is added, derived from the artifact: the route matches `ai/observability/**`, and the primary's own scope is \"AI traces, prompt metadata, costs, token accounting, eval telemetry\" -- instrumentation code whose defects are arithmetic and control-flow defects (token and cost accounting, sampling, span lifetime) that `security-reviewer` does not answer, since its lens is attack surface, control sufficiency, and residual risk rather than implementation correctness. `security-reviewer` stays and is the right role for the half it does cover: the primary is required to \"Preserve data minimization and never capture secrets or prompt bodies without approval\", which is a sensitive-capture disposition it may not make for itself. `primary`, `support`, and `workflow_shape` are unchanged.",
       "task": "Implement ai observability implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3246,6 +3345,7 @@
           "ai-observability-implementer"
         ],
         "reviewers": [
+          "code-reviewer",
           "security-reviewer",
           "technical-writer"
         ],
@@ -3342,7 +3442,7 @@
     },
     {
       "id": "C_SYSTEMS_EXECUTION_GOLDEN_1",
-      "description": "Narrow c-systems-execution route regression fixture. Workflow shape: C systems code is delivered application/library code.",
+      "description": "Narrow c-systems-execution route regression fixture. Workflow shape: C systems code is delivered application/library code. Support staffing (#223): c-systems-implementer's AGENT.md names `backend-engineer` or `application-engineer` as its accountability, and this route's artifact is a target project's native C under `systems/c/**` -- work application-engineer's own AGENT.md explicitly disclaims -- so `backend-engineer` is the accountability this route can honestly confer. application-engineer is dropped, not supplemented; reviewers are unchanged. This matches go-service-execution and python-automation-execution, whose implementers name the same pair and which already staff `backend-engineer`.",
       "task": "Implement c systems implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3359,7 +3459,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "c-systems-execution"
@@ -3369,7 +3469,7 @@
     },
     {
       "id": "CMAKE_BUILD_EXECUTION_GOLDEN_1",
-      "description": "Narrow cmake-build-execution route regression fixture. Workflow shape: a project's own CMake build system ships with the application it builds, so it is application delivery rather than a CI/CD pipeline definition.",
+      "description": "Narrow cmake-build-execution route regression fixture. Workflow shape: a project's own CMake build system ships with the application it builds, so it is application delivery rather than a CI/CD pipeline definition. Support staffing (#223): cmake-build-implementer's AGENT.md names no accountable role, only \"accountable engineering ownership\". The shape reasoning above is what decides it -- because the build definition ships with the C/C++ application rather than with the pipeline, the accountable role is that application's (`backend-engineer`, the accountability c-systems-implementer and cpp-systems-implementer both name) and not `cicd-engineer`, despite \"CI build glue\" appearing in this implementer's knowledge focus. application-engineer is dropped, not supplemented; reviewers are unchanged.",
       "task": "Implement cmake build implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3386,7 +3486,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "cmake-build-execution"
@@ -3396,7 +3496,7 @@
     },
     {
       "id": "CPP_SYSTEMS_EXECUTION_GOLDEN_1",
-      "description": "Narrow cpp-systems-execution route regression fixture. Workflow shape: C++ systems code is delivered application/library code.",
+      "description": "Narrow cpp-systems-execution route regression fixture. Workflow shape: C++ systems code is delivered application/library code. Support staffing (#223): cpp-systems-implementer's AGENT.md names `backend-engineer` or `application-engineer`, and this route's artifact is a target project's C++ services and libraries under `systems/cpp/**` -- work application-engineer's own AGENT.md explicitly disclaims -- leaving `backend-engineer` as the accountability this route confers. application-engineer is dropped, not supplemented; reviewers are unchanged.",
       "task": "Implement cpp systems implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3413,7 +3513,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "cpp-systems-execution"
@@ -3423,7 +3523,7 @@
     },
     {
       "id": "DEVICE_DRIVER_EXECUTION_GOLDEN_1",
-      "description": "Narrow device-driver-execution route regression fixture. Workflow shape: device-driver integration code and its test harnesses are delivered code artifacts.",
+      "description": "Narrow device-driver-execution route regression fixture. Workflow shape: device-driver integration code and its test harnesses are delivered code artifacts. Support staffing (#223): device-driver-implementer's AGENT.md names no accountable role. Two candidates were weighed. `infrastructure-provisioner` fits the udev-rule and device-permission half of its knowledge focus, but the host-configuration counterparts already exist as separate routes -- linux-systems-execution and embedded-linux-platform-execution, both `infrastructure-change` with an infrastructure reviewer -- while this route's artifact set is driver code reviewed by test-engineer and code-reviewer. kernel-module-implementer, the sibling role whose knowledge focus also covers drivers, names `backend-engineer` explicitly, so that is the accountability adopted here. application-engineer is dropped, not supplemented; reviewers are unchanged.",
       "task": "Implement device driver implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3440,7 +3540,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "device-driver-execution"
@@ -3476,7 +3576,7 @@
     },
     {
       "id": "EBPF_EXECUTION_GOLDEN_1",
-      "description": "Narrow ebpf-execution route regression fixture. Workflow shape: eBPF probes, maps, and loaders are delivered code artifacts.",
+      "description": "Narrow ebpf-execution route regression fixture. Workflow shape: eBPF probes, maps, and loaders are delivered code artifacts. Support staffing (#223): ebpf-implementer's AGENT.md names no accountable role. eBPF programs are kernel-space code compiled and loaded by a userspace loader -- the same artifact family as kernel modules, whose implementer names `backend-engineer` -- rather than declarative host configuration, which is what the `infrastructure-change` routes carry. `observability-sre` was considered because \"observability filters\" appears in this implementer's knowledge focus, but that role is an operations-phase environment_operator owning telemetry and SLO design, not the authoring accountability for privileged kernel code. application-engineer is dropped, not supplemented; support staffing is unchanged by #227. Security review (#227): ebpf-implementer's AGENT.md commits to independent security review, and this route staffed none -- test-engineer and code-reviewer only. `security-reviewer` is added. Unlike its two sibling routes here, this implementer named no role, so the specialized alternatives were weighed against the artifact and rejected: `pipeline-security-reviewer` reviews how code moves through build, artifact, and deployment stages, and `supply-chain-security-reviewer` reviews dependency, SBOM, provenance, and signing risk -- neither is the review an eBPF probe needs, and the catalog has no kernel- or runtime-specific security reviewer; neither is staffed here. What this implementer's own escalation list names -- verifier pressure, privileged runtime, sensitive capture, kernel safety -- is `security-reviewer`'s stated remit (cross-layer attack paths, trust boundaries, control gaps, telemetry exposure). The role definition's prose was tightened in the same change to name `security-reviewer` and `code-reviewer` explicitly rather than \"independent security review\", matching its two sibling implementers and making the commitment checkable against the route. test-engineer stays: verifier-oriented tests are this implementer's own deliverable, so independent test-adequacy review was never the half that was missing. code-reviewer stays. No workflow_shape changed.",
       "task": "Implement ebpf implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3488,12 +3588,13 @@
         ],
         "reviewers": [
           "test-engineer",
-          "code-reviewer"
+          "code-reviewer",
+          "security-reviewer"
         ],
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "ebpf-execution"
@@ -3529,7 +3630,7 @@
     },
     {
       "id": "EMBEDDED_C_EXECUTION_GOLDEN_1",
-      "description": "Narrow embedded-c-execution route regression fixture. Workflow shape: embedded C compiled into a device image is delivered application code, not declarative platform configuration.",
+      "description": "Narrow embedded-c-execution route regression fixture. Workflow shape: embedded C compiled into a device image is delivered application code, not declarative platform configuration. Support staffing (#223): embedded-c-implementer's AGENT.md names `c-systems-implementer` or `backend-engineer`. The first is itself a bounded execution specialist working under someone else's accountability, so it cannot confer accountability from a support slot; `backend-engineer` is the accountable role this route can name. application-engineer is dropped, not supplemented; reviewers are unchanged.",
       "task": "Implement embedded c implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3546,7 +3647,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "embedded-c-execution"
@@ -3647,7 +3748,7 @@
     },
     {
       "id": "FIRMWARE_EXECUTION_GOLDEN_1",
-      "description": "Narrow firmware-execution route regression fixture. Workflow shape: firmware and board artifacts are delivered code, accountable to engineering rather than to infrastructure provisioning.",
+      "description": "Narrow firmware-execution route regression fixture. Workflow shape: firmware and board artifacts are delivered code, accountable to engineering rather than to infrastructure provisioning. Support staffing (#223): firmware-implementer's AGENT.md names no accountable role, so the shape reasoning above supplies it -- \"accountable to engineering rather than to infrastructure provisioning\" names a category, and `backend-engineer` is the engineering accountability the catalog uses for on-device code (embedded-c-implementer, which authors what compiles into the same image, names it). The platform-image counterpart is a separate route: embedded-linux-platform-execution is `infrastructure-change` and already carries `infrastructure-provisioner`. application-engineer is dropped, not supplemented; reviewers are unchanged.",
       "task": "Implement firmware implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3664,7 +3765,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "firmware-execution"
@@ -3726,7 +3827,7 @@
     },
     {
       "id": "INFERENCE_GATEWAY_EXECUTION_GOLDEN_1",
-      "description": "Narrow inference-gateway-execution route regression fixture. Workflow shape: model API adapters, streaming, retries, and budgets are delivered service code; the co-matched ai-feature route declares the same shape.",
+      "description": "Narrow inference-gateway-execution route regression fixture. Workflow shape: model API adapters, streaming, retries, and budgets are delivered service code; the co-matched ai-feature route declares the same shape. Reviewer staffing (#227 class, generalized): `inference-gateway-implementer`'s AGENT.md commits unconditionally -- \"Hand off the revision to independent `code-reviewer` and `security-reviewer` review\" -- while `inference-gateway-execution` staffed only `security-reviewer`. `code-reviewer` is added to the route, derived from the artifact: the route matches `ai/inference-gateway/**` and the primary implements \"model API adapters, streaming, retries, budgets, and telemetry\" -- concurrency, resource-use, retry, and error-handling code that is `code-reviewer`'s stated remit and is not what `security-reviewer` answers. `security-reviewer` stays for the half it does cover: the primary escalates \"providers, data classification, credentials\" and may not approve providers. This fixture's expected reviewers are deliberately unchanged: the co-matched broad `ai-feature` route already contributed `code-reviewer` here, so the route-level addition removes the dependence on that co-match rather than adding a name to this plan -- a task matching the narrow route alone previously got no code review at all. `primary`, `support`, and `workflow_shape` are unchanged.",
       "task": "Implement inference gateway implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3757,7 +3858,7 @@
     },
     {
       "id": "KERNEL_MODULE_EXECUTION_GOLDEN_1",
-      "description": "Narrow kernel-module-execution route regression fixture. Workflow shape: kernel modules and drivers are compiled, delivered code artifacts.",
+      "description": "Narrow kernel-module-execution route regression fixture. Workflow shape: kernel modules and drivers are compiled, delivered code artifacts. Support staffing (#223): kernel-module-implementer's AGENT.md names `backend-engineer` accountability explicitly and singularly -- no alternative to weigh -- so the route staffs the one role its primary's own definition points at. #223 hypothesised that this route might want something closer to `infrastructure-provisioner`; the role definition refutes that, and the host-platform routes that do carry `infrastructure-provisioner` already exist separately. application-engineer is dropped, not supplemented; support staffing is unchanged by #227. Security review (#227): kernel-module-implementer's AGENT.md names `security-reviewer` literally (\"hand off to independent `security-reviewer` and code review\") and this route staffed neither a security reviewer nor anything standing in for one -- test-engineer and code-reviewer only -- so `security-reviewer` is added. No specialized alternative was weighed, because the role definition names the role rather than leaving it to derivation; the artifact agrees with it, since memory safety, kernel ABI, and secure boot are trust-boundary and control-gap questions rather than the pipeline or dependency-provenance questions `pipeline-security-reviewer` and `supply-chain-security-reviewer` own, and neither of those is staffed here. test-engineer stays: smoke tests are part of this implementer's own knowledge focus, so independent test-adequacy review was never the half that was missing. code-reviewer stays. No workflow_shape changed.",
       "task": "Implement kernel module implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3769,12 +3870,13 @@
         ],
         "reviewers": [
           "test-engineer",
-          "code-reviewer"
+          "code-reviewer",
+          "security-reviewer"
         ],
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "kernel-module-execution"
@@ -3838,7 +3940,7 @@
     },
     {
       "id": "LINUX_SYSTEMS_EXECUTION_GOLDEN_1",
-      "description": "Narrow linux-systems-execution route regression fixture. Workflow shape: systemd units, packages, sysctls, and filesystem layout are host configuration, which is infrastructure-change.md's subject regardless of who reviews the change. Recorded divergence, not a justification: this is the only one of the 20 infrastructure-change routes that staffs neither infrastructure-reviewer nor infrastructure-provisioner (it staffs test-engineer/code-reviewer/application-engineer), so the plan points the operator at infrastructure-change.md's 'Classify -> Provision+Plan -> Infrastructure Reviewer -> gated approval -> Apply' shape while dispatching no infrastructure reviewer. The linux-systems-implementer AGENT.md names 'infrastructure-provisioner or backend-engineer accountability', which the route staffing also does not match, so the staffing is the suspect half, not the shape. Filed as a routing question rather than fixed here, because changing route staffing changes agent selection and is outside #210's scope.",
+      "description": "Narrow linux-systems-execution route regression fixture. Workflow shape (unchanged): linux-systems-implementer's AGENT.md names seven artifact kinds -- systemd, packages, permissions, sysctls, filesystem layout, bootstrap scripts, and diagnostics -- and all seven are host configuration, which is infrastructure-change.md's subject regardless of who reviews the change. Staffing corrected in #213, reasoning from that artifact set rather than from the previous staffing. reviewers is [infrastructure-reviewer] and support is [infrastructure-provisioner]: identical to the 18 other infrastructure-change routes that staff a support agent, and to the accountability linux-systems-implementer's own AGENT.md names. (The 19th, the broad infrastructure route, matches on reviewers only and correctly carries infrastructure-provisioner as its primary rather than as support -- do not 'align' a route to a flat count of 19 without re-deriving it.) The previous reviewers [test-engineer, code-reviewer] and support [application-engineer] are dropped, not supplemented. Two of the seven artifact kinds are executable code rather than declarative configuration -- bootstrap scripts and diagnostics -- and they are the reason to state explicitly that code review is reassigned here, not removed: infrastructure-change.md:23 has the infrastructure reviewer 'independently evaluate code and plan', and its checklist (privilege, exposure, logging, state, rollback) fits scripts that configure hosts better than code-reviewer's does. ansible-automation-execution routes more logic-heavy artifacts to infrastructure-reviewer alone. application-engineer's own AGENT.md scopes it to this suite's own tooling and explicitly disclaims a target project's capability work, so it was never the right support role for a target project's Linux hosts.",
       "task": "Implement linux systems implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3849,13 +3951,12 @@
           "linux-systems-implementer"
         ],
         "reviewers": [
-          "test-engineer",
-          "code-reviewer"
+          "infrastructure-reviewer"
         ],
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "infrastructure-provisioner"
         ],
         "matched_routes": [
           "linux-systems-execution"
@@ -3865,7 +3966,7 @@
     },
     {
       "id": "MCP_SERVER_EXECUTION_GOLDEN_1",
-      "description": "Narrow mcp-server-execution route regression fixture. Workflow shape: an MCP server with its tools, schemas, and permission boundaries is a delivered service.",
+      "description": "Narrow mcp-server-execution route regression fixture. Workflow shape: an MCP server with its tools, schemas, and permission boundaries is a delivered service. Support staffing (#223): mcp-server-implementer's AGENT.md names `ai-engineer` or `application-engineer`. #223 hypothesised `backend-engineer`; the role definition does not offer it, and the artifact decides against it -- tools, schemas, and permission boundaries are the model-facing surface, which is exactly the layer ai-engineer's AGENT.md claims (\"the model-facing layer of a product feature, not the surrounding service\") in a target project. application-engineer's own AGENT.md disclaims a target project's capability work, and the sibling `ai/**` execution routes (inference-gateway-execution, model-routing-execution) already staff `ai-engineer` for services of this shape. application-engineer is dropped, not supplemented; support staffing is unchanged by #227. Security review (#227): mcp-server-implementer's AGENT.md names `security-reviewer` literally (\"hand off to independent `security-reviewer` and `code-reviewer` review\") and this route staffed only test-engineer and code-reviewer, so `security-reviewer` is added. No specialized alternative was weighed, because the role definition names the role rather than leaving it to derivation; the artifact agrees with it, since this implementer's escalation list -- identity, permissions, external coordination -- is `security-reviewer`'s remit and not that of `pipeline-security-reviewer` (CI/CD trust boundaries) or `supply-chain-security-reviewer` (dependency and artifact provenance), neither of which is staffed here. test-engineer stays: tool-call tests are this implementer's own deliverable. code-reviewer stays; the missing half was security, not code review. No workflow_shape changed.",
       "task": "Implement mcp server implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3877,12 +3978,13 @@
         ],
         "reviewers": [
           "test-engineer",
-          "code-reviewer"
+          "code-reviewer",
+          "security-reviewer"
         ],
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "ai-engineer"
         ],
         "matched_routes": [
           "mcp-server-execution"
@@ -4161,7 +4263,7 @@
     },
     {
       "id": "PROTOCOL_FUZZING_EXECUTION_GOLDEN_1",
-      "description": "Narrow protocol-fuzzing-execution route regression fixture.",
+      "description": "Narrow protocol-fuzzing-execution route regression fixture. Reviewer staffing (#227 class, generalized): `protocol-fuzzing-implementer`'s AGENT.md commits unconditionally -- \"hand off to independent `test-engineer`, `security-reviewer`, and accountable code-owner review\" -- while the route staffed only `code-reviewer`. `security-reviewer` is added, derived from the artifact rather than from the list: the route matches `fuzz/protocols/**`, and the primary's own escalation clause names \"privileged runtime, sensitive capture, memory-safety policy\" while its Authority forbids it to \"bypass sandboxing, approve security posture, or target production services\". That is the same argument #227 made for `ebpf-execution` -- a security posture the primary explicitly may not approve, held by nobody in the plan. `code-reviewer` stays and satisfies the \"accountable code-owner\" half of the primary's phrasing; it answers harness correctness, not the security disposition of a reproducible crash. `test-engineer` is named in the same handoff sentence but already sits in this route's `support`, which is also where the primary's accountability line puts it (\"under `test-engineer` accountability\"); `support` is out of scope here and is deliberately not disturbed, so that ambiguity is recorded rather than resolved. `primary`, `support`, and `workflow_shape` are unchanged.",
       "task": "Implement protocol fuzzing implementation",
       "changed_files": [],
       "classification": "internal",
@@ -4172,7 +4274,8 @@
           "protocol-fuzzing-implementer"
         ],
         "reviewers": [
-          "code-reviewer"
+          "code-reviewer",
+          "security-reviewer"
         ],
         "support": [
           "product-intent-agent",
@@ -4187,7 +4290,7 @@
     },
     {
       "id": "PROTOCOL_INTEGRATION_EXECUTION_GOLDEN_1",
-      "description": "Narrow protocol-integration-execution route regression fixture. Workflow shape: protocol adapters, parsers, framing, and conformance fixtures are delivered service code.",
+      "description": "Narrow protocol-integration-execution route regression fixture. Workflow shape: protocol adapters, parsers, framing, and conformance fixtures are delivered service code. Support staffing (#223): protocol-integration-implementer's AGENT.md names `backend-engineer` or `api-contract-engineer`. The artifact is adapter and parser implementation, not contract design, and api-contract-engineer's own AGENT.md scopes itself to designing the contract \"not the system architecture around it or its implementation\", handing implementation off to frontend-engineer, backend-engineer, and application-engineer -- of which `backend-engineer` is the one that fits a server-side protocol adapter and that this implementer independently names. application-engineer is dropped, not supplemented; reviewers are unchanged.",
       "task": "Implement protocol integration implementation",
       "changed_files": [],
       "classification": "internal",
@@ -4204,7 +4307,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "protocol-integration-execution"
@@ -4245,7 +4348,7 @@
     },
     {
       "id": "QUANTUM_NETWORK_INTEGRATION_EXECUTION_GOLDEN_1",
-      "description": "Narrow quantum-network-integration-execution route regression fixture.",
+      "description": "Narrow quantum-network-integration-execution route regression fixture. Reviewer staffing (#227 class, generalized): `quantum-network-integration-implementer`'s AGENT.md commits unconditionally and to exactly one role -- \"hand off to independent `security-reviewer` review\" -- while the route staffed only `infrastructure-reviewer`, so the single review the primary names was the one nobody performed. `security-reviewer` is added, derived from the artifact: the route matches `quantum/network/**`, the primary's scope is \"QKD, QKMS, QRNG, and quantum-network integration artifacts\", and its own required checks instruct it to \"make no security, physical-trust, or timing-assurance claim\" while its Authority is that it \"May not approve cryptographic posture, access keys, or deploy\". `security-reviewer`'s required checks name that surface directly (\"Review cryptographic inventory, algorithm posture, key and certificate lifecycle requirements, agility, downgrade and fallback behavior, and any PQC, QKMS, QKD, QRNG, or specialized BOM claims without inventing undefined semantics\"), and the sibling `qkd-qkms-integration-execution` route over `quantum/qkd-qkms/**` already staffs it. The more specialized `cryptographic-assurance-engineer` and `quantum-timing-assurance-engineer` were weighed and rejected: the primary names neither, both are `document_author` roles in the security phase that produce assurance artifacts, and routing's own established pattern for this artifact family puts them on the other side of the handoff -- the sibling `qkd-qkms-integration-execution` route staffs `security-reviewer` as its reviewer with `cryptographic-assurance-engineer` in `support`. `infrastructure-reviewer` stays -- quantum-network integration lands real network and appliance topology, which is why `infrastructure-provisioner` holds `support`. `primary`, `support`, and `workflow_shape` are unchanged.",
       "task": "Implement quantum network integration implementation",
       "changed_files": [],
       "classification": "internal",
@@ -4256,7 +4359,8 @@
           "quantum-network-integration-implementer"
         ],
         "reviewers": [
-          "infrastructure-reviewer"
+          "infrastructure-reviewer",
+          "security-reviewer"
         ],
         "support": [
           "product-intent-agent",
@@ -4271,7 +4375,7 @@
     },
     {
       "id": "RBAC_MANIFEST_EXECUTION_GOLDEN_1",
-      "description": "Narrow rbac-manifest-execution route regression fixture.",
+      "description": "Narrow rbac-manifest-execution route regression fixture. Reviewer staffing (#227 class, generalized): `rbac-manifest-implementer`'s AGENT.md commits unconditionally -- \"hand off to independent `security-reviewer` and `infrastructure-reviewer` review\" -- while the route staffed only `security-reviewer`. `infrastructure-reviewer` is added, derived from the artifact: the route matches `security/rbac/**`, the primary's scope is \"scoped RBAC, service-account, and least-privilege manifests\" following \"shared Kubernetes, secrets, and autonomy policies\", and its Authority forbids it to \"apply to persistent clusters\". Those are cluster resources, and `infrastructure-reviewer` is the role whose required checks cover \"IAM scope and trust policies\" and \"rendered deployment resources and lifecycle behavior\" -- the question of what the manifest actually grants once applied, which `security-reviewer`'s posture-level lens does not resolve. Every sibling Kubernetes-manifest route (`kubernetes-manifest-execution`, `kubernetes-networking-execution`, `kubernetes-operator-execution`, `helm-chart-execution`) already staffs `infrastructure-reviewer`; this route was the outlier. `security-reviewer` stays, and `compliance-reviewer` continues to arrive from the co-matched `secrets-identity` route rather than from this one. `primary`, `support`, and `workflow_shape` are unchanged.",
       "task": "Implement rbac manifest implementation",
       "changed_files": [],
       "classification": "internal",
@@ -4283,6 +4387,7 @@
           "rbac-manifest-implementer"
         ],
         "reviewers": [
+          "infrastructure-reviewer",
           "security-reviewer",
           "compliance-reviewer"
         ],
@@ -4300,7 +4405,7 @@
     },
     {
       "id": "RTOS_INTEGRATION_EXECUTION_GOLDEN_1",
-      "description": "RTOS task and scheduling work selects the narrow RTOS executor under application-engineer accountability, with independent test and code review retained. Workflow shape: RTOS task and scheduling artifacts are delivered embedded code.",
+      "description": "RTOS task and scheduling work selects the narrow RTOS executor under backend-engineer accountability, with independent test and code review retained. Workflow shape: RTOS task and scheduling artifacts are delivered embedded code. Support staffing (#223): rtos-integration-implementer's AGENT.md names no accountable role, but embedded-c-implementer's knowledge focus explicitly covers \"RTOS tasks\", placing this route's artifacts in the embedded-application family whose accountability is `backend-engineer` rather than in the platform-image family that embedded-linux-platform-execution serves under `infrastructure-provisioner`. The previous sentence of this description asserted application-engineer accountability, which the route conferred but application-engineer's own AGENT.md disclaims for a target project's code; it is corrected here rather than left standing. application-engineer is dropped, not supplemented; reviewers are unchanged.",
       "task": "Implement an RTOS integration",
       "changed_files": [
         "rtos/tasks/watchdog.c"
@@ -4319,7 +4424,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "rtos-integration-execution"
@@ -4461,7 +4566,7 @@
     },
     {
       "id": "SUPPLY_CHAIN_REMEDIATION_EXECUTION_GOLDEN_1",
-      "description": "Narrow supply-chain-remediation-execution route regression fixture.",
+      "description": "Narrow supply-chain-remediation-execution route regression fixture. Support staffing (#229): supply-chain-remediation-implementer's AGENT.md names no accountable role -- it says only \"under accountable engineering ownership\" -- so the accountability is derived from the artifact rather than read off the primary. `application-engineer` is dropped: its own AGENT.md scopes it to this suite's own tooling, and this route matches `security/supply-chain-remediation/**`, a target-project path in the same family as `security/pki/**`, `security/pkcs11/**`, and `security/pqc/**` (whose routes staff the security-domain engineering role for their artifact, not application-engineer). This repository's own supply-chain surface is matched by the separate `supply-chain` and `packaging` routes, so #223's \"arguably this suite's own tooling\" reading does not survive the artifact test. `cicd-engineer` is staffed instead, on two pieces of evidence from the primary itself: its required checks are the only ones among the remediation implementers to name shared CI/CD policy alongside library and autonomy policy, and its artifact list -- dependency pinning, checksums, provenance, SBOM, artifact integrity -- is enumerated almost verbatim in `cicd-engineer`'s own required checks (pin tools to reviewed immutable versions; run dependency, license, SBOM, and provenance controls; build once and promote the same signed immutable artifact). `release-engineer` was weighed because it holds `support` on the neighbouring `supply-chain` and `release-automation-execution` routes, and rejected because its AGENT.md scopes it to promoting already approved artifacts and forbids changing source or artifacts, which is exactly what this route's primary does; it is not staffed here. #229 left `reviewers` untouched deliberately, having scoped itself to `support`. Reviewer staffing (#227 class, generalized): `supply-chain-remediation-implementer`'s AGENT.md commits unconditionally to two roles -- \"hand off to independent `supply-chain-security-reviewer` and `code-reviewer` review\" -- and only the first was staffed, so the code-review half is added here. It is derived from the artifact, not from the primary's list: this primary does not merely bump pins, it edits the controls themselves -- its required checks are to \"preserve lockfile and provenance verification controls\", and whether an edited verification control still fails closed is a correctness question, not a supply-chain-risk question. `supply-chain-security-reviewer`'s own stated lens is dependency approval, SBOM quality, provenance, signing, and artifact-integrity risk; `code-reviewer`'s covers correctness, error handling, and \"pinned versions, dependency health\" in the change under review. #229's finding that this route's artifact carries a CI/CD dimension (which is why `cicd-engineer` holds `support`) is the same reason the change surface is executable rather than declarative. The sibling `dependency-remediation-execution` is the control that shows this is not a bulk pattern: its primary names `supply-chain-security-reviewer` and nothing else, its route staffs exactly that, and it correctly needs no `code-reviewer` because its artifact is lockfiles and version pins rather than verification logic. `supply-chain-security-reviewer` stays -- it remains the specialized security reviewer this artifact wants, and is read_only. No workflow_shape changed -- pinning, checksum, provenance, and SBOM remediation is corrective work claiming no delivery shape. The sibling `dependency-remediation-execution` route was re-examined in the same pass and deliberately left at `application-engineer`: its primary names no accountability either and its paths are target-project paths too, so the same objection applies, but it carries no CI/CD-policy clause and its artifact (lockfiles and version pins) is ecosystem-specific, so no replacement is derivable from that route's own evidence and picking one would be reasoning from convenience -- recorded in #229 rather than changed here.",
       "task": "Implement supply chain remediation implementation",
       "changed_files": [],
       "classification": "internal",
@@ -4472,12 +4577,13 @@
           "supply-chain-remediation-implementer"
         ],
         "reviewers": [
+          "code-reviewer",
           "supply-chain-security-reviewer"
         ],
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "cicd-engineer"
         ],
         "matched_routes": [
           "supply-chain-remediation-execution"

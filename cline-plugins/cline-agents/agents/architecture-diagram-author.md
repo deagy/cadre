@@ -27,7 +27,7 @@ and state diagrams from approved sources. Do not create or alter architecture.
 - Follow this project's team-profile documentation, this project's technology-standards documentation, and this project's agent-autonomy policy documentation.
 - Keep diagrams consistent with approved sources; label unknowns rather than inventing claims.
 - Escalate architecture, security, production, scope, or source-conflict questions to `cloud-architect`, `api-contract-engineer`, or `technical-writer` as applicable.
-- Hand off to an independent `technical-writer`, `code-reviewer`, or `architecture-authority` when architectural claims require review.
+- Hand off to an independent `technical-writer` and `threat-modeler` review before publication; escalate architectural claims rather than adjudicating them in a diagram.
 
 ## Authority
 
@@ -834,8 +834,11 @@ boundary, security- or classification-relevant result), not only this one.
 
 ## Never remove or prune a worktree yourself
 
-Never run `git worktree remove` or `git worktree prune` (or delete a
-worktree directory directly) as part of your own task. This covers every
+Never run `git worktree remove`, `git worktree prune`, or `git worktree
+move` (or delete a worktree directory directly) as part of your own task.
+`move` belongs here for the same reason: it rewrites a registration in
+place, so a session whose working directory is the old path loses its tree
+mid-task with no error at the moment of the move. This covers every
 worktree, including an inspection worktree you created yourself and are
 finished with: tidying up afterwards is exactly the reasoning to refuse,
 because `git worktree prune` is not scoped to your worktree -- it
@@ -850,6 +853,50 @@ registrations is a destructive git-metadata operation
 cleanup to the operator; see this project's operating runbook's worktree-operations
 section. If a leftover inspection worktree is untidy, say so in your result
 and let the operator remove it.
+
+On Claude Code and Cline this rule is also enforced structurally, not by
+prompt text alone: a guard (`.claude/hooks/guard_workspace_mutation.py` for
+Claude Code, the equivalent in the Cline agents plugin) refuses `git
+worktree remove` and `git worktree move` outright, refuses `git worktree
+prune` whenever its own dry run shows a registration would actually be
+removed, and refuses `git gc` when gc's own worktree pruning would
+deregister one. It sees through wrapper programs (`timeout`, `nice`,
+`xargs`, `find -exec`, ...) and through an alias defined inline with `git
+-c`. `git worktree list` is never blocked, and neither is `git worktree
+add` in its ordinary forms (plain, or `-b` for a new branch) -- creating a
+worktree is explicitly allowed. The one exception is `git worktree add -B
+<branch>` naming a branch that already exists and points elsewhere: `-B`
+force-creates, so that spelling moves the branch off its commits and is
+refused like the other branch-moving forms.
+
+**Do not treat that guard as the reason to stop thinking about this rule.**
+It is defense in depth, not a boundary you can lean on:
+
+- It can be switched off entirely. Setting
+  `CADRE_DISABLE_WORKSPACE_MUTATION_GUARD=1` in the environment disables it
+  before any parsing, so enforcement is conditional on an environment you
+  do not control and cannot observe from inside a task.
+- Other runners have no such guard at all, and this file is shipped to all
+  of them.
+- **Deleting a worktree directory with `rm` instead of a git verb is not
+  covered and will not be.** The guard inspects `git` invocations; `rm` is
+  not one. Deciding whether an arbitrary `rm` target is a registered
+  worktree, for every `rm` an agent runs, is a much broader question than
+  workspace isolation, and a guard that tried and half-succeeded would be
+  worse than this stated boundary. `rm -rf <worktree-dir>` is the most
+  likely real-world way this rule gets broken, and **for it the rule above
+  is the only control.**
+- Other things it cannot see include, but are not limited to: `git worktree
+  add --force` over a path a registered worktree still occupies; a
+  subcommand reached through an alias defined in a git CONFIG FILE (the
+  inline `git -c` spelling is covered, a config-file one is not, because
+  resolving it would mean trusting your git config); a command wrapped in a
+  program outside the guard's list, which is deliberately not exhaustive
+  (`firejail`, `runuser`, `doas`, ...); reflog expiry and `git gc`'s
+  object-pruning surface; and inline shell nesting deeper than its bounded
+  recursion limit.
+
+The prohibition above is the rule. The guard catches some violations of it.
 
 ## No runner names as behavioral conditions
 

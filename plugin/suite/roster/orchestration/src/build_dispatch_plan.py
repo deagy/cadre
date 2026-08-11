@@ -265,6 +265,57 @@ def _select_workflow(
     return "unclassified"
 
 
+def _undeclared_workflow_shape_routes(matched_routes: list[dict[str, Any]]) -> list[str]:
+    """Name every matched route that declared no `workflow_shape` at all.
+
+    #210 gave every route in this repository's own `routing.yaml` an explicit
+    `workflow_shape`, and `test_selector.py::WorkflowShapeDeclarationTests`
+    keeps it that way. That guarantee stopped at the overlay boundary (#214).
+    `routing.schema.json` leaves the field optional on purpose so an overlay
+    written before #210 still validates, and `validate_routing_config` checks
+    only the *value* against `WORKFLOW_SHAPES`, never its presence. A consumer
+    adding a route in `.agents/orchestration/routing-overlay.json` could
+    therefore reproduce exactly the defect #210 was filed about: the route
+    matches, contributes no delivery shape to `_select_workflow`'s final
+    stage, and the plan falls back to "unclassified" by omission with nothing
+    to notice short of reading the plan.
+
+    Making the field *required* would give a stronger guarantee at the cost of
+    breaking every overlay that already adds a route -- a trade considered and
+    rejected in #214. So this reports rather than rejects: the plan names the
+    routes, turning a silent fallback into a visible one. It also covers any
+    *base* route that ever slips past the declaration test, which is why it
+    reads matched routes generally rather than overlay-added ones specifically
+    -- by the time a plan is built, an overlay-added route is an ordinary
+    entry in the effective configuration and is not distinguishable from a
+    base one, nor does it need to be.
+
+    Note what is NOT reported. "unclassified" is a declaration -- a route
+    stating it claims no delivery shape is doing the right thing and never
+    appears here. Only a missing (or null/empty) field does. Risk rules are
+    out of scope entirely: `workflow_shape` is a route-only field and
+    `_select_workflow` never reads a shape off a risk rule.
+
+    Two properties here are contractual, not incidental, and are pinned by
+    tests in test_undeclared_workflow_shape.py rather than left to the
+    reader's good faith:
+
+    - The result is in *match order*, never sorted. It lines up positionally
+      with the plan's own `matched_routes`, which is the only way a reader
+      can correlate the two lists. Route ids are unique within the effective
+      configuration, so no de-duplication is needed.
+    - Only *matched* routes appear. This reads `matched_routes`, not
+      `config["routes"]`; a configured-but-unmatched route with no shape is
+      not a defect in this plan and must never be reported here, or the
+      signal would fire on every plan and stop meaning anything.
+    """
+    return [
+        route["id"]
+        for route in matched_routes
+        if not (route.get("rule") or {}).get("workflow_shape")
+    ]
+
+
 def _build_human_gates(risks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     descriptions = {
         "persistent-database-migration": "An authorized human must approve persistent database migrations.",
@@ -704,8 +755,36 @@ def build_dispatch_plan(
         else {"status": "standalone", "reason": STANDALONE_REASON}
     )
 
+    # `undeclared_workflow_shape_routes` is optional and omitted when empty,
+    # but that did NOT make it additive: adding it incremented schema_version
+    # 5 -> 6. RUNBOOK.md's "When schema_version increments" rule is that any
+    # change to the emitted field set bumps the version, because
+    # selection.schema.json is closed (`additionalProperties: false`) and is
+    # vendored away from the producer, so a consumer's pinned copy rejects a
+    # plan carrying a property it has never seen. Its sole carve-out --
+    # "optional AND not emitted by default" -- does not reach this field, and
+    # the `provenance` analogy that first suggested it was wrong: the
+    # carve-out works only because the consumer never sees the field, while
+    # this one is emitted unconditionally to exactly the population it exists
+    # for (projects running a routing overlay), which are also the
+    # customized, long-lived installations most likely pinned to an older
+    # vendored schema. At 6 they fail on schema_version's `const`, an error
+    # naming the real cause; at 5 they would have failed on
+    # `additionalProperties` while the plan truthfully reported the version
+    # their copy claims to handle.
+    #
+    # Unlike `provenance` it IS part of the fingerprint's hashed payload,
+    # deliberately: it is computed from the same matched routes the rest of
+    # the plan is, not from generation-time environment state, so it belongs
+    # in the determinism check over what the selector actually decided. This
+    # is load-bearing rather than merely tidy. `matched_routes` emits only
+    # `id` + `reasons` and never the shape, so a route that flips between
+    # `workflow_shape: "unclassified"` and omitting the field entirely
+    # produces an otherwise byte-identical plan -- excluding this field would
+    # make those two genuinely different configurations fingerprint-identical.
+    undeclared_workflow_shapes = _undeclared_workflow_shape_routes(matched_routes)
     dispatch = {
-        "schema_version": 5,
+        "schema_version": 6,
         "task_id": task_id,
         "generated_at": generated_at,
         "status": "ready" if selected_agents else "needs-triage",
@@ -721,6 +800,11 @@ def build_dispatch_plan(
         },
         "matched_routes": [{"id": match["id"], "reasons": _reasons(match)} for match in matched_routes],
         "matched_risks": [{"id": match["id"], "reasons": _reasons(match)} for match in matched_risks],
+        **(
+            {"undeclared_workflow_shape_routes": undeclared_workflow_shapes}
+            if undeclared_workflow_shapes
+            else {}
+        ),
         "context_packs": _build_context_packs(
             matched_context_packs, input_data.get("classification")
         ),

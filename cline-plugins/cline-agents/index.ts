@@ -1047,19 +1047,122 @@ type DestructiveGitGuardBeforeToolHook = (
   context: DestructiveGitGuardToolContext,
 ) => DestructiveGitGuardToolResult | undefined | Promise<DestructiveGitGuardToolResult | undefined>;
 
+// cadre:guard-region:begin
+// -------------------------------------------------------------------------
+// Everything between these two markers is the workspace-mutation guard, the
+// TypeScript mirror of `.claude/hooks/guard_workspace_mutation.py`. The
+// markers are load-bearing, not decorative: `plugin/tools/
+// guard_parity_runner.mjs` slices this exact region out, prepends a small
+// prelude supplying `execFileAsync`/`isAbsolute`/`join`/`resolve` and the
+// `GitGuardDecision` type, and runs the shared behavioural fixture through
+// it under node's type stripping -- so the two guards are pinned to the
+// same OUTCOMES, not merely to the same structure (deagy/cadre#222).
+//
+// Consequences for editing: the region must stay self-contained (import
+// nothing declared outside it beyond that prelude), and both markers must
+// stay exactly as written.
+// -------------------------------------------------------------------------
+
+// The delimiter of a heredoc redirection, matched at the position just past
+// the `<<`: an optional `-` (the tab-stripping form), optional whitespace,
+// then a quoted or bare word. Applied only where the scanner has already
+// established that the `<<` is a real redirection -- outside quotes,
+// outside arithmetic expansion, and not part of a `<<<` here-string. That
+// context is NOT re-derivable from segment text after the fact, which is
+// why detection happens during the scan. Ports
+// guard_workspace_mutation.py's _HEREDOC_DELIMITER_RE.
+const HEREDOC_DELIMITER_RE = /^(-?)[ \t]*(?:'([^']*)'|"([^"]*)"|([A-Za-z0-9_.\-]+))/;
+
 /**
- * Split a shell command line into top-level segments on `&&`, `||`, `;`,
- * and `|`, respecting single/double quoting. Not a full shell parser --
- * good enough to find each independent `git ...` invocation in a chained
- * command line without being fooled by an operator sitting inside a quoted
- * string. Ports `guard_workspace_mutation.py`'s `split_top_level`.
+ * Remove backslash-newline line continuations, as the shell does.
+ * `git push \<newline> origin main --force` is one command, not two --
+ * without this, newline splitting turns it into `git push \` and
+ * `origin main --force`, neither of which is a destructive git invocation,
+ * so a force push walks through the guard. Quote-aware: inside SINGLE
+ * quotes a backslash-newline is literal and preserved; unquoted and inside
+ * double quotes it is a continuation and removed. Ports
+ * guard_workspace_mutation.py's `_joinLineContinuations`.
  */
-function splitTopLevel(command: string): string[] {
-  const segments: string[] = [];
-  let buf = "";
+function joinLineContinuations(command: string): string {
+  let out = "";
   let quote: string | null = null;
   let i = 0;
   const n = command.length;
+  while (i < n) {
+    const ch = command[i];
+    // Single quotes first: inside them a backslash is literal, so the
+    // continuation branch below must not see it.
+    if (quote === "'") {
+      out += ch;
+      if (ch === "'") quote = null;
+      i += 1;
+      continue;
+    }
+    if (ch === "\\" && command.slice(i + 1, i + 2) === "\n") {
+      i += 2;
+      continue;
+    }
+    if (ch === "\\" && command.slice(i + 1, i + 3) === "\r\n") {
+      i += 3;
+      continue;
+    }
+    if (quote === '"') {
+      out += ch;
+      if (ch === '"' && (i === 0 || command[i - 1] !== "\\")) quote = null;
+      i += 1;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      out += ch;
+      i += 1;
+      continue;
+    }
+    out += ch;
+    i += 1;
+  }
+  return out;
+}
+
+interface CommandSegment {
+  /** Segment text, NOT trimmed -- whitespace is load-bearing for heredoc
+   * terminator matching. Trimming happens on the way out of splitTopLevel. */
+  raw: string;
+  /** Did this segment begin a new LINE, rather than follow `&&`/`||`/`;`/`|`
+   * on the previous one? A heredoc body starts on the next line, so a
+   * command chained onto the opener's own line is a command, not body. */
+  newlineBefore: boolean;
+  /** Delimiters opened by this segment, in order, recorded only when the
+   * `<<` was seen outside quotes and outside arithmetic expansion. */
+  heredocs: Array<{ delimiter: string; allowsLeadingTabs: boolean }>;
+}
+
+/**
+ * Split into segments while retaining what the shell knew and the previous
+ * implementation discarded: the separator that produced each break, and
+ * whether a `<<` was inside quote state. Re-deriving those from finished
+ * segment text produced findings F7 (`cat > f <<EOF && git ...` swallowed
+ * the chained command), F8 (a quoted `"<<EOF"` mention treated as a real
+ * redirection) and the `$(( x << 2 ))` shift case. Ports
+ * guard_workspace_mutation.py's `_scan_segments`.
+ */
+function scanSegments(command: string): CommandSegment[] {
+  const segments: CommandSegment[] = [];
+  let buf = "";
+  let heredocs: CommandSegment["heredocs"] = [];
+  let quote: string | null = null;
+  let arithmeticDepth = 0;
+  let newlineBefore = false;
+  let i = 0;
+  const n = command.length;
+
+  const flush = (nextStartsALine: boolean) => {
+    segments.push({ raw: buf, newlineBefore, heredocs });
+    buf = "";
+    heredocs = [];
+    newlineBefore = nextStartsALine;
+  };
+
   while (i < n) {
     const ch = command[i];
     if (quote) {
@@ -1068,30 +1171,141 @@ function splitTopLevel(command: string): string[] {
       i += 1;
       continue;
     }
+    // An unquoted backslash escapes the next character, so `\;` is a
+    // LITERAL semicolon and not a command separator. Without this,
+    // `find . -exec git worktree remove {} \;` -- the ordinary spelling of
+    // `find -exec` -- split at the `;` and its `git` invocation was never
+    // evaluated. Backslash-NEWLINE is already gone by this point
+    // (`joinLineContinuations`). Ports guard_workspace_mutation.py's
+    // matching branch in `_scan_segments`.
+    if (ch === "\\" && i + 1 < n) {
+      buf += ch;
+      buf += command[i + 1];
+      i += 2;
+      continue;
+    }
     if (ch === "'" || ch === '"') {
       quote = ch;
       buf += ch;
       i += 1;
       continue;
     }
+    // `$(( ... ))`: `<<` in here is a left-shift operator, not a
+    // redirection. Other arithmetic contexts (a bare `(( ))`, `let`) are
+    // not modelled -- a known limit, in the fail-open direction only.
+    if (command.slice(i, i + 3) === "$((") {
+      arithmeticDepth += 1;
+      buf += "$((";
+      i += 3;
+      continue;
+    }
+    if (arithmeticDepth > 0 && command.slice(i, i + 2) === "))") {
+      arithmeticDepth -= 1;
+      buf += "))";
+      i += 2;
+      continue;
+    }
     const pair = command.slice(i, i + 2);
     if (pair === "&&" || pair === "||") {
-      segments.push(buf);
-      buf = "";
+      flush(false);
       i += 2;
       continue;
     }
     if (ch === ";" || ch === "|") {
-      segments.push(buf);
-      buf = "";
+      flush(false);
       i += 1;
       continue;
+    }
+    if (ch === "\n") {
+      flush(true);
+      i += 1;
+      continue;
+    }
+    if (
+      arithmeticDepth === 0 &&
+      pair === "<<" &&
+      command.slice(i, i + 3) !== "<<<" && // here-STRING: no body, no terminator
+      (i === 0 || command[i - 1] !== "<") // not the tail of a `<<<`
+    ) {
+      const match = HEREDOC_DELIMITER_RE.exec(command.slice(i + 2));
+      // Explicit first-defined selection, matching the Python mirror's
+      // behaviour for an empty delimiter (`<<''`).
+      const delimiter = match ? (match[2] ?? match[3] ?? match[4]) : undefined;
+      if (match && delimiter !== undefined) {
+        heredocs.push({ delimiter, allowsLeadingTabs: match[1] === "-" });
+        buf += command.slice(i, i + 2 + match[0].length);
+        i += 2 + match[0].length;
+        continue;
+      }
     }
     buf += ch;
     i += 1;
   }
-  segments.push(buf);
-  return segments.map((s) => s.trim()).filter((s) => s.length > 0);
+  flush(false);
+  return segments;
+}
+
+/**
+ * Drop heredoc body lines (and their terminator line). Keeps three things
+ * a naive consume-forward pass gets wrong (F7): the opening segment (a
+ * real command), every remaining segment on the opener's OWN line, and
+ * everything after the terminator. Terminator matching is exact against
+ * untrimmed text, as the shell requires -- only the `<<-` form accepts
+ * leading TABS. Ports guard_workspace_mutation.py's
+ * `_strip_heredoc_bodies`.
+ */
+function stripHeredocBodies(records: CommandSegment[]): CommandSegment[] {
+  const out: CommandSegment[] = [];
+  let i = 0;
+  while (i < records.length) {
+    const record = records[i];
+    out.push(record);
+    i += 1;
+    if (record.heredocs.length === 0) continue;
+
+    // The rest of the opener's own line is commands, not body.
+    while (i < records.length && !records[i].newlineBefore) {
+      out.push(records[i]);
+      i += 1;
+    }
+
+    // Bodies begin on the following line, one per delimiter, in order.
+    for (const { delimiter, allowsLeadingTabs } of record.heredocs) {
+      while (i < records.length) {
+        const segment = records[i];
+        const aloneOnItsLine =
+          segment.newlineBefore && (i + 1 >= records.length || records[i + 1].newlineBefore);
+        i += 1;
+        if (!aloneOnItsLine) continue;
+        let candidate = segment.raw.replace(/\r+$/, "");
+        if (allowsLeadingTabs) candidate = candidate.replace(/^\t+/, "");
+        if (candidate === delimiter) break;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Split a shell command line into top-level segments on `&&`, `||`, `;`,
+ * `|`, and NEWLINES, respecting single/double quoting. Not a full shell
+ * parser -- good enough to find each independent `git ...` invocation in a
+ * chained command line without being fooled by an operator sitting inside
+ * a quoted string. Ports `guard_workspace_mutation.py`'s `split_top_level`.
+ *
+ * Newline is a separator for the same reason `;` is: the shell treats them
+ * identically as command terminators. Omitting it (as this function did
+ * until deagy/cadre#215) silently defeated EVERY handler -- the tokenizer
+ * treats a newline as ordinary whitespace, so a two-line command collapsed
+ * into one token list whose first token was the first line's program and
+ * `parseGitInvocation` returned null. No adversarial intent required:
+ * multi-line commands are routine. A newline inside quotes is NOT a
+ * separator, and backslash-newline continuations are joined first so a
+ * command written across several lines is still seen as one invocation.
+ */
+function splitTopLevel(command: string): string[] {
+  const records = stripHeredocBodies(scanSegments(joinLineContinuations(command)));
+  return records.map((r) => r.raw.trim()).filter((s) => s.length > 0);
 }
 
 /**
@@ -1152,46 +1366,83 @@ function tokenizeCommand(segment: string): string[] | null {
 }
 
 const ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
-// "env" added (Wave 3 finding 1, deagy/cadre#129): `env git reset --hard`
-// was a complete, low-effort bypass -- `env` is a real command, not a shell
-// builtin, so it reached this guard as an unrecognized leading token and the
-// `git ...` invocation behind it was never inspected. Handled specially
-// below (not just added to the plain wrapper set) because, unlike
-// `sudo`/`command`/`exec`/`nohup`/`time`, `env` accepts its own flags and
-// `VAR=value` assignment pairs before the real command
-// (`env VAR=value... <command>`, `env -i <command>`).
-const WRAPPER_TOKENS = new Set(["sudo", "command", "exec", "nohup", "time", "env"]);
+// Wrapper programs that run another command, mapped to the flags of their
+// OWN that consume the following token as a value. Ports
+// guard_workspace_mutation.py's `_WRAPPER_FLAGS_WITH_VALUE` -- see that
+// file for why an arity error in either direction only ever loses coverage
+// and why the set is deliberately non-exhaustive. "env" was Wave 3 finding
+// 1 (deagy/cadre#129); `timeout`/`nice`/`ionice`/`stdbuf`/`setsid`/`chrt`/
+// `taskset`/`xargs` were added under deagy/cadre#219, where
+// `timeout 10 git worktree remove <path>` was confirmed to walk straight
+// through this guard.
+const WRAPPER_FLAGS_WITH_VALUE: Record<string, Set<string>> = {
+  sudo: new Set([
+    "-u", "--user", "-g", "--group", "-p", "--prompt", "-C", "--close-from",
+    "-h", "--host", "-r", "--role", "-t", "--type", "-U", "--other-user",
+    "-T", "--command-timeout", "-D", "--chdir", "-R", "--chroot",
+  ]),
+  command: new Set<string>(),
+  exec: new Set<string>(),
+  nohup: new Set<string>(),
+  time: new Set<string>(),
+  env: new Set(["-u", "--unset", "-C", "--chdir", "-S", "--split-string"]),
+  timeout: new Set(["-s", "--signal", "-k", "--kill-after"]),
+  nice: new Set(["-n", "--adjustment"]),
+  ionice: new Set(["-c", "--class", "-n", "--classdata", "-p", "--pid", "-P", "--pgid", "-u", "--uid"]),
+  stdbuf: new Set(["-i", "--input", "-o", "--output", "-e", "--error"]),
+  setsid: new Set<string>(),
+  chrt: new Set(["-p", "--pid", "-T", "--sched-runtime", "-P", "--sched-period", "-D", "--sched-deadline"]),
+  taskset: new Set(["-c", "--cpu-list", "-p", "--pid"]),
+  xargs: new Set([
+    "-I", "--replace", "-L", "--max-lines", "-n", "--max-args",
+    "-P", "--max-procs", "-s", "--max-chars", "-d", "--delimiter",
+    "-E", "--eof", "-a", "--arg-file", "--process-slot-var",
+  ]),
+};
+const WRAPPER_TOKENS = new Set(Object.keys(WRAPPER_FLAGS_WITH_VALUE));
+// Wrappers taking a mandatory positional of their own before the command
+// (`timeout <duration>`, `chrt <priority>`, `taskset <mask>`), skipped
+// lazily so `taskset -c 0,1 git ...` -- which supplies the same value
+// through a flag -- does not step over `git` itself.
+const WRAPPER_LEADING_POSITIONALS: Record<string, number> = { timeout: 1, chrt: 1, taskset: 1 };
+// Wrappers accepting `VAR=value` pairs before the command they run.
+const WRAPPER_TAKES_ENV_ASSIGNMENTS = new Set(["env", "sudo"]);
 const GIT_GLOBAL_FLAGS_WITH_VALUE = ["-C", "--git-dir", "--work-tree", "--namespace", "-c"];
-// GNU coreutils `env` flags that take a following value argument (so it
-// must be skipped along with the flag itself, not mistaken for the real
-// command). Conservative, not exhaustive -- an unrecognized `env` flag
-// falls through to `t.startsWith("-")` below and is skipped on its own
-// without consuming a value, which is safe here: it can only make this
-// guard fail open one token later than ideal, never mis-treat a value as
-// the command.
-const ENV_FLAGS_WITH_VALUE = new Set(["-u", "--unset", "-C", "--chdir", "-S", "--split-string"]);
 
 function stripLeadingWrappers(tokens: string[]): string[] {
   let i = 0;
   while (i < tokens.length) {
-    if (ENV_ASSIGN_RE.test(tokens[i])) {
+    const token = tokens[i];
+    if (ENV_ASSIGN_RE.test(token)) {
       i += 1;
       continue;
     }
-    if (!WRAPPER_TOKENS.has(tokens[i])) break;
-    const isEnv = tokens[i] === "env";
+    if (!WRAPPER_TOKENS.has(token)) break;
+    const flagsWithValue = WRAPPER_FLAGS_WITH_VALUE[token];
+    const takesAssignments = WRAPPER_TAKES_ENV_ASSIGNMENTS.has(token);
+    let positionalsLeft = WRAPPER_LEADING_POSITIONALS[token] ?? 0;
     i += 1;
-    if (!isEnv) continue;
-    // Continue past `env`'s own flags/`VAR=value` pairs before the real
-    // command: `env VAR=value... <command>`, `env -i <command>`.
     while (i < tokens.length) {
       const t = tokens[i];
-      if (ENV_ASSIGN_RE.test(t)) {
+      if (t === "--") {
         i += 1;
+        break;
+      }
+      if (flagsWithValue.has(t)) {
+        i += 2;
         continue;
       }
       if (t.startsWith("-") && t !== "-") {
-        i += ENV_FLAGS_WITH_VALUE.has(t) ? 2 : 1;
+        i += 1;
+        continue;
+      }
+      if (takesAssignments && ENV_ASSIGN_RE.test(t)) {
+        i += 1;
+        continue;
+      }
+      if (positionalsLeft > 0 && t !== "git") {
+        positionalsLeft -= 1;
+        i += 1;
         continue;
       }
       break;
@@ -1200,21 +1451,87 @@ function stripLeadingWrappers(tokens: string[]): string[] {
   return tokens.slice(i);
 }
 
+// `find`'s command-carrying primaries. Unlike everything in
+// `WRAPPER_TOKENS` these take the command in ARGUMENT position, terminated
+// by `;` or `+`, so prefix stripping cannot reach them. Ports
+// guard_workspace_mutation.py's `find_command_invocations`.
+const FIND_COMMAND_PRIMARIES = new Set(["-exec", "-execdir", "-ok", "-okdir"]);
+const FIND_COMMAND_TERMINATORS = new Set([";", "+"]);
+
+function findCommandInvocations(tokens: string[]): string[][] {
+  if (tokens.length === 0 || tokens[0] !== "find") return [];
+  const found: string[][] = [];
+  let i = 0;
+  while (i < tokens.length) {
+    if (!FIND_COMMAND_PRIMARIES.has(tokens[i])) {
+      i += 1;
+      continue;
+    }
+    i += 1;
+    const body: string[] = [];
+    while (i < tokens.length && !FIND_COMMAND_TERMINATORS.has(tokens[i])) {
+      body.push(tokens[i]);
+      i += 1;
+    }
+    if (body.length > 0) found.push(body);
+  }
+  return found;
+}
+
 /**
- * Return `{ subcommand, subArgs, explicitCwd }` for a token list that
- * starts with `git`, skipping global flags (including `-C <dir>`), or
- * `null` if this isn't a recognizable `git <subcommand> ...` invocation.
+ * Fold one `git -C <value>` onto the directory already accumulated. Git
+ * applies repeated `-C` CUMULATIVELY, each relative to the previous, and an
+ * absolute value resets the accumulation; an empty value is a no-op.
+ * Verified against git 2.53.0 -- see `accumulate_dash_c` in
+ * guard_workspace_mutation.py for the probe transcript. Keeping only the
+ * LAST value (this parser's behaviour until deagy/cadre#220) resolved
+ * `git -C .worktrees -C ../ worktree prune` to the wrong directory, so
+ * every state-probing handler ran its git calls somewhere else and failed
+ * open.
+ */
+function accumulateDashC(current: string | undefined, value: string): string | undefined {
+  if (!value) return current;
+  if (isAbsolute(value)) return value;
+  if (current === undefined) return value;
+  return join(current, value);
+}
+
+/**
+ * Record one `git -c <name>=<value>` pair. Config variable names are
+ * case-insensitive (verified against git 2.53.0), so the key is lowercased;
+ * a `-c <name>` with no `=` sets a boolean and carries no definition.
+ */
+function recordGitConfig(config: Record<string, string>, pair: string): void {
+  const index = pair.indexOf("=");
+  if (index === -1) return;
+  config[pair.slice(0, index).trim().toLowerCase()] = pair.slice(index + 1);
+}
+
+/**
+ * Return `{ subcommand, subArgs, explicitCwd, config }` for a token list
+ * that starts with `git`, skipping global flags, or `null` if this isn't a
+ * recognizable `git <subcommand> ...` invocation. `config` maps lowercased
+ * `-c <name>=<value>` variables to their values, which is what makes a
+ * command-line-defined alias visible to `expandGitAlias`.
  */
 function parseGitInvocation(
   tokens: string[],
-): { subcommand: string; subArgs: string[]; explicitCwd?: string } | null {
+): { subcommand: string; subArgs: string[]; explicitCwd?: string; config: Record<string, string> } | null {
   if (tokens.length === 0 || tokens[0] !== "git") return null;
   let i = 1;
   let explicitCwd: string | undefined;
+  const config: Record<string, string> = {};
   while (i < tokens.length) {
     const t = tokens[i];
     if (t === "-C") {
-      if (i + 1 < tokens.length) explicitCwd = tokens[i + 1];
+      if (i + 1 < tokens.length) explicitCwd = accumulateDashC(explicitCwd, tokens[i + 1]);
+      i += 2;
+      continue;
+    }
+    if (t === "-c") {
+      // Only the detached spelling exists: verified against git 2.53.0 that
+      // `git -calias.x=...` is rejected with "unknown option".
+      if (i + 1 < tokens.length) recordGitConfig(config, tokens[i + 1]);
       i += 2;
       continue;
     }
@@ -1233,7 +1550,7 @@ function parseGitInvocation(
     break;
   }
   if (i >= tokens.length) return null;
-  return { subcommand: tokens[i], subArgs: tokens.slice(i + 1), explicitCwd };
+  return { subcommand: tokens[i], subArgs: tokens.slice(i + 1), explicitCwd, config };
 }
 
 // ---------------------------------------------------------------------------
@@ -1272,11 +1589,134 @@ async function isLocalBranch(cwd: string, name: string): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------------------
+// Argument-shape helpers shared by the handlers, modelling git's own
+// parse-options behaviour for short flags. Ports
+// guard_workspace_mutation.py's `flag_value`/`flag_present`/`positionals`.
+// ---------------------------------------------------------------------------
+
+/** The letters of a combined short-flag group (`-fB` -> `"fB"`), or null. */
+function shortFlagGroup(token: string): string | null {
+  if (token.length > 1 && token[0] === "-" && token[1] !== "-" && /^[A-Za-z]+$/.test(token.slice(1))) {
+    return token.slice(1);
+  }
+  return null;
+}
+
+/**
+ * Value of `<flag> <value>`, `--long=<value>`, or -- for a short flag --
+ * git's attached and combined spellings. Verified against git 2.53.0:
+ * `-Bexisting` resets `existing` like `-B existing`; `-fB existing` does
+ * too (`B` last in the group, value is the next token); `-Bf existing`
+ * creates a branch named `f` with `existing` as the START POINT (`B` not
+ * last, so the rest of the group is its value). `-B=name` is NOT a git
+ * spelling -- `git checkout -B=weird` creates a branch literally named
+ * `=weird` -- so the attached branch deliberately returns `"=weird"` and
+ * the `<flag>=<value>` branch is reserved for LONG flags.
+ *
+ * NOT `a.split("=", 2)[1]`: JS `split` with a limit TRUNCATES rather than
+ * keeping the remainder, so `--expire=a=b` would yield "a" where Python's
+ * `split("=", 1)[1]` yields "a=b". Slice past the first `=`.
+ */
+function flagValue(args: string[], flag: string): string | undefined {
+  const isShort = flag.length === 2 && flag.startsWith("-") && !flag.startsWith("--");
+  const letter = isShort ? flag[1] : undefined;
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (a === flag) return args[i + 1];
+    if (isShort && letter !== undefined) {
+      const group = shortFlagGroup(a);
+      if (group !== null && group.includes(letter)) {
+        const position = group.indexOf(letter);
+        if (position === group.length - 1) return args[i + 1];
+        return group.slice(position + 1);
+      }
+      if (a.startsWith(flag) && a.length > 2) return a.slice(2);
+    } else if (a.startsWith(`${flag}=`)) {
+      return a.slice(a.indexOf("=") + 1);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Whether `flag` appears at all, in any spelling `flagValue` understands.
+ * Distinct from `flagValue(...) !== undefined`, which cannot tell "absent"
+ * from "present with no value left on the line".
+ */
+function flagPresent(args: string[], flag: string): boolean {
+  const isShort = flag.length === 2 && flag.startsWith("-") && !flag.startsWith("--");
+  const letter = isShort ? flag[1] : undefined;
+  for (const a of args) {
+    if (a === flag) return true;
+    if (isShort && letter !== undefined) {
+      const group = shortFlagGroup(a);
+      if (group !== null && group.includes(letter)) return true;
+      if (a.startsWith(flag) && a.length > 2) return true;
+    } else if (a.startsWith(`${flag}=`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Whether `token` takes the FOLLOWING token as its value. */
+function consumesNextToken(token: string, flagsWithValue: Set<string>): boolean {
+  if (flagsWithValue.has(token)) return true;
+  const group = shortFlagGroup(token);
+  if (group !== null && group.length > 1) {
+    for (let position = 0; position < group.length; position += 1) {
+      if (flagsWithValue.has(`-${group[position]}`)) return position === group.length - 1;
+    }
+  }
+  return false;
+}
+
+/**
+ * Positional arguments, skipping flags and their values. Conservative, not
+ * exhaustive -- an unrecognized flag falls through to the generic
+ * `startsWith("-")` skip without consuming a value. Getting a
+ * `flagsWithValue` set wrong mis-resolves a start point, which `git
+ * rev-parse` then fails to resolve, which fails open.
+ */
+function commandPositionals(args: string[], flagsWithValue: Set<string>): string[] {
+  const found: string[] = [];
+  let i = 0;
+  while (i < args.length) {
+    const a = args[i];
+    if (a === "--") {
+      found.push(...args.slice(i + 1));
+      break;
+    }
+    if (consumesNextToken(a, flagsWithValue)) {
+      i += 2;
+      continue;
+    }
+    if (a.startsWith("-") && a !== "-") {
+      i += 1;
+      continue;
+    }
+    found.push(a);
+    i += 1;
+  }
+  return found;
+}
+
+// ---------------------------------------------------------------------------
 // Per-subcommand checks -- each returns a decision to deny, or `null` to
 // express no opinion (allow). Ports guard_workspace_mutation.py's
 // check_reset/check_clean/check_branch/check_push/check_checkout/
-// check_restore, same scope and same deliberate exclusions (see that file's
-// module docstring for what is and isn't covered, and why).
+// check_switch/check_restore/check_worktree/check_gc, same scope and same
+// deliberate exclusions (see that file's module docstring for what is and
+// isn't covered, and why -- including the gaps that stay open: `rm -rf` of
+// a worktree directory, config-file aliases, wrappers outside the set, and
+// gc's object-pruning surface).
+//
+// This mirror is kept in sync deliberately, and since deagy/cadre#222 that
+// is CHECKED rather than asserted: `plugin/tools/test_guard_parity.py`
+// compares the two files' handler tables, wrapper sets, global-flag sets
+// and recursion bounds, and runs `plugin/tools/guard_parity_fixture.json`
+// through both implementations against the same repository state. A
+// behavioural change made here and not there (or vice versa) fails.
 // ---------------------------------------------------------------------------
 
 async function checkReset(subArgs: string[], cwd: string): Promise<GitGuardDecision | null> {
@@ -1441,9 +1881,70 @@ async function checkBranchSwitch(cwd: string, branch: string): Promise<GitGuardD
   };
 }
 
+// `git checkout` / `git switch` flags that consume the following token, so
+// a start point is never confused with one of their values. Read off
+// `git checkout -h` / `git switch -h` on git 2.53.0. Note switch's `-C` is
+// the SUBCOMMAND's force-create flag and has nothing to do with git's
+// global `-C <dir>`, which `parseGitInvocation` consumes before the
+// subcommand is read.
+const CHECKOUT_FLAGS_WITH_VALUE = new Set([
+  "-b", "-B", "-U", "--unified", "--conflict", "--orphan",
+  "--pathspec-from-file", "--inter-hunk-context",
+]);
+const SWITCH_FLAGS_WITH_VALUE = new Set([
+  "-c", "--create", "-C", "--force-create", "--conflict", "--orphan",
+]);
+
+/**
+ * Shared `-B`/`-C` force-create check for `checkout`, `switch`, and
+ * `worktree add`: refuse only when the named branch already exists AND its
+ * tip differs from the resolved start point, i.e. only when the command
+ * would actually move a branch off its commits. `startIndex` is where the
+ * start point sits among the positionals -- 0 for `checkout -B <branch>
+ * [<start>]` and `switch -C <branch> [<start>]`, 1 for `worktree add -B
+ * <branch> <path> [<start>]`. Ports guard_workspace_mutation.py's
+ * `_check_force_created_branch` (deagy/cadre#221).
+ */
+async function checkForceCreatedBranch(
+  cwd: string,
+  args: string[],
+  forced: string,
+  flagsWithValue: Set<string>,
+  spelling: string,
+  startIndex = 0,
+): Promise<GitGuardDecision | null> {
+  if (!(await isLocalBranch(cwd, forced))) return null; // behaves like `-b`/`-c`
+  const found = commandPositionals(args, flagsWithValue);
+  const start = found.length > startIndex ? found[startIndex] : "HEAD";
+  const current = await runGit(["rev-parse", "--verify", forced], cwd);
+  const target = await runGit(["rev-parse", "--verify", start], cwd);
+  if (!current || current.code !== 0 || !target || target.code !== 0) return null; // fail open
+  if (current.stdout.trim() === target.stdout.trim()) return null; // moves nothing
+  return {
+    reason:
+      `Blocked: \`git ${spelling} ${forced}\` force-resets the existing branch ` +
+      `'${forced}' to '${start}', moving it off the commits it points at now -- git ` +
+      "reports this only as a 'Switched to and reset branch' note, and any commit no " +
+      "other ref reaches is then recoverable from `git reflog` alone. That is " +
+      "`agent-autonomy.yaml`'s `discard_uncommitted_work_or_move_branches: never`, and " +
+      "`workspace-isolation.md` names this flag. Creating a branch is allowed: use the " +
+      "non-forcing spelling with a name that does not exist yet (git refuses it if the " +
+      `name is taken), or check out '${forced}' where it already is.`,
+  };
+}
+
 async function checkCheckout(subArgs: string[], cwd: string): Promise<GitGuardDecision | null> {
   if (subArgs.length === 0) return null; // bare `git checkout`: lists status, not destructive
-  if (subArgs.includes("-b") || subArgs.includes("-B")) return null;
+
+  if (flagPresent(subArgs, "-B")) {
+    // `-B` force-creates: when the branch exists and points elsewhere this
+    // moves it off its commits with no warning (deagy/cadre#221).
+    const forced = flagValue(subArgs, "-B");
+    if (!forced) return null; // no resolvable name; git errors on its own
+    return checkForceCreatedBranch(cwd, subArgs, forced, CHECKOUT_FLAGS_WITH_VALUE, "checkout -B");
+  }
+  // `-b` is genuinely safe: git refuses it when the branch already exists.
+  if (flagPresent(subArgs, "-b")) return null;
 
   if (subArgs.includes("--")) {
     const idx = subArgs.indexOf("--");
@@ -1474,12 +1975,20 @@ async function checkRestore(subArgs: string[], cwd: string): Promise<GitGuardDec
   while (i < subArgs.length) {
     const a = subArgs[i];
     if (a === "--source" || a === "-s") {
-      source = subArgs[i + 1];
+      // Bounds-checked to match the Python mirror: a trailing `--source`
+      // with no value leaves `source` undefined rather than assigning
+      // `undefined` over a value a previous flag had set.
+      if (i + 1 < subArgs.length) source = subArgs[i + 1];
       i += 2;
       continue;
     }
     if (a.startsWith("--source=")) {
-      source = a.split("=", 2)[1];
+      // Same idiom slip as `flagValue` above: a limited JS `split`
+      // truncates rather than keeping the remainder, so a ref containing
+      // `=` was silently cut short. Python's `split("=", 1)[1]` keeps it.
+      // Pinned by the shared parity fixture (deagy/cadre#222), not only by
+      // this comment.
+      source = a.slice(a.indexOf("=") + 1);
       i += 1;
       continue;
     }
@@ -1497,16 +2006,326 @@ async function checkRestore(subArgs: string[], cwd: string): Promise<GitGuardDec
   return checkRefIntoPaths(cwd, source, paths, "restore");
 }
 
-type GitGuardHandler = (subArgs: string[], cwd: string) => Promise<GitGuardDecision | null> | GitGuardDecision | null;
+/**
+ * `git switch` -- the newer spelling of the `checkout` operations already
+ * guarded here (deagy/cadre#221). `-C`/`--force-create` is `checkout -B`
+ * under another name; verified against git 2.53.0 that `git switch -C
+ * existing`, `-Cexisting`, and `-fC existing` all move `existing` off its
+ * commits. The plain `git switch <branch>` form gets checkout's dirty-tree
+ * check for the same reason: without it the whole branch-switch guard is
+ * bypassable by choosing the other spelling, which
+ * `workspace-isolation.md` lists side by side. `-c`/`--create`,
+ * `--orphan`, and `-d`/`--detach` move no existing branch and are allowed.
+ */
+async function checkSwitch(subArgs: string[], cwd: string): Promise<GitGuardDecision | null> {
+  if (subArgs.length === 0) return null; // bare `git switch`: errors, mutates nothing
 
+  if (flagPresent(subArgs, "-C") || flagPresent(subArgs, "--force-create")) {
+    // `||`, not `??`: Python's `or` also falls through on an EMPTY value,
+    // and the two files must mean the same thing, not merely coincide.
+    // (This is the exact class of divergence deagy/cadre#222 names.)
+    const forced = flagValue(subArgs, "-C") || flagValue(subArgs, "--force-create");
+    if (!forced) return null; // no resolvable name; git errors on its own
+    return checkForceCreatedBranch(cwd, subArgs, forced, SWITCH_FLAGS_WITH_VALUE, "switch -C");
+  }
+
+  if (
+    flagPresent(subArgs, "-c")
+    || flagPresent(subArgs, "--create")
+    || subArgs.includes("--orphan")
+    || flagPresent(subArgs, "-d")
+    || subArgs.includes("--detach")
+  ) {
+    return null;
+  }
+
+  const found = commandPositionals(subArgs, SWITCH_FLAGS_WITH_VALUE);
+  if (found.length === 0) return null;
+  const name = found[0];
+  if (await isLocalBranch(cwd, name)) return checkBranchSwitch(cwd, name);
+  return null;
+}
+
+// How `git gc` decides whether to deregister a worktree, and the default it
+// uses. Verified against git 2.53.0, CONTRADICTING deagy/cadre#217's
+// framing: plain `git gc`, `git gc --prune=now`, and `--prune=all` all left
+// a just-moved worktree registered (gc's own `--prune=<date>` governs
+// loose-OBJECT pruning), while `git -c gc.worktreePruneExpire=now gc`
+// deregistered it immediately, and plain `git gc` deregistered it once its
+// administrative files aged past the default. So the probe below runs
+// `worktree prune`'s dry run at gc's EFFECTIVE expiry, not at prune's own
+// immediate default. Ports guard_workspace_mutation.py's `check_gc`.
+const GC_WORKTREE_PRUNE_EXPIRE_DEFAULT = "3.months.ago";
+const GC_WORKTREE_PRUNE_EXPIRE_KEY = "gc.worktreepruneexpire";
+
+/**
+ * `git gc` -- scoped to worktree registrations only. `gc` runs worktree
+ * pruning as housekeeping, reaching the same registration state
+ * `checkWorktree`'s `prune` refusal protects through a subcommand that
+ * names no worktree. Deliberately NOT extended to gc's destructive surface
+ * generally: reflog expiry and `--prune=now` object pruning stay the
+ * documented gap they were.
+ */
+async function checkGc(
+  subArgs: string[],
+  cwd: string,
+  config?: Record<string, string>,
+): Promise<GitGuardDecision | null> {
+  let expire = config?.[GC_WORKTREE_PRUNE_EXPIRE_KEY];
+  if (expire === undefined) {
+    const configured = await runGit(["config", "--get", "gc.worktreePruneExpire"], cwd);
+    expire =
+      configured && configured.code === 0 && configured.stdout.trim()
+        ? configured.stdout.trim()
+        : GC_WORKTREE_PRUNE_EXPIRE_DEFAULT;
+  }
+  if (!expire) expire = GC_WORKTREE_PRUNE_EXPIRE_DEFAULT;
+
+  const result = await runGit(["worktree", "prune", "-n", "-v", "--expire", expire], cwd);
+  if (!result || result.code !== 0) return null; // can't confirm state; fail open
+  // Same stream quirk as checkWorktree's prune branch: git 2.53.0 reports
+  // the dry run on stderr.
+  const report = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n");
+  if (!report) return null; // nothing prunable: gc deregisters nothing
+
+  const entries = report
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const example = entries[0] ?? "a registered worktree";
+  return {
+    reason:
+      "Blocked: `git gc` prunes worktrees as part of its own housekeeping, and here " +
+      `that would deregister ${entries.length} worktree(s) (e.g. ${example}). Like ` +
+      "`git worktree prune`, gc names no target -- it removes whatever git considers " +
+      "unreachable, which can include a teammate's worktree on a momentarily " +
+      "unavailable path. `workspace-isolation.md` says never remove or prune a worktree " +
+      "yourself. Inspect what would go with `git worktree prune -n -v` (allowed, it " +
+      "removes nothing) and report it, or ask the operator to run gc themselves.",
+  };
+}
+
+// `git worktree add` flags that consume the following token as their value,
+// so it must not be mistaken for a positional (the new worktree's path, or
+// its start point). Conservative, not exhaustive -- an unrecognized flag
+// falls through to the generic `startsWith("-")` skip without consuming a
+// value. Getting this wrong mis-resolves the start point, which `git
+// rev-parse` then fails to resolve, which fails open.
+const WORKTREE_ADD_FLAGS_WITH_VALUE = new Set(["-b", "-B", "--reason"]);
+
+/**
+ * `git worktree` (deagy/cadre#215). Ports guard_workspace_mutation.py's
+ * `check_worktree` -- same verbs, same state checks, same deliberate
+ * exclusions. See that file's module docstring for the full reasoning,
+ * including why `prune` is state-checked via its own dry run while
+ * `remove`/`move` are refused flat, and why `add` is guarded only in the
+ * `-B`-moves-an-existing-branch case.
+ *
+ * The asymmetry this paragraph used to describe -- `worktree add -B`
+ * guarded while `checkCheckout` allowed `git checkout -B` unconditionally
+ * -- is gone as of deagy/cadre#221. `checkCheckout` and the new
+ * `checkSwitch` both route `-B`/`-C` through `checkForceCreatedBranch`,
+ * the same helper this handler uses, so all three spellings of "force
+ * create a branch that already points somewhere else" refuse alike.
+ */
+async function checkWorktree(subArgs: string[], cwd: string): Promise<GitGuardDecision | null> {
+  const verbIndex = subArgs.findIndex((a) => !a.startsWith("-"));
+  if (verbIndex === -1) return null; // bare `git worktree`: prints usage
+  const verb = subArgs[verbIndex];
+  const rest = subArgs.slice(verbIndex + 1);
+
+  if (verb === "remove") {
+    const target = rest.find((a) => !a.startsWith("-")) ?? "<worktree>";
+    return {
+      reason:
+        `Blocked: \`git worktree remove\` on '${target}' deregisters a worktree, which ` +
+        "is a destructive git-metadata operation requiring human approval " +
+        "(`agent-autonomy.yaml`: destructive_action: human_approval). " +
+        "`workspace-isolation.md` says never remove or prune a worktree yourself -- " +
+        "including one you created, and including an inspection worktree you are done " +
+        "with: the worktree IS the deliverable location until a human or the " +
+        "dispatching process decides otherwise. Leave it in place and say in your " +
+        "result that it can be cleaned up, or ask the operator to remove it themselves.",
+    };
+  }
+
+  if (verb === "move") {
+    const source = rest.find((a) => !a.startsWith("-")) ?? "<worktree>";
+    return {
+      reason:
+        `Blocked: \`git worktree move\` relocates the registered worktree '${source}'. ` +
+        "Any session whose working directory is the old path loses its tree mid-task, " +
+        "with no error at the moment of the move. Rewriting another session's worktree " +
+        "registration is a destructive git-metadata operation " +
+        "(`agent-autonomy.yaml`: destructive_action: human_approval) and " +
+        "`workspace-isolation.md` reserves worktree cleanup and relocation to the " +
+        "operator. Create a new worktree at the path you want instead, or ask the " +
+        "operator to move this one.",
+    };
+  }
+
+  if (verb === "prune") {
+    const shortChars = new Set<string>();
+    const longOpts = new Set<string>();
+    for (const a of rest) {
+      if (a.startsWith("--")) longOpts.add(a.split("=", 1)[0]);
+      else if (a.startsWith("-") && a.length > 1) for (const c of a.slice(1)) shortChars.add(c);
+    }
+    if (shortChars.has("n") || longOpts.has("--dry-run")) return null; // caller's own dry run
+
+    const dryArgs = ["worktree", "prune", "-n", "-v"];
+    const expire = flagValue(rest, "--expire");
+    if (expire) dryArgs.push("--expire", expire);
+
+    const result = await runGit(dryArgs, cwd);
+    if (!result || result.code !== 0) return null; // can't confirm state; fail open
+    // git 2.53.0 reports prune's dry run on STDERR, not stdout (unlike
+    // `git clean -n`) -- both are considered so a git writing to either
+    // stream is caught.
+    const report = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n");
+    if (!report) return null; // nothing prunable: the command would be a no-op
+
+    const entries = report
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const example = entries[0] ?? "a registered worktree";
+    return {
+      reason:
+        `Blocked: \`git worktree prune\` would deregister ${entries.length} worktree(s) ` +
+        `(e.g. ${example}). Prune names no target -- it removes whatever git currently ` +
+        "considers unreachable, which can include a teammate's worktree sitting on a " +
+        "momentarily unavailable path, so you cannot tell from this command that only " +
+        "your own worktrees are affected. `workspace-isolation.md` says never remove or " +
+        "prune a worktree yourself. Inspect what would go with " +
+        "`git worktree prune -n -v` (allowed, it removes nothing) and report it, or ask " +
+        "the operator to prune themselves.",
+    };
+  }
+
+  if (verb === "add") {
+    const forced = flagValue(rest, "-B");
+    if (!forced) return null; // plain `add`/`-b`: explicitly allowed, creates only
+    if (!(await isLocalBranch(cwd, forced))) return null; // `-B` on a new name behaves like `-b`
+    const positional = commandPositionals(rest, WORKTREE_ADD_FLAGS_WITH_VALUE);
+    // positional[0] is the new worktree's path; positional[1], if present,
+    // is the start point. Default start point is HEAD.
+    const start = positional[1] ?? "HEAD";
+    const current = await runGit(["rev-parse", "--verify", forced], cwd);
+    const target = await runGit(["rev-parse", "--verify", start], cwd);
+    if (!current || current.code !== 0 || !target || target.code !== 0) return null; // fail open
+    if (current.stdout.trim() === target.stdout.trim()) return null; // moves nothing
+    return {
+      reason:
+        `Blocked: \`git worktree add -B ${forced}\` force-resets the existing branch ` +
+        `'${forced}' to '${start}', moving it off the commits it points at now -- git ` +
+        "reports this only as a 'resetting branch' note, and any commit no other ref " +
+        "reaches is then recoverable from `git reflog` alone. That is " +
+        "`agent-autonomy.yaml`'s `discard_uncommitted_work_or_move_branches: never`. " +
+        "Creating a worktree is allowed: use `git worktree add -b <new-branch>` with a " +
+        "name that doesn't exist yet (git refuses `-b` if it does), or check out " +
+        `'${forced}' into the new worktree without -B if you want it where it already is.`,
+    };
+  }
+
+  // list / lock / unlock / repair and anything else: no opinion.
+  return null;
+}
+
+type GitGuardHandler = (
+  subArgs: string[],
+  cwd: string,
+  config: Record<string, string>,
+) => Promise<GitGuardDecision | null> | GitGuardDecision | null;
+
+// Keep in lockstep with `_HANDLERS` in
+// `.claude/hooks/guard_workspace_mutation.py`. That is no longer a claim in
+// a comment: `plugin/tools/test_guard_parity.py` parses both files and
+// fails when the key sets diverge, and drives a shared behavioural fixture
+// through both implementations (deagy/cadre#222).
 const GIT_GUARD_HANDLERS: Record<string, GitGuardHandler> = {
   reset: checkReset,
   checkout: checkCheckout,
+  switch: checkSwitch,
   restore: checkRestore,
   clean: checkClean,
   branch: (subArgs) => checkBranch(subArgs),
   push: (subArgs) => checkPush(subArgs),
+  worktree: checkWorktree,
+  gc: checkGc,
 };
+
+// How many alias definitions to follow before giving up. Git itself detects
+// alias loops ("fatal: alias loop detected") and the `seen` set below
+// mirrors that; the numeric bound is a cheaper second backstop. Matches
+// guard_workspace_mutation.py's `_MAX_ALIAS_EXPANSION_DEPTH`.
+const MAX_ALIAS_EXPANSION_DEPTH = 5;
+
+/**
+ * Resolve a subcommand that names an alias defined by `-c` on the same
+ * command line (deagy/cadre#218). A non-null `shellScript` means the alias
+ * was git's `!<shell command>` form and the caller should evaluate that
+ * string through `evaluateGitCommand` instead of dispatching a handler.
+ *
+ * Closes the COMMAND-LINE alias spelling only -- the config-file alias gap
+ * stays open, because resolving one means reading and trusting the invoking
+ * user's git config, whereas `-c alias.x=...` is already in the tokens this
+ * guard was handed. Verified against git 2.53.0: an alias is live in the
+ * invocation that defines it, remaining arguments are appended to the
+ * definition (plain and `!shell` forms alike), an alias may name another
+ * alias, loops are detected, names match case-insensitively, and an alias
+ * can NOT shadow a real subcommand -- which is why a subcommand already in
+ * `GIT_GUARD_HANDLERS` is never expanded.
+ */
+function expandGitAlias(
+  subcommand: string,
+  subArgs: string[],
+  config: Record<string, string>,
+  explicitCwd: string | undefined,
+): {
+  subcommand: string;
+  subArgs: string[];
+  explicitCwd?: string;
+  config: Record<string, string>;
+  shellScript: string | null;
+} {
+  const seen = new Set<string>();
+  let mergedConfig = config;
+  for (let depth = 0; depth < MAX_ALIAS_EXPANSION_DEPTH; depth += 1) {
+    if (Object.prototype.hasOwnProperty.call(GIT_GUARD_HANDLERS, subcommand)) break;
+    const key = `alias.${subcommand.toLowerCase()}`;
+    if (seen.has(key)) break; // alias loop, as git itself reports
+    const definition = mergedConfig[key];
+    if (definition === undefined) break;
+    seen.add(key);
+    if (definition.startsWith("!")) {
+      const script = [definition.slice(1).trim(), ...subArgs.map(shellQuote)].join(" ").trim();
+      return { subcommand, subArgs, explicitCwd, config: mergedConfig, shellScript: script };
+    }
+    const parts = tokenizeCommand(definition);
+    if (parts === null || parts.length === 0) break;
+    const reparsed = parseGitInvocation(["git", ...parts, ...subArgs]);
+    if (reparsed === null) break;
+    subcommand = reparsed.subcommand;
+    subArgs = reparsed.subArgs;
+    // A definition may carry global flags of its own (`git <definition>
+    // <args>` is literally what git runs), so fold them in.
+    if (reparsed.explicitCwd) explicitCwd = accumulateDashC(explicitCwd, reparsed.explicitCwd);
+    if (Object.keys(reparsed.config).length > 0) mergedConfig = { ...mergedConfig, ...reparsed.config };
+  }
+  return { subcommand, subArgs, explicitCwd, config: mergedConfig, shellScript: null };
+}
+
+/**
+ * POSIX single-quote escaping, matching Python's `shlex.quote` -- used to
+ * rebuild a `!shell` alias's argv into one string for the shell-recursion
+ * path, so the two guards feed the same text to their recursion.
+ */
+function shellQuote(value: string): string {
+  if (value === "") return "''";
+  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(value)) return value;
+  return `'${value.replace(/'/g, "'\"'\"'")}'`;
+}
 
 function resolveGitGuardCwd(baseCwd: string, explicitCwd: string | undefined): string {
   if (!explicitCwd) return baseCwd;
@@ -1544,6 +2363,16 @@ function extractShellDashCScript(tokens: string[]): string | null {
   for (let i = 1; i < tokens.length; i += 1) {
     const t = tokens[i];
     if (t === "--") return null;
+    // A bare `-` ends option processing just as `--` does, so a following
+    // `-c` is an operand, not a flag: `bash - -c "git reset --hard"` makes
+    // bash treat `-c` as a SCRIPT FILENAME and fail with "No such file or
+    // directory" -- the git command never runs. Verified by execution.
+    // Without this branch `-` matches neither the `-c` test nor the
+    // non-flag test (it does start with `-`), so the loop just continues,
+    // reaches the `-c`, and returns the script -- blocking a command that
+    // does nothing. Python's `find_shell_dash_c_script` has always had the
+    // equivalent `t == "-"` guard; this is the parity fix.
+    if (t === "-") return null;
     if (t === "-c" || (/^-[a-zA-Z]+$/.test(t) && t.includes("c"))) {
       return tokens[i + 1] ?? null;
     }
@@ -1577,16 +2406,50 @@ async function evaluateGitCommand(
       }
     }
 
-    const parsed = parseGitInvocation(stripped);
-    if (!parsed) continue;
-    const handler = GIT_GUARD_HANDLERS[parsed.subcommand];
-    if (!handler) continue;
-    const cwd = resolveGitGuardCwd(baseCwd, parsed.explicitCwd);
-    const decision = await handler(parsed.subArgs, cwd);
-    if (decision) return decision;
+    // The segment itself, plus any command `find` carries in argument
+    // position (`-exec git ... \;`), which prefix stripping cannot reach.
+    const candidates = [stripped, ...findCommandInvocations(stripped).map(stripLeadingWrappers)];
+    for (const candidate of candidates) {
+      const decision = await evaluateGitTokens(candidate, baseCwd, depth);
+      if (decision) return decision;
+    }
   }
   return null;
 }
+
+/**
+ * Parse one already-wrapper-stripped token list as a `git` invocation and
+ * run its handler, expanding a command-line-defined alias first. Ports
+ * guard_workspace_mutation.py's `_evaluate_git_tokens`.
+ */
+async function evaluateGitTokens(
+  tokens: string[],
+  baseCwd: string,
+  depth: number,
+): Promise<GitGuardDecision | null> {
+  const parsed = parseGitInvocation(tokens);
+  if (!parsed) return null;
+  const expanded = expandGitAlias(parsed.subcommand, parsed.subArgs, parsed.config, parsed.explicitCwd);
+  if (expanded.shellScript !== null) {
+    // A `!shell` alias: hand the expansion to the same bounded recursion
+    // `bash -c "..."` uses rather than ignoring it.
+    if (depth < MAX_SHELL_C_RECURSION_DEPTH) {
+      return evaluateGitCommand(expanded.shellScript, baseCwd, depth + 1);
+    }
+    return null;
+  }
+  const handler = GIT_GUARD_HANDLERS[expanded.subcommand];
+  if (!handler) return null;
+  const cwd = resolveGitGuardCwd(baseCwd, expanded.explicitCwd);
+  // `expanded.config`, not `parsed.config`: an alias definition may carry
+  // `-c` of its own, and `checkGc` reads config to resolve the effective
+  // `gc.worktreePruneExpire`. Passing the pre-expansion copy let
+  // `git -c alias.g='-c gc.worktreePruneExpire=now gc' g` through while
+  // real git pruned. Mirrors `expand_git_alias` in the Python hook.
+  return handler(expanded.subArgs, cwd, expanded.config);
+}
+
+// cadre:guard-region:end
 
 /**
  * Normalize a `run_commands` tool call's raw `input` (matching

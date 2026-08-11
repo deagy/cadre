@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -735,6 +735,379 @@ describe("destructive-git guard (deagy/cadre#129): subcommand-level restriction 
         // silent regression either way.
         const nested = wrapInBashC(wrapInBashC(wrapInBashC(wrapInBashC("git reset --hard HEAD"))));
         expect(await evaluateGitCommand(nested, repoDir)).toBeNull();
+      });
+    });
+
+    // -----------------------------------------------------------------
+    // Newline as a command separator (deagy/cadre#215 review, F1) --
+    // mirrors NewlineSeparatorTests in plugin/tools/
+    // test_guard_workspace_mutation.py. Before this, splitTopLevel split
+    // on &&/||/;/| but not newlines, so a two-line command collapsed into
+    // one token list whose first token was the first line's program and
+    // EVERY handler was bypassed. No adversarial intent required.
+    // -----------------------------------------------------------------
+    describe("newline as a command separator (deagy/cadre#215 F1)", () => {
+      it("blocks a newline-separated destructive command, matching the && control", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(await evaluateGitCommand("echo hi && git reset --hard HEAD", repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand("echo hi\ngit reset --hard HEAD", repoDir)).not.toBeNull();
+      });
+
+      it("closes the bypass for every handler, not just worktree", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        writeFileSync(join(repoDir, "untracked.txt"), "junk\n");
+        execFileSync("git", ["branch", "throwaway"], { cwd: repoDir });
+        for (const command of [
+          "cd /tmp\ngit reset --hard HEAD",
+          "cd /tmp\ngit clean -fd",
+          "cd /tmp\ngit branch -D throwaway",
+          "cd /tmp\ngit push --force origin main",
+        ]) {
+          expect(await evaluateGitCommand(command, repoDir), command).not.toBeNull();
+        }
+      });
+
+      it("handles CRLF line endings, blank lines, and leading indentation", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(await evaluateGitCommand("echo hi\r\ngit reset --hard HEAD", repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand("echo one\n\n    git reset --hard HEAD\n", repoDir)).not.toBeNull();
+      });
+
+      it("does not treat a newline inside quotes as a separator", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(await evaluateGitCommand("echo 'first line\ngit reset --hard HEAD'", repoDir)).toBeNull();
+      });
+
+      it("blocks the command following a heredoc, but not the heredoc body itself", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        // Body is text being written to a file -- blocking it would be a
+        // false positive, and writing docs that quote a destructive
+        // command is routine.
+        expect(await evaluateGitCommand("cat <<'EOF' > note.md\ngit reset --hard HEAD\nEOF", repoDir)).toBeNull();
+        // The command after the terminator is a real invocation.
+        expect(
+          await evaluateGitCommand("cat <<'EOF' > note.md\nsome text\nEOF\ngit reset --hard HEAD", repoDir),
+        ).not.toBeNull();
+      });
+
+      it("handles the `<<-` tab-indented-terminator form, and only that form", async () => {
+        // The two spellings must DIFFER or the `<<-` branch is dead code.
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        // `<<-` accepts the tab-indented terminator: heredoc ends, the
+        // trailing command is real.
+        expect(
+          await evaluateGitCommand("cat <<-'EOF' > note.md\ntext\n\tEOF\ngit reset --hard HEAD", repoDir),
+        ).not.toBeNull();
+        // Plain `<<` does not: unterminated heredoc swallows the trailing
+        // command, exactly as the shell would.
+        expect(
+          await evaluateGitCommand("cat <<'EOF' > note.md\ntext\n\tEOF\ngit reset --hard HEAD", repoDir),
+        ).toBeNull();
+        // Only TABS are stripped by `<<-`, never spaces.
+        expect(
+          await evaluateGitCommand("cat <<-'EOF' > note.md\ntext\n    EOF\ngit reset --hard HEAD", repoDir),
+        ).toBeNull();
+      });
+
+      it("keeps a command chained onto the heredoc opener's own line (F7)", async () => {
+        // `cat > f <<EOF && git ...` runs that git command before a single
+        // body line is read. Consuming forward to the delimiter swallowed
+        // it.
+        writeFileSync(join(repoDir, "untracked.txt"), "junk\n");
+        for (const sep of ["&&", ";", "|"]) {
+          expect(
+            await evaluateGitCommand(`cat > note.md <<EOF ${sep} git clean -fd`, repoDir),
+            sep,
+          ).not.toBeNull();
+        }
+        // ...while the body, which starts on the NEXT line, is still
+        // skipped: the false positive stays prevented.
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(
+          await evaluateGitCommand("cat > note.md <<EOF && echo started\ngit reset --hard HEAD\nEOF", repoDir),
+        ).toBeNull();
+      });
+
+      it("does not treat a quoted mention of `<<EOF` as a redirection (F8)", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(
+          await evaluateGitCommand('echo "see <<EOF for details"; git reset --hard HEAD', repoDir),
+        ).not.toBeNull();
+        expect(await evaluateGitCommand("echo 'see <<EOF'; git reset --hard HEAD", repoDir)).not.toBeNull();
+      });
+
+      it("does not treat `<<` in arithmetic expansion as a heredoc", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(await evaluateGitCommand("echo $(( 1 << 2 ))\ngit reset --hard HEAD", repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand("echo $(( x << shift ))\ngit reset --hard HEAD", repoDir)).not.toBeNull();
+      });
+
+      it("joins backslash-newline continuations (F9)", async () => {
+        // How long commands are normally written. Once newline became a
+        // separator, `git push \` / `origin main --force` split into two
+        // segments, neither a destructive git invocation.
+        expect(await evaluateGitCommand("git push --force origin main", repoDir)).not.toBeNull(); // control
+        expect(await evaluateGitCommand("git push \\\n  origin main --force", repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand("git push \\\r\n  origin main --force", repoDir)).not.toBeNull();
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(await evaluateGitCommand("git reset \\\n  --hard HEAD", repoDir)).not.toBeNull();
+      });
+
+      it("leaves a backslash-newline inside single quotes literal", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(await evaluateGitCommand("echo 'a\\\nb'", repoDir)).toBeNull();
+        expect(await evaluateGitCommand("echo 'git reset \\\n--hard'", repoDir)).toBeNull();
+      });
+
+      it("does not mistake a here-string (`<<<`) for a heredoc", async () => {
+        // Both the lookbehind and the lookahead are required: with only
+        // the lookahead, `<<<word` matches from the second `<` and the
+        // guard swallows everything after it.
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(await evaluateGitCommand("cat <<<somestring\ngit reset --hard HEAD", repoDir)).not.toBeNull();
+      });
+
+      // No direct `splitTopLevel` unit assertion here (it is module-private
+      // and not worth widening the export surface for): the behavioural
+      // cases above cover the same ground, and the Python suite's
+      // `test_split_top_level_splits_on_newline` pins the splitter itself.
+    });
+
+    // -----------------------------------------------------------------
+    // git worktree (deagy/cadre#215) -- mirrors WorktreeTests /
+    // WorktreeDocumentedGapTests in plugin/tools/
+    // test_guard_workspace_mutation.py. Kept in sync deliberately.
+    // -----------------------------------------------------------------
+    describe("git worktree (deagy/cadre#215)", () => {
+      let wtRoot: string;
+
+      beforeEach(() => {
+        wtRoot = mkdtempSync(join(tmpdir(), "cline-agents-git-guard-wt-"));
+      });
+
+      afterEach(() => {
+        rmSync(wtRoot, { recursive: true, force: true });
+      });
+
+      const addWorktree = (name: string, branch: string): string => {
+        const path = join(wtRoot, name);
+        execFileSync("git", ["worktree", "add", "-q", path, "-b", branch], { cwd: repoDir });
+        return path;
+      };
+
+      it("blocks `git worktree remove`, including --force and the bare-name spelling", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        expect((await evaluateGitCommand(`git worktree remove ${wt}`, repoDir))?.reason).toMatch(
+          /deregisters a worktree/,
+        );
+        expect(await evaluateGitCommand(`git worktree remove --force ${wt}`, repoDir)).not.toBeNull();
+        // Verified against git 2.53.0: the bare basename really does remove
+        // it, which is why the handler refuses flat rather than matching the
+        // target against `git worktree list`.
+        expect(await evaluateGitCommand("git worktree remove wt1", repoDir)).not.toBeNull();
+      });
+
+      it("blocks `git worktree remove` of a worktree this session created (the policy is absolute)", async () => {
+        const wt = addWorktree("mine", "mine");
+        const decision = await evaluateGitCommand(`git worktree remove ${wt}`, repoDir);
+        expect(decision?.reason).toMatch(/including one you created/);
+      });
+
+      it("blocks `git worktree move`", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        const decision = await evaluateGitCommand(`git worktree move ${wt} ${join(wtRoot, "wt1b")}`, repoDir);
+        expect(decision?.reason).toMatch(/relocates the registered worktree/);
+      });
+
+      it("blocks `git worktree prune` when its dry run shows something would be deregistered", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        // Make it unreachable without touching git metadata -- the
+        // "teammate's worktree on a momentarily unavailable path" case.
+        renameSync(wt, join(wtRoot, "wt1-relocated"));
+        const decision = await evaluateGitCommand("git worktree prune", repoDir);
+        expect(decision?.reason).toMatch(/would deregister/);
+        expect(decision?.reason).toMatch(/names no target/);
+      });
+
+      it("allows `git worktree prune` when nothing would be deregistered", async () => {
+        // The rejected stricter policy (block whenever any worktree this
+        // session did not create is registered) would block this. A prune
+        // that removes nothing removes nothing.
+        addWorktree("wt1", "wt1");
+        expect(await evaluateGitCommand("git worktree prune", repoDir)).toBeNull();
+      });
+
+      it("allows an explicit prune dry run even when something is prunable", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        renameSync(wt, join(wtRoot, "wt1-relocated"));
+        expect(await evaluateGitCommand("git worktree prune -n", repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git worktree prune --dry-run", repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git worktree prune -nv", repoDir)).toBeNull();
+      });
+
+      it("passes --expire through to the dry run, so a prune scoped to remove nothing is allowed", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        renameSync(wt, join(wtRoot, "wt1-relocated"));
+        expect(await evaluateGitCommand("git worktree prune --expire never", repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git worktree prune --expire=never", repoDir)).toBeNull();
+      });
+
+      it("allows plain `git worktree add` -- the policy-endorsed isolation step", async () => {
+        const dest = join(wtRoot, "new-wt");
+        expect(await evaluateGitCommand(`git worktree add ${dest}`, repoDir)).toBeNull();
+        expect(await evaluateGitCommand(`git worktree add -b agent/task/role ${dest}`, repoDir)).toBeNull();
+        expect(await evaluateGitCommand(`git worktree add --detach ${dest} HEAD`, repoDir)).toBeNull();
+      });
+
+      it("blocks `git worktree add -B` only when it would move an existing branch", async () => {
+        const dest = join(wtRoot, "new-wt");
+        // Branch does not exist yet: `-B` behaves like `-b`, moves nothing.
+        expect(await evaluateGitCommand(`git worktree add -B brand-new ${dest}`, repoDir)).toBeNull();
+
+        execFileSync("git", ["branch", "existing"], { cwd: repoDir });
+        // Branch already points at the start point: still moves nothing.
+        expect(await evaluateGitCommand(`git worktree add -B existing ${dest}`, repoDir)).toBeNull();
+
+        writeFileSync(join(repoDir, "second.txt"), "second\n");
+        execFileSync("git", ["add", "."], { cwd: repoDir });
+        execFileSync("git", ["commit", "-q", "-m", "second"], { cwd: repoDir });
+        // Now HEAD has moved past `existing`, so -B would reset it.
+        const decision = await evaluateGitCommand(`git worktree add -B existing ${dest}`, repoDir);
+        expect(decision?.reason).toMatch(/force-resets the existing branch/);
+        // Attached short-flag spelling is the same operation, one space apart.
+        expect(await evaluateGitCommand(`git worktree add -Bexisting ${dest}`, repoDir)).not.toBeNull();
+      });
+
+      it("allows read-only and non-removing worktree verbs", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        expect(await evaluateGitCommand("git worktree list", repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git worktree list --porcelain", repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git worktree", repoDir)).toBeNull();
+        expect(await evaluateGitCommand(`git worktree lock ${wt}`, repoDir)).toBeNull();
+        expect(await evaluateGitCommand(`git worktree unlock ${wt}`, repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git worktree repair", repoDir)).toBeNull();
+      });
+
+      it("blocks `git worktree remove` through chaining, bash -c, env, and -C", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        expect(await evaluateGitCommand(`cd /tmp && git worktree remove ${wt}`, repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand(`bash -c "git worktree remove ${wt}"`, repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand(`env git worktree remove ${wt}`, repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand(`git -C ${repoDir} worktree remove ${wt}`, repoDir)).not.toBeNull();
+      });
+
+      it("expands `git -c alias.x=... x` defined in the command line itself (deagy/cadre#218)", async () => {
+        // Unlike the config-file alias gap below, nothing external needs
+        // reading or trusting to see this one -- the definition is in the
+        // tokens the guard already holds -- so it is CLOSED. Chained
+        // aliases, `-c` interleaved with other globals, and the `!shell`
+        // form are covered by the shared parity fixture
+        // (plugin/tools/guard_parity_fixture.json), which runs the same
+        // cases through this guard and the Python one.
+        const wt = addWorktree("wt1", "wt1");
+        expect(await evaluateGitCommand(`git -c alias.wtr='worktree remove' wtr ${wt}`, repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand(`git -c alias.a=worktree -c alias.b='a remove' b ${wt}`, repoDir)).not.toBeNull();
+        // Defined but unused, and an alias that cannot shadow a builtin.
+        expect(await evaluateGitCommand("git -c alias.wtr='worktree remove' status", repoDir)).toBeNull();
+      });
+
+      it("sees through prefix wrappers and `find -exec` (deagy/cadre#219)", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        for (const wrapper of ["timeout 10", "nice", "stdbuf -o0", "setsid", "ionice -c 3", "taskset 0x1", "sudo -u root"]) {
+          expect(await evaluateGitCommand(`${wrapper} git worktree remove ${wt}`, repoDir)).not.toBeNull();
+        }
+        expect(await evaluateGitCommand(`echo ${wt} | xargs -I{} git worktree remove {}`, repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand(`find ${repoDir} -maxdepth 1 -exec git worktree remove ${wt} \\;`, repoDir)).not.toBeNull();
+      });
+
+      it("documented known gap: the wrapper set is still not exhaustive", async () => {
+        // #219 extended the set rather than inverting to scan every token
+        // for a `git` invocation, because inverting reintroduces the
+        // false-positive class the heredoc handling exists to avoid. That
+        // trade means the list can always be one entry short.
+        const wt = addWorktree("wt1", "wt1");
+        for (const wrapper of ["firejail", "runuser -u root --", "unbuffer", "doas"]) {
+          expect(await evaluateGitCommand(`${wrapper} git worktree remove ${wt}`, repoDir)).toBeNull();
+        }
+        // ...and a literal mention as DATA must still not match.
+        expect(await evaluateGitCommand(`echo 'timeout 10 git worktree remove ${wt}'`, repoDir)).toBeNull();
+      });
+
+      it("documented known gap: `git worktree add --force` over a registered-but-missing path", async () => {
+        // Verified against git 2.53.0: plain `add` refuses, `--force`
+        // re-registers the path onto the new branch, and `-f -f` does so
+        // even when the original is locked.
+        const wt = addWorktree("victim", "victim");
+        renameSync(wt, join(wtRoot, "victim-elsewhere"));
+        expect(await evaluateGitCommand(`git worktree add --force ${wt} -b intruder`, repoDir)).toBeNull();
+        expect(await evaluateGitCommand(`git worktree add -f -f ${wt} -b intruder`, repoDir)).toBeNull();
+      });
+
+      it("documented known gaps: rm -rf of a worktree directory, and a CONFIG-FILE alias", async () => {
+        // Both assert the current (permissive) behaviour so closing a gap
+        // stays a visible, intentional change.
+        //
+        // `rm` is PROMPT-ONLY and will stay that way (deagy/cadre#217
+        // re-examined it while closing the sibling `git gc` path): this
+        // guard inspects `git` invocations, and deciding whether an
+        // arbitrary `rm` target is a registered worktree, for every `rm` an
+        // agent runs, is a much broader question than workspace isolation.
+        //
+        // A CONFIG-FILE alias stays uncovered because resolving it means
+        // reading and trusting the invoking user's git config -- the
+        // command-line `-c` spelling, which needs neither, is covered above.
+        const wt = addWorktree("wt1", "wt1");
+        expect(await evaluateGitCommand(`rm -rf ${wt}`, repoDir)).toBeNull();
+        execFileSync("git", ["config", "alias.wtr", "worktree remove"], { cwd: repoDir });
+        expect(await evaluateGitCommand(`git wtr ${wt}`, repoDir)).toBeNull();
+      });
+
+      it("blocks `git gc` only when it would actually deregister a worktree (deagy/cadre#217)", async () => {
+        // Verified against git 2.53.0, contradicting the issue's framing:
+        // plain `git gc` and `git gc --prune=now` both left a just-moved
+        // worktree registered (gc's --prune governs loose OBJECTS), while
+        // `gc.worktreePruneExpire` governs the registration. So a gc that
+        // deregisters nothing must not be blocked -- friction with no
+        // safety is what gets a guard disabled.
+        const wt = addWorktree("wt1", "wt1");
+        expect(await evaluateGitCommand("git gc", repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git gc --prune=now", repoDir)).toBeNull();
+        renameSync(wt, join(wtRoot, "wt1-relocated"));
+        expect(await evaluateGitCommand("git gc", repoDir)).toBeNull();
+        const decision = await evaluateGitCommand("git -c gc.worktreePruneExpire=now gc", repoDir);
+        expect(decision?.reason).toMatch(/prunes worktrees as part of its own housekeeping/);
+      });
+
+      it("blocks `checkout -B` / `switch -C` that move an existing branch (deagy/cadre#221)", async () => {
+        // A second commit, so `existing` can sit one commit behind HEAD.
+        writeFileSync(join(repoDir, "README.md"), "second\n");
+        execFileSync("git", ["add", "README.md"], { cwd: repoDir });
+        execFileSync("git", ["commit", "-q", "-m", "second"], { cwd: repoDir });
+        // `update-ref`, not `branch -f`: this suite is run by developers
+        // working under the very guard it tests.
+        execFileSync("git", ["update-ref", "refs/heads/existing", "HEAD~1"], { cwd: repoDir });
+        for (const command of [
+          "git checkout -B existing",
+          "git checkout -Bexisting",
+          "git checkout -fB existing",
+          "git switch -C existing",
+          "git switch --force-create existing",
+        ]) {
+          expect(await evaluateGitCommand(command, repoDir)).not.toBeNull();
+        }
+        // A name that does not exist behaves like `-b`; `-Bf existing`
+        // names the branch `f` with `existing` as the START POINT.
+        expect(await evaluateGitCommand("git checkout -B brand-new", repoDir)).toBeNull();
+        expect(await evaluateGitCommand("git checkout -Bf existing", repoDir)).toBeNull();
+      });
+
+      it("accumulates repeated `git -C` the way git does (deagy/cadre#220)", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        renameSync(wt, join(wtRoot, "wt1-relocated2"));
+        // `.git` then `..` is the repository root again, where the prune is
+        // meaningful. Last-wins resolved this to `<repo>/..`, a different
+        // directory, where the probe exited non-zero and failed open.
+        expect(await evaluateGitCommand("git -C .git -C .. worktree prune", repoDir)).not.toBeNull();
       });
     });
   });

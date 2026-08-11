@@ -72,7 +72,13 @@ UNIVERSAL_PHRASES = (
     "## The security-relevant-resolver rule",
     "falls through to the machine-global shared store instead",
     "## Never remove or prune a worktree yourself",
-    "Never run `git worktree remove` or `git worktree prune`",
+    # #215 added `git worktree move` to the prohibition and a note on what
+    # the PreToolUse guard hook does and does not enforce structurally.
+    # Both are asserted here so the excerpt keeps carrying them: the hook
+    # only guards Claude Code, so every other runner still relies on this
+    # prose reaching the wrapper.
+    "Never run `git worktree remove`, `git worktree prune`, or `git worktree",
+    "guard_workspace_mutation.py",
     "## No runner names as behavioral conditions",
     "never by which coding-agent runner you are",
 )
