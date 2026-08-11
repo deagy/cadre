@@ -15,6 +15,20 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.18.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.18.0) - 2026-08-11
+
+### Changed
+
+- **The bundled workspace-mutation hook now blocks destructive `git` commands it previously allowed.** A newline separating two commands defeated the guard entirely: it split on `&&`, `||`, `;`, and `|` but not on newlines, so everything after the first line went uninspected. That affected every check the hook performs — `reset`, `checkout`, `restore`, `clean`, `branch`, `push` — and it needed no adversarial intent, since multi-line `Bash` calls are routine. **Required action if you rely on the hook:** multi-line commands that happened to pass because of this bug will now be refused. The same fix landed in the Cline guard. See the [register changelog](https://github.com/deagy/cadre/blob/main/CHANGELOG.md) for the shell-context work that made it safe.
+
+- **A dispatch plan's `schema_version` goes 5 → 6, and the plan may carry a new `undeclared_workflow_shape_routes` property.** **Required action:** if you validate `cadre select` output against a pinned copy of `selection.schema.json`, update that copy when you upgrade. The schema is closed, so a v5 copy rejects a plan carrying the new property. Plans already archived as v5 stay valid v5 documents.
+
+### Added
+
+- **The hook now covers `git worktree`.** `remove` and `move` are refused outright; `prune` is refused only when its own dry run shows a registration would actually be removed. `worktree add` stays allowed — it is the isolation step the policy asks for — except `-B` on an existing branch pointing elsewhere, which force-resets it. Six spellings remain deliberately uncovered and are each pinned by a test asserting they are not blocked.
+
+- **Read-only role wrappers now state that this enforcement exists**, and that it is partial: the policy prose lists what the hook cannot see and names the environment variable that disables it, so no role treats the guard as a boundary to lean on.
+
 ## [0.17.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.17.0) - 2026-08-10
 
 ### Changed

@@ -23,6 +23,10 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-08-11
+
+Shipped to users as plugin [v0.18.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.18.0).
+
 **Two changes in this release alter behavior a consumer may depend on.** The dispatch plan's `schema_version` goes 5 → 6 (details under Changed). And the workspace-mutation guard hook now blocks destructive `git` commands it previously allowed — a newline separating two commands defeated it entirely, so anything after the first line went uninspected. Multi-line `Bash` calls that happened to pass because of that bug will now be refused. Both are detailed below.
 
 ### Fixed
