@@ -23,6 +23,14 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+### Added
+
+- **A dispatch plan now names any matched route that declared no `workflow_shape`** ([#214](https://github.com/deagy/cadre/issues/214), finishing [#210](https://github.com/deagy/cadre/issues/210)). 0.20.0 gave every route in this repository's own `routing.yaml` an explicit `workflow_shape` and guarded it with a test, but left the field optional in `routing.schema.json` so an overlay written earlier still validates — which meant a route added in a project-local `.agents/orchestration/routing-overlay.json` could still contribute no delivery shape and let the plan fall back to `unclassified` by omission, with nothing to notice short of reading the plan. Requiring the field would break every existing overlay that adds a route, so `cadre select` reports instead: the plan carries an optional top-level `undeclared_workflow_shape_routes` array listing those route ids in match order. `unclassified` is a *declaration* and never appears there; only a missing, null, or empty field does. The check reads matched routes generally, so it also catches a base route that ever slips past the declaration test.
+
+  **No schema break.** The field is emitted only when non-empty and is absent from `selection.schema.json`'s top-level `required` array — the same additive pattern `provenance` uses — so `schema_version` stays **5** and a consumer validating against a pinned v5 copy is unaffected. A plan built from the unmodified base configuration never carries the field, and no existing plan's `dispatch_fingerprint` changes. (Unlike `provenance`, the field *is* inside the fingerprinted payload when present: it is computed from the plan's own matched routes, not from generation-time environment state.)
+
+  `roster/RUNBOOK.md`'s per-construct overlay merge-rule list now also documents `workflow_shape` explicitly: immutable on an existing base route (it is not a widen field, so the deny-by-default rule applies), free to declare and still optional on a new overlay-added route.
+
 ## [0.20.0] - 2026-08-10
 
 Shipped to users as plugin [v0.17.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.17.0).

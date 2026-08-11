@@ -34,6 +34,10 @@
       "description": "Risk rules that matched, in the same shape as matched_routes.",
       "$ref": "#/$defs/idWithReasonsArray"
     },
+    "undeclared_workflow_shape_routes": {
+      "description": "Optional, additive signal (#214, finishing #210): the ids of matched routes that declared no 'workflow_shape' at all, in match order. Such a route contributes no delivery shape to the plan's 'workflow' field, so the plan can fall back to 'unclassified' by omission rather than by judgment -- exactly the defect #210 fixed for this repository's own routing.yaml. routing.schema.json deliberately keeps 'workflow_shape' OPTIONAL so a project-local routing overlay (.agents/orchestration/routing-overlay.json) written before #210 still validates, and validate_routing_config checks only the value, never the presence; requiring it would break every existing overlay that adds a route, a trade considered and rejected. This reports instead. 'unclassified' is a declaration and never appears here -- only a missing, null, or empty field does. Emitted ONLY when non-empty and absent from the top-level 'required' array, in the same pattern as 'provenance', so schema_version stays 5 and a consumer validating against a pinned v5 copy is unaffected. Every route in this repository's own routing.yaml declares a shape, so a plan built from the unmodified base configuration never carries this field.",
+      "$ref": "#/$defs/nonemptyStringArray"
+    },
     "context_packs": {
       "type": "array",
       "items": {

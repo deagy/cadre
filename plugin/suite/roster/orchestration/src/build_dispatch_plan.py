@@ -265,6 +265,47 @@ def _select_workflow(
     return "unclassified"
 
 
+def _undeclared_workflow_shape_routes(matched_routes: list[dict[str, Any]]) -> list[str]:
+    """Name every matched route that declared no `workflow_shape` at all.
+
+    #210 gave every route in this repository's own `routing.yaml` an explicit
+    `workflow_shape`, and `test_selector.py::WorkflowShapeDeclarationTests`
+    keeps it that way. That guarantee stopped at the overlay boundary (#214).
+    `routing.schema.json` leaves the field optional on purpose so an overlay
+    written before #210 still validates, and `validate_routing_config` checks
+    only the *value* against `WORKFLOW_SHAPES`, never its presence. A consumer
+    adding a route in `.agents/orchestration/routing-overlay.json` could
+    therefore reproduce exactly the defect #210 was filed about: the route
+    matches, contributes no delivery shape to `_select_workflow`'s final
+    stage, and the plan falls back to "unclassified" by omission with nothing
+    to notice short of reading the plan.
+
+    Making the field *required* would give a stronger guarantee at the cost of
+    breaking every overlay that already adds a route -- a trade considered and
+    rejected in #214. So this reports rather than rejects: the plan names the
+    routes, turning a silent fallback into a visible one. It also covers any
+    *base* route that ever slips past the declaration test, which is why it
+    reads matched routes generally rather than overlay-added ones specifically
+    -- by the time a plan is built, an overlay-added route is an ordinary
+    entry in the effective configuration and is not distinguishable from a
+    base one, nor does it need to be.
+
+    Note what is NOT reported. "unclassified" is a declaration -- a route
+    stating it claims no delivery shape is doing the right thing and never
+    appears here. Only a missing (or null/empty) field does. Risk rules are
+    out of scope entirely: `workflow_shape` is a route-only field and
+    `_select_workflow` never reads a shape off a risk rule.
+
+    Match order is preserved, and route ids are unique within the effective
+    configuration, so no de-duplication is needed.
+    """
+    return [
+        route["id"]
+        for route in matched_routes
+        if not (route.get("rule") or {}).get("workflow_shape")
+    ]
+
+
 def _build_human_gates(risks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     descriptions = {
         "persistent-database-migration": "An authorized human must approve persistent database migrations.",
@@ -704,6 +745,19 @@ def build_dispatch_plan(
         else {"status": "standalone", "reason": STANDALONE_REASON}
     )
 
+    # Emitted only when non-empty, and therefore additive rather than a
+    # schema break: `undeclared_workflow_shape_routes` is an optional
+    # top-level property in selection.schema.json, absent from its `required`
+    # array, exactly like `provenance`. `schema_version` stays 5 -- a
+    # consumer validating against a pinned v5 copy of the schema is
+    # unaffected, and no existing plan gains a field (every route in this
+    # repository's routing.yaml declares a shape, so the list is empty here).
+    #
+    # Unlike `provenance` it IS part of the fingerprint's hashed payload,
+    # deliberately: it is computed from the same matched routes the rest of
+    # the plan is, not from generation-time environment state, so it belongs
+    # in the determinism check over what the selector actually decided.
+    undeclared_workflow_shapes = _undeclared_workflow_shape_routes(matched_routes)
     dispatch = {
         "schema_version": 5,
         "task_id": task_id,
@@ -721,6 +775,11 @@ def build_dispatch_plan(
         },
         "matched_routes": [{"id": match["id"], "reasons": _reasons(match)} for match in matched_routes],
         "matched_risks": [{"id": match["id"], "reasons": _reasons(match)} for match in matched_risks],
+        **(
+            {"undeclared_workflow_shape_routes": undeclared_workflow_shapes}
+            if undeclared_workflow_shapes
+            else {}
+        ),
         "context_packs": _build_context_packs(
             matched_context_packs, input_data.get("classification")
         ),

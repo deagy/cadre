@@ -176,9 +176,16 @@ def validate_routing_config(config: dict[str, Any]) -> dict[str, Any]:
     # route in this repository's own routing.yaml declares one and
     # test_selector.py::WorkflowShapeDeclarationTests fails the build if one
     # stops doing so; a project-local overlay (routing_overlay.py) may add a
-    # route without the field, which behaves exactly as it did before #210 --
-    # it contributes no delivery shape. A *misspelled* shape is the case worth
-    # failing on: it would silently contribute nothing while looking declared.
+    # route without the field, which still contributes no delivery shape.
+    # Requiring presence here would break every existing overlay that adds a
+    # route -- a trade considered and rejected in #210 review and again in
+    # #214. What #214 changed is that the omission is no longer *silent*:
+    # build_dispatch_plan._undeclared_workflow_shape_routes names any matched
+    # route with no declared shape in the plan's optional
+    # `undeclared_workflow_shape_routes` field. Report, don't reject -- so
+    # this loop stays a value check.
+    # A *misspelled* shape is still the case worth failing on: it would
+    # silently contribute nothing while looking declared.
     for route in config["routes"]:
         shape = route.get("workflow_shape")
         if shape is not None and shape not in WORKFLOW_SHAPES:
