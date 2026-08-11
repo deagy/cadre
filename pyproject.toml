@@ -140,6 +140,7 @@ packages = ["cadre_cli"]
 "roster/shared/definition-of-done.md" = "cadre_cli/_vendor/roster/shared/definition-of-done.md"
 "roster/shared/documentation-style.md" = "cadre_cli/_vendor/roster/shared/documentation-style.md"
 "roster/shared/knowledge-use-policy.md" = "cadre_cli/_vendor/roster/shared/knowledge-use-policy.md"
+"roster/shared/context-use-policy.md" = "cadre_cli/_vendor/roster/shared/context-use-policy.md"
 "roster/shared/library-standards.yaml" = "cadre_cli/_vendor/roster/shared/library-standards.yaml"
 "roster/shared/operating-principles.md" = "cadre_cli/_vendor/roster/shared/operating-principles.md"
 "roster/shared/platform-impact-profile.yaml" = "cadre_cli/_vendor/roster/shared/platform-impact-profile.yaml"

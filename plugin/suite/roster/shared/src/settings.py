@@ -381,6 +381,22 @@ FIELDS: dict[str, FieldSpec] = {
         required=False,
         default_static=None,
     ),
+    # Global-only for exactly the same reason as knowledge_store.home: it
+    # picks where a database is read and written, and a project-local
+    # `.agents/cadre.yaml` arrives with `git clone` and is editable by anyone
+    # who can open a pull request. Letting a cloned file redirect the context
+    # store would let it choose what an agent reads back as its own working
+    # notes -- a strictly better position from which to feed an agent
+    # attacker-chosen text than the knowledge store offers, since context
+    # entries carry no steward disposition at all.
+    "context_store.home": FieldSpec(
+        key="context_store.home",
+        env_var="CONTEXT_STORE_HOME",
+        scope=SCOPE_GLOBAL_ONLY,
+        kind="path",
+        required=False,
+        default_static=None,
+    ),
 }
 
 
@@ -985,6 +1001,7 @@ _HEADER_COMMENT = """\
 #   runners.codex_bin                      SECURE_CLOUD_AGENTS_CODEX_BIN  (global-only)
 #   agentic_sdlc.bin_path                  AGENTIC_SDLC_BIN               (global-only)
 #   knowledge_store.home                   KNOWLEDGE_STORE_HOME           (global-only)
+#   context_store.home                     CONTEXT_STORE_HOME             (global-only)
 """
 
 

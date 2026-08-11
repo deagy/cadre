@@ -153,6 +153,21 @@ PATH_SUBSTITUTIONS: list[tuple[str, str]] = [
     ),
     ("`../../shared/operating-principles.md`", "this project's operating-principles documentation"),
     ("`../../shared/knowledge-use-policy.md`", "this project's knowledge-use-policy documentation"),
+    ("`../../shared/context-use-policy.md`", "this project's context-use-policy documentation"),
+    # Absolute-from-repo-root forms too: knowledge-use-policy.md's own body
+    # cross-references the context store this way, and shared policy documents
+    # are concatenated into role bodies, so the reference arrives here even
+    # though no role file writes it directly.
+    ("`roster/shared/context-use-policy.md`", "this project's context-use-policy documentation"),
+    ("roster/shared/context-use-policy.md", "this project's context-use-policy documentation"),
+    # context-use-policy.md is itself embedded into every role body
+    # (SHARED_POLICIES in generate_global_plugin.py), so its own
+    # cross-references arrive here as well as the references *to* it.
+    ("`roster/shared/knowledge-use-policy.md`", "this project's knowledge-use-policy documentation"),
+    ("roster/shared/knowledge-use-policy.md", "this project's knowledge-use-policy documentation"),
+    ("`roster/context-store/SECURITY.md`", "this project's context-store security documentation"),
+    ("`roster/orchestration/handoff-contracts.md`", "this project's handoff-contracts documentation"),
+    ("roster/orchestration/handoff-contracts.md", "this project's handoff-contracts documentation"),
     ("`../../shared/cloud-guardrails.md`", "this project's cloud-guardrails documentation"),
     ("`../../orchestration/escalation-policy.md`", "this project's escalation-policy documentation"),
     ("`../../orchestration/handoff-contracts.md`", "this project's handoff-contracts documentation"),
@@ -505,6 +520,8 @@ SKILL_PATH_SUBSTITUTIONS: list[tuple[str, str]] = [
     ("`roster/runner-capabilities.schema.json`", "the bundled runner-capabilities manifest's schema"),
     ("`roster/shared/knowledge-use-policy.md`", "this project's knowledge-use-policy documentation"),
     ("roster/shared/knowledge-use-policy.md", "this project's knowledge-use-policy documentation"),
+    ("`roster/shared/context-use-policy.md`", "this project's context-use-policy documentation"),
+    ("roster/shared/context-use-policy.md", "this project's context-use-policy documentation"),
     ("`roster/shared/operating-principles.md`", "this project's operating-principles documentation"),
     ("roster/shared/operating-principles.md", "this project's operating-principles documentation"),
     ("`roster/shared/technology-standards.md`", "this project's technology-standards documentation"),

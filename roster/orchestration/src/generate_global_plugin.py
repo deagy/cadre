@@ -334,6 +334,12 @@ SHARED_POLICIES = [
     "roster/shared/technology-standards.md",
     "roster/shared/library-standards.yaml",
     "roster/shared/knowledge-use-policy.md",
+    # Beside knowledge-use-policy.md, and for the same reason: any role may be
+    # handed a context handle in a handoff, so the rules for reading one --
+    # untrusted on the way out, `untrusted_inputs` means hostile input, a
+    # handle never substitutes for a required contract field -- bind every
+    # tier, not only the roles that write entries.
+    "roster/shared/context-use-policy.md",
     "roster/shared/agent-autonomy.yaml",
     "roster/shared/documentation-style.md",
     # Every role, not just write-capable ones: its "Never mutate a working
@@ -1443,6 +1449,17 @@ def generate_suite_copy(
             # reader cannot open.
             "roster/knowledge-store/proposed-knowledge.schema.json",
         }:
+            selected.append(relative)
+        elif relative.startswith("roster/context-store/src/") or relative in {
+            "roster/context-store/README.md",
+            "roster/context-store/SECURITY.md",
+        }:
+            # The packaged `bin/cadre` exposes `context`, so the modules behind
+            # it have to travel with it -- shipping the subcommand without its
+            # package is the "plugin whose CLI cannot import its own code"
+            # failure the repository docs warn about. SECURITY.md is packaged
+            # for the same reason as the knowledge store's: the CLI's own error
+            # text points readers at it.
             selected.append(relative)
     selected.extend(
         relative

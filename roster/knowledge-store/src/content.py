@@ -1,60 +1,33 @@
-"""Content redaction, injection indicators, and chunking."""
+"""Content redaction, injection indicators, and chunking.
+
+Both halves of this module now live in `roster/shared/src/` and are re-exported
+here: `protect_content` in `content_protection.py`, `chunk_text` in
+`text_chunking.py`. They moved as the context store (`roster/context-store/`)
+came to need each of them -- protection in its phase 1, chunking in its phase 2
+-- and the two stores may not import each other (see
+`roster/orchestration/test/test_context_boundary.py`), so a routine both need
+belongs to neither.
+
+Re-exporting keeps every existing `from content import ...` caller, including
+`service.py` and this store's test suite, working unchanged.
+"""
 
 from __future__ import annotations
 
-import re
-from typing import Any
+import sys
+from pathlib import Path
 
+# Appended (never inserted at sys.path[0]), matching config.py's discipline in
+# this same package: a caller's own same-named module always wins first.
+_SHARED_SRC_DIR = Path(__file__).resolve().parents[2] / "shared" / "src"
+if str(_SHARED_SRC_DIR) not in sys.path:
+    sys.path.append(str(_SHARED_SRC_DIR))
 
-SECRET_PATTERNS = [
-    ("private-key", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")),
-    ("bearer-token", re.compile(r"\bBearer\s+[A-Za-z0-9._~+/\-]+=*", re.IGNORECASE)),
-    ("aws-access-key", re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")),
-    ("github-token", re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}\b")),
-    ("generic-secret", re.compile(r"\b(api[_-]?key|secret|password|token)\s*[:=]\s*[\"']?[^\s,\"']{8,}[\"']?", re.IGNORECASE)),
-]
-INJECTION_PATTERNS = [
-    re.compile(r"ignore (?:all |any )?(?:previous|prior|above) instructions", re.IGNORECASE),
-    re.compile(r"reveal (?:the )?(?:system|developer) prompt", re.IGNORECASE),
-    re.compile(r"act as (?:the )?system", re.IGNORECASE),
-    re.compile(r"bypass (?:security|policy|approval|guardrail)", re.IGNORECASE),
-    re.compile(r"do not tell (?:the )?user", re.IGNORECASE),
-]
+from content_protection import (  # noqa: E402,F401  (sys.path set above; re-exported)
+    INJECTION_PATTERNS,
+    SECRET_PATTERNS,
+    protect_content,
+)
+from text_chunking import chunk_text  # noqa: E402,F401  (re-exported)
 
-
-def protect_content(content: str, enabled: bool = True) -> dict[str, Any]:
-    protected = content
-    redactions: list[str] = []
-    if enabled:
-        for label, pattern in SECRET_PATTERNS:
-            def replacement(_: re.Match[str], current_label: str = label) -> str:
-                redactions.append(current_label)
-                return f"[REDACTED:{current_label}]"
-            protected = pattern.sub(replacement, protected)
-    return {
-        "content": protected,
-        "redactions": redactions,
-        "injection_risk": any(pattern.search(protected) for pattern in INJECTION_PATTERNS),
-    }
-
-
-def chunk_text(text: str, config: dict[str, int]) -> list[str]:
-    maximum = config["max_characters"]
-    overlap = config["overlap_characters"]
-    if len(text) <= maximum:
-        return [text]
-    chunks: list[str] = []
-    start = 0
-    while start < len(text):
-        end = min(start + maximum, len(text))
-        if end < len(text):
-            boundary = max(text.rfind("\n\n", start, end + 1), text.rfind(". ", start, end + 1))
-            if boundary > start + int(maximum * 0.55):
-                end = boundary + 1
-        chunk = text[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
-        if end >= len(text):
-            break
-        start = max(start + 1, end - overlap)
-    return chunks
+__all__ = ["INJECTION_PATTERNS", "SECRET_PATTERNS", "protect_content", "chunk_text"]

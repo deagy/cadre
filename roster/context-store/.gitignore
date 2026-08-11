@@ -1,0 +1,5 @@
+data/*.db
+data/*.db-shm
+data/*.db-wal
+!data/.gitkeep
+config.json
