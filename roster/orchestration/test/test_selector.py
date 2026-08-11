@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -19,8 +20,15 @@ AGENTS_ROOT = ROOT.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 import agentic_sdlc_contracts  # noqa: E402
-from build_dispatch_plan import build_dispatch_plan  # noqa: E402
-from routing import glob_to_regex, load_catalog, load_routing, match_rule  # noqa: E402
+from build_dispatch_plan import _select_workflow, build_dispatch_plan  # noqa: E402
+from routing import (  # noqa: E402
+    WORKFLOW_SHAPES,
+    glob_to_regex,
+    load_catalog,
+    load_routing,
+    match_rule,
+    validate_routing_config,
+)
 from select_agents import (  # noqa: E402
     _origin_slug,
     discover_changed_files,
@@ -2391,6 +2399,235 @@ class SelectorTests(unittest.TestCase):
             self.assertRaisesRegex(RuntimeError, "timed out"),
         ):
             agentic_sdlc_contracts.try_lifecycle_contract()
+
+
+class WorkflowShapeDeclarationTests(unittest.TestCase):
+    """`workflow_shape` must be declared, not inherited by omission (#210).
+
+    _select_workflow()'s delivery-shape fallback used to test a hardcoded set
+    of four route ids, so every route outside it -- including all 86
+    `*-execution` routes -- contributed no shape and produced "unclassified"
+    by accident rather than by judgment. The field replaces that set; this
+    class is the guard that a *newly added* route cannot silently reacquire
+    the old behavior by leaving the field off.
+    """
+
+    def test_every_shipped_route_declares_a_workflow_shape(self) -> None:
+        undeclared = [route["id"] for route in CONFIG["routes"] if "workflow_shape" not in route]
+        self.assertEqual(
+            undeclared,
+            [],
+            "every route in routing.yaml must declare workflow_shape (one of "
+            f"{sorted(WORKFLOW_SHAPES)}); a route that claims no delivery shape "
+            'declares "unclassified" explicitly',
+        )
+
+    def test_declared_shapes_are_a_subset_of_the_plan_workflow_enum(self) -> None:
+        enum = set(
+            json.loads((ROOT / "selection.schema.json").read_text(encoding="utf-8"))["properties"][
+                "workflow"
+            ]["enum"]
+        )
+        self.assertTrue(WORKFLOW_SHAPES <= enum, sorted(WORKFLOW_SHAPES - enum))
+
+    def test_an_unknown_shape_is_rejected_rather_than_silently_ignored(self) -> None:
+        config = copy.deepcopy(CONFIG)
+        config["routes"][0]["workflow_shape"] = "new-servce"
+        with self.assertRaisesRegex(ValueError, "workflow_shape must be one of"):
+            validate_routing_config(config)
+
+    def test_an_overlay_route_without_the_field_still_loads(self) -> None:
+        # A project-local routing overlay written before the field existed
+        # must keep working; such a route contributes no shape, which is
+        # exactly what every route did before #210.
+        config = copy.deepcopy(CONFIG)
+        config["routes"][0].pop("workflow_shape")
+        self.assertIs(validate_routing_config(config), config)
+
+    def test_unclassified_stays_reachable_for_a_route_that_claims_no_shape(self) -> None:
+        result = plan(task="Run a premortem", changed_files=[])
+        self.assertEqual([route["id"] for route in result["matched_routes"]], ["premortem"])
+        self.assertEqual(result["workflow"], "unclassified")
+
+    def test_a_lone_execution_route_now_contributes_its_declared_shape(self) -> None:
+        # The #210 headline case: no broad route co-matches, so before the
+        # change this came back "unclassified".
+        result = plan(task="Implement Node TypeScript utility", changed_files=["tools/build.mts"])
+        self.assertEqual([route["id"] for route in result["matched_routes"]], ["node-typescript-execution"])
+        self.assertEqual(result["workflow"], "new-service")
+
+    def test_a_narrow_shape_wins_only_when_every_claiming_route_agrees(self) -> None:
+        # Exclusivity through real routes: infrastructure alone stays
+        # infrastructure-change; mixed with a new-service-shaped route it is
+        # generic delivery work.
+        #
+        # This pair is NOT evidence about #210's widening, despite reading
+        # like it: `backend` was already in the old hardcoded exclusion set
+        # {"frontend", "backend", "infrastructure", "pipeline"}, so
+        # infrastructure+backend returned new-service under the old rule too.
+        # It pins the half of the behavior that did not change. The widening
+        # is pinned by test_the_widened_exclusion_set_reclassifies_a_real_pair
+        # and by WorkflowShapeCombinationTests below -- do not treat this test
+        # as covering it.
+        infrastructure_only = plan(
+            task="Update the cluster configuration", changed_files=["infrastructure/cluster.tf"]
+        )
+        self.assertEqual(infrastructure_only["workflow"], "infrastructure-change")
+        mixed = plan(
+            task="Update the cluster configuration and the backend api",
+            changed_files=["infrastructure/cluster.tf", "backend/api.go"],
+        )
+        self.assertEqual(mixed["workflow"], "new-service")
+
+    def test_the_widened_exclusion_set_reclassifies_a_real_pair(self) -> None:
+        # One member of the 85 route combinations #210 reclassified (see
+        # _select_workflow's comment for the enumeration), reached through
+        # real routing rather than synthetic shapes.
+        #
+        # For this exact matched set the pre-#210 rule returned
+        # "infrastructure-change": `infrastructure` matched and none of the
+        # three ids its check excluded (frontend/backend/pipeline) was
+        # present, so the narrow label survived even though a service-code
+        # route had also matched. `go-service-execution` declares
+        # new-service now, which makes the set mixed-shape and resolves it to
+        # generic delivery work. That reclassification is the deliberate
+        # widening; this test is what fails if it is reverted or if
+        # go-service-execution's declared shape changes.
+        #
+        # The input is constructed, not natural, and every part of it is
+        # load-bearing:
+        #   - "go implementation" (not "go service implementation") matches
+        #     go-service-execution's keyword without matching `backend`,
+        #     whose keyword list contains "service implementation".
+        #   - no *.go file, because `**/*.go` is a `backend` path glob too.
+        #   - "cluster configuration" + a .tf file bring in `infrastructure`
+        #     (and opentofu-module-execution, which declares
+        #     infrastructure-change and so does not disturb the mix).
+        #
+        # The matched set is asserted EXACTLY, and that is the point. The
+        # first version of this test used assertIn on two route ids and
+        # passed while `backend` was quietly also matching -- and `backend`
+        # contributes new-service on its own, so the assertion held whatever
+        # go-service-execution declared, under the old rule as well as the
+        # new one. A broad route creeping into this set silently neutralizes
+        # the pin, so a change in the set must fail here rather than be
+        # tolerated.
+        result = plan(
+            task="Update the cluster configuration and the go implementation",
+            changed_files=["infrastructure/cluster.tf"],
+        )
+        self.assertEqual(
+            [route["id"] for route in result["matched_routes"]],
+            ["infrastructure", "go-service-execution", "opentofu-module-execution"],
+        )
+        self.assertEqual(result["workflow"], "new-service")
+
+    def test_quality_gates_do_not_depend_on_the_declared_shape(self) -> None:
+        # `required_quality_gates` come from each route's own `quality_gates`
+        # (_build_quality_gates), never from `workflow`/`workflow_shape`.
+        # Mutating every route's declared shape must leave them untouched.
+        baseline = plan(task="Update the cluster configuration", changed_files=["infrastructure/cluster.tf"])
+        config = copy.deepcopy(CONFIG)
+        for route in config["routes"]:
+            route["workflow_shape"] = "new-service"
+        mutated = build_dispatch_plan(
+            validate_routing_config(config),
+            CATALOG,
+            {
+                "task": "Update the cluster configuration",
+                "changed_files": ["infrastructure/cluster.tf"],
+                "changed_file_source": "test",
+                "repository_root": str(AGENTS_ROOT.parent),
+                "source": "example/repository",
+            },
+        )
+        self.assertNotEqual(baseline["workflow"], mutated["workflow"])
+        self.assertEqual(baseline["required_quality_gates"], mutated["required_quality_gates"])
+        self.assertEqual(baseline["human_gates"], mutated["human_gates"])
+        self.assertEqual(baseline["agents"], mutated["agents"])
+
+
+class WorkflowShapeCombinationTests(unittest.TestCase):
+    """The delivery-shape combination rule itself, with no route ids involved.
+
+    Every other test of this stage reaches it through real routes, which
+    couples the assertion to routing.yaml's current path/keyword rules: the
+    combination under test can stop being reachable because a route was
+    narrowed, and the test still passes while covering nothing. That is the
+    #207 failure mode one level down.
+
+    These cases drive `_select_workflow` with synthetic route dicts carrying
+    only a shape, so they pin the rule #210 actually changed and stay valid
+    across any routing.yaml edit. Synthetic ids are deliberately not real
+    route ids -- every precedence check above the fallback keys on specific
+    ids ("rollback", "debugging", ...), so unrecognized ids fall straight
+    through to the stage under test.
+    """
+
+    @staticmethod
+    def _decide(shapes: tuple[str, ...], risk_ids: tuple[str, ...] = ()) -> str:
+        matched = [
+            {"id": f"synthetic-route-{index}", "rule": {"workflow_shape": shape}}
+            for index, shape in enumerate(shapes)
+        ]
+        return _select_workflow(matched, list(risk_ids), True)
+
+    def test_the_combination_rule(self) -> None:
+        cases = [
+            # (declared shapes on matched routes) -> resulting workflow
+            (("infrastructure-change",), "infrastructure-change"),
+            (("pipeline-change",), "pipeline-change"),
+            (("new-service",), "new-service"),
+            # Agreement across several routes is still a single shape.
+            (("infrastructure-change", "infrastructure-change"), "infrastructure-change"),
+            (("pipeline-change", "pipeline-change"), "pipeline-change"),
+            # Mixed narrow shapes, and narrow mixed with new-service, are
+            # generic design-and-delivery work. These four are the widening:
+            # under the pre-#210 rule the narrow label survived whenever the
+            # co-matched route was not one of three hardcoded ids.
+            (("infrastructure-change", "new-service"), "new-service"),
+            (("pipeline-change", "new-service"), "new-service"),
+            (("infrastructure-change", "pipeline-change"), "new-service"),
+            (("new-service", "infrastructure-change", "pipeline-change"), "new-service"),
+            # "unclassified" is a declaration that contributes nothing, so it
+            # never suppresses a narrow shape and never invents one. Dropping
+            # the strip step in _select_workflow turns the second and third
+            # of these into "new-service".
+            (("infrastructure-change", "unclassified"), "infrastructure-change"),
+            (("pipeline-change", "unclassified"), "pipeline-change"),
+            (("unclassified",), "unclassified"),
+            (("unclassified", "unclassified"), "unclassified"),
+            ((), "unclassified"),
+        ]
+        for shapes, expected in cases:
+            with self.subTest(shapes=shapes):
+                self.assertEqual(self._decide(shapes), expected)
+
+    def test_a_route_that_declares_nothing_contributes_nothing(self) -> None:
+        # The overlay compatibility path: a project-local route predating the
+        # field behaves exactly as every route did before #210.
+        self.assertEqual(_select_workflow([{"id": "synthetic-route", "rule": {}}], [], True), "unclassified")
+        self.assertEqual(_select_workflow([{"id": "synthetic-route"}], [], True), "unclassified")
+
+    def test_narrow_shapes_stay_ahead_of_the_architecture_change_risk(self) -> None:
+        # An infrastructure change that also trips architecture-change is
+        # still an infrastructure change -- the ordering the pre-#210 code
+        # had, preserved.
+        self.assertEqual(
+            self._decide(("infrastructure-change",), ("architecture-change",)), "infrastructure-change"
+        )
+        self.assertEqual(self._decide(("pipeline-change",), ("architecture-change",)), "pipeline-change")
+        # With no shape at all the risk alone still produces new-service.
+        self.assertEqual(self._decide((), ("architecture-change",)), "new-service")
+        self.assertEqual(self._decide(("unclassified",), ("architecture-change",)), "new-service")
+
+    def test_needs_triage_precedes_every_shape_decision(self) -> None:
+        self.assertEqual(
+            _select_workflow(
+                [{"id": "synthetic-route", "rule": {"workflow_shape": "new-service"}}], [], False
+            ),
+            "needs-triage",
+        )
 
 
 if __name__ == "__main__":

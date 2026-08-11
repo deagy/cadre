@@ -18,6 +18,19 @@ GLOB_STAR = "star"  # `*`   -- anything within one segment
 GLOB_QUESTION = "question"  # `?`   -- one character, not `/`
 GLOB_LITERAL = "literal"  # any other character, matched exactly
 
+# The delivery shapes a route may declare through `workflow_shape` (#210).
+# Deliberately a strict subset of selection.schema.json's `workflow` enum:
+# the other shapes there (rollback, production-release, support-escalation,
+# runtime-assurance, knowledge-ingestion, debugging, agent-suite-maintenance,
+# product-intake) are decided by _select_workflow()'s precedence *conditions*
+# -- a route id combined with an exclusion, a keyword having actually fired,
+# or a risk rule -- which no per-route constant can express. "unclassified"
+# is the explicit "this route claims no delivery shape" declaration, not the
+# absence of one.
+WORKFLOW_SHAPES = frozenset(
+    {"new-service", "infrastructure-change", "pipeline-change", "unclassified"}
+)
+
 
 def iter_glob_tokens(pattern: str) -> Iterator[tuple[str, str]]:
     """Yield `(kind, text)` for each construct in `pattern`.
@@ -158,6 +171,20 @@ def validate_routing_config(config: dict[str, Any]) -> dict[str, Any]:
         ):
             raise ValueError(
                 f"{rule.get('id', 'rule')} keyword_groups must contain non-empty string groups"
+            )
+    # `workflow_shape` is validated by value, not required by presence. Every
+    # route in this repository's own routing.yaml declares one and
+    # test_selector.py::WorkflowShapeDeclarationTests fails the build if one
+    # stops doing so; a project-local overlay (routing_overlay.py) may add a
+    # route without the field, which behaves exactly as it did before #210 --
+    # it contributes no delivery shape. A *misspelled* shape is the case worth
+    # failing on: it would silently contribute nothing while looking declared.
+    for route in config["routes"]:
+        shape = route.get("workflow_shape")
+        if shape is not None and shape not in WORKFLOW_SHAPES:
+            raise ValueError(
+                f"{route.get('id', 'route')} workflow_shape must be one of "
+                f"{sorted(WORKFLOW_SHAPES)}, got {shape!r}"
             )
     context_packs = config.get("context_packs", [])
     if not isinstance(context_packs, list):

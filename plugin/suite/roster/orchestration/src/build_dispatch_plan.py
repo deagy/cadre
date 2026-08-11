@@ -194,24 +194,73 @@ def _select_workflow(
         and "architecture-change" not in risk_ids
     ):
         return "product-intake"
-    if "infrastructure" in route_ids and not any(
-        route_id in {"frontend", "backend", "pipeline"} for route_id in route_ids
-    ):
+    # Everything above decides a shape from a *condition* -- a route id plus
+    # an exclusion, a keyword actually having fired, a risk rule. Those
+    # conditions are not expressible as a per-route constant and stay here.
+    #
+    # What follows is the delivery-shape fallback, and it reads each matched
+    # route's own declared `workflow_shape` (routing.yaml; see
+    # routing.schema.json for the field's definition and the four permitted
+    # values). Until #210 this stage instead tested a hardcoded id set,
+    # {"frontend", "backend", "infrastructure", "pipeline"}, so every route
+    # outside those four -- including all 86 `*-execution` routes --
+    # contributed no shape whatsoever and fell through to "unclassified" by
+    # omission rather than by judgment. That was invisible while a broad
+    # route usually co-matched and supplied the label, and became visible
+    # when the frontend route's bare typescript/javascript keywords were
+    # gated behind a browser corroborator (#207).
+    #
+    # The two single-shape checks below keep the previous rule's *form* --
+    # a narrow shape wins only when nothing contradicts it -- but they
+    # deliberately WIDEN what counts as a contradiction, and that
+    # reclassifies existing cases. Do not read them as behavior-preserving.
+    #
+    # The old infrastructure check excluded three hardcoded route ids
+    # ("infrastructure and not frontend/backend/pipeline"); the new one
+    # excludes every route declaring a different narrow shape, currently 38
+    # of them (33 new-service + 5 pipeline-change). The mirrored pipeline
+    # check went from the same three ids to 53 (33 new-service + 20
+    # infrastructure-change). Enumerating every route pair anchored on
+    # `infrastructure` or `pipeline`: 85 combinations now produce a
+    # different label than the old code would have -- 35 that were
+    # infrastructure-change and 50 that were pipeline-change, all of them
+    # now new-service. For example, `infrastructure` + `go-service-execution`
+    # and `pipeline` + `helm-chart-execution` were narrow before and are
+    # generic delivery work now.
+    #
+    # That is intended, and it is the point of letting an execution route
+    # contribute a shape at all: a plan that matched both a service-code
+    # route and an infrastructure route is doing both, and new-service is
+    # the shape whose workflow doc (new-service.md, a full G1-G10 intent-to-
+    # runtime lifecycle) covers both. Under the old rule the narrow label
+    # won purely because the co-matched route happened not to be one of
+    # three ids. Only one of those 85 has an existing fixture --
+    # KUBERNETES_OPERATOR_EXECUTION_GOLDEN_1, whose golden expectation moved
+    # from infrastructure-change to new-service in #210 -- so the remaining
+    # 84 will first appear in a real dispatch, not in a test diff. Recount
+    # with the enumeration above if the shape assignments in routing.yaml
+    # change rather than trusting these numbers.
+    #
+    # Both checks stay ahead of the architecture-change risk check for the
+    # same reason they did before -- an infrastructure change that also
+    # trips architecture-change is still an infrastructure change.
+    #
+    # "unclassified" remains reachable and meaningful: it is what a plan
+    # gets when it matched something (so this is not needs-triage) but no
+    # matched route claims a delivery shape -- advisory, assessment,
+    # review, governance, support, documentation, and evidence routes all
+    # declare "unclassified" deliberately. The difference from before is
+    # that the answer is now something a route author wrote down.
+    shapes = {
+        shape
+        for shape in ((route.get("rule") or {}).get("workflow_shape") for route in matched_routes)
+        if shape and shape != "unclassified"
+    }
+    if shapes == {"infrastructure-change"}:
         return "infrastructure-change"
-    if "pipeline" in route_ids and not any(
-        route_id in {"frontend", "backend", "infrastructure"} for route_id in route_ids
-    ):
+    if shapes == {"pipeline-change"}:
         return "pipeline-change"
-    # "new-service" is only for a route/risk combination that actually looks
-    # like building or architecting something -- at least one build-shaped
-    # route, or the architecture-change risk. Anything else that matched
-    # something (so this isn't needs-triage) but doesn't fit any recognized
-    # shape above is genuinely unclassified, not silently mislabeled as a
-    # new service (confirmed empirically: every currently-tested "new-service"
-    # case satisfies this condition; a risk-only match with no build-shaped
-    # route, e.g. a lone security risk rule, did not and was previously
-    # mislabeled).
-    if set(route_ids) & {"frontend", "backend", "infrastructure", "pipeline"} or "architecture-change" in risk_ids:
+    if shapes or "architecture-change" in risk_ids:
         return "new-service"
     return "unclassified"
 
