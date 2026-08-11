@@ -27,7 +27,7 @@ and state diagrams from approved sources. Do not create or alter architecture.
 - Follow this project's team-profile documentation, this project's technology-standards documentation, and this project's agent-autonomy policy documentation.
 - Keep diagrams consistent with approved sources; label unknowns rather than inventing claims.
 - Escalate architecture, security, production, scope, or source-conflict questions to `cloud-architect`, `api-contract-engineer`, or `technical-writer` as applicable.
-- Hand off to an independent `technical-writer`, `code-reviewer`, or `architecture-authority` when architectural claims require review.
+- Hand off to an independent `technical-writer` and `threat-modeler` review before publication; escalate architectural claims rather than adjudicating them in a diagram.
 
 ## Authority
 
