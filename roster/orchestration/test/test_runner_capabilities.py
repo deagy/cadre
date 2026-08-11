@@ -46,6 +46,42 @@ CLINE_AGENTS_PRESETS_DIR = CLINE_AGENTS_DIR / "agents"
 CLINE_AGENTS_INDEX_TS = CLINE_AGENTS_DIR / "index.ts"
 
 
+def _strip_whole_line_comments(source: str) -> str:
+    """Drop lines that are entirely a comment, keeping every code line intact.
+
+    Deliberately not a TypeScript parser, but it does track `/* */` nesting
+    depth, because the obvious shortcut is unsound: treating any line that
+    starts with `*` as a comment drops real code, since `*` also begins a
+    wrapped multiplication and can begin a line inside a template literal.
+    A guard that silently discards code lines is worse than the false
+    positive it was narrowed to avoid -- it fails open.
+
+    Anything executable survives, so a check over the output cannot be
+    evaded by appending a trailing comment to a real statement.
+    """
+    kept: list[str] = []
+    in_block = False
+    for line in source.splitlines():
+        stripped = line.strip()
+        if in_block:
+            # Inside /* */: this line is comment text whatever it starts with.
+            if "*/" in stripped:
+                in_block = False
+                # Keep anything after the terminator -- it is code again.
+                tail = stripped.split("*/", 1)[1]
+                if tail.strip():
+                    kept.append(tail)
+            continue
+        if stripped.startswith("//"):
+            continue
+        if stripped.startswith("/*"):
+            if "*/" not in stripped:
+                in_block = True
+            continue
+        kept.append(line)
+    return "\n".join(kept)
+
+
 def _load_manifest() -> dict:
     return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 
@@ -364,10 +400,51 @@ class ClineScopeRespectedTests(unittest.TestCase):
         """Companion grounding check for the class docstring's claim that
         per-preset tool policy comes from each preset's own `allowedTools`
         frontmatter, not from `roster/runner-capabilities.json`: the plugin
-        source must not reference the manifest file at all.
+        must not read the manifest at runtime. It is a standalone
+        distributable and cannot reach into the generating repository.
+
+        Scoped to code, not prose. It began as a substring check over the
+        whole file, which also fired on a comment explaining that a *test*
+        pins index.ts's tier vocabulary against the manifest (deagy/cadre#234
+        follow-up) -- true, useful, and not a runtime dependency.
+
+        Only *whole-line* comments are excluded, which is what keeps the
+        narrowing honest: an import, a `readFileSync`, or a bare string
+        literal holding the manifest path all live on code lines and are
+        still caught, and a trailing `// ...` cannot hide a read because the
+        code before it remains. Verified against both directions below.
         """
         source = CLINE_AGENTS_INDEX_TS.read_text(encoding="utf-8")
-        self.assertNotIn("runner-capabilities.json", source)
+        self.assertNotIn("runner-capabilities.json", _strip_whole_line_comments(source))
+
+        # Both directions, so a future simplification of the helper cannot
+        # quietly turn this into a check that passes on anything: a code line
+        # must survive stripping (and so still be caught above), a whole-line
+        # comment must not.
+        self.assertIn(
+            "runner-capabilities.json",
+            _strip_whole_line_comments('const p = "roster/runner-capabilities.json";'),
+        )
+        self.assertIn(
+            "runner-capabilities.json",
+            _strip_whole_line_comments('const p = load(); // roster/runner-capabilities.json'),
+        )
+        self.assertNotIn(
+            "runner-capabilities.json",
+            _strip_whole_line_comments("  // see roster/runner-capabilities.json for the map"),
+        )
+        # A bare `*` line is only comment text when a block is actually open.
+        # Treating it as one unconditionally is how this helper would fail
+        # open: a wrapped expression or template-literal line starting with
+        # `*` would be discarded along with any read it carried.
+        self.assertNotIn(
+            "runner-capabilities.json",
+            _strip_whole_line_comments('/**\n * roster/runner-capabilities.json\n */'),
+        )
+        self.assertIn(
+            "runner-capabilities.json",
+            _strip_whole_line_comments('const n = base\n  * load("roster/runner-capabilities.json");'),
+        )
 
 
 class PackagingAllowlistParityTests(unittest.TestCase):

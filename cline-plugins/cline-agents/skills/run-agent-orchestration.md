@@ -577,6 +577,14 @@ authoritative for the *why*.
     error. `cadre role-fidelity --mode probe` measures that against a specific
     model; run it before trusting a new one with dispatch.
 
+    **Model choice matters as much as size.** Measured on this suite's own
+    roles, a 27B preset scored 45/45 on the fidelity probes while a 70B
+    preset of a different family scored 36/45, failing role-scope discipline
+    9/9. Weight quantization also differed between the two presets and was
+    not isolated, so read the caveats in
+    `this repository's local run-artifact directorycadre-cline-local-model-fidelity-2026-08-10/fidelity-baseline.md`
+    before generalizing.
+
 So as of this section, Cline has **three** distinct ways to reach a role,
 not zero: the `cline-agents` plugin above (preferred when installed — it is
 the only path with a bundled, generated per-role wrapper), the MCP

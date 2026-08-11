@@ -328,6 +328,7 @@
         "server/**",
         "sdk/**",
         "plugins/**",
+        "cline-plugins/**",
         "**/*.config.ts"
       ]
     },
@@ -1108,7 +1109,10 @@
         "server/**/*.ts",
         "sdk/**/*.ts",
         "plugins/**/*.ts",
+        "cline-plugins/**/*.ts",
+        "cline-plugins/**/*.mts",
         "packages/**/src/**/*.ts",
+        "packages/**/src/**/*.mts",
         "**/*.config.ts"
       ],
       "exclude_paths": [

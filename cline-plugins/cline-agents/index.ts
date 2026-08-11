@@ -456,6 +456,10 @@ const LEGACY_MODEL_TIERS: Readonly<Record<string, ModelTier>> = {
 
 const asModelTier = (value: string | undefined): ModelTier | undefined => {
   const normalized = value?.trim().toLowerCase() ?? "";
+  // Empty is not "unrecognized" -- most global/project presets declare no
+  // modelTier at all, and that is the ordinary, silent, unrestricted case
+  // this function has always returned undefined for.
+  if (!normalized) return undefined;
   if ((MODEL_TIERS as readonly string[]).includes(normalized)) return normalized as ModelTier;
   // `Object.hasOwn`, not a bare lookup: a bare one also resolves inherited
   // `Object.prototype` keys, so `modelTier: constructor` (or `toString`,
@@ -472,6 +476,19 @@ const asModelTier = (value: string | undefined): ModelTier | undefined => {
     );
     return legacy;
   }
+  // Genuinely unrecognized -- neither a current tier nor a retired one.
+  // Previously this fell through to `undefined` with no signal at all, which
+  // is the wrong direction for the asymmetry here: a *retired* tier name
+  // warns (above); a manifest-valid tier this build does not know about (or
+  // a plain typo) must not fail more quietly than that. It still resolves as
+  // "no tier" -- CLINE_AGENTS_MODEL_DEFAULT, same as before -- this only
+  // adds the missing signal.
+  console.error(
+    `[cline-agents] Preset declares an unrecognized modelTier "${normalized}" (expected one of ` +
+      `${MODEL_TIERS.join("/")}, or a retired opus/sonnet/haiku spelling). Treating it as no tier at all: ` +
+      "dispatch falls through to CLINE_AGENTS_MODEL_DEFAULT instead of a tier-specific variable. " +
+      "Fix the preset's modelTier, or this will keep silently routing to the default model.",
+  );
   return undefined;
 };
 
@@ -499,6 +516,87 @@ const modelForTier = (tier: ModelTier | undefined): { varName?: string; modelId?
   }
   return { varName };
 };
+
+// ---------------------------------------------------------------------------
+// Role-fidelity attestation notice (deagy/cadre#234 follow-up)
+// ---------------------------------------------------------------------------
+//
+// Measurement on this suite (roster/orchestration/runs/
+// cadre-cline-local-model-fidelity-2026-08-10/fidelity-baseline.md) found a
+// weakly-steered model producing fluent, confident, well-formatted
+// violations of role-scope discipline -- authorship/approval separation --
+// with nothing erroring anywhere: a 70B model scored 0/9 on the
+// `stays-in-remit` probe where a 27B model scored 9/9 on the same probes.
+// The decision recorded for this plugin, given that finding, is to warn, not
+// gate: dispatch always proceeds. This is a notice only -- it must never
+// throw, block, or otherwise change what start_subagent/dispatch_selected_roles
+// does.
+//
+// Suppression is an attestation, not a flag. `cadre role-fidelity --mode
+// probe` (roster/orchestration/src/role_fidelity.py) is the measurement this
+// notice points the operator at; its forthcoming attestation writer is
+// expected to record a real per-model result (pass rate, probe count, when
+// it ran), keyed by the exact model string -- not a bare boolean an operator
+// could set without ever running a probe. This resolver only checks that
+// SOME record exists for the exact model string; it does not read or
+// threshold the record's contents, both because the point is "was this
+// measured", not "did it pass" (a low score is the operator's call with the
+// transcript in hand), and because nothing yet produces the value to
+// validate a shape against.
+//
+// Read from an env var, not `.agents/cadre.yaml`: this plugin is a
+// standalone distributable with no access to the generating repository's
+// project-local configuration mechanism (see the plugin's own "About this
+// plugin" note above).
+//
+// Coverage note (say this in every place the notice is described, not just
+// here): this reaches the cline-agents dispatch path ONLY. It does not cover
+// the MCP path (roster/orchestration/mcp/, which takes its model from the
+// generated Codex/Claude wrapper, not from this resolver) and it does not
+// cover manual injection of a model string outside this plugin's own tools.
+const ROLE_FIDELITY_ATTESTATION_ENV = "CLINE_AGENTS_ROLE_FIDELITY_ATTESTATIONS";
+
+// Per-model, per plugin-process session: fires once for a given model
+// string, not once per dispatched role. An unconditional per-call warning
+// is unreadable noise across a wave that dispatches ten-plus roles against
+// the same model, and noise like that gets filtered out of the operator's
+// attention permanently -- which defeats the point of a notice.
+const roleFidelityNoticeShown = new Set<string>();
+
+function hasRoleFidelityAttestation(modelId: string): boolean {
+  const raw = env(ROLE_FIDELITY_ATTESTATION_ENV);
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+    // `Object.hasOwn`, matching asModelTier's own reasoning above: a bare
+    // lookup would resolve inherited Object.prototype keys (a model string
+    // of "constructor" would otherwise read as attested).
+    if (!Object.hasOwn(parsed as Record<string, unknown>, modelId)) return false;
+    const record = (parsed as Record<string, unknown>)[modelId];
+    return record !== undefined && record !== null;
+  } catch {
+    // Malformed JSON fails toward showing the notice, not suppressing it --
+    // the same fail-open-to-visibility stance as the legacy-tier handling
+    // above, just in the direction that keeps the operator informed rather
+    // than the direction that keeps a guard from over-blocking.
+    return false;
+  }
+}
+
+function warnMissingRoleFidelityAttestation(modelId: string): void {
+  if (roleFidelityNoticeShown.has(modelId)) return;
+  roleFidelityNoticeShown.add(modelId);
+  console.error(
+    `[cline-agents] No role-fidelity attestation on file for model "${modelId}". Measurement on this suite ` +
+      "found a weakly-steered model producing fluent, confident, well-formatted violations of role-scope " +
+      "discipline (authorship/approval separation) with nothing erroring anywhere -- this is a notice, not a " +
+      `gate, and dispatch proceeds. Run \`cadre role-fidelity --mode probe --base-url <endpoint> --model ` +
+      `"${modelId}"\` to measure this model; record the result as an attestation to silence this notice ` +
+      `(see the ${ROLE_FIDELITY_ATTESTATION_ENV} env var). Covers cline-agents dispatch only -- not the MCP ` +
+      "path or manual injection.",
+  );
+}
 
 /**
  * Resolve the provider/model for one dispatch. Order, most specific first:
@@ -558,6 +656,9 @@ function resolveProviderAndModel(
     missing.push(tierVar ? `${tierVar} (or CLINE_AGENTS_MODEL_DEFAULT)` : "CLINE_AGENTS_MODEL_DEFAULT");
   }
   if (missing.length > 0) return { status: "unconfigured", missing };
+  if (!hasRoleFidelityAttestation(modelId as string)) {
+    warnMissingRoleFidelityAttestation(modelId as string);
+  }
   return { status: "resolved", providerId: providerId as string, modelId: modelId as string };
 }
 
@@ -2980,6 +3081,17 @@ export {
   // getSessionManager()'s module-scoped ClineCore.create() cache (which only
   // ever calls ClineCore.create() once per test process).
   resolveSubagentBackendMode,
+  // Model-tier vocabulary (deagy/cadre#234 follow-up): exported so a test can
+  // pin it against roster/runner-capabilities.json's model_tiers[*].cline_tier
+  // set directly, rather than trusting a second hand-copied list to stay in
+  // sync with it.
+  MODEL_TIERS,
+  // Role-fidelity attestation notice (deagy/cadre#234 follow-up): exported so
+  // the attestation lookup and the once-per-model-per-session dedupe can each
+  // be unit-tested directly, independent of a live start_subagent dispatch.
+  ROLE_FIDELITY_ATTESTATION_ENV,
+  hasRoleFidelityAttestation,
+  roleFidelityNoticeShown,
   type AgentDefinition,
   type KnowledgeContextRequest,
   type KnowledgeRetrievalResult,

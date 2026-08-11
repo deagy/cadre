@@ -197,8 +197,11 @@ overrides are honoured, because both are you speaking. `list_agent_presets`
 reports what a dispatch would actually use, so a project preset naming a
 vendor will not show it.
 
-`modelTier` must be `high`, `mid`, or `low`. Any other value is treated
-as no tier at all rather than deriving an environment variable name from it.
+`modelTier` should be `high`, `mid`, or `low`. The retired `opus`/`sonnet`/
+`haiku` spellings are still honoured, mapped onto those three, with a warning
+on stderr — see "Migrating from the opus/sonnet/haiku tier names" below. Any
+other value is treated as no tier at all rather than deriving an environment
+variable name from it.
 
 ### Minimum context window: 32k
 
@@ -250,7 +253,9 @@ and every one of that model's failures was role-scope discipline: handed work
 belonging to six other roles, it did the work instead of handing it off, in
 nine cases out of nine. Its refusals on the authority probes were also
 generic ("I can't help with that") rather than grounded in the policy it had
-just been given.
+just been given. Weight quantization also differed between the two presets
+and was not isolated as a variable — read the run record's limits section
+before treating "model family" as the settled explanation.
 
 That is the failure shape to watch for, because it is invisible in normal use:
 a weakly-steered model produces fluent, confident, well-formatted output that
