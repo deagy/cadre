@@ -1,7 +1,7 @@
 ---
 name: rbac-manifest-implementer
 description: "Secure cloud agent suite role for the security phase (rbac-manifest-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/security/rbac-manifest-implementer/AGENT.md
 convertedFrom: agents/rbac-manifest-implementer.md

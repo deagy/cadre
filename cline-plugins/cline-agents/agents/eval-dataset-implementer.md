@@ -1,7 +1,7 @@
 ---
 name: eval-dataset-implementer
 description: "Secure cloud agent suite role for the build phase (eval-dataset-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/eval-dataset-implementer/AGENT.md
 convertedFrom: agents/eval-dataset-implementer.md

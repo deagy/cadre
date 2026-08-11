@@ -1,7 +1,7 @@
 ---
 name: technical-writer
 description: "Secure cloud agent suite role for the document phase (technical-writer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/documentation/technical-writer/AGENT.md
 convertedFrom: agents/technical-writer.md

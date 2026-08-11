@@ -1,7 +1,7 @@
 ---
 name: governance-planner
 description: "Secure cloud agent suite role for the design phase (governance-planner)."
-modelTier: opus
+modelTier: high
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/governance/governance-planner/AGENT.md
 convertedFrom: agents/governance-planner.md

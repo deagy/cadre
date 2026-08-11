@@ -1,7 +1,7 @@
 ---
 name: pki-certificate-lifecycle-implementer
 description: "Secure cloud agent suite role for the security phase (pki-certificate-lifecycle-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/security/pki-certificate-lifecycle-implementer/AGENT.md
 convertedFrom: agents/pki-certificate-lifecycle-implementer.md

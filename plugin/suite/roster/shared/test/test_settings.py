@@ -276,7 +276,7 @@ class GlobalOnlyScopeTests(SettingsTestCase):
         self.assertIn("gitlab.base_url", str(ctx.exception))
 
     def test_gitlab_project_id_is_global_only(self) -> None:
-        # roster/orchestration/mcp/SECURITY-CONTROLS.md records a
+        # roster/orchestration/SECURITY-CONTROLS.md records a
         # human-accepted residual-risk control that depends on both
         # GITLAB_BASE_URL *and* GITLAB_DOCS_PROJECT_ID being operator-fixed
         # (a dedicated docs-only project + a least-privilege token) --

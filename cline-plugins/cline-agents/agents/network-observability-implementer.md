@@ -1,7 +1,7 @@
 ---
 name: network-observability-implementer
 description: "Secure cloud agent suite role for the build phase (network-observability-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/network-observability-implementer/AGENT.md
 convertedFrom: agents/network-observability-implementer.md

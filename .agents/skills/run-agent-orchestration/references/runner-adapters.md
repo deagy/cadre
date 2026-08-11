@@ -123,7 +123,7 @@ authoritative for the *why*.
     enforces sandbox narrowing and a human confirmation gate for
     write-capable dispatch, and spawns the child in its own process group
     with an explicit wait/timeout/group-kill and a bounded concurrency
-    limiter (see `roster/orchestration/mcp/SECURITY-CONTROLS.md` for exactly
+    limiter (see `roster/orchestration/SECURITY-CONTROLS.md` for exactly
     which of those guarantees are mechanically enforced and tested). Once
     registered, call it directly instead of `spawn_agent` — no per-file
     reading or manual `developer_instructions` injection needed. Setup:
@@ -160,7 +160,7 @@ authoritative for the *why*.
        distinguishable by `member_index`/`role_id`; a single team-wide
        `confirmation_required` round trip covers every write-capable member
        at once rather than one per member. See
-       `roster/orchestration/mcp/SECURITY-CONTROLS.md`'s "Team dispatch"
+       `roster/orchestration/SECURITY-CONTROLS.md`'s "Team dispatch"
        section for exactly how each single-role control (classification/
        sandbox narrowing, the depth guard, confirmation gating, the
        concurrency limiter, audit logging) generalizes to a team.
@@ -169,7 +169,7 @@ authoritative for the *why*.
        only fully-verified option, or `"claude-code"`) for dispatching a
        role as a Claude Code child process instead of a Codex one. This is
        newer and only partially verified — read
-       `roster/orchestration/mcp/SECURITY-CONTROLS.md`'s "Claude Code
+       `roster/orchestration/SECURITY-CONTROLS.md`'s "Claude Code
        runner" section before relying on it: in particular, a Claude Code
        role can currently only ever be dispatched read-only (there's no
        wrapper-format field yet to declare write-capability the way a Codex
@@ -304,13 +304,37 @@ authoritative for the *why*.
     silently defaulted to Anthropic and required `ANTHROPIC_API_KEY`
     regardless of how Cline itself was configured (issue #142). A dispatch
     needs `CLINE_AGENTS_PROVIDER_ID` plus at least one of
-    `CLINE_AGENTS_MODEL_OPUS`/`_SONNET`/`_HAIKU` or
+    `CLINE_AGENTS_MODEL_HIGH`/`_MID`/`_LOW` or
     `CLINE_AGENTS_MODEL_DEFAULT` set in the process environment before
     calling `start_subagent`/`dispatch_selected_roles`; if nothing resolves
     for a role's tier, the call fails before any session starts, naming the
     missing variable, rather than falling back to a vendor. See that
     plugin's `README.md` ("Model tiers and provider selection") for the full
     resolution order and per-tier variables.
+  - **Configure a model with at least a 32k context window.** Role briefs
+    carry their shared-policy block embedded verbatim, because a dispatched
+    subagent is an isolated session with no other channel to receive it. That
+    makes the briefs large: a median of roughly 15,700 tokens and a largest of
+    about 18,000 (`cadre role-fidelity --mode static` at its default 4.0
+    chars/token divisor; an estimate, not a real tokenizer). Every role fits from about
+    20k upward; at 16k, 131 of 159 do not. 32k is the documented minimum
+    because the gap absorbs the estimate's error, the task and tool schemas,
+    any retrieved knowledge, and the reply.
+
+    Fitting is necessary, not sufficient. Advertised context is not effective
+    context, and a small model that accepts a 15k-token brief may still stop
+    attending to its constraints well before the window fills — which looks
+    like a role ignoring its own authority limits, not like a truncation
+    error. `cadre role-fidelity --mode probe` measures that against a specific
+    model; run it before trusting a new one with dispatch.
+
+    **Model choice matters as much as size.** Measured on this suite's own
+    roles, a 27B preset scored 45/45 on the fidelity probes while a 70B
+    preset of a different family scored 36/45, failing role-scope discipline
+    9/9. Weight quantization also differed between the two presets and was
+    not isolated, so read the caveats in
+    `roster/orchestration/runs/cadre-cline-local-model-fidelity-2026-08-10/fidelity-baseline.md`
+    before generalizing.
 
 So as of this section, Cline has **three** distinct ways to reach a role,
 not zero: the `cline-agents` plugin above (preferred when installed — it is
@@ -536,7 +560,10 @@ it's a fixed statement of what's actually possible:
   `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` set. Spawn the team's members as an
   Agent Team exactly as described above.
 - **`fallback: orchestrator-relayed`** applies everywhere else — Codex always,
-  and Claude Code whenever the experimental flag isn't set. Dispatch the same
+  Cline in practice (its `start_subagent` sessions run with agent teams
+  disabled, so treat `peer` there as best-effort and assume this fallback
+  unless you have positively confirmed otherwise), and Claude Code whenever
+  the experimental flag isn't set. Dispatch the same
   member list as an ordinary parallel wave and perform all reconciliation
   yourself as the orchestrating session. Never report that agents "discussed"
   or "challenged" each other's findings when this fallback was actually used —
@@ -550,10 +577,10 @@ selector can't know either in advance.
 
 ## Choosing between an ordinary wave and a team
 
-Default to an ordinary parallel wave — it's cheaper and works identically on
-both runners. Reach for a Claude Code Agent Team only when the recipe's value
+Default to an ordinary parallel wave — it's cheaper and works the same way on
+every runner. Reach for a Claude Code Agent Team only when the recipe's value
 specifically comes from teammates challenging or building on each other's
 findings before you synthesize (see [team-recipes.md](team-recipes.md)), and
-only when `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is available. On Codex, or on
-Claude Code without that flag, run the same recipe as an ordinary wave and
-perform the synthesis step yourself.
+only when `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is available. On Codex, on
+Cline, or on Claude Code without that flag, run the same recipe as an ordinary
+wave and perform the synthesis step yourself.

@@ -77,7 +77,11 @@ class ToolAndModelMappingTests(unittest.TestCase):
         # selects a vendor on the operator's behalf, and where that vendor's
         # credentials happen to exist, silently routes task and
         # knowledge-store content to it.
-        self.assertIn("modelTier: sonnet", content)
+        # ...translated to the capability-neutral vocabulary. The catalog's
+        # `sonnet` is a Claude model line, which names nothing on a local or
+        # open-weight rig -- the axis survives the move, the branding does not.
+        self.assertIn("modelTier: mid", content)
+        self.assertNotIn("modelTier: sonnet", content)
         self.assertNotIn("providerId", content)
         self.assertNotIn("anthropic", content)
         self.assertIn("convertedFrom: agents/sample-role.md", content)
@@ -91,9 +95,25 @@ class ToolAndModelMappingTests(unittest.TestCase):
         self.assertEqual(deduped, ["read_files", "search_codebase"])
 
     def test_tiers_are_capability_labels_not_vendor_model_ids(self) -> None:
-        self.assertEqual(("opus", "sonnet", "haiku"), p.MODEL_TIERS)
-        for tier in p.MODEL_TIERS:
+        # Keys are the catalog's vocabulary (what a Claude Code preset carries);
+        # values are what a Cline preset carries.
+        self.assertEqual({"opus": "high", "sonnet": "mid", "haiku": "low"}, p.MODEL_TIERS)
+        for tier in p.MODEL_TIERS.values():
             self.assertNotIn("/", tier, "a tier is a capability label, not a vendor-qualified id")
+
+    def test_emitted_tier_vocabulary_names_no_vendor_model_line(self) -> None:
+        """The point of the rename. Cline is driven mostly against open-weight
+        and local models, where `opus`/`sonnet`/`haiku` name models the
+        operator does not have -- and, via CLINE_AGENTS_MODEL_<TIER>, ask them
+        to write `CLINE_AGENTS_MODEL_OPUS=<some local model>`. Nothing on the
+        Cline surface may reintroduce that branding.
+        """
+        for tier in p.MODEL_TIERS.values():
+            self.assertNotIn(
+                tier,
+                {"opus", "sonnet", "haiku", "gpt", "claude"},
+                f"emitted tier {tier!r} names a vendor's model line",
+            )
 
     def test_unknown_tier_is_rejected_rather_than_defaulted(self) -> None:
         source = (

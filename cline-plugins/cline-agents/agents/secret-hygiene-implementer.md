@@ -1,7 +1,7 @@
 ---
 name: secret-hygiene-implementer
 description: "Secure cloud agent suite role for the security phase (secret-hygiene-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/security/secret-hygiene-implementer/AGENT.md
 convertedFrom: agents/secret-hygiene-implementer.md

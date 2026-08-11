@@ -1,7 +1,7 @@
 ---
 name: backend-engineer
 description: "Secure cloud agent suite role for the build phase (backend-engineer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/backend-engineer/AGENT.md
 convertedFrom: agents/backend-engineer.md

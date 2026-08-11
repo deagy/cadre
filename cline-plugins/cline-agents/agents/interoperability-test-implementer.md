@@ -1,7 +1,7 @@
 ---
 name: interoperability-test-implementer
 description: "Secure cloud agent suite role for the verify phase (interoperability-test-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/interoperability-test-implementer/AGENT.md
 convertedFrom: agents/interoperability-test-implementer.md

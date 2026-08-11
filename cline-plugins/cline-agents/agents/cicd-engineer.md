@@ -1,7 +1,7 @@
 ---
 name: cicd-engineer
 description: "Secure cloud agent suite role for the build phase (cicd-engineer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/cicd-engineer/AGENT.md
 convertedFrom: agents/cicd-engineer.md

@@ -90,7 +90,7 @@ TOOL_MAP = {
 RUNNER_CAPABILITIES_PATH = Path(__file__).resolve().parents[2] / "roster" / "runner-capabilities.json"
 
 
-def _model_tiers_from_manifest(path: Path) -> tuple[str, ...]:
+def _model_tiers_from_manifest(path: Path) -> dict[str, str]:
     try:
         manifest = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
@@ -98,9 +98,31 @@ def _model_tiers_from_manifest(path: Path) -> tuple[str, ...]:
     tiers = manifest.get("model_tiers")
     if not isinstance(tiers, dict) or not tiers:
         raise SystemExit(f"{path}: 'model_tiers' must be a non-empty object")
-    return tuple(tiers)
+    mapping: dict[str, str] = {}
+    for tier, data in tiers.items():
+        if not isinstance(data, dict) or not data.get("cline_tier"):
+            raise SystemExit(f"{path}: model_tiers[{tier!r}] must declare 'cline_tier'")
+        mapping[tier] = data["cline_tier"]
+    return mapping
 
 
+# Catalog tier (`opus`/`sonnet`/`haiku`) -> the tier name a Cline preset
+# carries (`high`/`mid`/`low`).
+#
+# The catalog's vocabulary is Anthropic's brand names because the catalog was
+# written against Claude Code first. Cline is overwhelmingly driven against
+# open-weight and locally hosted models, where `modelTier: opus` names nothing
+# the operator has and `export CLINE_AGENTS_MODEL_OPUS=qwen3-coder:30b` is an
+# absurd line to ask them to write. The tier *axis* is sound and survives the
+# move -- a local rig with a large, a mid and a small model tiers exactly as
+# well, and a single-model rig collapses onto CLINE_AGENTS_MODEL_DEFAULT --
+# so this renames the labels on the Cline surface only, and leaves the
+# catalog, the Claude Code plugin and the Codex wrappers untouched.
+#
+# Derived from the manifest for the same reason the tier vocabulary already
+# was: one edit location, no second copy to drift. `codex_model` set the
+# precedent that a runner whose namespace does not share Claude's naming gets
+# its own field rather than a reused value.
 MODEL_TIERS = _model_tiers_from_manifest(RUNNER_CAPABILITIES_PATH)
 
 # Applied in order, each a plain (non-regex) substring replacement, except
@@ -292,7 +314,7 @@ def _convert_agent_file(source_path: Path, role: str) -> str:
         "---",
         f"name: {fields['name']}",
         f'description: "{fields["description"]}"',
-        f"modelTier: {model}",
+        f"modelTier: {MODEL_TIERS[model]}",
         f"allowedTools: [{', '.join(allowed_tools)}]",
         f"canonicalSource: {fields['canonical_source']}",
         f"convertedFrom: agents/{role}.md",
@@ -409,13 +431,16 @@ SKILL_PATH_SUBSTITUTIONS: list[tuple[str, str]] = [
     ),
     ("`roster/knowledge-store/test`", "the bundled knowledge-store test suite"),
     ("roster/knowledge-store/test", "the bundled knowledge-store test suite"),
+    # Promoted out of `mcp/` in the #234 follow-up: the register now covers
+    # every dispatch path, not only the MCP servers, so the replacement prose
+    # can no longer call it "the MCP dispatch server's" documentation.
     (
-        "`roster/orchestration/mcp/SECURITY-CONTROLS.md`",
-        "the bundled MCP dispatch server's security-controls documentation",
+        "`roster/orchestration/SECURITY-CONTROLS.md`",
+        "the bundled security-controls register",
     ),
     (
-        "roster/orchestration/mcp/SECURITY-CONTROLS.md",
-        "the bundled MCP dispatch server's security-controls documentation",
+        "roster/orchestration/SECURITY-CONTROLS.md",
+        "the bundled security-controls register",
     ),
     # Two literal runnable shell commands (Codex CLI MCP-server setup
     # instructions), not descriptive prose -- these describe a register

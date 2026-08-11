@@ -1,7 +1,7 @@
 ---
 name: visual-designer
 description: "Secure cloud agent suite role for the design phase (visual-designer)."
-modelTier: opus
+modelTier: high
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/architecture/visual-designer/AGENT.md
 convertedFrom: agents/visual-designer.md

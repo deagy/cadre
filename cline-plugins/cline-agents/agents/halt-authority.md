@@ -1,7 +1,7 @@
 ---
 name: halt-authority
 description: "Secure cloud agent suite role for the review phase (halt-authority)."
-modelTier: opus
+modelTier: high
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/halt-authority/AGENT.md
 convertedFrom: agents/halt-authority.md

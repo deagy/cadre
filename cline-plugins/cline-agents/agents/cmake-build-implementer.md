@@ -1,7 +1,7 @@
 ---
 name: cmake-build-implementer
 description: "Secure cloud agent suite role for the build phase (cmake-build-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/cmake-build-implementer/AGENT.md
 convertedFrom: agents/cmake-build-implementer.md

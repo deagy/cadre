@@ -40,8 +40,46 @@ check and reporting "nothing to do". See
 - **Wrapper commands outside a six-name list hid the whole command** ([#219](https://github.com/deagy/cadre/issues/219)). Anything not in `_WRAPPER_TOKENS` left `tokens[0]` as a non-`git` program, so the invocation was never recognized — `timeout 10 git worktree remove <path>` was allowed, and `timeout` is what an agent reaches for around a command that might hang, with no adversarial intent at all. `timeout`, `nice`, `ionice`, `stdbuf`, `setsid`, `chrt`, and `taskset` are now recognized, each with its own flag arity confirmed by running it against real `git` (`timeout`/`chrt`/`taskset` take a leading positional, skipped lazily so `taskset -c 0,1 git …` does not step over `git`). `xargs` and `find -exec`/`-execdir`/`-ok`/`-okdir` take their command in argument position rather than as a prefix and are now extracted there; supporting `\;` required teaching the segment scanner that an unquoted backslash escapes the next character.
 
   The prefix-stripping design was kept deliberately rather than inverted to "scan every token for a `git` invocation." Inverting is more robust against unknown wrappers but would make a literal `git worktree remove` appearing as *data* start matching — exactly the false-positive class [#215](https://github.com/deagy/cadre/issues/215)'s heredoc handling was written to avoid. The set remains explicitly non-exhaustive.
+- The `run-agent-orchestration` skill's **Bootstrap Local Setup** had no Cline
+  row, so nothing told a Cline session that dispatch fails closed until
+  `CLINE_AGENTS_PROVIDER_ID` and a model variable are set. Because
+  `dispatch_selected_roles` catches the per-role failure and returns each role
+  as `skipped`, the visible symptom was a correct, fully staffed plan and zero
+  started agents. Added, including the note that
+  `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is a Claude Code peer-messaging flag
+  with no effect on Cline.
+- `references/runner-adapters.md` described team-communication fallback for a
+  two-runner world, enumerating "Codex always, and Claude Code whenever the
+  experimental flag isn't set" and calling an ordinary wave one that "works
+  identically on both runners" — omitting Cline from both. Cline is now named
+  in the fallback rule.
 
 ### Added
+
+- **A role-fidelity model-validation notice on the `cline-agents` dispatch
+  path, recorded as a control** ([#234](https://github.com/deagy/cadre/issues/234)).
+  When the resolved model has no role-fidelity attestation on file, the plugin
+  prints a once-per-model-per-session stderr notice naming the model and the
+  `cadre role-fidelity --mode probe` command that would measure it. It is a
+  notice, not a gate: dispatch always proceeds. Suppression is an attestation
+  rather than a flag — `CLINE_AGENTS_ROLE_FIDELITY_ATTESTATIONS` must parse as
+  a JSON object carrying an own key exactly equal to the model string, so a
+  bare `=1` cannot silence it, and `cadre role-fidelity --attest-file` writes
+  that record (merging, never clobbering) while refusing a `--dry-run`, a
+  `--compare-condensed` run, or a run with zero scored results.
+
+  It is now entry-by-entry in the security-controls register, classified
+  **advisory** with its reach stated exactly: it covers the `cline-agents`
+  dispatch path only. It does not reach the MCP path, which takes the child's
+  model from the generated wrapper rather than operator environment, and
+  nothing reaches manual injection or the Claude Code plugin-subagent path.
+  The register also records the honest limit that the consumer never reads or
+  provenance-checks the record's contents, so a hand-written entry suppresses
+  the notice without a probe having run — attestation is not proof of
+  measurement. A blocking gate was **deferred, not rejected**, by the
+  accountable human control owner, with a named trigger to revisit: evidence
+  of unvalidated models on write-capable dispatch. Nothing currently detects
+  that trigger automatically, which the register says rather than implies.
 
 - **A `gc` handler covering worktree registrations** ([#217](https://github.com/deagy/cadre/issues/217)). `git gc` prunes worktree registrations as housekeeping and had no handler, so it reached the state `check_worktree` exists to protect through a subcommand nobody guarded.
 
@@ -50,8 +88,61 @@ check and reporting "nothing to do". See
 - **The Python guard and its Cline TypeScript mirror are now pinned to each other by a check, not a comment** ([#222](https://github.com/deagy/cadre/issues/222)). The two implementations must agree, and the only thing asserting that was a code comment — prose about intent, which is precisely what this repository's operating principles say to replace with a check when one is possible. `plugin/tools/test_guard_parity.py` compares handler keys, wrapper tokens, global flags, and recursion bounds across both files, and a 59-case shared fixture runs *both* implementations against the same prepared repositories, asserting they agree with the fixture and with each other. The suite was mutation-tested: seven deliberate divergences injected into `index.ts` were all caught, and a no-op control passed. Generating one file from the other was considered and rejected — the two runtimes differ enough that the generator becomes its own maintenance surface.
 
 - **`schema_version` drift is now caught by CI rather than by review** ([#224](https://github.com/deagy/cadre/issues/224)). `RUNBOOK.md`'s rule — any change to the emitted field set increments `schema_version` — had been violated or nearly violated three times, each caught only by a human noticing. `roster/orchestration/test/test_schema_release_drift.py` diffs the committed `selection.schema.json` against its copy at the last `plugin-v*` release tag and fails when the emitted field set differs while the version does not. It reads the baseline with `git show`, because `pyproject.toml` force-includes the schema into the wheel from source and any *rebuilt* baseline would reproduce the current file by construction and always pass. It compares the resolved property set and each property's type across nested objects, array items, and `$defs`, so a description reword passes and a retype does not; `const`/`enum` *values* are not compared, so widening an enum stays out of its reach and still needs the rule applied by hand. Its one skip condition — no release-tag baseline reachable — hard-fails under CI, and `.github/workflows/validate.yml`'s `roster` job now checks out with `fetch-depth: 0` so the baseline exists. This also closes [#214](https://github.com/deagy/cadre/issues/214)'s disclosed limitation, by checking its reconstruct-a-v5-schema-by-delta against the bytes actually released as v5.
+- **`cadre role-fidelity`** — measures whether a role brief survives a given
+  model, for operators running this suite against open-weight or locally
+  hosted models. `--mode static` needs no model or network and reports each
+  role's payload against a context budget, split into role-specific content
+  versus the shared-policy block embedded verbatim into every role.
+  `--mode probe` sends each role's real brief plus a probe task to any
+  OpenAI-compatible `/chat/completions` endpoint (Ollama, LM Studio, vLLM,
+  llama.cpp, hosted providers) and scores replies against declarative checks
+  in `role-fidelity-probes.yaml`. `--dry-run` inspects a run without sending
+  anything. It is a screening instrument, not a judge: it detects a brief
+  that has stopped steering the output, and its results may never stand in
+  for a human review, gate approval, or risk acceptance.
+
+  For CI use the two thresholds are deliberately separate. `--fail-under`
+  gates the pass rate, which is computed over *answered* probes only so a
+  flaky endpoint cannot masquerade as a fidelity verdict; `--min-coverage`
+  gates how much of the run actually happened. A run using only the former
+  can exit 0 on a single lucky answer out of hundreds of attempts, so a CI
+  invocation should set both.
+
+  Measured against two local models on this suite's own roles
+  (`roster/orchestration/runs/cadre-cline-local-model-fidelity-2026-08-10/`),
+  a 27B model scored 45/45 while a 70B model of a different family scored
+  36/45 — every one of its failures being role-scope discipline. **Model
+  choice affects whether role boundaries hold at all, more than model size or
+  context length does**, and that failure is silent: a weakly-steered model
+  emits fluent, well-formatted output simply not governed by the role it was
+  dispatched as.
 
 ### Changed
+
+- **The security-controls register is now repository-wide, and moved to match**
+  ([#234](https://github.com/deagy/cadre/issues/234)).
+  `roster/orchestration/mcp/SECURITY-CONTROLS.md` is now
+  `roster/orchestration/SECURITY-CONTROLS.md` (moved with `git mv`, so history
+  follows). It had grown its first non-MCP entry, and a register claiming
+  repository-wide scope while living in `mcp/` misrepresents itself — which is
+  the thing this file exists not to do.
+
+  The promotion is a reframing, not a rewrite: every pre-existing entry is
+  preserved with its enforcement classification unchanged, demoted one heading
+  level under a section scoped to the MCP servers. Nothing was reclassified or
+  dropped. New up front: a scope section naming the four dispatch paths (MCP
+  servers, the `cline-agents` plugin, Claude Code plugin subagents, and
+  manual/direct invocation), which controls reach each, and the two
+  disambiguations that reading needs — that "Claude Code" names both an
+  MCP-spawned child runner and an uncovered operator-facing path, and that "no
+  entries reach it" is a statement of fact rather than an assessment that the
+  path is safe.
+
+  Every in-repository reference was repointed. Historical records under
+  `roster/orchestration/runs/` and already-shipped changelog entries still cite
+  the old path and were deliberately left alone: a point-in-time record
+  describing what was true when it was written is correct, and editing it to
+  match today's layout would falsify it.
 
 - **`architecture-diagram-author` no longer names `architecture-authority` as a review handoff.** Its required checks said to "hand off to an independent `technical-writer`, `code-reviewer`, or `architecture-authority` when architectural claims require review". `architecture-authority` is a blocking boundary-conformance gate whose declared input is "code or configuration touching an infrastructure interface" and whose output is "a block on any change that reaches infrastructure without all required elements" — a Mermaid diagram is neither, and a routine review handoff is not how that gate is reached. The line now names `technical-writer` and `threat-modeler`, matching the review the artifact actually needs and the staffing `architecture-diagram-execution` already carries, and directs architectural claims to the escalation path that was already one bullet above. With this, no route's primary names a reviewer its route does not staff.
 
@@ -72,6 +163,28 @@ check and reporting "nothing to do". See
   Staffing was derived per route from the artifact, never by bulk replace: `c-systems`, `cmake-build`, `cpp-systems`, `device-driver`, `ebpf`, `embedded-c`, `firmware`, `kernel-module`, `protocol-integration`, and `rtos-integration` execution now staff `backend-engineer`; `mcp-server-execution` staffs `ai-engineer`, because its implementer's own definition offers `ai-engineer` or `application-engineer` and never `backend-engineer`. Two hypotheses in the issue did not survive the derivation and are recorded where they failed: the firmware/kernel/driver/RTOS group is not `embedded-linux-platform-implementer`-shaped, and `mcp-server-execution` is not `backend-engineer`. The ten-way convergence on `backend-engineer` is the catalog's existing vocabulary, not a find-and-replace — `go-service`, `python-automation`, and `node-typescript` execution already resolved the identical role pair the same way.
 
   **Consumer impact:** a task matching one of these routes selects a different support agent. No `reviewers` array, `workflow_shape`, or gate requirement changed. The six routes covering this suite's *own* tooling (`selector-test`, `agent-workflow`, `git-operations`, `dependency-remediation`, `shell-automation`, `supply-chain-remediation`) were each confirmed correct and left alone.
+- **Cline model tiers are now `high`/`mid`/`low`, not `opus`/`sonnet`/`haiku`,**
+  and the per-tier variables are `CLINE_AGENTS_MODEL_HIGH`/`_MID`/`_LOW`. The
+  Cline distribution is driven overwhelmingly against open-weight and local
+  models, where the old names denoted models the operator does not have and
+  asked them to write `CLINE_AGENTS_MODEL_OPUS=<a local model>`. The tier axis
+  is unchanged, as is the catalog (`roster/catalog.yaml` still assigns
+  `opus`/`sonnet`/`haiku`), the Claude Code plugin, and the Codex wrappers —
+  only Cline's surface is renamed, from a new `cline_tier` field in
+  `roster/runner-capabilities.json`.
+
+  **Backwards compatible.** Both the retired `modelTier` values in your own
+  presets and the retired `CLINE_AGENTS_MODEL_OPUS`/`_SONNET`/`_HAIKU`
+  variables are still honoured, mapped onto the new names, each warning on
+  stderr; the current variable wins where both are set.
+
+- **Documented a 32k minimum context window for the Cline dispatch path.**
+  Role briefs embed shared policy verbatim (a dispatched subagent is an
+  isolated session with no other channel to receive it), so they run to a
+  median of ~15,700 estimated tokens. Every role fits from roughly 20k upward;
+  at 16k, 131 of 159 do not. Recorded in `cline-agents/README.md` and
+  `references/runner-adapters.md`, with the caveat that fitting is necessary
+  but not sufficient — advertised context is not effective context.
 
 ### Removed
 

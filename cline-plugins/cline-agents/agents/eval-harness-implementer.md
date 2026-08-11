@@ -1,7 +1,7 @@
 ---
 name: eval-harness-implementer
 description: "Secure cloud agent suite role for the verify phase (eval-harness-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/eval-harness-implementer/AGENT.md
 convertedFrom: agents/eval-harness-implementer.md

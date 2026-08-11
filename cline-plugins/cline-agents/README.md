@@ -137,9 +137,18 @@ Presets carry a capability **tier** and nothing else about the model:
 
 | Source `model:` tier | Preset `modelTier` |
 |---|---|
-| `opus` | `opus` |
-| `sonnet` | `sonnet` |
-| `haiku` | `haiku` |
+| `opus` | `high` |
+| `sonnet` | `mid` |
+| `haiku` | `low` |
+
+The tier names are capability levels, not model lines. The source catalog was
+written against Claude Code and uses Anthropic's names; this suite is driven
+overwhelmingly against open-weight and locally hosted models, where `opus`
+names nothing you have and `CLINE_AGENTS_MODEL_OPUS=qwen3-coder:30b` is an
+absurd line to write. The tier *axis* survives that move intact — a rig with a
+large, a mid-size and a small model tiers exactly as well as a frontier API
+does — so only the labels change, and only here. Codex wrappers get the same
+treatment for the same reason, via their own `codex_model` value.
 
 The tier is this suite's own domain knowledge — `roster/catalog.yaml`'s header
 documents the heuristic that assigns it. Which provider and which concrete
@@ -152,17 +161,27 @@ retrieved into a role's instructions — to it. Earlier versions defaulted to
 Anthropic and requested `ANTHROPIC_API_KEY` regardless of how Cline itself was
 configured (issue #142).
 
-Configure at least a provider and one model:
+Configure at least a provider and one model. A local rig with three models:
 
 ```sh
-export CLINE_AGENTS_PROVIDER_ID=your-provider
-export CLINE_AGENTS_MODEL_OPUS=your/opus-class-model
-export CLINE_AGENTS_MODEL_SONNET=your/sonnet-class-model
-export CLINE_AGENTS_MODEL_HAIKU=your/haiku-class-model
+export CLINE_AGENTS_PROVIDER_ID=ollama
+export CLINE_AGENTS_MODEL_HIGH=qwen3-coder:30b
+export CLINE_AGENTS_MODEL_MID=qwen3-coder:14b
+export CLINE_AGENTS_MODEL_LOW=qwen3:8b
+```
+
+Running a single model — the common case on one box — needs one variable, and
+every tier collapses onto it:
+
+```sh
+export CLINE_AGENTS_PROVIDER_ID=ollama
+export CLINE_AGENTS_MODEL_DEFAULT=qwen3-coder:30b
 ```
 
 `CLINE_AGENTS_MODEL_DEFAULT` sets one model for every tier if you would rather not
-map them individually; the per-tier variables take precedence where set.
+map them individually; the per-tier variables take precedence where set. The
+provider id is whatever your Cline installation calls it (`ollama`,
+`lmstudio`, `openrouter`, `anthropic`, …) — this suite does not constrain it.
 
 Resolution order, most specific first: a per-call `providerId`/`modelId` on
 `start_subagent` or `dispatch_selected_roles` → an explicit `providerId`/
@@ -178,8 +197,80 @@ overrides are honoured, because both are you speaking. `list_agent_presets`
 reports what a dispatch would actually use, so a project preset naming a
 vendor will not show it.
 
-`modelTier` must be `opus`, `sonnet`, or `haiku`. Any other value is treated
-as no tier at all rather than deriving an environment variable name from it.
+`modelTier` should be `high`, `mid`, or `low`. The retired `opus`/`sonnet`/
+`haiku` spellings are still honoured, mapped onto those three, with a warning
+on stderr — see "Migrating from the opus/sonnet/haiku tier names" below. Any
+other value is treated as no tier at all rather than deriving an environment
+variable name from it.
+
+### Minimum context window: 32k
+
+Whatever you configure, give it at least a **32k context window**.
+
+Role briefs embed their shared-policy block verbatim. That is not an oversight
+to be optimized away: a dispatched subagent runs as an isolated session with
+no other channel to receive policy, so it has to arrive in the brief. The
+consequence is that briefs are large. Measured with
+`cadre role-fidelity --mode static`:
+
+| | estimated tokens |
+|---|---|
+| median brief | ~15,700 |
+| largest brief (`knowledge-store-steward`) | ~18,000 |
+| median role-specific content | ~370 |
+| median embedded shared policy | ~15,500 |
+
+Those are estimates from the command's default 4.0 chars-per-token divisor
+rather than a real tokenizer — treat a model near the line as under it. Every role fits from
+roughly 20k upward; at 16k, 131 of 159 do not. The recommendation is 32k
+rather than 20k because the headroom has to cover the estimate's error, the
+task itself, tool schemas, any retrieved knowledge, and the reply.
+
+**Fitting is necessary, not sufficient.** Advertised context is not effective
+context: a small or heavily quantized model will accept a 15k-token brief and
+may still stop attending to its constraints long before the window fills. That
+failure does not look like truncation — it looks like a role quietly ignoring
+its own authority limits, which is the one failure mode this suite can least
+afford. Before trusting a new model with dispatch, measure it:
+
+```sh
+export CADRE_FIDELITY_BASE_URL=http://localhost:11434/v1   # LM Studio: :1234
+export CADRE_FIDELITY_MODEL=your-model-tag
+cadre role-fidelity --mode probe --role code-reviewer --output fidelity.json
+```
+
+Read the `instruction-retention-under-load` result first; it is the cheapest
+and sharpest signal, and nothing else means much until it passes. Then read a
+sample of the recorded replies rather than trusting the score alone — the
+checks are keyword assertions and can be satisfied by a reply that says the
+right words while doing the wrong thing.
+
+**Model choice matters more than model size, and more than context length.**
+Measured on this suite's own roles (see
+`roster/orchestration/runs/cadre-cline-local-model-fidelity-2026-08-10/`), a
+27B model scored 45/45 while a 70B model of a different family scored 36/45 —
+and every one of that model's failures was role-scope discipline: handed work
+belonging to six other roles, it did the work instead of handing it off, in
+nine cases out of nine. Its refusals on the authority probes were also
+generic ("I can't help with that") rather than grounded in the policy it had
+just been given. Weight quantization also differed between the two presets
+and was not isolated as a variable — read the run record's limits section
+before treating "model family" as the settled explanation.
+
+That is the failure shape to watch for, because it is invisible in normal use:
+a weakly-steered model produces fluent, confident, well-formatted output that
+simply is not governed by the role it was dispatched as. Nothing errors. Run
+`--mode probe` against your own model and read the `stays-in-remit`
+transcripts before trusting a dispatch path with anything that matters.
+
+### Migrating from the opus/sonnet/haiku tier names
+
+Both the old `modelTier` values and the old `CLINE_AGENTS_MODEL_OPUS`/
+`_SONNET`/`_HAIKU` variables are still honoured, mapped onto `high`/`mid`/
+`low`, so an existing shell and your own existing presets keep working. Each
+warns on stderr naming the current spelling, and the current variable wins
+where both are set. The old names are read, never recommended — rename when
+convenient.
 
 If nothing resolves, dispatch **fails before any session starts**, naming the
 missing variable. It does not fall back to a vendor.
@@ -190,9 +281,9 @@ Prior versions behaved as though these were set. To reproduce that exactly:
 
 ```sh
 export CLINE_AGENTS_PROVIDER_ID=anthropic
-export CLINE_AGENTS_MODEL_OPUS=anthropic/claude-opus-4.6
-export CLINE_AGENTS_MODEL_SONNET=anthropic/claude-sonnet-4.6
-export CLINE_AGENTS_MODEL_HAIKU=anthropic/claude-haiku-4.6
+export CLINE_AGENTS_MODEL_HIGH=anthropic/claude-opus-4.6
+export CLINE_AGENTS_MODEL_MID=anthropic/claude-sonnet-4.6
+export CLINE_AGENTS_MODEL_LOW=anthropic/claude-haiku-4.6
 ```
 
 There is no transition period during which the old default still applies —
@@ -218,8 +309,9 @@ stores, or forwards an API key, endpoint, or provider setting. Configure the
 credential for your chosen provider in Cline's own provider configuration, the
 same way you would for any other Cline session.
 
-**Caveat carried forward:** those model ids were never independently verified
-against Cline's supported model catalog, `haiku` least of all. Confirm the ids
+**Caveat carried forward:** those Anthropic model ids were never independently
+verified against Cline's supported model catalog, the `low`-tier one least of
+all — and the same caution applies to any local model id. Confirm the ids
 you configure resolve in your own installation; a wrong id now fails at
 session start rather than silently selecting something else.
 
@@ -446,8 +538,9 @@ copy. See `package.json` for the exact pinned version.
 |---|---|
 | `CLINE_AGENTS_BACKEND_MODE` | `auto` (`auto` \| `hub` \| `local`) — see caveat below |
 | `CLINE_AGENTS_PROVIDER_ID` | *(none — required, see above)* |
-| `CLINE_AGENTS_MODEL_OPUS` / `_SONNET` / `_HAIKU` | *(none — per-tier model id)* |
+| `CLINE_AGENTS_MODEL_HIGH` / `_MID` / `_LOW` | *(none — per-tier model id)* |
 | `CLINE_AGENTS_MODEL_DEFAULT` | *(none — one model for every tier)* |
+| `CLINE_AGENTS_MODEL_OPUS` / `_SONNET` / `_HAIKU` | *(retired spellings of the three above; read with a warning)* |
 | `CLINE_DATA_DIR` | `~/.cline/data` |
 | `CLINE_DIR` | `~/.cline` |
 

@@ -1,7 +1,7 @@
 ---
 name: opentofu-module-implementer
 description: "Secure cloud agent suite role for the build phase (opentofu-module-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/opentofu-module-implementer/AGENT.md
 convertedFrom: agents/opentofu-module-implementer.md

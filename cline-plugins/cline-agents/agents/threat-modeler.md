@@ -1,7 +1,7 @@
 ---
 name: threat-modeler
 description: "Secure cloud agent suite role for the design phase (threat-modeler)."
-modelTier: opus
+modelTier: high
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/architecture/threat-modeler/AGENT.md
 convertedFrom: agents/threat-modeler.md

@@ -1,7 +1,7 @@
 ---
 name: python-test-implementer
 description: "Secure cloud agent suite role for the verify phase (python-test-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/python-test-implementer/AGENT.md
 convertedFrom: agents/python-test-implementer.md

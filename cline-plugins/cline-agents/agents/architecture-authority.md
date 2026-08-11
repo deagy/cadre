@@ -1,7 +1,7 @@
 ---
 name: architecture-authority
 description: "Secure cloud agent suite role for the review phase (architecture-authority)."
-modelTier: opus
+modelTier: high
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/architecture-authority/AGENT.md
 convertedFrom: agents/architecture-authority.md

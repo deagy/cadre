@@ -1,7 +1,7 @@
 ---
 name: bare-metal-provisioning-implementer
 description: "Secure cloud agent suite role for the build phase (bare-metal-provisioning-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/bare-metal-provisioning-implementer/AGENT.md
 convertedFrom: agents/bare-metal-provisioning-implementer.md

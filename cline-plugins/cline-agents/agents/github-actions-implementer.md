@@ -1,7 +1,7 @@
 ---
 name: github-actions-implementer
 description: "Secure cloud agent suite role for the build phase (github-actions-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/github-actions-implementer/AGENT.md
 convertedFrom: agents/github-actions-implementer.md

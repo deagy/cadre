@@ -1,7 +1,7 @@
 ---
 name: phase-gate
 description: "Secure cloud agent suite role for the release phase (phase-gate)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/phase-gate/AGENT.md
 convertedFrom: agents/phase-gate.md

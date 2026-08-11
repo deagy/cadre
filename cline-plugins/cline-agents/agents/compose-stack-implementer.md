@@ -1,7 +1,7 @@
 ---
 name: compose-stack-implementer
 description: "Secure cloud agent suite role for the build phase (compose-stack-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/compose-stack-implementer/AGENT.md
 convertedFrom: agents/compose-stack-implementer.md

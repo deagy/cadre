@@ -1,7 +1,7 @@
 ---
 name: ai-observability-implementer
 description: "Secure cloud agent suite role for the build phase (ai-observability-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/ai-observability-implementer/AGENT.md
 convertedFrom: agents/ai-observability-implementer.md

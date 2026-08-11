@@ -298,7 +298,7 @@ def _ensure_contained(path: Path, root: Path) -> None:
 # some prior commit, not that the commit's content was reviewed or is safe.
 # This is risk-reduction against accidental/blind escalation, not
 # risk-elimination against a determined adversary who controls the local
-# git history. See SECURITY-CONTROLS.md for the full enforced-vs-advisory
+# git history. See ../SECURITY-CONTROLS.md for the full enforced-vs-advisory
 # breakdown.
 # ---------------------------------------------------------------------------
 
@@ -679,7 +679,7 @@ def resolve_claude_role_file(
         # declare write-capability the way a Codex .toml wrapper's
         # sandbox_mode field does. Extending this needs a new field in the
         # wrapper format and its generator -- tracked as follow-up, not done
-        # here. See SECURITY-CONTROLS.md's "Claude Code runner" section.
+        # here. See ../SECURITY-CONTROLS.md's "Claude Code runner" section.
         sandbox_mode=None,
         model_reasoning_effort=model_reasoning_effort,
         instructions_sha256=digest,
@@ -718,7 +718,7 @@ def build_claude_child_argv(role: ResolvedRole, effective_sandbox: str, project_
     one live smoke-test call above used `--model haiku` for a trivial
     prompt, not a full role dispatch); and, most importantly, the
     `--permission-mode` mapping below is a first-pass design choice, not a
-    confirmed-equivalent one -- see SECURITY-CONTROLS.md's "Claude Code
+    confirmed-equivalent one -- see ../SECURITY-CONTROLS.md's "Claude Code
     runner" section for why this must not be treated as an established
     fact until reviewed. As noted on `ResolvedRole.sandbox_mode`'s Claude
     Code path, `effective_sandbox` can in practice only ever be
@@ -1883,7 +1883,7 @@ def poll_dispatch_status(job_id: str, *, job_store: DispatchJobStore | None = No
 # Design decisions made explicit here because they were left open in the
 # product-intent record this feature implements (INTENT-CADRE-TEAM-DISPATCH-001,
 # OD-5) -- these are v1 answers, not the only defensible ones, and should be
-# revisited by SECURITY-CONTROLS.md review, not assumed permanent:
+# revisited by ../SECURITY-CONTROLS.md review, not assumed permanent:
 #   - Classification/sandbox: each member is narrowed independently against
 #     the same caller-declared parent_classification (no team-wide ceiling
 #     distinct from each member's own check).

@@ -1,7 +1,7 @@
 ---
 name: kubernetes-operator-implementer
 description: "Secure cloud agent suite role for the build phase (kubernetes-operator-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/kubernetes-operator-implementer/AGENT.md
 convertedFrom: agents/kubernetes-operator-implementer.md

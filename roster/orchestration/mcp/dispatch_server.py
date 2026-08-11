@@ -124,7 +124,7 @@ def build_server():
             when the effective sandbox is write-capable; omit on the first
             call and the tool returns a confirmation_token to replay.
         runner: "codex" (default, fully verified) or "claude-code" (newer,
-            partially unverified -- see SECURITY-CONTROLS.md's "Claude Code
+            partially unverified -- see ../SECURITY-CONTROLS.md's "Claude Code
             runner" section; in this increment it can only ever resolve to
             a read-only sandbox, regardless of mode, since no Claude Code
             wrapper field exists yet to declare write-capability).

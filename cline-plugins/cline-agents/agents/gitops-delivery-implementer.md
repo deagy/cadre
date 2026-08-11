@@ -1,7 +1,7 @@
 ---
 name: gitops-delivery-implementer
 description: "Secure cloud agent suite role for the build phase (gitops-delivery-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/gitops-delivery-implementer/AGENT.md
 convertedFrom: agents/gitops-delivery-implementer.md

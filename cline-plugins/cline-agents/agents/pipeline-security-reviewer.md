@@ -1,7 +1,7 @@
 ---
 name: pipeline-security-reviewer
 description: "Secure cloud agent suite role for the review phase (pipeline-security-reviewer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/pipeline-security-reviewer/AGENT.md
 convertedFrom: agents/pipeline-security-reviewer.md

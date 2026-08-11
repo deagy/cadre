@@ -1,7 +1,7 @@
 ---
 name: engineering-lead-aide
 description: "Secure cloud agent suite role for the authority phase (engineering-lead-aide)."
-modelTier: opus
+modelTier: high
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/authority/engineering-lead-aide/AGENT.md
 convertedFrom: agents/engineering-lead-aide.md

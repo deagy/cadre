@@ -1,7 +1,7 @@
 ---
 name: gherkin-test-implementer
 description: "Secure cloud agent suite role for the verify phase (gherkin-test-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/gherkin-test-implementer/AGENT.md
 convertedFrom: agents/gherkin-test-implementer.md

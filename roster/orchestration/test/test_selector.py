@@ -421,6 +421,37 @@ class SelectorTests(unittest.TestCase):
         tooling = plan(task="Update the bundler config", changed_files=["tools/esbuild.ts"])
         self.assertNotIn("frontend", [m["id"] for m in tooling["matched_routes"]])
 
+    def test_this_repos_own_cline_plugin_typescript_is_not_frontend(self) -> None:
+        # Same defect as the Node-tooling case above, in this repository's own
+        # tree: every .ts/.mts file here lives under cline-plugins/, so before
+        # the exclusion the frontend route could only ever fire as a false
+        # positive -- it staffed frontend-engineer, accessibility-reviewer and
+        # interaction-designer, and pulled in G3/G5/G6/G7, for a plugin dispatch
+        # shim with no browser surface anywhere near it.
+        result = plan(
+            task="Rename the Cline model tier vocabulary",
+            changed_files=["cline-plugins/cline-agents/index.ts"],
+        )
+        self.assertNotIn("frontend", [m["id"] for m in result["matched_routes"]])
+        self.assertNotIn("frontend-engineer", result["agents"]["primary"])
+        self.assertNotIn("accessibility-reviewer", result["agents"]["reviewers"])
+        self.assertNotIn("interaction-designer", result["agents"]["support"])
+
+        # The other half, and the reason excluding it is not enough on its own:
+        # node-typescript-execution's include list said "plugins/**/*.ts" while
+        # the directory is "cline-plugins/", so the route that should own this
+        # file missed it by the same off-by-a-directory-name as the exclusion.
+        # Excluding without including would have turned a wrong answer into
+        # needs-triage.
+        self.assertIn("node-typescript-execution", [m["id"] for m in result["matched_routes"]])
+        self.assertIn("node-typescript-implementer", result["agents"]["primary"])
+
+        mts = plan(
+            task="Add a preset regression test",
+            changed_files=["cline-plugins/cline-agents/test/presets.test.mts"],
+        )
+        self.assertIn("node-typescript-execution", [m["id"] for m in mts["matched_routes"]])
+
     def test_selects_frontend_and_backend_with_cross_stack_coordination(self) -> None:
         result = plan(
             task="Add a React upload form backed by a PostgreSQL API",

@@ -1,7 +1,7 @@
 ---
 name: network-management-automation-implementer
 description: "Secure cloud agent suite role for the build phase (network-management-automation-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/network-management-automation-implementer/AGENT.md
 convertedFrom: agents/network-management-automation-implementer.md

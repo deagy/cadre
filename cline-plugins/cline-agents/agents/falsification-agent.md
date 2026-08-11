@@ -1,7 +1,7 @@
 ---
 name: falsification-agent
 description: "Secure cloud agent suite role for the verify phase (falsification-agent)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/testing/falsification-agent/AGENT.md
 convertedFrom: agents/falsification-agent.md

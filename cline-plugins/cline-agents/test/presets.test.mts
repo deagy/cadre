@@ -12,9 +12,11 @@ import {
   createDestructiveGitGuardHook,
   evaluateGitCommand,
   formatKnowledgeInstructions,
+  hasRoleFidelityAttestation,
   HANDOFFS_DIR,
   type KnowledgeContextRequest,
   type KnowledgeRetrievalResult,
+  MODEL_TIERS,
   normalizeRunCommandsInput,
   plugin,
   readAgentDefinitions,
@@ -25,6 +27,8 @@ import {
   resolveSubagentBackendMode,
   resolveToolPolicyConfig,
   retrieveKnowledgeContext,
+  ROLE_FIDELITY_ATTESTATION_ENV,
+  roleFidelityNoticeShown,
   runGitlabEvidenceCli,
   sanitizeToolResult,
   shouldRetrieveKnowledge,
@@ -119,16 +123,16 @@ const startConfigs: Array<Record<string, unknown>> = [];
 // a leaked provider would mask a fail-closed regression elsewhere.
 beforeAll(() => {
   process.env.CLINE_AGENTS_PROVIDER_ID = "test-provider";
-  process.env.CLINE_AGENTS_MODEL_OPUS = "test/opus-model";
-  process.env.CLINE_AGENTS_MODEL_SONNET = "test/sonnet-model";
-  process.env.CLINE_AGENTS_MODEL_HAIKU = "test/haiku-model";
+  process.env.CLINE_AGENTS_MODEL_HIGH = "test/high-model";
+  process.env.CLINE_AGENTS_MODEL_MID = "test/mid-model";
+  process.env.CLINE_AGENTS_MODEL_LOW = "test/low-model";
 });
 
 afterAll(() => {
   delete process.env.CLINE_AGENTS_PROVIDER_ID;
-  delete process.env.CLINE_AGENTS_MODEL_OPUS;
-  delete process.env.CLINE_AGENTS_MODEL_SONNET;
-  delete process.env.CLINE_AGENTS_MODEL_HAIKU;
+  delete process.env.CLINE_AGENTS_MODEL_HIGH;
+  delete process.env.CLINE_AGENTS_MODEL_MID;
+  delete process.env.CLINE_AGENTS_MODEL_LOW;
 });
 
 describe("cline-agents plugin manifest", () => {
@@ -185,13 +189,21 @@ describe("preset discovery", () => {
     for (const d of defs) {
       expect(d.name, `${d.name} name`).toBeTruthy();
       expect(d.description, `${d.name} description`).toBeTruthy();
-      expect(["opus", "sonnet", "haiku"], `${d.name} modelTier`).toContain(d.modelTier);
+      expect(["high", "mid", "low"], `${d.name} modelTier`).toContain(d.modelTier);
       expect(d.providerId, `${d.name} must not carry a provider`).toBeUndefined();
       expect(d.modelId, `${d.name} must not carry a vendor model id`).toBeUndefined();
     }
   });
 
   it("carries the same tier the role catalog assigns, so the port cannot drift from it", () => {
+    // Mirrors the generator manifest's model_tiers[].cline_tier. Duplicated
+    // here rather than read: this suite tests a standalone distributable,
+    // which must not reach into the generating repository.
+    const CLINE_TIER_BY_CATALOG_TIER: Record<string, string> = {
+      opus: "high",
+      sonnet: "mid",
+      haiku: "low",
+    };
     // modelTier is a pass-through of roster/catalog.yaml's `model:`. Nothing
     // in CI re-runs port_cline_agents.py against the committed presets (see
     // issue #144), so this is currently the only thing tying the two
@@ -213,7 +225,10 @@ describe("preset discovery", () => {
     expect(tierByRole.size).toBe(SOURCE_ROLE_COUNT);
 
     for (const def of readAgentDefinitions(REPO_ROOT).filter((d) => d.source === "bundled")) {
-      expect(def.modelTier, `${def.name} tier vs catalog.yaml`).toBe(tierByRole.get(def.name));
+      // The catalog speaks opus/sonnet/haiku; a preset speaks high/mid/low.
+      // Mapped, not compared raw -- see CLINE_TIER_BY_CATALOG_TIER.
+      const expected = CLINE_TIER_BY_CATALOG_TIER[tierByRole.get(def.name) ?? ""];
+      expect(def.modelTier, `${def.name} tier vs catalog.yaml`).toBe(expected);
     }
   });
 
@@ -225,6 +240,37 @@ describe("preset discovery", () => {
     };
     const bundledNames = result.agents.filter((a) => a.source === "bundled").map((a) => a.name);
     expect(new Set(bundledNames).size).toBe(SOURCE_ROLE_COUNT);
+  });
+});
+
+// deagy/cadre#234 follow-up: port_cline_agents.py derives its own MODEL_TIERS
+// from roster/runner-capabilities.json's model_tiers[*].cline_tier "so there
+// is one edit location, no second copy to drift" -- but index.ts's runtime
+// tier vocabulary (MODEL_TIERS/asModelTier, used at dispatch time by every
+// installed copy of this plugin, not just freshly-generated presets) was
+// never checked against that same manifest. The asymmetry that leaves: a
+// *retired* tier name warns (asModelTier's LEGACY_MODEL_TIERS branch); a
+// manifest-valid tier this build does not know about fell through to
+// CLINE_AGENTS_MODEL_DEFAULT in total silence. Reads the manifest directly
+// (JSON, no shell-out) rather than reimplementing port_cline_agents.py's
+// Python parsing here, matching how "carries the same tier the role catalog
+// assigns" above pins index.ts against roster/catalog.yaml.
+describe("model-tier vocabulary parity with roster/runner-capabilities.json (deagy/cadre#234 follow-up)", () => {
+  it("index.ts's MODEL_TIERS covers exactly the manifest's model_tiers[*].cline_tier set", () => {
+    const manifestPath = join(REPO_ROOT, "..", "..", "roster", "runner-capabilities.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      model_tiers?: Record<string, { cline_tier?: string }>;
+    };
+    expect(manifest.model_tiers, "runner-capabilities.json must declare model_tiers").toBeTruthy();
+    const manifestClineTiers = new Set(
+      Object.values(manifest.model_tiers ?? {})
+        .map((entry) => entry.cline_tier)
+        .filter((tier): tier is string => Boolean(tier)),
+    );
+    // Fails loudly rather than vacuously if the manifest shape ever changes
+    // out from under the filter above.
+    expect(manifestClineTiers.size).toBeGreaterThan(0);
+    expect(new Set(MODEL_TIERS)).toEqual(manifestClineTiers);
   });
 });
 
@@ -1540,9 +1586,9 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
     await tool.execute({ label: "tiered", task: "t", preset: "security-reviewer" }, FAKE_TOOL_CTX);
     const config = startConfigs[before];
     expect(config.providerId).toBe("test-provider");
-    // security-reviewer is a sonnet-tier role, so it must resolve the sonnet
+    // security-reviewer is a mid-tier role, so it must resolve the mid
     // model rather than whatever a single shared setting would give.
-    expect(config.modelId).toBe("test/sonnet-model");
+    expect(config.modelId).toBe("test/mid-model");
   });
 
   it("lets an explicit per-call override beat the configured default", async () => {
@@ -1586,10 +1632,10 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
     // to name both the tier-specific variable and the fallback, or the
     // operator cannot tell which one to set.
     const saved = {
-      sonnet: process.env.CLINE_AGENTS_MODEL_SONNET,
+      mid: process.env.CLINE_AGENTS_MODEL_MID,
       fallback: process.env.CLINE_AGENTS_MODEL_DEFAULT,
     };
-    delete process.env.CLINE_AGENTS_MODEL_SONNET;
+    delete process.env.CLINE_AGENTS_MODEL_MID;
     delete process.env.CLINE_AGENTS_MODEL_DEFAULT;
     try {
       const tools = await registerTools(REPO_ROOT);
@@ -1598,10 +1644,10 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
       // security-reviewer is a sonnet-tier role.
       await expect(
         tool.execute({ label: "no-model", task: "t", preset: "security-reviewer" }, FAKE_TOOL_CTX),
-      ).rejects.toThrow(/CLINE_AGENTS_MODEL_SONNET.*CLINE_AGENTS_MODEL_DEFAULT/s);
+      ).rejects.toThrow(/CLINE_AGENTS_MODEL_MID.*CLINE_AGENTS_MODEL_DEFAULT/s);
       expect(startConfigs.length).toBe(before);
     } finally {
-      if (saved.sonnet !== undefined) process.env.CLINE_AGENTS_MODEL_SONNET = saved.sonnet;
+      if (saved.mid !== undefined) process.env.CLINE_AGENTS_MODEL_MID = saved.mid;
       if (saved.fallback !== undefined) process.env.CLINE_AGENTS_MODEL_DEFAULT = saved.fallback;
     }
   });
@@ -1621,7 +1667,7 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
         "description: ships its own vendor",
         "providerId: repo-chosen-provider",
         "modelId: repo-chosen/model",
-        "modelTier: sonnet",
+        "modelTier: mid",
         "allowedTools: [read_files]",
         "---",
         "",
@@ -1638,7 +1684,7 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
     // The operator's configuration wins on both axes; the repository's
     // choices are ignored rather than merged.
     expect(startConfigs[before].providerId).toBe("test-provider");
-    expect(startConfigs[before].modelId).toBe("test/sonnet-model");
+    expect(startConfigs[before].modelId).toBe("test/mid-model");
   });
 
   it("warns when a global preset pins a provider that differs from the operator's configuration", async () => {
@@ -1767,6 +1813,198 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
     }
   });
 
+  // deagy/cadre#234 follow-up: the case above pins the *fallback behavior*
+  // for an unrecognized tier; this pins that it is no longer SILENT. A
+  // manifest-valid tier this build's MODEL_TIERS does not know about (or a
+  // plain typo) must warn just as visibly as a retired tier name does --
+  // previously it fell through to undefined with no signal at all.
+  it("warns distinctly (not silently) for a modelTier that is neither current nor retired", async () => {
+    process.env.CLINE_AGENTS_MODEL_DEFAULT = "generic/model";
+    const globalDir = mkdtempSync(join(tmpdir(), "cline-unrecognized-tier-warns-"));
+    mkdirSync(join(globalDir, ".cline", "agents"), { recursive: true });
+    writeFileSync(
+      join(globalDir, ".cline", "agents", "bad-tier2.md"),
+      [
+        "---",
+        "name: bad-tier2",
+        "description: typo'd tier",
+        "modelTier: garbage",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+      errors.push(a.map(String).join(" "));
+    });
+    try {
+      const tools = await registerTools(globalDir);
+      const tool = findTool(tools, "start_subagent");
+      await tool.execute({ label: "bad2", task: "t", preset: "bad-tier2" }, FAKE_TOOL_CTX);
+      expect(errors.join("\n")).toMatch(/unrecognized modelTier "garbage"/);
+      // Distinct wording from the retired-tier warning -- a caller filtering
+      // on "retired" would otherwise miss this class entirely.
+      expect(errors.join("\n")).not.toMatch(/retired modelTier/);
+    } finally {
+      spy.mockRestore();
+      delete process.env.CLINE_AGENTS_MODEL_DEFAULT;
+    }
+  });
+
+  it("treats an Object.prototype key in modelTier as no tier, not as a crash", async () => {
+    // The legacy-tier lookup is a plain object, so `modelTier: constructor`
+    // (or `toString`, `valueOf`) resolves through the prototype chain and
+    // yields a truthy *function*, which then throws
+    // "tier.toUpperCase is not a function" deep inside resolution. A preset is
+    // free to say anything -- project presets arrive with an untrusted
+    // checkout -- so this has to land on the documented "no tier at all" path.
+    process.env.CLINE_AGENTS_MODEL_DEFAULT = "generic/model";
+    const globalDir = mkdtempSync(join(tmpdir(), "cline-proto-tier-"));
+    mkdirSync(join(globalDir, ".cline", "agents"), { recursive: true });
+    writeFileSync(
+      join(globalDir, ".cline", "agents", "proto-tier.md"),
+      [
+        "---",
+        "name: proto-tier",
+        "description: inherited key as a tier",
+        "modelTier: constructor",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    try {
+      const tools = await registerTools(globalDir);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      await tool.execute({ label: "proto", task: "t", preset: "proto-tier" }, FAKE_TOOL_CTX);
+      expect(startConfigs[before].modelId).toBe("generic/model");
+    } finally {
+      delete process.env.CLINE_AGENTS_MODEL_DEFAULT;
+    }
+  });
+
+  it("honours a retired tier variable so an existing shell keeps dispatching", async () => {
+    // The tier vocabulary moved from opus/sonnet/haiku to high/mid/low. An
+    // operator whose shell still exports the old variables must not have a
+    // working dispatch turn into "no model provider is configured" -- that is
+    // the same fail-closed surprise this rename exists to reduce.
+    const savedHigh = process.env.CLINE_AGENTS_MODEL_HIGH;
+    delete process.env.CLINE_AGENTS_MODEL_HIGH;
+    process.env.CLINE_AGENTS_MODEL_OPUS = "legacy/opus-model";
+    const globalDir = mkdtempSync(join(tmpdir(), "cline-legacy-var-"));
+    mkdirSync(join(globalDir, ".cline", "agents"), { recursive: true });
+    writeFileSync(
+      join(globalDir, ".cline", "agents", "high-role.md"),
+      [
+        "---",
+        "name: high-role",
+        "description: high tier",
+        "modelTier: high",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+      errors.push(a.join(" "));
+    });
+    try {
+      const tools = await registerTools(globalDir);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      await tool.execute({ label: "legacy", task: "t", preset: "high-role" }, FAKE_TOOL_CTX);
+      expect(startConfigs[before].modelId).toBe("legacy/opus-model");
+      // Honoured, but never silently -- and the warning names the current
+      // spelling, so following it moves the operator forward, not sideways.
+      expect(errors.join("\n")).toMatch(/CLINE_AGENTS_MODEL_OPUS.*CLINE_AGENTS_MODEL_HIGH/s);
+    } finally {
+      spy.mockRestore();
+      delete process.env.CLINE_AGENTS_MODEL_OPUS;
+      if (savedHigh !== undefined) process.env.CLINE_AGENTS_MODEL_HIGH = savedHigh;
+    }
+  });
+
+  it("prefers the current tier variable over the retired one where both are set", async () => {
+    process.env.CLINE_AGENTS_MODEL_OPUS = "legacy/opus-model";
+    const globalDir = mkdtempSync(join(tmpdir(), "cline-both-vars-"));
+    mkdirSync(join(globalDir, ".cline", "agents"), { recursive: true });
+    writeFileSync(
+      join(globalDir, ".cline", "agents", "high-role.md"),
+      [
+        "---",
+        "name: high-role",
+        "description: high tier",
+        "modelTier: high",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    try {
+      const tools = await registerTools(globalDir);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      await tool.execute({ label: "both", task: "t", preset: "high-role" }, FAKE_TOOL_CTX);
+      // CLINE_AGENTS_MODEL_HIGH is set file-wide in beforeAll.
+      expect(startConfigs[before].modelId).toBe("test/high-model");
+    } finally {
+      delete process.env.CLINE_AGENTS_MODEL_OPUS;
+    }
+  });
+
+  it("reads a retired modelTier in an operator's own preset, warning rather than failing", async () => {
+    // An operator's global presets were written against the old vocabulary
+    // and nothing regenerates them. Distinct from `modelTier: garbage` above:
+    // a retired name is a known translation, a typo is not.
+    const globalDir = mkdtempSync(join(tmpdir(), "cline-legacy-tier-"));
+    mkdirSync(join(globalDir, ".cline", "agents"), { recursive: true });
+    writeFileSync(
+      join(globalDir, ".cline", "agents", "old-tier.md"),
+      [
+        "---",
+        "name: old-tier",
+        "description: retired tier name",
+        "modelTier: sonnet",
+        "allowedTools: [read_files]",
+        "---",
+        "",
+        "Body.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+      errors.push(a.join(" "));
+    });
+    try {
+      const tools = await registerTools(globalDir);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      await tool.execute({ label: "old", task: "t", preset: "old-tier" }, FAKE_TOOL_CTX);
+      // Resolved as `mid`, i.e. through CLINE_AGENTS_MODEL_MID.
+      expect(startConfigs[before].modelId).toBe("test/mid-model");
+      expect(errors.join("\n")).toMatch(/retired modelTier "sonnet".*"mid"/s);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("names the missing setting so the error is actionable, not just a refusal", async () => {
     const saved = process.env.CLINE_AGENTS_PROVIDER_ID;
     delete process.env.CLINE_AGENTS_PROVIDER_ID;
@@ -1779,6 +2017,190 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
     } finally {
       process.env.CLINE_AGENTS_PROVIDER_ID = saved;
     }
+  });
+
+  // deagy/cadre#234 follow-up: the human-decided posture is "warn now, no
+  // gate" (see the module comment above resolveProviderAndModel in index.ts
+  // for the fidelity-baseline finding this responds to). These tests pin
+  // both halves of that decision -- the notice fires with the required
+  // content, and dispatch is never blocked by its absence -- plus the
+  // per-model/per-session dedupe and the attestation seam.
+  describe("role-fidelity attestation notice (deagy/cadre#234 follow-up)", () => {
+    beforeEach(() => {
+      roleFidelityNoticeShown.clear();
+      delete process.env[ROLE_FIDELITY_ATTESTATION_ENV];
+    });
+
+    afterEach(() => {
+      roleFidelityNoticeShown.clear();
+      delete process.env[ROLE_FIDELITY_ATTESTATION_ENV];
+    });
+
+    describe("hasRoleFidelityAttestation (pure lookup)", () => {
+      it("returns false with no attestation env var set", () => {
+        expect(hasRoleFidelityAttestation("some/model")).toBe(false);
+      });
+
+      it("returns true when a record exists for the exact model string, regardless of its contents", () => {
+        // A low pass rate still counts as attested -- this is the operator's
+        // call to make with the transcript in hand, not this resolver's to
+        // gate on. It checks presence, not a threshold.
+        process.env[ROLE_FIDELITY_ATTESTATION_ENV] = JSON.stringify({
+          "some/model": { passRate: 0.4, probeCount: 45, attestedAt: "2026-08-10" },
+        });
+        expect(hasRoleFidelityAttestation("some/model")).toBe(true);
+      });
+
+      it("returns false for a model string not present in the record", () => {
+        process.env[ROLE_FIDELITY_ATTESTATION_ENV] = JSON.stringify({ "other/model": { passRate: 1 } });
+        expect(hasRoleFidelityAttestation("some/model")).toBe(false);
+      });
+
+      it("fails toward showing the notice (false) on malformed JSON", () => {
+        process.env[ROLE_FIDELITY_ATTESTATION_ENV] = "{not json";
+        expect(hasRoleFidelityAttestation("some/model")).toBe(false);
+      });
+
+      it("does not resolve an inherited Object.prototype key as an attestation", () => {
+        process.env[ROLE_FIDELITY_ATTESTATION_ENV] = "{}";
+        expect(hasRoleFidelityAttestation("constructor")).toBe(false);
+        expect(hasRoleFidelityAttestation("toString")).toBe(false);
+      });
+
+      it("rejects a non-object (array/primitive) attestation value", () => {
+        process.env[ROLE_FIDELITY_ATTESTATION_ENV] = JSON.stringify(["some/model"]);
+        expect(hasRoleFidelityAttestation("some/model")).toBe(false);
+      });
+    });
+
+    describe("integration via start_subagent (resolveProviderAndModel)", () => {
+      it("warns once, naming the model string, the failure shape, and the exact measuring command", async () => {
+        const errors: string[] = [];
+        const spy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+          errors.push(a.map(String).join(" "));
+        });
+        try {
+          const tools = await registerTools(REPO_ROOT);
+          const tool = findTool(tools, "start_subagent");
+          await tool.execute(
+            {
+              label: "unattested",
+              task: "t",
+              preset: "security-reviewer",
+              providerId: "p",
+              modelId: "fidelity-test/unattested-model",
+            },
+            FAKE_TOOL_CTX,
+          );
+          const text = errors.join("\n");
+          expect(text).toMatch(/No role-fidelity attestation on file for model "fidelity-test\/unattested-model"/);
+          expect(text).toMatch(/role-scope discipline/);
+          expect(text).toMatch(/not a gate/);
+          expect(text).toMatch(
+            /cadre role-fidelity --mode probe --base-url <endpoint> --model "fidelity-test\/unattested-model"/,
+          );
+        } finally {
+          spy.mockRestore();
+        }
+      });
+
+      it("does not gate dispatch -- the session still starts with no attestation on file", async () => {
+        const tools = await registerTools(REPO_ROOT);
+        const tool = findTool(tools, "start_subagent");
+        const before = startConfigs.length;
+        await expect(
+          tool.execute(
+            {
+              label: "unattested-ok",
+              task: "t",
+              preset: "security-reviewer",
+              providerId: "p",
+              modelId: "fidelity-test/unattested-model-2",
+            },
+            FAKE_TOOL_CTX,
+          ),
+        ).resolves.toBeDefined();
+        expect(startConfigs.length).toBe(before + 1);
+        expect(startConfigs[before].modelId).toBe("fidelity-test/unattested-model-2");
+      });
+
+      it("fires once per model string per session, not once per dispatched role", async () => {
+        const errors: string[] = [];
+        const spy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+          errors.push(a.map(String).join(" "));
+        });
+        try {
+          const tools = await registerTools(REPO_ROOT);
+          const tool = findTool(tools, "start_subagent");
+          for (let i = 0; i < 3; i += 1) {
+            await tool.execute(
+              {
+                label: `dup-${i}`,
+                task: "t",
+                preset: "security-reviewer",
+                providerId: "p",
+                modelId: "fidelity-test/repeat-model",
+              },
+              FAKE_TOOL_CTX,
+            );
+          }
+          const occurrences = errors.filter((e) => e.includes("fidelity-test/repeat-model")).length;
+          expect(occurrences).toBe(1);
+        } finally {
+          spy.mockRestore();
+        }
+      });
+
+      it("re-fires when the operator swaps to a different model string", async () => {
+        const errors: string[] = [];
+        const spy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+          errors.push(a.map(String).join(" "));
+        });
+        try {
+          const tools = await registerTools(REPO_ROOT);
+          const tool = findTool(tools, "start_subagent");
+          await tool.execute(
+            { label: "first", task: "t", preset: "security-reviewer", providerId: "p", modelId: "fidelity-test/model-a" },
+            FAKE_TOOL_CTX,
+          );
+          await tool.execute(
+            { label: "second", task: "t", preset: "security-reviewer", providerId: "p", modelId: "fidelity-test/model-b" },
+            FAKE_TOOL_CTX,
+          );
+          expect(errors.some((e) => e.includes("fidelity-test/model-a"))).toBe(true);
+          expect(errors.some((e) => e.includes("fidelity-test/model-b"))).toBe(true);
+        } finally {
+          spy.mockRestore();
+        }
+      });
+
+      it("stays silent when an attestation record exists for the exact model string", async () => {
+        process.env[ROLE_FIDELITY_ATTESTATION_ENV] = JSON.stringify({
+          "fidelity-test/attested-model": { passRate: 1, probeCount: 45, attestedAt: "2026-08-10" },
+        });
+        const errors: string[] = [];
+        const spy = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+          errors.push(a.map(String).join(" "));
+        });
+        try {
+          const tools = await registerTools(REPO_ROOT);
+          const tool = findTool(tools, "start_subagent");
+          await tool.execute(
+            {
+              label: "attested",
+              task: "t",
+              preset: "security-reviewer",
+              providerId: "p",
+              modelId: "fidelity-test/attested-model",
+            },
+            FAKE_TOOL_CTX,
+          );
+          expect(errors.some((e) => e.includes("fidelity-test/attested-model"))).toBe(false);
+        } finally {
+          spy.mockRestore();
+        }
+      });
+    });
   });
 
   it("get_subagent returns the tracked shape (status: running) for a session start_subagent just started", async () => {
@@ -1891,7 +2313,7 @@ describe("dispatch_selected_roles", () => {
     for (const config of startConfigs.slice(before)) {
       expect(config.providerId).toBe("test-provider");
       // Resolved from each role's own tier, never a shipped vendor default.
-      expect(String(config.modelId)).toMatch(/^test\/(opus|sonnet|haiku)-model$/);
+      expect(String(config.modelId)).toMatch(/^test\/(high|mid|low)-model$/);
     }
   });
 

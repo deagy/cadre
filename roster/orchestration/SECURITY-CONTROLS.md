@@ -1,13 +1,36 @@
-# Security controls: agents MCP dispatch server
+# Security controls register
 
-This document enumerates every control in `dispatch_core.py` /
-`dispatch_server.py` that maps to a threat-model expectation or an
-`agent-autonomy.yaml` guarantee, and states plainly whether the control is:
+This is the repository-wide register of security controls: every control in
+this suite's own code that maps to a threat-model expectation or an
+`agent-autonomy.yaml` guarantee, with a plain statement of how strongly each
+one is actually enforced and against whom.
+
+**Provenance of this file.** It began as `roster/orchestration/mcp/SECURITY-CONTROLS.md`,
+covering the MCP dispatch server alone, and was promoted to this path in the
+[#234](https://github.com/deagy/cadre/issues/234) follow-up, when its first
+non-MCP entry landed (the role-fidelity model-validation notice below). A
+register claiming repository-wide scope while living in `mcp/` misrepresents
+itself, which is the thing this file exists not to do.
+The promotion is a reframing, not a rewrite: every
+control entry that existed before the move is preserved below with its
+enforcement classification unchanged, now under a heading that scopes it to
+the path it actually covers. Nothing was reclassified, weakened, or dropped
+by the move. Historical records under `roster/orchestration/runs/` and
+already-shipped `CHANGELOG.md` entries still cite the old path; that is
+correct for a point-in-time record and must not be edited to match today's
+layout.
+
+## Enforcement classifications
+
+Every entry states which of these two it is. The vocabulary is fixed --
+do not introduce a third informal tier in prose, and do not describe an
+advisory control with enforcement language:
 
 - **Mechanically enforced** -- the code makes the bad outcome structurally
-  impossible for a caller of this tool to produce through this tool's own
-  interface, and a specific automated test in
-  `roster/orchestration/test/test_mcp_dispatch.py` exercises that claim.
+  impossible for a caller to produce through that control's own interface,
+  and a specific automated test exercises that claim. For the MCP entries
+  that test suite is `roster/orchestration/test/test_mcp_dispatch.py`; each
+  entry names the tests it relies on.
 - **Advisory** -- the code implements the control and it holds against an
   ordinary, non-adversarial, or single-turn caller, but a sufficiently
   adversarial or fully autonomous caller (in particular: a compromised child
@@ -17,12 +40,166 @@ This document enumerates every control in `dispatch_core.py` /
   and produce an audit trail -- but must never be described or relied upon as
   hard guarantees.
 
-This is written to be accurate as of the code on disk after the H-1 (project-
-tier git-clean) and L-1 (`confirmation_required` response shape) fixes. If
-the code changes, this document must be re-checked against it, not
-regenerated from memory or intent.
+A control that only *informs* an operator and never blocks anything is
+advisory in this vocabulary too. It is not a weaker third category and it
+does not get softer language: if an operator who ignores it proceeds
+unimpeded, the entry says so in its first line.
 
-## Sandbox narrowing for `planning-review-only` mode
+**Accuracy discipline.** Each entry is written against the code on disk at
+the time it was written, and cites the functions and tests it depends on. If
+that code changes, the entry must be re-checked against it, not regenerated
+from memory or intent.
+
+## Scope: the dispatch paths, and which controls reach them
+
+Four distinct paths can cause a role in this suite to run. They share role
+*content* -- `roster/<phase>/<role>/AGENT.md` and the wrappers generated from
+it -- and they share almost no *enforcement*. A control's reach is the path
+it was built for, never "this suite" in general, and this register states
+that reach per entry rather than leaving it to be inferred.
+
+| Dispatch path | What it is | Where the child's model comes from | Entries in this register that reach it |
+|---|---|---|---|
+| **MCP servers** (`roster/orchestration/mcp/`) | `dispatch_secure_cloud_role` / `dispatch_team` / `dispatch_team_recipe` spawning a `codex exec` or `claude` child, plus the separate create-only GitLab evidence server | the generated wrapper resolved by `resolve_role_file()` / `resolve_claude_role_file()` -- never caller-supplied | every MCP entry below |
+| **`cline-agents` plugin** (`cline-plugins/cline-agents/`) | `start_subagent` / `dispatch_selected_roles` starting a subagent inside a Cline session | operator environment: `CLINE_AGENTS_PROVIDER_ID` plus `CLINE_AGENTS_MODEL_<TIER>` / `CLINE_AGENTS_MODEL_DEFAULT`, or a per-call override | the role-fidelity model-validation notice, and nothing else |
+| **Claude Code plugin subagents** (`plugin/agents/*.md`) | an operator invoking a packaged subagent directly in a Claude Code session, with no MCP server in the loop | the wrapper's own `model:` frontmatter tier, resolved by Claude Code itself | none |
+| **Manual / direct invocation** | a human or agent pasting a role brief into any runner, or invoking `codex`/`claude`/an API by hand | whatever the operator chose | none |
+
+Two disambiguations this table depends on, both of which have caused
+confusion already:
+
+- **"Claude Code" names two different things here.** The "Claude Code runner
+  (`runner="claude-code"`)" entry below is about the *MCP dispatch server*
+  spawning a `claude` child process; it is an MCP-path control and
+  every other MCP control applies to it. That is a different thing from the
+  third row above, where an operator uses the packaged Claude Code subagents
+  directly and no code in this repository is in the execution path at all.
+- **"No entries reach it" is a statement of fact, not an assessment that the
+  path is safe.** The third and fourth rows are uncovered because nothing in
+  this repository sits between the operator and the model on those paths, so
+  there is no place a control could be implemented without introducing one.
+  Anything relying on a guarantee for those paths must obtain it elsewhere
+  (host-runner configuration, operator process, or a control not yet built),
+  and must not cite this register as the source.
+
+## Role-fidelity model-validation notice (`cline-agents` dispatch path)
+
+**Advisory, and specifically a notice rather than a gate: dispatch always
+proceeds, and an operator who ignores it is not stopped by anything in this
+repository.** Classifying it any higher would misstate what it does.
+
+**What it is.** `resolveProviderAndModel()` in
+`cline-plugins/cline-agents/index.ts` checks whether a role-fidelity
+attestation exists for the exact model string it just resolved, and when none
+does, `warnMissingRoleFidelityAttestation()` prints a single stderr notice
+naming the model and the command that would measure it. It fires once per
+model string per plugin-process session, not once per dispatched role,
+because a per-call warning across a wave of ten-plus roles on one model is
+noise an operator learns to filter permanently. It never throws and never
+alters what `start_subagent` / `dispatch_selected_roles` does.
+
+**Why it exists.** Measurement on this suite's own role briefs
+(`roster/orchestration/runs/cadre-cline-local-model-fidelity-2026-08-10/fidelity-baseline.md`)
+found a weakly-steered model producing fluent, confident, well-formatted
+violations of role-scope discipline -- authorship/approval separation, the
+one invariant this suite is least able to tolerate losing -- with nothing
+erroring anywhere: a 70B model scored 0/9 on the `stays-in-remit` probe where
+a 27B model of a different family scored 9/9 on the same probes. The failure
+is silent by construction, which is why the response is a notice at all
+rather than nothing.
+
+**Reach -- state this wherever the notice is described, not only here:**
+
+- Covers the `cline-agents` dispatch path only. `start_subagent` and
+  `dispatch_selected_roles` (both via `startPresetSubagent()`) and
+  `list_agent_presets` all resolve through the same function, so a listing
+  shows the notice too rather than disagreeing with what would actually run.
+- Does **not** cover the MCP path. Those servers take the child's model from
+  the generated Codex/Claude wrapper resolved server-side, not from this
+  resolver or from operator environment, so this control is not in that code
+  path at all.
+- Does **not** cover manual injection of a model string outside this
+  plugin's own tools, or the Claude Code plugin-subagent path.
+
+**Suppression is an attestation, not a flag -- and the mechanical part of
+that claim is narrower than it sounds.** Mechanically enforced: the notice
+cannot be silenced by a truthy scalar.
+`CLINE_AGENTS_ROLE_FIDELITY_ATTESTATIONS` must parse as a JSON object
+carrying an *own* key (`Object.hasOwn`, so a model literally named
+`constructor` does not read as attested) exactly equal to the resolved model
+string, with a non-null value; a bare `=1`, an array, or malformed JSON all
+fail toward showing the notice rather than toward silence. On the writing
+side, `write_attestation()` in `roster/orchestration/src/role_fidelity.py`
+(reached as `cadre role-fidelity --mode probe ... --attest-file <path>`)
+refuses to write from a `--dry-run` (nothing was sent), from a
+`--compare-condensed` run (no single per-model result exists), or from a run
+with zero scored results (nothing was measured), and merges rather than
+clobbering so one model's re-run never erases another's record.
+
+**Honest limit, and it is the important one:** the consumer checks only that
+*some* record exists for that exact model string. It does not read,
+threshold, or provenance-check the record's contents -- deliberately, because
+the question the notice asks is "was this model measured", not "did it pass"
+(a low score is the operator's call with the transcript in hand), and because
+a threshold enforced here would move a human judgement somewhere the record
+cannot show it happened. The consequence is that an operator can hand-write
+`{"<model>": {}}` and suppress the notice without ever running a probe.
+The barrier this raises is that they must name the exact model string and
+write a structured record, not that anything verified the record came from a
+real measurement. Do not describe attestation as proof that a model was
+measured.
+
+**Deferred gate: recorded as deferred, not rejected.** A blocking gate --
+refusing dispatch on an unattested model -- was considered and deliberately
+not built in this increment.
+
+- **Decision and authority.** Warn now, non-enforcing attestation, gate
+  deferred. Decided by the accountable human control owner, recorded
+  2026-08-10 in the [#234](https://github.com/deagy/cadre/issues/234)
+  follow-up.
+  This register's author has no authority to promote it; doing so is a new
+  decision by that owner, not a follow-up an agent may take on its own
+  judgement.
+- **Rationale.** The measured failure is real but its blast radius depends
+  entirely on what the dispatched role is allowed to do, and a gate that
+  refuses dispatch on a model an operator has legitimate reason to run --
+  including the read-only, low-stakes majority of dispatches -- would be
+  routed around by disabling it, leaving less signal than a notice nobody
+  had reason to suppress.
+- **Named trigger to revisit.** Evidence of unvalidated models on
+  write-capable dispatch: an unattested model resolving for a dispatch whose
+  effective sandbox is not read-only. That is the condition under which the
+  notice's advisory classification stops being adequate, and it is the
+  trigger to re-open the gate decision with the accountable owner rather
+  than to widen this entry's language.
+- **Open, and blocking nothing today:** nothing currently detects that
+  trigger automatically, though the ingredients exist. `resolveToolPolicyConfig()`
+  already computes exactly the write-capability signal the trigger needs -- a
+  preset whose `allowedTools` contains none of `WRITE_OR_EXEC_TOOL_NAMES`
+  (`run_commands`, `editor`, `apply_patch`) is treated as genuinely read-only
+  and additionally gets Cline's `mode: "plan"` guard. What is missing is any
+  join between that signal and attestation state: `resolveProviderAndModel()`'s
+  declared parameter type omits `allowedTools`, so it cannot read the signal
+  without a signature change; nothing correlates the two; and no dispatch
+  record is written anywhere that a reviewer could count unattested
+  write-capable dispatches from. So the trigger is evaluable in principle and
+  unmeasured in practice. Until something measures it, it is an operator and
+  reviewer obligation -- do not read its presence here as a control.
+
+## MCP dispatch and evidence servers (`roster/orchestration/mcp/`)
+
+Everything in this section enumerates controls in `dispatch_core.py` /
+`dispatch_server.py` (and, in its own subsection, `gitlab_core.py` /
+`gitlab_server.py`). These entries are unchanged in substance from before
+this register was promoted to repository-wide scope; they were written to be
+accurate as of the code on disk after the H-1 (project-tier git-clean) and
+L-1 (`confirmation_required` response shape) fixes. If that code changes,
+they must be re-checked against it, not regenerated from memory or intent.
+
+None of these controls reach the `cline-agents`, Claude Code plugin-subagent,
+or manual dispatch paths -- see the scope table above.
+
+### Sandbox narrowing for `planning-review-only` mode
 
 **Mechanically enforced.** `compute_effective_sandbox()` has exactly two
 inputs: the caller-supplied `mode` (constrained to the two-value `MODES` set)
@@ -41,7 +218,7 @@ by
 which inspects the literal `argv` handed to the child process (not just a
 status field) for a role file that declares `sandbox_mode = "danger-full-access"`.
 
-## H-1 remediation: project-tier git-clean check
+### H-1 remediation: project-tier git-clean check
 
 **Enforced against accidental/single-turn escalation. NOT enforced against a
 determined actor.** Before Fix H-1, a caller with ordinary repository write
@@ -95,7 +272,7 @@ provenance-marker-gated `sync_codex_agents.py` sync, and the plugin tier
 ships with the package -- neither is writable by an ordinary caller through
 the same direct "just edit a file in the repo" path the project tier is.
 
-## Dispatch-depth limit (`MAX_DISPATCH_DEPTH = 1`)
+### Dispatch-depth limit (`MAX_DISPATCH_DEPTH = 1`)
 
 **Advisory against an adversarial child.** `current_dispatch_depth()` reads
 an integer counter from `SECURE_CLOUD_AGENTS_DISPATCH_DEPTH` in this
@@ -116,7 +293,7 @@ deliberate adversary erasing it. Treat this exactly as the depth-guard
 docstring and the prior security review already state: an accident/misuse
 guard, not a hard depth bound against a compromised or hostile child.
 
-## Human-confirmation gate for write-capable dispatch (`ConfirmationGate`)
+### Human-confirmation gate for write-capable dispatch (`ConfirmationGate`)
 
 **Advisory against a fully autonomous calling session.** The gate is a
 mechanical two-call, single-use, TTL-bound token scheme (see
@@ -145,7 +322,7 @@ inside, not of this module. Treat this gate as a necessary layer that raises
 the bar against a single accidental or blindly-scripted write-capable
 dispatch, never as a sufficient proof that a human was in the loop.
 
-## Env allowlist for the child process
+### Env allowlist for the child process
 
 **Mechanically enforced.** `build_child_env()` only ever copies names
 present in the fixed `ENV_ALLOWLIST` tuple out of this server process's own
@@ -158,7 +335,7 @@ environment with credential-shaped variable names
 (`AWS_SECRET_ACCESS_KEY`, `API_TOKEN`, `GITLAB_TOKEN`, `OPENAI_API_KEY`) and
 asserts none of them appear in the resulting child environment.
 
-## Audit-record secret redaction
+### Audit-record secret redaction
 
 **Mechanically enforced.** `build_audit_record()` asserts (raises
 `AssertionError`, not a silent drop) if any of the fixed `_FORBIDDEN_AUDIT_KEYS`
@@ -174,7 +351,7 @@ forbidden key) and, at the top-level dispatch entry point, by
 which dispatches with a marked secret brief and marked child output and
 asserts neither marker appears anywhere in the raw audit file contents.
 
-## Concurrency / timeout / output caps
+### Concurrency / timeout / output caps
 
 **Mechanically enforced.**
 
@@ -199,7 +376,7 @@ asserts neither marker appears anywhere in the raw audit file contents.
   above). Tested by
   `SpawnAndWaitTests.test_output_is_capped_and_truncation_recorded`.
 
-## Role-file resolution safety (symlink/non-regular refusal, path containment)
+### Role-file resolution safety (symlink/non-regular refusal, path containment)
 
 **Mechanically enforced.**
 
@@ -225,7 +402,7 @@ asserts neither marker appears anywhere in the raw audit file contents.
   exactly this shape) and by `RoleIdValidationTests.test_rejects_path_traversal_shapes`
   for the `role_id` input side of the same defense-in-depth boundary.
 
-## Team dispatch (`dispatch_team`)
+### Team dispatch (`dispatch_team`)
 
 Generalizes the single-role mechanism above to more than one member per call,
 waiting for every member to reach a terminal state before returning
@@ -379,7 +556,7 @@ on a refused expansion.
   regression coverage for it specifically because the fix is in the shared
   `_ensure_audit_log_path()` path both call.
 
-## Async dispatch (`wait=False`) audit-write durability
+### Async dispatch (`wait=False`) audit-write durability
 
 **Best-effort, not mechanically enforced, for the completion/team-summary
 records specifically -- this is a deliberate, narrower guarantee than the
@@ -426,7 +603,7 @@ is still a plain `write_audit_record()` call, so a write failure there
 propagates directly to the same caller who would otherwise receive the
 result -- there is no background thread to silently swallow it.
 
-## Claude Code runner (`runner="claude-code"`)
+### Claude Code runner (`runner="claude-code"`)
 
 Implements OD-4 of `INTENT-CADRE-TEAM-DISPATCH-001`. Both
 `dispatch_secure_cloud_role()` and `dispatch_team()` now accept a `runner`
@@ -514,7 +691,7 @@ passing unmodified.
   against a real installed Claude Code CLI. Do this before relying on the
   Claude Code runner for anything beyond local development.
 
-## GitLab evidence MCP server (`gitlab_core.py` / `gitlab_server.py`)
+### GitLab evidence MCP server (`gitlab_core.py` / `gitlab_server.py`)
 
 A separate, create-only MCP surface (`create_review_subtask`, `write_wiki_page`,
 `write_evidence_comment`) for recording human-reviewable evidence in a single,
@@ -793,7 +970,7 @@ mechanically-enforced/advisory classification as above.
   `write_wiki_page`'s `ConfirmationGate` reuse), that is a deliberate policy
   change, not a gap being quietly closed.
 
-## Not covered above
+### Not covered above (MCP servers)
 
 M-2 (hash-pinning the `mcp` dependency in `requirements-mcp.txt`) and M-3
 (verifying the `codex exec` invocation shape in `build_child_argv()` against

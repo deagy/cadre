@@ -1,7 +1,7 @@
 ---
 name: adr-writer
 description: "Secure cloud agent suite role for the document phase (adr-writer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/documentation/adr-writer/AGENT.md
 convertedFrom: agents/adr-writer.md

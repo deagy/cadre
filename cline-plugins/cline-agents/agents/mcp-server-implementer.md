@@ -1,7 +1,7 @@
 ---
 name: mcp-server-implementer
 description: "Secure cloud agent suite role for the build phase (mcp-server-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/mcp-server-implementer/AGENT.md
 convertedFrom: agents/mcp-server-implementer.md

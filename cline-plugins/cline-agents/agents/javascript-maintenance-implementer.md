@@ -1,7 +1,7 @@
 ---
 name: javascript-maintenance-implementer
 description: "Secure cloud agent suite role for the build phase (javascript-maintenance-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/javascript-maintenance-implementer/AGENT.md
 convertedFrom: agents/javascript-maintenance-implementer.md

@@ -1,7 +1,7 @@
 ---
 name: code-reviewer
 description: "Secure cloud agent suite role for the review phase (code-reviewer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/code-reviewer/AGENT.md
 convertedFrom: agents/code-reviewer.md

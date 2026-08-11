@@ -1,7 +1,7 @@
 ---
 name: retrieval-pipeline-implementer
 description: "Secure cloud agent suite role for the build phase (retrieval-pipeline-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/retrieval-pipeline-implementer/AGENT.md
 convertedFrom: agents/retrieval-pipeline-implementer.md

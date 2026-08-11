@@ -1,7 +1,7 @@
 ---
 name: release-automation-implementer
 description: "Secure cloud agent suite role for the build phase (release-automation-implementer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/release-automation-implementer/AGENT.md
 convertedFrom: agents/release-automation-implementer.md

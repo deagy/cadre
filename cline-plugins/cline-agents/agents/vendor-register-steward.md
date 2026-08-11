@@ -1,7 +1,7 @@
 ---
 name: vendor-register-steward
 description: "Secure cloud agent suite role for the operations phase (vendor-register-steward)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/operations/vendor-register-steward/AGENT.md
 convertedFrom: agents/vendor-register-steward.md

@@ -37,12 +37,13 @@ return a blocking question in its result instead of prompting directly.**
 Before the first dispatch this session, this is entirely handled for you: this plugin's tools resolve the bundled role catalog on their own, with no config step needed before first dispatch:
 
 - **Codex CLI only, no question needed**: run `cadre bootstrap-codex`. It installs generated `agents-<role>.toml` wrappers, never touches legacy bare global role files, and fails if an existing namespaced file lacks this generator's provenance marker. Mention in your final report that wrappers were synced, so it isn't a silent write. Claude Code needs no equivalent step: its plugin-bundled `agents/*.md` wrappers are auto-discovered once the plugin is installed.
-- **Both runners, ask first**: if none of the three knowledge-store config tiers resolve yet (no explicit `--config`, no project-local `.agents/knowledge-store/config.json`, and no `~/.agents/knowledge-store/config.json` — i.e. this is genuinely the first knowledge-store use anywhere on this machine, or the first use in a project that hasn't opted in either way), this is a real decision, not plumbing: ask the human once, before creating anything —
+- **Cline only, check before the first dispatch**: the `cline-agents` plugin ships no default provider or model on purpose, so dispatch **fails closed** until the operator has set `CLINE_AGENTS_PROVIDER_ID` plus a model for every tier a plan uses: either `CLINE_AGENTS_MODEL_HIGH`/`_MID`/`_LOW` individually, or `CLINE_AGENTS_MODEL_DEFAULT` — only `_DEFAULT` covers every tier on its own, so setting just one of the per-tier variables still skips every role in the other two tiers. This is the single most common reason a Cline dispatch appears to do nothing: `dispatch_selected_roles` catches the per-role failure and returns every role as `skipped`, so you see a correct, fully staffed plan and zero started agents. If those variables are unset, say so and ask the human to set them rather than reporting the plan as if it ran. Neither Claude Code nor Codex has an equivalent requirement, and `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is unrelated — it is a Claude Code peer-messaging flag with no effect on Cline.
+- **Every runner, ask first**: if none of the three knowledge-store config tiers resolve yet (no explicit `--config`, no project-local `.agents/knowledge-store/config.json`, and no `~/.agents/knowledge-store/config.json` — i.e. this is genuinely the first knowledge-store use anywhere on this machine, or the first use in a project that hasn't opted in either way), this is a real decision, not plumbing: ask the human once, before creating anything —
 
   > No knowledge-store config found. Create an isolated store for this project only (`.agents/knowledge-store/config.json`, recommended — keeps this project's content separate from every other project), or use the shared store across every project on this machine (`~/.agents/knowledge-store/config.json`)?
 
   Suggest project-local as the default if the human doesn't have a preference. Create only the one chosen — an empty `{}` is sufficient, since the bundled knowledge-store config-resolution logic's `load_config()` fills every other setting from built-in defaults. Skip asking (and skip creating anything) once a tier already resolves; this is a first-use question, not a repeated one.
-- **Both runners, ask if relevant**: if `cadre` doesn't resolve as a bare command, this only matters for the human's own terminal use (an orchestrating Claude Code agent already has it on the Bash tool's PATH via the installed plugin's `bin/` directory, no action needed there) — ask once whether to show the exact `PATH` setup command from `README.md` "Put `cadre` on `PATH`" rather than assuming the human has already read it.
+- **Every runner, ask if relevant**: if `cadre` doesn't resolve as a bare command, this only matters for the human's own terminal use (an orchestrating Claude Code agent already has it on the Bash tool's PATH via the installed plugin's `bin/` directory, no action needed there) — ask once whether to show the exact `PATH` setup command from `README.md` "Put `cadre` on `PATH`" rather than assuming the human has already read it.
 
 ## Select Agents
 
@@ -373,7 +374,7 @@ authoritative for the *why*.
     enforces sandbox narrowing and a human confirmation gate for
     write-capable dispatch, and spawns the child in its own process group
     with an explicit wait/timeout/group-kill and a bounded concurrency
-    limiter (see the bundled MCP dispatch server's security-controls documentation for exactly
+    limiter (see the bundled security-controls register for exactly
     which of those guarantees are mechanically enforced and tested). Once
     registered, call it directly instead of `spawn_agent` — no per-file
     reading or manual `developer_instructions` injection needed. Setup:
@@ -408,7 +409,7 @@ authoritative for the *why*.
        distinguishable by `member_index`/`role_id`; a single team-wide
        `confirmation_required` round trip covers every write-capable member
        at once rather than one per member. See
-       the bundled MCP dispatch server's security-controls documentation's "Team dispatch"
+       the bundled security-controls register's "Team dispatch"
        section for exactly how each single-role control (classification/
        sandbox narrowing, the depth guard, confirmation gating, the
        concurrency limiter, audit logging) generalizes to a team.
@@ -417,7 +418,7 @@ authoritative for the *why*.
        only fully-verified option, or `"claude-code"`) for dispatching a
        role as a Claude Code child process instead of a Codex one. This is
        newer and only partially verified — read
-       the bundled MCP dispatch server's security-controls documentation's "Claude Code
+       the bundled security-controls register's "Claude Code
        runner" section before relying on it: in particular, a Claude Code
        role can currently only ever be dispatched read-only (there's no
        wrapper-format field yet to declare write-capability the way a Codex
@@ -552,13 +553,37 @@ authoritative for the *why*.
     silently defaulted to Anthropic and required `ANTHROPIC_API_KEY`
     regardless of how Cline itself was configured (issue #142). A dispatch
     needs `CLINE_AGENTS_PROVIDER_ID` plus at least one of
-    `CLINE_AGENTS_MODEL_OPUS`/`_SONNET`/`_HAIKU` or
+    `CLINE_AGENTS_MODEL_HIGH`/`_MID`/`_LOW` or
     `CLINE_AGENTS_MODEL_DEFAULT` set in the process environment before
     calling `start_subagent`/`dispatch_selected_roles`; if nothing resolves
     for a role's tier, the call fails before any session starts, naming the
     missing variable, rather than falling back to a vendor. See that
     plugin's `README.md` ("Model tiers and provider selection") for the full
     resolution order and per-tier variables.
+  - **Configure a model with at least a 32k context window.** Role briefs
+    carry their shared-policy block embedded verbatim, because a dispatched
+    subagent is an isolated session with no other channel to receive it. That
+    makes the briefs large: a median of roughly 15,700 tokens and a largest of
+    about 18,000 (`cadre role-fidelity --mode static` at its default 4.0
+    chars/token divisor; an estimate, not a real tokenizer). Every role fits from about
+    20k upward; at 16k, 131 of 159 do not. 32k is the documented minimum
+    because the gap absorbs the estimate's error, the task and tool schemas,
+    any retrieved knowledge, and the reply.
+
+    Fitting is necessary, not sufficient. Advertised context is not effective
+    context, and a small model that accepts a 15k-token brief may still stop
+    attending to its constraints well before the window fills — which looks
+    like a role ignoring its own authority limits, not like a truncation
+    error. `cadre role-fidelity --mode probe` measures that against a specific
+    model; run it before trusting a new one with dispatch.
+
+    **Model choice matters as much as size.** Measured on this suite's own
+    roles, a 27B preset scored 45/45 on the fidelity probes while a 70B
+    preset of a different family scored 36/45, failing role-scope discipline
+    9/9. Weight quantization also differed between the two presets and was
+    not isolated, so read the caveats in
+    `this repository's local run-artifact directorycadre-cline-local-model-fidelity-2026-08-10/fidelity-baseline.md`
+    before generalizing.
 
 So as of this section, Cline has **three** distinct ways to reach a role,
 not zero: the `cline-agents` plugin above (preferred when installed — it is
@@ -784,7 +809,10 @@ it's a fixed statement of what's actually possible:
   `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` set. Spawn the team's members as an
   Agent Team exactly as described above.
 - **`fallback: orchestrator-relayed`** applies everywhere else — Codex always,
-  and Claude Code whenever the experimental flag isn't set. Dispatch the same
+  Cline in practice (its `start_subagent` sessions run with agent teams
+  disabled, so treat `peer` there as best-effort and assume this fallback
+  unless you have positively confirmed otherwise), and Claude Code whenever
+  the experimental flag isn't set. Dispatch the same
   member list as an ordinary parallel wave and perform all reconciliation
   yourself as the orchestrating session. Never report that agents "discussed"
   or "challenged" each other's findings when this fallback was actually used —
@@ -798,13 +826,13 @@ selector can't know either in advance.
 
 ## Choosing between an ordinary wave and a team
 
-Default to an ordinary parallel wave — it's cheaper and works identically on
-both runners. Reach for a Claude Code Agent Team only when the recipe's value
+Default to an ordinary parallel wave — it's cheaper and works the same way on
+every runner. Reach for a Claude Code Agent Team only when the recipe's value
 specifically comes from teammates challenging or building on each other's
 findings before you synthesize (see the "Reference: team-recipes.md" section below), and
-only when `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is available. On Codex, or on
-Claude Code without that flag, run the same recipe as an ordinary wave and
-perform the synthesis step yourself.
+only when `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is available. On Codex, on
+Cline, or on Claude Code without that flag, run the same recipe as an ordinary
+wave and perform the synthesis step yourself.
 
 # Reference: team-recipes.md
 

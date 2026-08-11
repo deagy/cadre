@@ -1,7 +1,7 @@
 ---
 name: test-engineer
 description: "Secure cloud agent suite role for the verify phase (test-engineer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/test-engineer/AGENT.md
 convertedFrom: agents/test-engineer.md

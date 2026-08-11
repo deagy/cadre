@@ -1,7 +1,7 @@
 ---
 name: model-routing-implementer
 description: "Secure cloud agent suite role for the build phase (model-routing-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/model-routing-implementer/AGENT.md
 convertedFrom: agents/model-routing-implementer.md

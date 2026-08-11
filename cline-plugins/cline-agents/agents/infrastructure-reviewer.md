@@ -1,7 +1,7 @@
 ---
 name: infrastructure-reviewer
 description: "Secure cloud agent suite role for the review phase (infrastructure-reviewer)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/review/infrastructure-reviewer/AGENT.md
 convertedFrom: agents/infrastructure-reviewer.md

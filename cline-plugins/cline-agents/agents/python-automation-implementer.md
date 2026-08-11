@@ -1,7 +1,7 @@
 ---
 name: python-automation-implementer
 description: "Secure cloud agent suite role for the build phase (python-automation-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/python-automation-implementer/AGENT.md
 convertedFrom: agents/python-automation-implementer.md

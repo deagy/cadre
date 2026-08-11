@@ -1,7 +1,7 @@
 ---
 name: go-service-implementer
 description: "Secure cloud agent suite role for the build phase (go-service-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/go-service-implementer/AGENT.md
 convertedFrom: agents/go-service-implementer.md

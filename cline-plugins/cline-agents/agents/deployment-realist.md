@@ -1,7 +1,7 @@
 ---
 name: deployment-realist
 description: "Secure cloud agent suite role for the operations phase (deployment-realist)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase]
 canonicalSource: roster/operations/deployment-realist/AGENT.md
 convertedFrom: agents/deployment-realist.md

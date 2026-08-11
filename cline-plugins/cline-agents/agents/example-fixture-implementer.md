@@ -1,7 +1,7 @@
 ---
 name: example-fixture-implementer
 description: "Secure cloud agent suite role for the verify phase (example-fixture-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/example-fixture-implementer/AGENT.md
 convertedFrom: agents/example-fixture-implementer.md

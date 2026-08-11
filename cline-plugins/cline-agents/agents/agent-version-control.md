@@ -1,7 +1,7 @@
 ---
 name: agent-version-control
 description: "Secure cloud agent suite role for the operations phase (agent-version-control)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/operations/agent-version-control/AGENT.md
 convertedFrom: agents/agent-version-control.md

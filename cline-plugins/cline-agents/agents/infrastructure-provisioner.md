@@ -1,7 +1,7 @@
 ---
 name: infrastructure-provisioner
 description: "Secure cloud agent suite role for the build phase (infrastructure-provisioner)."
-modelTier: sonnet
+modelTier: mid
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/engineering/infrastructure-provisioner/AGENT.md
 convertedFrom: agents/infrastructure-provisioner.md

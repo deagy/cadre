@@ -1,7 +1,7 @@
 ---
 name: go-test-implementer
 description: "Secure cloud agent suite role for the verify phase (go-test-implementer)."
-modelTier: haiku
+modelTier: low
 allowedTools: [read_files, search_codebase, run_commands, editor]
 canonicalSource: roster/testing/go-test-implementer/AGENT.md
 convertedFrom: agents/go-test-implementer.md
