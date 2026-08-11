@@ -93,6 +93,46 @@ args = ["mcp-dispatch-server"]
 This needs `cadre` on your shell `PATH` (the install script's symlink) and
 the MCP extra: `pip install -r roster/orchestration/mcp/requirements-mcp.txt`.
 
+### Self-hosted models (llama.cpp, Ollama, LM Studio, vLLM)
+
+To run roles against a model you host yourself, declare a Codex config
+profile in `$CODEX_HOME/cadre-local.config.toml` (default `~/.codex`) — note
+that Codex's `--oss`/`--local-provider` shortcut only knows `lmstudio` and
+`ollama`, so llama.cpp needs a custom provider block:
+
+```toml
+model = "qwen3-coder-30b"
+model_provider = "llamacpp"
+
+[model_providers.llamacpp]
+name = "llama.cpp (self-hosted)"
+base_url = "http://<host>:8080/v1"
+wire_api = "chat"
+```
+
+Then tell Cadre to use it, and which local model each catalog tier maps to:
+
+```sh
+export SECURE_CLOUD_AGENTS_CODEX_PROFILE=cadre-local
+export SECURE_CLOUD_AGENTS_LOCAL_MODEL_OPUS=qwen3-coder-30b
+export SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET=qwen3-coder-30b
+export SECURE_CLOUD_AGENTS_LOCAL_MODEL_HAIKU=qwen3-4b
+```
+
+To dispatch with **no coding CLI installed at all**, use `runner="api"`,
+which talks to the endpoint directly:
+
+```sh
+export SECURE_CLOUD_AGENTS_API_BASE_URL=http://<host>:8080/v1
+```
+
+`llama-server` needs `--jinja` for tool calling. Read
+`roster/orchestration/SECURITY-CONTROLS.md`'s "API runner" section before
+enabling its write-capable path (`SECURE_CLOUD_AGENTS_API_ALLOW_WRITES`) or
+its command tool (`SECURE_CLOUD_AGENTS_API_COMMAND_ALLOWLIST`): that runner
+supplies its own sandbox, and it is weaker than the one Codex and Claude Code
+provide.
+
 ## Cline
 
 ```sh

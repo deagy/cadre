@@ -13,6 +13,9 @@ real package being available.
 
 from __future__ import annotations
 
+import contextlib
+import dataclasses
+import http.server
 import importlib.util
 import io
 import json
@@ -43,6 +46,7 @@ _TEST_DIR = Path(__file__).resolve().parent
 if str(_TEST_DIR) not in sys.path:
     sys.path.insert(0, str(_TEST_DIR))
 
+import api_runner  # noqa: E402  (sibling module in mcp/, stdlib-only like dispatch_core)
 import dispatch_core as core  # noqa: E402
 from build_dispatch_plan import CLASSIFICATIONS as SELECTOR_CLASSIFICATIONS  # noqa: E402
 from mcp_absence import mcp_unimportable  # noqa: E402  (sibling test helper)
@@ -51,6 +55,7 @@ _SHARED_TEST_DIR = AGENTS_ROOT / "shared" / "test"
 if str(_SHARED_TEST_DIR) not in sys.path:
     sys.path.append(str(_SHARED_TEST_DIR))
 
+import settings as _settings  # noqa: E402  (dispatch_core appends roster/shared/src to sys.path)
 from settings_test_helpers import isolate_settings_module  # noqa: E402  (sys.path set above)
 
 # Module-wide settings isolation: build_claude_child_argv/build_codex_child_argv
@@ -619,6 +624,1140 @@ class DispatchWithClaudeCodeRunnerTests(unittest.TestCase):
             runner="some-other-cli",
         )
         self.assertEqual(result["status"], "denied")
+
+
+class ModelTierReverseMapTests(unittest.TestCase):
+    """dispatch_core's first dispatch-time read of runner-capabilities.json.
+
+    Backs SECURITY-CONTROLS.md's "Self-hosted model providers" entry: the
+    tier a role belongs to decides which operator-configured local model it
+    is sent to, so an inversion that silently guessed would silently
+    misroute.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory(prefix="mcp-dispatch-tiers-")
+        self.addCleanup(self.tmp.cleanup)
+        self.addCleanup(core.clear_model_tier_cache)
+        core.clear_model_tier_cache()
+        self.manifest = Path(self.tmp.name) / "runner-capabilities.json"
+
+    def _write(self, model_tiers: dict) -> Path:
+        self.manifest.write_text(json.dumps({"model_tiers": model_tiers}), encoding="utf-8")
+        return self.manifest
+
+    def test_real_manifest_inverts_every_tier(self) -> None:
+        inverted = core.load_model_tier_by_identifier()
+        self.assertEqual(set(inverted.values()), {"opus", "sonnet", "haiku"})
+
+    def test_codex_identifier_maps_to_its_tier(self) -> None:
+        path = self._write({"sonnet": {"codex_model": "vendor-mid"}})
+        self.assertEqual(core._model_tier_for_identifier("vendor-mid", path), "sonnet")
+
+    def test_claude_wrapper_tier_name_maps_to_itself(self) -> None:
+        # Claude Code wrappers write the bare tier name, not a vendor
+        # identifier, so both wrapper formats resolve without a runner branch.
+        path = self._write({"sonnet": {"codex_model": "vendor-mid"}})
+        self.assertEqual(core._model_tier_for_identifier("sonnet", path), "sonnet")
+
+    def test_unknown_identifier_yields_none_rather_than_a_guess(self) -> None:
+        path = self._write({"sonnet": {"codex_model": "vendor-mid"}})
+        self.assertIsNone(core._model_tier_for_identifier("something-else", path))
+
+    def test_duplicate_identifier_across_tiers_is_unavailable(self) -> None:
+        path = self._write({"opus": {"codex_model": "same"}, "haiku": {"codex_model": "same"}})
+        with self.assertRaises(core.DispatchUnavailable):
+            core.load_model_tier_by_identifier(path)
+
+    def test_missing_manifest_is_unavailable_not_a_silent_empty_map(self) -> None:
+        with self.assertRaises(core.DispatchUnavailable):
+            core.load_model_tier_by_identifier(Path(self.tmp.name) / "absent.json")
+
+    def test_malformed_manifest_is_unavailable(self) -> None:
+        self.manifest.write_text("{not json", encoding="utf-8")
+        with self.assertRaises(core.DispatchUnavailable):
+            core.load_model_tier_by_identifier(self.manifest)
+
+
+class CodexLocalProviderArgvTests(unittest.TestCase):
+    """build_child_argv()'s self-hosted-provider branches.
+
+    Backs SECURITY-CONTROLS.md's "Self-hosted model providers" entry. The
+    load-bearing claim these defend is that an operator who configures none
+    of the new settings gets a byte-identical argv to before the feature
+    existed.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory(prefix="mcp-dispatch-localprovider-")
+        self.addCleanup(self.tmp.cleanup)
+        self.project_root = Path(self.tmp.name)
+        self.role = core.ResolvedRole(
+            role_id="application-engineer",
+            tier="plugin",
+            path=self.project_root / "x.toml",
+            developer_instructions="Do the thing.",
+            model="gpt-5.6-terra",
+            sandbox_mode="workspace-write",
+            model_reasoning_effort="medium",
+            instructions_sha256="deadbeef",
+            project_tier_git_clean=None,
+            model_tier="sonnet",
+        )
+
+    def _argv(self, **env) -> list[str]:
+        with mock.patch.dict(os.environ, env, clear=False):
+            _settings.reset_cache()
+            try:
+                return core.build_child_argv(self.role, "read-only", self.project_root)
+            finally:
+                _settings.reset_cache()
+
+    def test_no_settings_configured_keeps_the_original_argv(self) -> None:
+        argv = self._argv()
+        self.assertIn("--model", argv)
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.6-terra")
+        self.assertNotIn("--profile", argv)
+
+    def test_profile_alone_omits_model_so_the_profile_key_applies(self) -> None:
+        argv = self._argv(SECURE_CLOUD_AGENTS_CODEX_PROFILE="cadre-local")
+        self.assertIn("--profile", argv)
+        self.assertEqual(argv[argv.index("--profile") + 1], "cadre-local")
+        # The flag a ChatGPT-authenticated session was field-confirmed to
+        # reject must not be sent when the profile can supply the model.
+        self.assertNotIn("--model", argv)
+
+    def test_tier_local_model_replaces_the_vendor_identifier(self) -> None:
+        argv = self._argv(SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET="qwen3-coder:30b")
+        self.assertEqual(argv[argv.index("--model") + 1], "qwen3-coder:30b")
+        self.assertNotIn("gpt-5.6-terra", argv)
+
+    def test_profile_and_tier_model_are_both_passed(self) -> None:
+        argv = self._argv(
+            SECURE_CLOUD_AGENTS_CODEX_PROFILE="cadre-local",
+            SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET="qwen3-coder:30b",
+        )
+        self.assertEqual(argv[argv.index("--profile") + 1], "cadre-local")
+        self.assertEqual(argv[argv.index("--model") + 1], "qwen3-coder:30b")
+
+    def test_a_different_tiers_setting_does_not_leak_across_tiers(self) -> None:
+        argv = self._argv(SECURE_CLOUD_AGENTS_LOCAL_MODEL_OPUS="big-local-model")
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.6-terra")
+
+    def test_role_with_no_resolvable_tier_keeps_its_wrapper_model(self) -> None:
+        role = dataclasses.replace(self.role, model_tier=None)
+        with mock.patch.dict(os.environ, {"SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET": "x"}, clear=False):
+            _settings.reset_cache()
+            try:
+                argv = core.build_child_argv(role, "read-only", self.project_root)
+            finally:
+                _settings.reset_cache()
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.6-terra")
+
+
+class ForwardEnvTests(unittest.TestCase):
+    """runners.forward_env, the one operator-consented widening of
+    ENV_ALLOWLIST.
+
+    Backs SECURITY-CONTROLS.md's "Env allowlist for the child process" entry,
+    which remains mechanically enforced: the widening is opt-in, exact-name
+    only, and cannot overwrite the depth counter.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory(prefix="mcp-dispatch-forwardenv-")
+        self.addCleanup(self.tmp.cleanup)
+        self.project_root = Path(self.tmp.name)
+
+    def _env(self, **environ) -> dict[str, str]:
+        with mock.patch.dict(os.environ, environ, clear=False):
+            _settings.reset_cache()
+            try:
+                return core.build_child_env(1, self.project_root)
+            finally:
+                _settings.reset_cache()
+
+    def test_nothing_is_forwarded_by_default(self) -> None:
+        child_env = self._env(LLAMACPP_API_KEY="secret-value")
+        self.assertNotIn("LLAMACPP_API_KEY", child_env)
+
+    def test_an_explicitly_named_variable_is_forwarded(self) -> None:
+        child_env = self._env(
+            LLAMACPP_API_KEY="secret-value",
+            SECURE_CLOUD_AGENTS_FORWARD_ENV="LLAMACPP_API_KEY",
+        )
+        self.assertEqual(child_env["LLAMACPP_API_KEY"], "secret-value")
+
+    def test_an_unnamed_variable_is_not_forwarded_alongside_a_named_one(self) -> None:
+        child_env = self._env(
+            LLAMACPP_API_KEY="secret-value",
+            OTHER_SECRET="nope",
+            SECURE_CLOUD_AGENTS_FORWARD_ENV="LLAMACPP_API_KEY",
+        )
+        self.assertIn("LLAMACPP_API_KEY", child_env)
+        self.assertNotIn("OTHER_SECRET", child_env)
+
+    def test_a_wildcard_is_refused_rather_than_matched(self) -> None:
+        with self.assertRaises(_settings.SettingsError):
+            self._env(SECURE_CLOUD_AGENTS_FORWARD_ENV="LLAMA_*")
+
+    def test_forwarding_cannot_overwrite_the_dispatch_depth_counter(self) -> None:
+        child_env = self._env(
+            **{
+                core.DEPTH_ENV_VAR: "0",
+                "SECURE_CLOUD_AGENTS_FORWARD_ENV": core.DEPTH_ENV_VAR,
+            }
+        )
+        self.assertEqual(child_env[core.DEPTH_ENV_VAR], "1")
+
+    def test_build_child_env_without_a_project_root_forwards_nothing(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {"LLAMACPP_API_KEY": "v", "SECURE_CLOUD_AGENTS_FORWARD_ENV": "LLAMACPP_API_KEY"},
+            clear=False,
+        ):
+            child_env = core.build_child_env(1)
+        self.assertNotIn("LLAMACPP_API_KEY", child_env)
+
+    def test_codex_home_is_allowlisted_for_profile_resolution(self) -> None:
+        # `codex exec --profile` resolves $CODEX_HOME/<name>.config.toml.
+        self.assertIn("CODEX_HOME", core.ENV_ALLOWLIST)
+
+
+class _LocalHttpServer:
+    """A real HTTP server on an ephemeral loopback port.
+
+    Exists because every other api-runner test substitutes `_FakeEndpoint`
+    and therefore never executes `ChatEndpoint.complete()` at all -- which is
+    how SECURITY-CONTROLS.md came to cite unrelated `settings.py` URL-string
+    tests as proof that `_RejectRedirects` refuses redirects. Proving a
+    *runtime HTTP* behavior requires a runtime HTTP exchange, so these tests
+    use one rather than a mock of `urllib`.
+
+    Loopback + ephemeral port + daemon thread: no external network, no fixed
+    port to collide with a developer's own services.
+    """
+
+    def __init__(self, handler_cls) -> None:
+        self.server = http.server.HTTPServer(("127.0.0.1", 0), handler_cls)
+        self.port = self.server.server_address[1]
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    @property
+    def base_url(self) -> str:
+        return f"http://127.0.0.1:{self.port}/v1"
+
+    def close(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=5)
+
+
+def _json_handler(status: int, body: bytes, extra_headers: tuple = ()):
+    class Handler(http.server.BaseHTTPRequestHandler):
+        received_authorization: list = []
+
+        def log_message(self, *args) -> None:  # keep test output clean
+            pass
+
+        def do_POST(self) -> None:
+            Handler.received_authorization.append(self.headers.get("Authorization"))
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            for name, value in extra_headers:
+                self.send_header(name, value)
+            self.end_headers()
+            self.wfile.write(body)
+
+    return Handler
+
+
+_OK_BODY = json.dumps({"choices": [{"message": {"role": "assistant", "content": "hello"}}]}).encode()
+
+
+class ChatEndpointHttpTests(unittest.TestCase):
+    """`ChatEndpoint.complete()` driven over real HTTP.
+
+    Backs SECURITY-CONTROLS.md's "API runner" network-posture bullet. Every
+    claim in that bullet that concerns *runtime* behavior -- redirect
+    refusal, the response size cap, error handling -- is exercised here.
+    The URL *policy* half of that bullet (https anywhere, http only toward a
+    private host) is validated at configuration time and is tested
+    separately in `roster/shared/test/test_settings.py`'s
+    `SelfHostedProviderFieldTests`; the two are deliberately not conflated,
+    because an earlier revision of the register cited only the latter as
+    proof of the former.
+    """
+
+    def _serve(self, handler_cls) -> _LocalHttpServer:
+        server = _LocalHttpServer(handler_cls)
+        self.addCleanup(server.close)
+        return server
+
+    def test_a_normal_response_is_parsed(self) -> None:
+        server = self._serve(_json_handler(200, _OK_BODY))
+        endpoint = api_runner.ChatEndpoint(server.base_url, "m")
+        message = endpoint.complete([{"role": "user", "content": "hi"}], None)
+        self.assertEqual(message["content"], "hello")
+
+    def test_the_api_key_is_sent_as_a_bearer_token(self) -> None:
+        handler = _json_handler(200, _OK_BODY)
+        handler.received_authorization = []
+        server = self._serve(handler)
+        api_runner.ChatEndpoint(server.base_url, "m", api_key="tok").complete([], None)
+        self.assertEqual(handler.received_authorization, ["Bearer tok"])
+
+    def test_a_redirect_is_refused_and_the_credential_never_reaches_the_new_host(self) -> None:
+        # The claim this defends: an endpoint cannot move the request -- and
+        # its Authorization header -- to a host the operator never
+        # configured. Verified by standing up the redirect *target* too and
+        # asserting it saw nothing.
+        target = _json_handler(200, _OK_BODY)
+        target.received_authorization = []
+        target_server = self._serve(target)
+        redirector = _json_handler(
+            302, b"", extra_headers=(("Location", f"{target_server.base_url}/chat/completions"),)
+        )
+        redirect_server = self._serve(redirector)
+
+        endpoint = api_runner.ChatEndpoint(redirect_server.base_url, "m", api_key="SECRET")
+        with self.assertRaises(api_runner.ApiRunnerError) as ctx:
+            endpoint.complete([{"role": "user", "content": "hi"}], None)
+        self.assertIn("302", str(ctx.exception))
+        self.assertEqual(target.received_authorization, [])
+
+    def test_an_http_error_status_surfaces_as_an_api_runner_error(self) -> None:
+        server = self._serve(_json_handler(500, b'{"error":"boom"}'))
+        with self.assertRaises(api_runner.ApiRunnerError) as ctx:
+            api_runner.ChatEndpoint(server.base_url, "m").complete([], None)
+        self.assertIn("500", str(ctx.exception))
+
+    def test_an_unreachable_endpoint_surfaces_as_an_api_runner_error(self) -> None:
+        # Bind and immediately close, so the port is known-closed.
+        server = _LocalHttpServer(_json_handler(200, _OK_BODY))
+        base_url = server.base_url
+        server.close()
+        with self.assertRaises(api_runner.ApiRunnerError) as ctx:
+            api_runner.ChatEndpoint(base_url, "m").complete([], None)
+        self.assertIn("cannot reach endpoint", str(ctx.exception).lower() + str(ctx.exception))
+
+    def test_a_non_json_body_surfaces_as_an_api_runner_error(self) -> None:
+        # An intercepting proxy's HTML error page, or an endpoint streaming
+        # SSE because it ignored the non-streaming request.
+        server = self._serve(_json_handler(200, b"<html>not json</html>"))
+        with self.assertRaises(api_runner.ApiRunnerError) as ctx:
+            api_runner.ChatEndpoint(server.base_url, "m").complete([], None)
+        self.assertIn("unreadable response", str(ctx.exception))
+
+    def test_an_oversized_response_is_refused_rather_than_buffered(self) -> None:
+        oversized = b'{"padding":"' + b"x" * (api_runner.MAX_RESPONSE_BYTES + 1024) + b'"}'
+        server = self._serve(_json_handler(200, oversized))
+        with self.assertRaises(api_runner.ApiRunnerError) as ctx:
+            api_runner.ChatEndpoint(server.base_url, "m").complete([], None)
+        self.assertIn("cap", str(ctx.exception))
+
+    def test_a_malformed_choices_shape_surfaces_as_an_api_runner_error(self) -> None:
+        server = self._serve(_json_handler(200, b'{"choices":[]}'))
+        with self.assertRaises(api_runner.ApiRunnerError) as ctx:
+            api_runner.ChatEndpoint(server.base_url, "m").complete([], None)
+        self.assertIn("unexpected response shape", str(ctx.exception))
+
+    def test_a_caller_supplied_timeout_never_exceeds_the_endpoint_ceiling(self) -> None:
+        endpoint = api_runner.ChatEndpoint("http://127.0.0.1:1/v1", "m", request_timeout=5.0)
+        self.assertEqual(min(999.0, endpoint.request_timeout), 5.0)
+
+
+class _FakeEndpoint:
+    """Scripted stand-in for `api_runner.ChatEndpoint`.
+
+    Takes a list of assistant messages to return in order. The final one
+    should carry no tool_calls, which is how the loop terminates. Records the
+    tool schemas it was offered so a test can assert on which tools a given
+    policy actually exposed.
+    """
+
+    def __init__(self, messages):
+        self._messages = list(messages)
+        self.offered_tools: list[str] = []
+        self.calls = 0
+        self.model = "fake-local-model"
+
+    def complete(self, messages, tools, temperature=0.0, timeout=None):
+        self.calls += 1
+        self.offered_tools = sorted(tool["function"]["name"] for tool in (tools or []))
+        if self._messages:
+            return self._messages.pop(0)
+        return {"role": "assistant", "content": "done"}
+
+
+def _tool_call(name: str, arguments, call_id: str = "call-1") -> dict:
+    """Build one tool_calls entry. `arguments` may be a JSON string or a raw
+    dict -- the latter is llama.cpp's real, schema-deviating behavior."""
+    return {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {"id": call_id, "type": "function", "function": {"name": name, "arguments": arguments}}
+        ],
+    }
+
+
+class ApiRunnerToolCallParsingTests(unittest.TestCase):
+    """parse_tool_calls()'s tolerance for real endpoint deviations.
+
+    Backs SECURITY-CONTROLS.md's "API runner" bullet on response parsing:
+    targeted tolerance for two documented deviations, and a hard failure on
+    anything else rather than a guess.
+    """
+
+    def test_arguments_as_a_json_string_is_parsed(self) -> None:
+        calls = api_runner.parse_tool_calls(_tool_call("read_file", '{"path": "a.txt"}'))
+        self.assertEqual(calls[0]["arguments"], {"path": "a.txt"})
+
+    def test_arguments_as_an_object_is_accepted(self) -> None:
+        # ggml-org/llama.cpp issue #20198: llama-server emits `arguments` as a
+        # parsed object rather than the JSON string the OpenAI schema requires.
+        calls = api_runner.parse_tool_calls(_tool_call("read_file", {"path": "a.txt"}))
+        self.assertEqual(calls[0]["arguments"], {"path": "a.txt"})
+
+    def test_missing_id_is_synthesized_rather_than_rejected(self) -> None:
+        message = _tool_call("read_file", {"path": "a.txt"})
+        del message["tool_calls"][0]["id"]
+        self.assertTrue(api_runner.parse_tool_calls(message)[0]["id"])
+
+    def test_absent_tool_calls_is_an_empty_list(self) -> None:
+        self.assertEqual(api_runner.parse_tool_calls({"role": "assistant", "content": "hi"}), [])
+
+    def test_unparseable_arguments_string_raises(self) -> None:
+        with self.assertRaises(api_runner.ApiRunnerError):
+            api_runner.parse_tool_calls(_tool_call("read_file", "{not json"))
+
+    def test_arguments_of_a_wrong_type_raises_rather_than_guessing(self) -> None:
+        with self.assertRaises(api_runner.ApiRunnerError):
+            api_runner.parse_tool_calls(_tool_call("read_file", 42))
+
+    def test_missing_function_name_raises(self) -> None:
+        message = _tool_call("read_file", {})
+        del message["tool_calls"][0]["function"]["name"]
+        with self.assertRaises(api_runner.ApiRunnerError):
+            api_runner.parse_tool_calls(message)
+
+
+class ApiRunnerPathConfinementTests(unittest.TestCase):
+    """The api runner's in-process containment boundary.
+
+    Backs SECURITY-CONTROLS.md's "API runner" path-confinement bullet.
+    Note what this does and does not claim: these tests prove the *tool
+    surface* refuses paths outside the project root. They do not, and cannot,
+    prove kernel-level containment -- the api runner has none, which is why
+    the register classifies its sandbox differently from the CLI runners'.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory(prefix="mcp-dispatch-apipaths-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name) / "project"
+        (self.root / "sub").mkdir(parents=True)
+        (self.root / "inside.txt").write_text("inside\n", encoding="utf-8")
+        (self.root / ".git").mkdir()
+        (self.root / ".git" / "config").write_text("[core]\n", encoding="utf-8")
+        self.outside = Path(self.tmp.name) / "outside.txt"
+        self.outside.write_text("SECRET\n", encoding="utf-8")
+
+    def _toolbox(self, allowed=("read_file", "list_files", "search", "write_file", "edit_file")):
+        return api_runner.Toolbox(self.root, list(allowed), [], 1, time.monotonic() + 60)
+
+    def test_a_path_inside_the_project_resolves(self) -> None:
+        resolved = api_runner.resolve_within_project(self.root, "inside.txt")
+        self.assertEqual(resolved.name, "inside.txt")
+
+    def test_dot_dot_traversal_is_denied(self) -> None:
+        with self.assertRaises(api_runner.ToolDenied):
+            api_runner.resolve_within_project(self.root, "../outside.txt")
+
+    def test_an_absolute_path_outside_the_project_is_denied(self) -> None:
+        with self.assertRaises(api_runner.ToolDenied):
+            api_runner.resolve_within_project(self.root, str(self.outside))
+
+    def test_a_symlink_pointing_out_of_the_project_is_denied(self) -> None:
+        link = self.root / "escape.txt"
+        link.symlink_to(self.outside)
+        with self.assertRaises(api_runner.ToolDenied):
+            api_runner.resolve_within_project(self.root, "escape.txt")
+
+    def test_the_git_directory_is_refused(self) -> None:
+        # Hooks are code that runs later, outside this loop's bounds.
+        with self.assertRaises(api_runner.ToolDenied):
+            api_runner.resolve_within_project(self.root, ".git/config")
+
+    def test_a_nul_byte_in_a_path_is_denied(self) -> None:
+        with self.assertRaises(api_runner.ToolDenied):
+            api_runner.resolve_within_project(self.root, "a\x00b")
+
+    def test_a_denied_path_surfaces_as_a_tool_error_not_a_dispatch_abort(self) -> None:
+        # In-band so the model can correct a mistyped path; the refused
+        # operation still never happens.
+        toolbox = self._toolbox()
+        result = toolbox.execute("read_file", {"path": "../outside.txt"})
+        self.assertTrue(result.startswith("ERROR:"))
+        self.assertNotIn("SECRET", result)
+        self.assertEqual(toolbox.denied_calls, 1)
+        # The same toolbox still serves a legitimate read, so the refusal is
+        # per-call and not a latched failure that would make the negative
+        # assertion above meaningless.
+        self.assertIn("inside", toolbox.execute("read_file", {"path": "inside.txt"}))
+
+    def test_a_write_outside_the_project_never_creates_the_file(self) -> None:
+        target = Path(self.tmp.name) / "created-outside.txt"
+        self._toolbox().execute("write_file", {"path": str(target), "content": "x"})
+        self.assertFalse(target.exists())
+
+    def test_a_write_inside_the_project_is_recorded_for_the_audit_trail(self) -> None:
+        toolbox = self._toolbox()
+        toolbox.execute("write_file", {"path": "sub/new.md", "content": "hello"})
+        self.assertEqual(toolbox.files_written, ["sub/new.md"])
+        self.assertEqual((self.root / "sub" / "new.md").read_text(), "hello")
+
+    def test_an_ambiguous_edit_is_refused_rather_than_guessed(self) -> None:
+        (self.root / "dup.txt").write_text("a\na\n", encoding="utf-8")
+        result = self._toolbox().execute(
+            "edit_file", {"path": "dup.txt", "old_string": "a", "new_string": "b"}
+        )
+        self.assertIn("exactly once", result)
+        self.assertEqual((self.root / "dup.txt").read_text(), "a\na\n")
+
+    def test_a_tool_not_offered_to_this_dispatch_is_refused(self) -> None:
+        toolbox = self._toolbox(allowed=("read_file",))
+        result = toolbox.execute("write_file", {"path": "x.txt", "content": "y"})
+        self.assertTrue(result.startswith("ERROR:"))
+        self.assertFalse((self.root / "x.txt").exists())
+
+    def test_a_symlink_at_the_write_target_is_refused_by_o_nofollow(self) -> None:
+        # Distinct from the resolve-time symlink test above: this exercises
+        # the *write* syscall's own O_NOFOLLOW guard, which is what closes
+        # the check-then-open window `resolve_within_project` alone cannot.
+        # Bypasses resolve_within_project deliberately, simulating a symlink
+        # that appeared after containment was already proven.
+        link = self.root / "appeared-later.txt"
+        link.symlink_to(self.outside)
+        with self.assertRaises(api_runner.ToolDenied):
+            api_runner._write_bytes_nofollow(link, b"PWNED")
+        self.assertEqual(self.outside.read_text(), "SECRET\n")
+
+    def test_a_successful_single_occurrence_edit_replaces_the_text(self) -> None:
+        (self.root / "edit-me.txt").write_text("alpha\nbeta\n", encoding="utf-8")
+        result = self._toolbox().execute(
+            "edit_file", {"path": "edit-me.txt", "old_string": "beta", "new_string": "gamma"}
+        )
+        self.assertIn("edited", result)
+        self.assertEqual((self.root / "edit-me.txt").read_text(), "alpha\ngamma\n")
+
+    def test_an_edit_whose_target_is_absent_is_refused(self) -> None:
+        (self.root / "edit-me.txt").write_text("alpha\n", encoding="utf-8")
+        result = self._toolbox().execute(
+            "edit_file", {"path": "edit-me.txt", "old_string": "nope", "new_string": "x"}
+        )
+        self.assertIn("not found", result)
+
+    def test_list_files_matches_a_glob_and_excludes_the_git_directory(self) -> None:
+        (self.root / "sub" / "a.py").write_text("x", encoding="utf-8")
+        result = self._toolbox().execute("list_files", {"pattern": "*.py"})
+        self.assertIn("sub/a.py", result)
+        self.assertNotIn(".git", result)
+
+    def test_list_files_reports_no_match_rather_than_failing(self) -> None:
+        self.assertIn("no files matched", self._toolbox().execute("list_files", {"pattern": "*.zzz"}))
+
+    def test_search_finds_a_match_with_its_line_number(self) -> None:
+        (self.root / "sub" / "hay.txt").write_text("one\nneedle here\n", encoding="utf-8")
+        result = self._toolbox().execute("search", {"pattern": r"need\w+"})
+        self.assertIn("sub/hay.txt:2:", result)
+
+    def test_search_reports_no_matches_rather_than_failing(self) -> None:
+        self.assertIn("no matches", self._toolbox().execute("search", {"pattern": "zzz-absent"}))
+
+    def test_an_invalid_regular_expression_is_refused(self) -> None:
+        result = self._toolbox().execute("search", {"pattern": "([unclosed"})
+        self.assertTrue(result.startswith("ERROR:"))
+
+    def test_a_write_exceeding_the_size_cap_is_refused(self) -> None:
+        oversized = "x" * (api_runner.MAX_WRITE_BYTES + 1)
+        result = self._toolbox().execute("write_file", {"path": "big.txt", "content": oversized})
+        self.assertIn("write cap", result)
+        self.assertFalse((self.root / "big.txt").exists())
+
+    def test_a_read_exceeding_the_size_cap_is_refused(self) -> None:
+        big = self.root / "big-read.txt"
+        big.write_bytes(b"x" * (api_runner.MAX_READ_BYTES + 1))
+        result = self._toolbox().execute("read_file", {"path": "big-read.txt"})
+        self.assertIn("read cap", result)
+
+
+class ApiRunnerCommandAllowlistTests(unittest.TestCase):
+    """run_command's allowlist.
+
+    Backs SECURITY-CONTROLS.md's "API runner" run_command bullet, which
+    classifies this control as **advisory, not mechanically enforced**: these
+    tests prove which *commands* can start, and deliberately claim nothing
+    about what an allowlisted command then does with the arguments the model
+    chose.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory(prefix="mcp-dispatch-apicmd-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def _toolbox(self, allowlist):
+        return api_runner.Toolbox(self.root, ["run_command"], allowlist, 1, time.monotonic() + 60)
+
+    def test_an_allowlisted_command_runs(self) -> None:
+        result = self._toolbox(["echo"]).execute("run_command", {"command": "echo", "args": ["hi"]})
+        self.assertIn("hi", result)
+
+    def test_a_command_outside_the_allowlist_is_refused(self) -> None:
+        result = self._toolbox(["echo"]).execute("run_command", {"command": "cat", "args": ["/etc/passwd"]})
+        self.assertTrue(result.startswith("ERROR:"))
+        self.assertNotIn("root:", result)
+
+    def test_agent_launching_binaries_are_refused_even_if_allowlisted(self) -> None:
+        # This is what makes recursive dispatch structurally impossible for
+        # this runner, rather than merely depth-capped.
+        for command in ("cadre", "codex", "claude"):
+            with self.subTest(command=command):
+                result = self._toolbox([command]).execute("run_command", {"command": command})
+                self.assertTrue(result.startswith("ERROR:"))
+                self.assertIn("another agent", result)
+
+    def test_an_empty_allowlist_offers_no_command_tool_at_all(self) -> None:
+        names = api_runner.available_tool_names(
+            ["Read", "Grep", "Glob", "Bash", "Edit", "Write"], writes_allowed=True, command_allowlist=[]
+        )
+        self.assertNotIn("run_command", names)
+
+    def test_args_must_be_strings(self) -> None:
+        result = self._toolbox(["echo"]).execute("run_command", {"command": "echo", "args": [1, 2]})
+        self.assertTrue(result.startswith("ERROR:"))
+
+    def test_the_command_child_gets_the_deny_by_default_environment(self) -> None:
+        # run_command routes through spawn_and_wait/build_child_env, which is
+        # what restores the env allowlist, group-kill and output caps for
+        # this one path.
+        with mock.patch.dict(os.environ, {"AWS_SECRET_ACCESS_KEY": "leak-me"}, clear=False):
+            _settings.reset_cache()
+            try:
+                result = self._toolbox(["env"]).execute("run_command", {"command": "env"})
+            finally:
+                _settings.reset_cache()
+        # Assert the command actually ran before asserting what it didn't
+        # see -- otherwise a refused command would satisfy the negative
+        # assertion vacuously.
+        self.assertIn("exit 0", result)
+        self.assertIn("PATH=", result)
+        self.assertNotIn("leak-me", result)
+
+
+class ApiRunnerToolAvailabilityTests(unittest.TestCase):
+    """Which tools a dispatch is offered, given its capability tier and the
+    write-authorization conditions.
+
+    Backs SECURITY-CONTROLS.md's "API runner" write-gating bullet.
+    """
+
+    def test_a_read_only_tier_never_gets_write_tools(self) -> None:
+        names = api_runner.available_tool_names(["Read", "Grep", "Glob"], writes_allowed=True, command_allowlist=["go"])
+        self.assertEqual(names, ["read_file", "list_files", "search"])
+
+    def test_a_write_tier_without_authorization_gets_only_read_tools(self) -> None:
+        names = api_runner.available_tool_names(
+            ["Read", "Grep", "Glob", "Bash", "Edit", "Write"], writes_allowed=False, command_allowlist=["go"]
+        )
+        self.assertNotIn("write_file", names)
+        self.assertNotIn("run_command", names)
+
+    def test_a_write_tier_with_authorization_gets_write_tools(self) -> None:
+        names = api_runner.available_tool_names(
+            ["Read", "Grep", "Glob", "Bash", "Edit", "Write"], writes_allowed=True, command_allowlist=["go"]
+        )
+        self.assertIn("write_file", names)
+        self.assertIn("edit_file", names)
+        self.assertIn("run_command", names)
+
+    def test_an_unknown_capability_fails_closed_to_read_only(self) -> None:
+        names = api_runner.available_tool_names(None, writes_allowed=True, command_allowlist=["go"])
+        self.assertEqual(names, ["read_file", "list_files", "search"])
+
+
+class ApiRunnerWriteAuthorizationTests(unittest.TestCase):
+    """writes_are_allowed(): every condition a write-capable api dispatch
+    must satisfy, re-checked locally rather than inferred from the caller.
+
+    Backs SECURITY-CONTROLS.md's "API runner" write-gating bullet.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory(prefix="mcp-dispatch-apiwrites-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def _allowed(self, mode, sandbox, **env) -> bool:
+        with mock.patch.dict(os.environ, env, clear=False):
+            _settings.reset_cache()
+            try:
+                return api_runner.writes_are_allowed(mode, sandbox, self.root)
+            finally:
+                _settings.reset_cache()
+
+    def test_all_conditions_met(self) -> None:
+        self.assertTrue(
+            self._allowed(
+                "scoped-repository-edit", "workspace-write", SECURE_CLOUD_AGENTS_API_ALLOW_WRITES="true"
+            )
+        )
+
+    def test_planning_review_only_mode_is_never_write_capable(self) -> None:
+        self.assertFalse(
+            self._allowed(
+                "planning-review-only", "workspace-write", SECURE_CLOUD_AGENTS_API_ALLOW_WRITES="true"
+            )
+        )
+
+    def test_a_read_only_sandbox_is_never_write_capable(self) -> None:
+        self.assertFalse(
+            self._allowed(
+                "scoped-repository-edit", "read-only", SECURE_CLOUD_AGENTS_API_ALLOW_WRITES="true"
+            )
+        )
+
+    def test_writes_are_off_unless_the_operator_opted_in(self) -> None:
+        self.assertFalse(self._allowed("scoped-repository-edit", "workspace-write"))
+
+
+class ApiRunnerEndpointConfigTests(unittest.TestCase):
+    """Endpoint and model resolution.
+
+    Backs SECURITY-CONTROLS.md's "API runner" network-posture bullet: the
+    credential is read from the variable *named* by a setting, and a
+    misconfiguration is reported rather than defaulted around.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory(prefix="mcp-dispatch-apicfg-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.role = core.ResolvedRole(
+            role_id="application-engineer",
+            tier="plugin",
+            path=self.root / "x.toml",
+            developer_instructions="Do the thing.",
+            model="gpt-5.6-terra",
+            sandbox_mode="read-only",
+            model_reasoning_effort="medium",
+            instructions_sha256="deadbeef",
+            project_tier_git_clean=None,
+            model_tier="sonnet",
+        )
+
+    @contextlib.contextmanager
+    def _env(self, **environ):
+        with mock.patch.dict(os.environ, environ, clear=False):
+            _settings.reset_cache()
+            try:
+                yield
+            finally:
+                _settings.reset_cache()
+
+    def test_missing_base_url_is_reported_not_defaulted(self) -> None:
+        with self._env():
+            with self.assertRaises(api_runner.ApiRunnerError):
+                api_runner.resolve_endpoint(self.root, "m")
+
+    def test_the_api_key_is_read_from_the_variable_named_by_the_setting(self) -> None:
+        with self._env(
+            SECURE_CLOUD_AGENTS_API_BASE_URL="http://127.0.0.1:8080/v1",
+            SECURE_CLOUD_AGENTS_API_KEY_ENV="MY_LOCAL_KEY",
+            MY_LOCAL_KEY="the-secret",
+        ):
+            endpoint = api_runner.resolve_endpoint(self.root, "m")
+        self.assertEqual(endpoint.api_key, "the-secret")
+
+    def test_a_named_but_unset_key_variable_is_an_error(self) -> None:
+        with self._env(
+            SECURE_CLOUD_AGENTS_API_BASE_URL="http://127.0.0.1:8080/v1",
+            SECURE_CLOUD_AGENTS_API_KEY_ENV="ABSENT_KEY_VARIABLE",
+        ):
+            with self.assertRaises(api_runner.ApiRunnerError):
+                api_runner.resolve_endpoint(self.root, "m")
+
+    def test_a_plaintext_public_endpoint_is_refused_by_the_settings_layer(self) -> None:
+        with self._env(SECURE_CLOUD_AGENTS_API_BASE_URL="http://example.com/v1"):
+            with self.assertRaises(_settings.SettingsError):
+                api_runner.resolve_endpoint(self.root, "m")
+
+    def test_the_model_comes_from_settings_not_the_wrapper(self) -> None:
+        with self._env(SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET="qwen3-coder:30b"):
+            self.assertEqual(api_runner.resolve_model(self.role, self.root), "qwen3-coder:30b")
+
+    def test_a_tier_with_no_configured_model_is_an_error_not_a_vendor_fallback(self) -> None:
+        # Falling back to the wrapper's `gpt-5.6-terra` would send the request
+        # to a self-hosted endpoint that has never heard of it.
+        with self._env():
+            with self.assertRaises(api_runner.ApiRunnerError):
+                api_runner.resolve_model(self.role, self.root)
+
+
+class ApiRunnerLoopTests(unittest.TestCase):
+    """run_api_dispatch()'s agent loop and its result contract."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory(prefix="mcp-dispatch-apiloop-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        (self.root / "hello.txt").write_text("file contents\n", encoding="utf-8")
+        self.role = core.ResolvedRole(
+            role_id="application-engineer",
+            tier="plugin",
+            path=self.root / "x.toml",
+            developer_instructions="ROLE INSTRUCTIONS",
+            model="gpt-5.6-terra",
+            sandbox_mode="read-only",
+            model_reasoning_effort="medium",
+            instructions_sha256="deadbeef",
+            project_tier_git_clean=None,
+            model_tier="sonnet",
+        )
+
+    def _run(self, endpoint, mode="planning-review-only", sandbox="read-only", **environ):
+        environ.setdefault("SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET", "fake-local-model")
+        with mock.patch.dict(os.environ, environ, clear=False):
+            _settings.reset_cache()
+            try:
+                return api_runner.run_api_dispatch(
+                    role=self.role,
+                    brief="THE BRIEF",
+                    mode=mode,
+                    effective_sandbox=sandbox,
+                    project_root=self.root,
+                    dispatch_depth=1,
+                    endpoint=endpoint,
+                )
+            finally:
+                _settings.reset_cache()
+
+    def test_result_matches_spawn_and_waits_six_key_contract(self) -> None:
+        result = self._run(_FakeEndpoint([{"role": "assistant", "content": "all done"}]))
+        for key in ("pid", "exit_code", "timed_out", "duration_seconds", "stdout_truncated", "stdout_text"):
+            self.assertIn(key, result)
+        # Honest null rather than a fabricated integer: there is no process.
+        self.assertIsNone(result["pid"])
+        self.assertEqual(result["exit_code"], 0)
+        self.assertIn("all done", result["stdout_text"])
+
+    def test_a_tool_call_round_trip_completes_and_is_counted(self) -> None:
+        endpoint = _FakeEndpoint(
+            [_tool_call("read_file", {"path": "hello.txt"}), {"role": "assistant", "content": "read it"}]
+        )
+        result = self._run(endpoint)
+        self.assertEqual(result["tool_calls"], 1)
+        self.assertEqual(endpoint.calls, 2)
+
+    def test_the_brief_is_fenced_through_dispatch_cores_own_helper(self) -> None:
+        captured = {}
+
+        class Recording(_FakeEndpoint):
+            def complete(self, messages, tools, temperature=0.0, timeout=None):
+                captured["messages"] = messages
+                return super().complete(messages, tools, temperature, timeout)
+
+        self._run(Recording([{"role": "assistant", "content": "ok"}]))
+        system, user = captured["messages"][0], captured["messages"][1]
+        self.assertEqual(system["content"], "ROLE INSTRUCTIONS")
+        self.assertIn("BEGIN UNTRUSTED TASK BRIEF", user["content"])
+        self.assertIn("THE BRIEF", user["content"])
+        # The role's trusted instructions must not be duplicated inside the
+        # untrusted fence.
+        self.assertNotIn("ROLE INSTRUCTIONS", user["content"])
+
+    def test_a_planning_review_only_dispatch_is_offered_no_write_tools(self) -> None:
+        endpoint = _FakeEndpoint([{"role": "assistant", "content": "ok"}])
+        self._run(endpoint, SECURE_CLOUD_AGENTS_API_ALLOW_WRITES="true")
+        self.assertNotIn("write_file", endpoint.offered_tools)
+        self.assertNotIn("run_command", endpoint.offered_tools)
+
+    def test_the_iteration_cap_terminates_a_looping_model(self) -> None:
+        class Looping(_FakeEndpoint):
+            def complete(self, messages, tools, temperature=0.0, timeout=None):
+                self.calls += 1
+                return _tool_call("read_file", {"path": "hello.txt"})
+
+        result = self._run(Looping([]))
+        self.assertEqual(result["exit_code"], 1)
+        self.assertIn("tool iterations", result["stdout_text"])
+        self.assertEqual(result["tool_calls"], api_runner.MAX_TOOL_ITERATIONS)
+
+    def test_an_unreachable_endpoint_surfaces_as_dispatch_unavailable(self) -> None:
+        class Broken(_FakeEndpoint):
+            def complete(self, messages, tools, temperature=0.0, timeout=None):
+                raise api_runner.ApiRunnerError("cannot reach endpoint")
+
+        with self.assertRaises(core.DispatchUnavailable):
+            self._run(Broken([]))
+
+    def test_each_call_is_bounded_by_the_remaining_dispatch_budget(self) -> None:
+        # The per-request ceiling must never let one slow response overrun
+        # the caller's whole-dispatch deadline; an earlier revision passed a
+        # flat 120s regardless of how little budget was left.
+        seen: list = []
+
+        class Recording(_FakeEndpoint):
+            def complete(self, messages, tools, temperature=0.0, timeout=None):
+                seen.append(timeout)
+                return {"role": "assistant", "content": "done"}
+
+        with mock.patch.dict(
+            os.environ, {"SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET": "fake-local-model"}, clear=False
+        ):
+            _settings.reset_cache()
+            try:
+                api_runner.run_api_dispatch(
+                    role=self.role,
+                    brief="b",
+                    mode="planning-review-only",
+                    effective_sandbox="read-only",
+                    project_root=self.root,
+                    dispatch_depth=1,
+                    timeout_seconds=3.0,
+                    endpoint=Recording([]),
+                )
+            finally:
+                _settings.reset_cache()
+        self.assertLessEqual(seen[0], 3.0)
+        self.assertLess(seen[0], api_runner.DEFAULT_REQUEST_TIMEOUT_SECONDS)
+
+    def test_an_expired_deadline_stops_the_dispatch_before_any_model_call(self) -> None:
+        class NeverCalled(_FakeEndpoint):
+            def complete(self, messages, tools, temperature=0.0, timeout=None):
+                raise AssertionError("must not call the endpoint past the deadline")
+
+        with mock.patch.dict(
+            os.environ, {"SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET": "fake-local-model"}, clear=False
+        ):
+            _settings.reset_cache()
+            try:
+                result = api_runner.run_api_dispatch(
+                    role=self.role,
+                    brief="b",
+                    mode="planning-review-only",
+                    effective_sandbox="read-only",
+                    project_root=self.root,
+                    dispatch_depth=1,
+                    timeout_seconds=0.0,
+                    endpoint=NeverCalled([]),
+                )
+            finally:
+                _settings.reset_cache()
+        self.assertTrue(result["timed_out"])
+        self.assertEqual(result["exit_code"], 1)
+        self.assertIn("deadline", result["stdout_text"])
+
+    def test_a_mid_loop_endpoint_failure_still_reports_what_was_written(self) -> None:
+        # The audit trail must never report an "unavailable" dispatch that in
+        # fact mutated the workspace. Writes are not rolled back, so the one
+        # thing that must survive is the record that they happened.
+        class WriteThenDie(_FakeEndpoint):
+            def __init__(self):
+                super().__init__([])
+                self.turn = 0
+
+            def complete(self, messages, tools, temperature=0.0, timeout=None):
+                self.turn += 1
+                if self.turn == 1:
+                    return _tool_call("write_file", {"path": "out.md", "content": "x"})
+                raise api_runner.ApiRunnerError("endpoint died mid-dispatch")
+
+        result = self._run(
+            WriteThenDie(),
+            mode="scoped-repository-edit",
+            sandbox="workspace-write",
+            SECURE_CLOUD_AGENTS_API_ALLOW_WRITES="true",
+        )
+        self.assertEqual(result["exit_code"], 1)
+        self.assertEqual(result["files_written"], ["out.md"])
+        self.assertIn("NOT rolled back", result["stdout_text"])
+        self.assertTrue((self.root / "out.md").exists())
+
+
+class DispatchWithApiRunnerTests(unittest.TestCase):
+    """End-to-end dispatch_secure_cloud_role()/dispatch_team() with
+    runner="api" -- confirms the runner threads through the existing
+    authorization pipeline without disturbing the two CLI runners."""
+
+    def setUp(self) -> None:
+        self.layout = TempLayout()
+        self.addCleanup(self.layout.close)
+        _write_wrapper(self.layout.plugin_file("application-engineer"), model="gpt-5.6-terra")
+        self.audit_path = self.layout.project_root / "audit.jsonl"
+
+    def _dispatch(self, **overrides):
+        kwargs = dict(
+            role_id="application-engineer",
+            brief="do it",
+            mode="planning-review-only",
+            classification="internal",
+            project_root=self.layout.project_root,
+            global_agents_root=self.layout.global_root,
+            plugin_agents_root=self.layout.plugin_root,
+            catalog_path=self.layout.catalog_path,
+            parent_classification="internal",
+            audit_path=self.audit_path,
+            runner="api",
+        )
+        kwargs.update(overrides)
+        return core.dispatch_secure_cloud_role(**kwargs)
+
+    def _fake_result(self, text="ok"):
+        return {
+            "pid": None,
+            "exit_code": 0,
+            "timed_out": False,
+            "duration_seconds": 0.01,
+            "stdout_truncated": False,
+            "stdout_text": text,
+            "tool_calls": 2,
+            "files_written": ["a.md"],
+            "commands_run": [],
+        }
+
+    def _records(self):
+        return [json.loads(line) for line in self.audit_path.read_text().splitlines()]
+
+    def test_api_runner_dispatches_through_the_normal_pipeline(self) -> None:
+        result = self._dispatch(child_runner=lambda *a, **k: self._fake_result())
+        self.assertEqual(result["status"], "dispatched")
+        self.assertIsNone(result["child_pid"])
+
+    def test_the_runner_is_recorded_on_every_audit_record(self) -> None:
+        self._dispatch(child_runner=lambda *a, **k: self._fake_result())
+        self.assertTrue(all(record["runner"] == "api" for record in self._records()))
+
+    def test_tool_activity_reaches_the_audit_record(self) -> None:
+        self._dispatch(child_runner=lambda *a, **k: self._fake_result())
+        terminal = self._records()[-1]
+        self.assertEqual(terminal["tool_calls"], 2)
+        self.assertEqual(terminal["files_written"], ["a.md"])
+
+    def test_a_cli_runner_records_no_tool_activity_fields(self) -> None:
+        # Those keys are absent, not zero: a CLI child's tool use happens
+        # inside that CLI and this process genuinely cannot account for it.
+        self._dispatch(
+            runner="codex",
+            child_runner=lambda *a, **k: {
+                "pid": 1,
+                "exit_code": 0,
+                "timed_out": False,
+                "duration_seconds": 0.01,
+                "stdout_truncated": False,
+                "stdout_text": "ok",
+            },
+        )
+        self.assertNotIn("tool_calls", self._records()[-1])
+
+    def test_argv_for_the_api_runner_is_descriptive_and_carries_no_endpoint(self) -> None:
+        role = core.ResolvedRole(
+            role_id="r",
+            tier="plugin",
+            path=Path("/x"),
+            developer_instructions="i",
+            model="gpt-5.6-terra",
+            sandbox_mode="read-only",
+            model_reasoning_effort=None,
+            instructions_sha256="d",
+            project_tier_git_clean=None,
+            model_tier="sonnet",
+        )
+        argv = core.build_child_argv_for_runner("api", role, "read-only", Path("/tmp"))
+        self.assertEqual(argv[0], "api")
+        self.assertNotIn("http", " ".join(argv))
+
+    def test_the_selected_child_runner_is_the_api_one(self) -> None:
+        role = core.ResolvedRole(
+            role_id="r",
+            tier="plugin",
+            path=Path("/x"),
+            developer_instructions="i",
+            model="gpt-5.6-terra",
+            sandbox_mode="read-only",
+            model_reasoning_effort=None,
+            instructions_sha256="d",
+            project_tier_git_clean=None,
+            model_tier="sonnet",
+        )
+        self.assertIs(
+            core.resolve_child_runner_for_runner("codex", role, "planning-review-only", "read-only", "b"),
+            core.spawn_and_wait,
+        )
+        self.assertIsNot(
+            core.resolve_child_runner_for_runner("api", role, "planning-review-only", "read-only", "b"),
+            core.spawn_and_wait,
+        )
+
+    def test_an_unknown_runner_is_denied_and_now_audited(self) -> None:
+        # Previously this path returned denied without writing a record while
+        # dispatch_team wrote one; the two entry points now agree.
+        result = self._dispatch(runner="some-other-cli", child_runner=lambda *a, **k: self.fail("must not run"))
+        self.assertEqual(result["status"], "denied")
+        self.assertEqual(self._records()[-1]["decision"], "denied")
+
+    def test_async_dispatch_surfaces_the_api_runners_activity_fields(self) -> None:
+        # wait=False routes the result through DispatchJobStore rather than
+        # returning it directly; the api runner's extra keys must survive
+        # that trip, or a polling caller loses the record of what was written.
+        result = self._dispatch(wait=True, child_runner=lambda *a, **k: self._fake_result())
+        self.assertEqual(result["status"], "dispatched")
+
+        started = threading.Event()
+        release = threading.Event()
+
+        def blocking_runner(*args, **kwargs):
+            started.set()
+            release.wait(timeout=10)
+            return self._fake_result()
+
+        async_result = self._dispatch(wait=False, child_runner=blocking_runner)
+        self.assertEqual(async_result["status"], "dispatched_async")
+        job_id = async_result["job_id"]
+        self.assertTrue(started.wait(timeout=10))
+        self.assertEqual(core.poll_dispatch_status(job_id)["status"], "running")
+        release.set()
+        for _ in range(200):
+            polled = core.poll_dispatch_status(job_id)
+            if polled["status"] != "running":
+                break
+            time.sleep(0.05)
+        self.assertEqual(polled["status"], "dispatched")
+        self.assertEqual(polled["tool_calls"], 2)
+        self.assertEqual(polled["files_written"], ["a.md"])
+
+    def test_a_team_dispatches_with_the_api_runner(self) -> None:
+        result = core.dispatch_team(
+            members=[{"role_id": "application-engineer", "brief": "x"}],
+            mode="planning-review-only",
+            classification="internal",
+            project_root=self.layout.project_root,
+            global_agents_root=self.layout.global_root,
+            plugin_agents_root=self.layout.plugin_root,
+            catalog_path=self.layout.catalog_path,
+            parent_classification="internal",
+            audit_path=self.audit_path,
+            runner="api",
+            child_runner=lambda *a, **k: self._fake_result(),
+        )
+        self.assertEqual(result["status"], "team_dispatched")
+        self.assertEqual(result["members"][0]["status"], "dispatched")
+        self.assertEqual(result["members"][0]["tool_calls"], 2)
 
 
 class ProjectTierGitCleanTests(unittest.TestCase):
@@ -1478,6 +2617,40 @@ class DispatchServerSchemaTests(unittest.TestCase):
                 tool(members=[{"role_id": "application-engineer", "brief": "x"}], runner="claude-code")
 
         self.assertEqual(captured["runner"], "claude-code")
+
+    def test_tool_passes_through_api_runner(self) -> None:
+        module = _load_dispatch_server_module()
+        server = module.build_server()
+        tool = server.tools["dispatch_secure_cloud_role"]
+
+        captured = {}
+
+        def fake_dispatch(**kwargs):
+            captured.update(kwargs)
+            return {"status": "denied", "reason": "stub"}
+
+        with mock.patch.object(module.core, "dispatch_secure_cloud_role", side_effect=fake_dispatch):
+            with mock.patch.dict(os.environ, {core.PARENT_CLASSIFICATION_ENV_VAR: "internal"}):
+                tool(role_id="application-engineer", brief="hello", classification="internal", runner="api")
+
+        self.assertEqual(captured["runner"], "api")
+
+    def test_team_tool_passes_through_api_runner(self) -> None:
+        module = _load_dispatch_server_module()
+        server = module.build_server()
+        tool = server.tools["dispatch_team"]
+
+        captured = {}
+
+        def fake_dispatch(**kwargs):
+            captured.update(kwargs)
+            return {"status": "denied", "reason": "stub"}
+
+        with mock.patch.object(module.core, "dispatch_team", side_effect=fake_dispatch):
+            with mock.patch.dict(os.environ, {core.PARENT_CLASSIFICATION_ENV_VAR: "internal"}):
+                tool(members=[{"role_id": "application-engineer", "brief": "x"}], runner="api")
+
+        self.assertEqual(captured["runner"], "api")
 
     def test_tool_passes_through_wait_false(self) -> None:
         module = _load_dispatch_server_module()

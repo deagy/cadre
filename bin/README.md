@@ -34,7 +34,7 @@ This directory contains the executable dispatch entry point for the Cadre agent 
 - **Lifecycle**: `sdlc` — G1-G10 gate management, plan, validate, approve
 - **Generation**: `generate-plugin`, `generate-role-metadata`, `generate-authority-aides` — build derived artifacts
 - **Bootstrap**: `bootstrap-codex`, `init`, `resolve-shared` — project setup
-- **Server**: `mcp-dispatch-server` — MCP protocol dispatch server
+- **Server**: `mcp-dispatch-server` — MCP protocol dispatch server (runners: `codex`, `claude-code`, `api`)
 
 ### Constraints
 

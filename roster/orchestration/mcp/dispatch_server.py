@@ -123,11 +123,19 @@ def build_server():
         confirmation_token: required on a second call to actually dispatch
             when the effective sandbox is write-capable; omit on the first
             call and the tool returns a confirmation_token to replay.
-        runner: "codex" (default, fully verified) or "claude-code" (newer,
+        runner: "codex" (default, fully verified), "claude-code" (newer,
             partially unverified -- see ../SECURITY-CONTROLS.md's "Claude Code
             runner" section; in this increment it can only ever resolve to
             a read-only sandbox, regardless of mode, since no Claude Code
-            wrapper field exists yet to declare write-capability).
+            wrapper field exists yet to declare write-capability), or "api"
+            (drives an OpenAI-compatible chat endpoint -- e.g. a self-hosted
+            llama.cpp server -- directly, spawning no coding CLI at all).
+            "api" requires runners.api_base_url and a runners.local_model_
+            <tier> model to be configured, and supplies its own agent loop
+            and its own in-process sandbox, which is weaker than the OS-level
+            sandbox the two CLI runners delegate to; its write-capable path
+            is additionally gated on runners.api_allow_writes. Read
+            ../SECURITY-CONTROLS.md's "API runner" section before using it.
         wait: True (default) blocks this call until the dispatched child
             exits (or times out) and returns its result directly -- existing
             callers see no behavior change. Set False if your MCP client has
@@ -195,7 +203,8 @@ def build_server():
             first call's response lists which members those are.
         runner: applies to every member identically -- a team cannot mix
             runners in this increment. See dispatch_secure_cloud_role's
-            runner parameter for the same "codex" vs "claude-code" caveats.
+            runner parameter for the "codex" / "claude-code" / "api"
+            caveats, all of which apply per member here.
         wait: True (default) blocks this call until every member has
             finished, denied, or been marked unavailable, exactly as before
             this parameter existed. Set False for the same short-client-

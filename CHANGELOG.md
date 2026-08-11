@@ -82,6 +82,60 @@ check and reporting "nothing to do". See
 
 ### Added
 
+- **Dispatch to self-hosted models: a local-provider path for the `codex`
+  runner, and a new `runner="api"` that needs no coding CLI at all.** Both
+  MCP-dispatch-server features; neither changes behavior for an operator who
+  configures nothing.
+
+  For the **`codex` runner**, three new `global_only` settings —
+  `runners.codex_profile`, `runners.local_model_{opus,sonnet,haiku}`, and
+  `runners.forward_env` — let `codex exec` run against an OpenAI-compatible
+  endpoint you host yourself. The provider block (`base_url`, `wire_api`,
+  `env_key`) stays in your own `$CODEX_HOME/<name>.config.toml`, which Codex
+  owns; Cadre passes `--profile <name>` and never stores an inference
+  endpoint or credential for this runner. One model per catalog tier, rather
+  than one model for everything, so a `haiku`-tier triage role and an
+  `opus`-tier architecture role do not collapse onto the same model — the
+  same shape as Cline's existing `CLINE_AGENTS_MODEL_<TIER>`. With a profile
+  set but no tier mapping, `--model` is omitted entirely and the profile's
+  own `model` key applies, which also sidesteps the field-confirmed
+  ChatGPT-auth rejection of any explicit `--model`. Note Codex's
+  `--oss`/`--local-provider` shortcut only knows `lmstudio` and `ollama`, so
+  llama.cpp needs a custom `[model_providers.*]` block; `docs/INSTALL.md` has
+  a worked example. This is the first *dispatch-time* read of
+  `roster/runner-capabilities.json`, which was previously build-time-only —
+  its `model_tiers` table is inverted to recover a role's tier from its
+  wrapper's model identifier.
+
+  `runner="api"` (`roster/orchestration/mcp/api_runner.py`, stdlib-only, no
+  new dependencies) drives `/chat/completions` directly, supplying its own
+  agent loop and file/search/edit tools. It reuses the committed Codex
+  `.toml` wrappers, so there is no fourth wrapper format; only the model
+  changes, coming from `runners.api_base_url` plus the tier settings above.
+  **Read `roster/orchestration/SECURITY-CONTROLS.md`'s "API runner" section
+  before enabling it.** Because it spawns no child CLI it has no OS-level
+  sandbox: file tools are confined in-process by path resolution, which is
+  strictly weaker than what Codex and Claude Code enforce. Its write path is
+  off unless `runners.api_allow_writes` is set, and its `run_command` tool is
+  absent unless `runners.api_command_allowlist` is non-empty — and that
+  allowlist is documented as **advisory, not a containment boundary**, since
+  the dispatched agent chooses the arguments and `pytest`/`go`/`npm` execute
+  repository-controlled code by design. Recursive dispatch is structurally
+  impossible: no tool exposes dispatch, and the agent-launching binaries are
+  refused by name regardless of the allowlist.
+
+  Two audit-trail changes come with this and apply to every runner: each
+  record now carries `runner` (the trail previously could not distinguish a
+  Codex dispatch from a Claude one), and the single-role unknown-runner
+  denial is now audited, matching `dispatch_team`, which always did. The
+  `api` runner additionally records `tool_calls`, `files_written` (paths
+  only) and `commands_run`.
+
+  Not verified: live execution against a real `llama-server` or an
+  authenticated `codex exec` under a local provider. Tool calling on
+  llama.cpp needs `--jinja`, and its `tool_calls[].function.arguments`
+  deviates from the OpenAI schema (both shapes are accepted).
+
 - **A role-fidelity model-validation notice on the `cline-agents` dispatch
   path, recorded as a control** ([#234](https://github.com/deagy/cadre/issues/234)).
   When the resolved model has no role-fidelity attestation on file, the plugin
