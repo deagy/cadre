@@ -1116,11 +1116,17 @@ class SelfHostedProviderFieldTests(SettingsTestCase):
             )
 
     def test_api_key_env_refuses_something_shaped_like_a_key_rather_than_a_name(self) -> None:
+        # The realistic mistake this guards against is pasting the key itself
+        # where the variable *name* belongs. The fixture is deliberately an
+        # obviously-fake placeholder rather than a realistic key shape,
+        # matching the convention `.gitleaks.toml` describes -- a
+        # realistic-looking literal here trips the `generic-api-key` rule and
+        # turns the secret-scan job red for a value that was never a secret.
         with self.assertRaises(settings.SettingsError):
             settings.resolve_setting(
                 "runners.api_key_env",
                 start=self.project_dir,
-                env={"SECURE_CLOUD_AGENTS_API_KEY_ENV": "sk-live-abc123"},
+                env={"SECURE_CLOUD_AGENTS_API_KEY_ENV": "pasted-key-not-a-variable-name"},
             )
 
     def test_the_command_allowlist_refuses_a_path(self) -> None:
