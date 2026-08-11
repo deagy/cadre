@@ -66,10 +66,12 @@ import http.client
 import json
 import os
 import re
+import shlex
 import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Sequence
@@ -848,6 +850,122 @@ def run_probes(
     }
 
 
+# ---------------------------------------------------------------------------
+# Attestation writing (deagy/cadre#234 follow-up)
+# ---------------------------------------------------------------------------
+#
+# `cline-plugins/cline-agents/index.ts` reads CLINE_ATTESTATION_ENV, a JSON
+# object mapping an exact model string to a record, and warns once per
+# session when the configured model has no entry. It checks only for the
+# entry's *presence*; the shape below is this repository's own convention for
+# what a real measurement looks like, not something the consumer validates.
+CLINE_ATTESTATION_ENV = "CLINE_AGENTS_ROLE_FIDELITY_ATTESTATIONS"
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def write_attestation(report: dict[str, Any], path: Path) -> dict[str, Any]:
+    """Write, merging rather than clobbering, a role-fidelity attestation
+    record for this run's model into `path` -- a JSON object keyed by the
+    exact model string, the same lookup `hasRoleFidelityAttestation` in
+    `cline-plugins/cline-agents/index.ts` performs. A re-run for the same
+    model replaces only that model's entry; every other model's entry in an
+    existing file is preserved untouched.
+
+    Refuses to write from a run that cannot support an attestation:
+
+    - `report["dry_run"]`: no probe was ever sent, so there is nothing to
+      attest. Writing here would let an operator silence the notice without
+      ever measuring anything -- exactly the failure the notice exists to
+      prevent, with a green tick on it.
+    - `report["mode"] != "probe"`: only a single-arm probe report has a
+      well-defined per-model result. `--compare-condensed`'s combined
+      full/condensed report answers a different question (does a condensed
+      brief hold up better than the full one), not "does this model pass",
+      and has no single pass rate the consumer's lookup could stand for.
+    - zero scored results: every call errored, or the probe file matched no
+      preset. Nothing was measured about this model.
+
+    Run quality that is merely *poor* -- less than full coverage, or
+    verdict-scored results the retention-coupling in `run_probes` marked
+    unreliable -- is deliberately NOT a refusal. It is recorded inside the
+    record instead, as `caveats`, because unlike the three refusals above
+    there is no threshold this module can assert on the operator's behalf
+    for "how much coverage is enough to attest" -- that judgement belongs to
+    the human who ran the probe and is reading the transcripts, which is
+    exactly what the shipped notice already tells them to do ("record the
+    result ... a low score is the operator's call with the transcript in
+    hand"). Refusing silently on an unstated coverage threshold would just
+    move that judgement call somewhere the record can't show it happened;
+    surfacing it in the record instead keeps it visible to whoever reads the
+    file later, including a human who did not run the probe themselves.
+    """
+    if report.get("dry_run"):
+        raise FidelityError("cannot attest a --dry-run: no probe was sent, so there is nothing to attest")
+    if report.get("mode") != "probe":
+        raise FidelityError(
+            f"cannot attest a {report.get('mode')!r} report: attestation is defined for a single "
+            "--mode probe run (not --compare-condensed, which has no single per-model result)"
+        )
+    model = report.get("model")
+    if not model:
+        raise FidelityError("cannot attest: report carries no model")
+    scored = report.get("scored") or 0
+    if scored <= 0:
+        raise FidelityError(
+            "cannot attest a run with zero scored results -- nothing was measured for this model "
+            "(every call errored, or no probe matched a preset)"
+        )
+
+    caveats: list[str] = []
+    coverage = report.get("coverage")
+    if coverage is not None and coverage < 1.0:
+        caveats.append(
+            f"coverage {coverage} (< 1.0): {report.get('errored', 0)} probe/role pair(s) did not "
+            "answer (transport error) and are excluded from this measurement"
+        )
+    if report.get("unreliable"):
+        caveats.append(
+            f"{report['unreliable']} verdict-scored result(s) excluded as unreliable: the same "
+            f"role failed {RETENTION_PROBE_ID} in this run, so a format-following failure means "
+            "the policy verdict they would have produced is unknown, not passing or failing"
+        )
+
+    record: dict[str, Any] = {
+        "model": model,
+        "generated_at": _utc_now_iso(),
+        "base_url": report.get("base_url"),
+        "pass_rate": report.get("pass_rate"),
+        "coverage": coverage,
+        "scored": scored,
+        "passed": report.get("passed"),
+        "failed": report.get("failed"),
+        "answered": report.get("answered"),
+        "errored": report.get("errored"),
+        "unreliable": report.get("unreliable"),
+        "probe_count": report.get("probe_count"),
+        "role_count": report.get("role_count"),
+        "caveats": caveats,
+    }
+
+    existing: dict[str, Any] = {}
+    if path.is_file():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError as error:
+            raise FidelityError(f"{path}: existing attestation file is not valid JSON: {error}") from error
+        if not isinstance(loaded, dict):
+            raise FidelityError(f"{path}: existing attestation file is not a JSON object")
+        existing = loaded
+
+    existing[model] = record
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(existing, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return existing
+
+
 def condensed_body(preset: Preset) -> str:
     """The role-specific part of a preset's payload, dropping the embedded
     shared-policy block.
@@ -1229,6 +1347,18 @@ def build_parser() -> argparse.ArgumentParser:
             "answered."
         ),
     )
+    probe_group.add_argument(
+        "--attest-file",
+        type=Path,
+        default=None,
+        help=(
+            "Write (merging, never clobbering) a role-fidelity attestation record for this run's "
+            "--model into this JSON file, keyed by the exact model string -- the shape "
+            f"cline-plugins/cline-agents/index.ts's {CLINE_ATTESTATION_ENV} lookup expects. "
+            "Refuses on --dry-run, on --compare-condensed, or on a run with zero scored results. "
+            "Prints the exact 'export ...' line to set on success."
+        ),
+    )
     return parser
 
 
@@ -1238,6 +1368,7 @@ def _default_probes_path() -> Path:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    attest_export_line: str | None = None
 
     try:
         presets_dir = args.presets_dir or default_presets_dir()
@@ -1279,6 +1410,12 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 report = run_probes(presets, probes, client, warn_degenerate=args.warn_degenerate)
                 rendered = render_probe(report)
+
+            if args.attest_file:
+                merged = write_attestation(report, args.attest_file)
+                attest_export_line = (
+                    f"export {CLINE_ATTESTATION_ENV}={shlex.quote(json.dumps(merged, sort_keys=True))}"
+                )
     except FidelityError as error:
         print(f"cadre role-fidelity: {error}", file=sys.stderr)
         return 2
@@ -1291,6 +1428,13 @@ def main(argv: list[str] | None = None) -> int:
         print(rendered)
         if args.output:
             print(f"\nFull report written to {args.output}")
+
+    if attest_export_line:
+        print(
+            f"\nAttestation for model {report['model']!r} written to {args.attest_file}. "
+            "To silence the cline-agents no-attestation notice for this model, export it before "
+            f"dispatch:\n\n{attest_export_line}"
+        )
 
     if args.mode == "static" and report["over_budget_count"]:
         return 1

@@ -1079,5 +1079,184 @@ class CliTests(unittest.TestCase):
             self.assertEqual(1, report["role_count"])
 
 
+class WriteAttestationTests(unittest.TestCase):
+    """`write_attestation` is the writer half of deagy/cadre#234: the
+    consumer (`cline-plugins/cline-agents/index.ts`) only checks presence of
+    a keyed record, so every guarantee about what gets written lives here."""
+
+    def _report(self, **overrides) -> dict:
+        base = {
+            "mode": "probe",
+            "dry_run": False,
+            "model": "local-70b",
+            "base_url": "http://localhost:11434/v1",
+            "pass_rate": 1.0,
+            "coverage": 1.0,
+            "scored": 9,
+            "passed": 9,
+            "failed": 0,
+            "answered": 9,
+            "errored": 0,
+            "unreliable": 0,
+            "probe_count": 3,
+            "role_count": 3,
+        }
+        base.update(overrides)
+        return base
+
+    def test_fresh_write_creates_a_record_keyed_by_the_exact_model_string(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "attestations.json"
+            data = rf.write_attestation(self._report(), path)
+            self.assertEqual(["local-70b"], list(data.keys()))
+            on_disk = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(9, on_disk["local-70b"]["scored"])
+            self.assertEqual(1.0, on_disk["local-70b"]["pass_rate"])
+            self.assertIn("generated_at", on_disk["local-70b"])
+            self.assertEqual([], on_disk["local-70b"]["caveats"])
+
+    def test_merge_preserves_another_models_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "attestations.json"
+            rf.write_attestation(self._report(model="model-a"), path)
+            data = rf.write_attestation(self._report(model="model-b", scored=4, passed=2), path)
+            self.assertEqual({"model-a", "model-b"}, set(data.keys()))
+            self.assertEqual(9, data["model-a"]["scored"])
+            self.assertEqual(4, data["model-b"]["scored"])
+
+    def test_a_second_run_for_the_same_model_replaces_that_entry_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "attestations.json"
+            rf.write_attestation(self._report(model="model-a", pass_rate=0.5), path)
+            rf.write_attestation(self._report(model="other", pass_rate=1.0), path)
+            data = rf.write_attestation(self._report(model="model-a", pass_rate=0.9), path)
+            self.assertEqual(0.9, data["model-a"]["pass_rate"])
+            self.assertEqual(1.0, data["other"]["pass_rate"])
+            self.assertEqual(2, len(data))
+
+    def test_refuses_a_dry_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "attestations.json"
+            with self.assertRaises(rf.FidelityError) as caught:
+                rf.write_attestation(self._report(dry_run=True, model=None), path)
+            self.assertIn("dry-run", str(caught.exception))
+            self.assertFalse(path.exists())
+
+    def test_refuses_a_zero_scored_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "attestations.json"
+            with self.assertRaises(rf.FidelityError) as caught:
+                rf.write_attestation(self._report(scored=0, passed=0), path)
+            self.assertIn("zero scored", str(caught.exception))
+            self.assertFalse(path.exists())
+
+    def test_refuses_a_condensed_comparison_report(self) -> None:
+        """`--compare-condensed` produces a differently-shaped report with no
+        single per-model pass rate the consumer's boolean lookup could stand
+        for -- attestation is defined for a single-arm --mode probe run
+        only."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "attestations.json"
+            with self.assertRaises(rf.FidelityError) as caught:
+                rf.write_attestation(self._report(mode="probe-condensed-comparison"), path)
+            self.assertIn("compare-condensed", str(caught.exception))
+            self.assertFalse(path.exists())
+
+    def test_a_poor_quality_run_is_attested_with_visible_caveats_not_silently(self) -> None:
+        """Design choice recorded here and in write_attestation's docstring:
+        low coverage and retention-coupled unreliable results do not refuse
+        the write -- there is no principled threshold this module can assert
+        on the operator's behalf -- but they must never be silently dropped
+        from the record either."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "attestations.json"
+            report = self._report(coverage=0.5, errored=4, unreliable=2)
+            data = rf.write_attestation(report, path)
+            caveats = data["local-70b"]["caveats"]
+            self.assertTrue(any("coverage" in c for c in caveats))
+            self.assertTrue(any(rf.RETENTION_PROBE_ID in c for c in caveats))
+
+    def test_merge_rejects_an_existing_file_that_is_not_a_json_object(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "attestations.json"
+            path.write_text("[1, 2, 3]", encoding="utf-8")
+            with self.assertRaises(rf.FidelityError) as caught:
+                rf.write_attestation(self._report(), path)
+            self.assertIn("not a JSON object", str(caught.exception))
+
+
+class CliAttestTests(unittest.TestCase):
+    """End-to-end through `main`, exercising the --attest-file flag and its
+    printed export line -- the handoff most likely to be got wrong in
+    practice, per the task brief."""
+
+    def _run(self, tmp: str, extra: list[str], answers: list[str]):
+        presets = Path(tmp) / "agents"
+        presets.mkdir()
+        (presets / "r.md").write_text("---\nname: r\nmodelTier: mid\n---\n\nBrief.\n", encoding="utf-8")
+        probes = Path(tmp) / "probes.yaml"
+        probes.write_text(
+            json.dumps([{"id": "p", "prompt": "do it", "must_mention_any": ["alpha"]}]),
+            encoding="utf-8",
+        )
+        calls = iter(answers)
+
+        class _Scripted:
+            def __init__(self, **kwargs) -> None:
+                self.base_url = kwargs.get("base_url", "stub://")
+                self.model = kwargs.get("model", "stub-model")
+
+            def complete(self, system_prompt: str, user_prompt: str) -> str:
+                reply = next(calls, None)
+                if reply is None:
+                    raise rf.FidelityError("connection refused")
+                return reply
+
+        stdout = io.StringIO()
+        with unittest.mock.patch.object(rf, "ChatClient", _Scripted):
+            with contextlib.redirect_stdout(stdout):
+                code = rf.main(
+                    [
+                        "--mode", "probe",
+                        "--presets-dir", str(presets),
+                        "--probes", str(probes),
+                        "--base-url", "stub://",
+                        "--model", "stub-model",
+                        *extra,
+                    ]
+                )
+        return code, stdout.getvalue()
+
+    def test_a_successful_run_writes_the_file_and_prints_a_copy_pasteable_export_line(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            attest_path = Path(tmp) / "attest.json"
+            code, out = self._run(tmp, ["--attest-file", str(attest_path)], ["alpha"])
+            self.assertEqual(0, code)
+            self.assertTrue(attest_path.is_file())
+            self.assertIn(f"export {rf.CLINE_ATTESTATION_ENV}=", out)
+            data = json.loads(attest_path.read_text(encoding="utf-8"))
+            self.assertEqual(["stub-model"], list(data.keys()))
+
+    def test_dry_run_with_attest_file_refuses_and_writes_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            attest_path = Path(tmp) / "attest.json"
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                code, _out = self._run(tmp, ["--attest-file", str(attest_path), "--dry-run"], [])
+            self.assertEqual(2, code)
+            self.assertIn("dry-run", stderr.getvalue())
+            self.assertFalse(attest_path.exists())
+
+    def test_a_fully_errored_run_refuses_the_attestation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            attest_path = Path(tmp) / "attest.json"
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                code, _out = self._run(tmp, ["--attest-file", str(attest_path)], [])
+            self.assertEqual(2, code)
+            self.assertIn("zero scored", stderr.getvalue())
+            self.assertFalse(attest_path.exists())
+
+
 if __name__ == "__main__":
     unittest.main()
