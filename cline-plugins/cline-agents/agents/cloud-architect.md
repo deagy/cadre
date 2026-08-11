@@ -869,15 +869,33 @@ cleanup to the operator; see this project's operating runbook's worktree-operati
 section. If a leftover inspection worktree is untidy, say so in your result
 and let the operator remove it.
 
-On Claude Code this rule is also enforced structurally, not by prompt text
-alone: the `PreToolUse` hook `.claude/hooks/guard_workspace_mutation.py`
-(shipped enabled in the packaged plugin) refuses `git worktree remove` and
-`git worktree move` outright, and refuses `git worktree prune` whenever its
-own dry run shows a registration would actually be removed. `git worktree
-add` and `git worktree list` are never blocked -- creating a worktree is
-explicitly allowed. Two things that hook cannot see, so they remain on you:
-deleting a worktree directory with `rm` instead of a git verb, and
-`git gc`, which prunes worktrees as part of its own housekeeping.
+On Claude Code and Cline this rule is also enforced structurally, not by
+prompt text alone: a guard (`.claude/hooks/guard_workspace_mutation.py` for
+Claude Code, the equivalent in the Cline agents plugin) refuses `git
+worktree remove` and `git worktree move` outright, and refuses `git
+worktree prune` whenever its own dry run shows a registration would
+actually be removed. `git worktree add` and `git worktree list` are never
+blocked -- creating a worktree is explicitly allowed.
+
+**Do not treat that guard as the reason to stop thinking about this rule.**
+It is defense in depth, not a boundary you can lean on:
+
+- It can be switched off entirely. Setting
+  `CADRE_DISABLE_WORKSPACE_MUTATION_GUARD=1` in the environment disables it
+  before any parsing, so enforcement is conditional on an environment you
+  do not control and cannot observe from inside a task.
+- Other runners have no such guard at all, and this file is shipped to all
+  of them.
+- Things it cannot see include, but are not limited to: deleting a worktree
+  directory with `rm` instead of a git verb; `git gc`, which prunes
+  worktrees as part of its own housekeeping; `git worktree add --force`
+  over a path a registered worktree still occupies; a subcommand reached
+  through a git alias, including one defined inline with `git -c`; a
+  command wrapped in a program the guard does not recognize (`timeout`,
+  `nice`, `xargs`, ...); and inline shell nesting deeper than its bounded
+  recursion limit.
+
+The prohibition above is the rule. The guard catches some violations of it.
 
 ## No runner names as behavioral conditions
 

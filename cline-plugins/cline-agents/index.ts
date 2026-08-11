@@ -985,12 +985,61 @@ type DestructiveGitGuardBeforeToolHook = (
   context: DestructiveGitGuardToolContext,
 ) => DestructiveGitGuardToolResult | undefined | Promise<DestructiveGitGuardToolResult | undefined>;
 
+// A heredoc redirection: `<<DELIM`, `<<-DELIM`, `<<'DELIM'`, `<< "DELIM"`.
+// `(?<!<)` and `(?!<)` together rule out `<<<` (a here-STRING, which has no
+// body and so no terminator line to skip). BOTH are required: with only the
+// trailing `(?!<)`, `<<<word` still matches starting at the second `<`,
+// which would make the guard swallow everything after a here-string as if
+// it were heredoc body. Ports guard_workspace_mutation.py's _HEREDOC_RE.
+const HEREDOC_RE = /(?<!<)<<(?!<)-?\s*(?:'([^']*)'|"([^"]*)"|([A-Za-z_][A-Za-z0-9_]*))/;
+
+/**
+ * Drop heredoc body lines (and their terminator) from `segments`. Needed
+ * because `splitTopLevel` splits on newlines: without this, the BODY of
+ * `cat > note.md <<'EOF' / git reset --hard / EOF` would be parsed as if
+ * it were a command and blocked, even though it is text being written to a
+ * file -- a false positive of exactly the kind this guard's design stance
+ * treats as the real risk. The opening segment is kept (it is a real
+ * command) and so is anything after the terminator, which is the point:
+ * the command FOLLOWING a heredoc is a real invocation. Ports
+ * guard_workspace_mutation.py's `_strip_heredoc_bodies`.
+ */
+function stripHeredocBodies(segments: string[]): string[] {
+  const out: string[] = [];
+  let i = 0;
+  while (i < segments.length) {
+    const seg = segments[i];
+    out.push(seg);
+    i += 1;
+    const match = HEREDOC_RE.exec(seg);
+    if (!match) continue;
+    const delimiter = match[1] ?? match[2] ?? match[3];
+    const allowsLeadingTabs = seg.includes("<<-");
+    while (i < segments.length) {
+      const body = segments[i];
+      i += 1;
+      const candidate = allowsLeadingTabs ? body.replace(/^\t+/, "") : body;
+      if (candidate.trim() === delimiter) break;
+    }
+  }
+  return out;
+}
+
 /**
  * Split a shell command line into top-level segments on `&&`, `||`, `;`,
- * and `|`, respecting single/double quoting. Not a full shell parser --
- * good enough to find each independent `git ...` invocation in a chained
- * command line without being fooled by an operator sitting inside a quoted
- * string. Ports `guard_workspace_mutation.py`'s `split_top_level`.
+ * `|`, and NEWLINES, respecting single/double quoting. Not a full shell
+ * parser -- good enough to find each independent `git ...` invocation in a
+ * chained command line without being fooled by an operator sitting inside
+ * a quoted string. Ports `guard_workspace_mutation.py`'s `split_top_level`.
+ *
+ * Newline is a separator for the same reason `;` is: the shell treats them
+ * identically as command terminators. Omitting it (as this function did
+ * until deagy/cadre#215) silently defeated EVERY handler -- the tokenizer
+ * treats a newline as ordinary whitespace, so a two-line command collapsed
+ * into one token list whose first token was the first line's program and
+ * `parseGitInvocation` returned null. No adversarial intent required:
+ * multi-line commands are routine. A newline inside quotes is NOT a
+ * separator.
  */
 function splitTopLevel(command: string): string[] {
   const segments: string[] = [];
@@ -1019,7 +1068,7 @@ function splitTopLevel(command: string): string[] {
       i += 2;
       continue;
     }
-    if (ch === ";" || ch === "|") {
+    if (ch === ";" || ch === "|" || ch === "\n") {
       segments.push(buf);
       buf = "";
       i += 1;
@@ -1029,7 +1078,7 @@ function splitTopLevel(command: string): string[] {
     i += 1;
   }
   segments.push(buf);
-  return segments.map((s) => s.trim()).filter((s) => s.length > 0);
+  return stripHeredocBodies(segments.map((s) => s.trim()).filter((s) => s.length > 0));
 }
 
 /**
@@ -1419,7 +1468,10 @@ async function checkRestore(subArgs: string[], cwd: string): Promise<GitGuardDec
       continue;
     }
     if (a.startsWith("--source=")) {
-      source = a.split("=", 2)[1];
+      // Same idiom slip as worktreeFlagValue below: a limited JS `split`
+      // truncates rather than keeping the remainder, so a ref containing
+      // `=` was silently cut short. Python's `split("=", 1)[1]` keeps it.
+      source = a.slice(a.indexOf("=") + 1);
       i += 1;
       continue;
     }
@@ -1479,7 +1531,10 @@ function worktreeFlagValue(args: string[], flag: string): string | undefined {
   for (let i = 0; i < args.length; i += 1) {
     const a = args[i];
     if (a === flag) return args[i + 1];
-    if (a.startsWith(`${flag}=`)) return a.split("=", 2)[1];
+    // NOT `a.split("=", 2)[1]`: JS `split` with a limit TRUNCATES rather
+    // than keeping the remainder, so `--expire=a=b` would yield "a" where
+    // Python's `split("=", 1)[1]` yields "a=b". Slice past the first `=`.
+    if (a.startsWith(`${flag}=`)) return a.slice(a.indexOf("=") + 1);
     if (isShort && flag.length === 2 && a.startsWith(flag) && a.length > 2) return a.slice(2);
   }
   return undefined;
@@ -1492,6 +1547,13 @@ function worktreeFlagValue(args: string[], flag: string): string | undefined {
  * including why `prune` is state-checked via its own dry run while
  * `remove`/`move` are refused flat, and why `add` is guarded only in the
  * `-B`-moves-an-existing-branch case.
+ *
+ * `checkCheckout` allows `git checkout -B` unconditionally. That is a
+ * SCOPE decision under #215, not a claim that it is safe: `checkout -B`
+ * with the implicit HEAD start point is precisely the destructive case
+ * when the branch already exists elsewhere, and `workspace-isolation.md`
+ * prohibits it by name. Changing an existing handler is tracked
+ * separately.
  */
 async function checkWorktree(subArgs: string[], cwd: string): Promise<GitGuardDecision | null> {
   const verbIndex = subArgs.findIndex((a) => !a.startsWith("-"));

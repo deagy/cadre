@@ -728,6 +728,80 @@ describe("destructive-git guard (deagy/cadre#129): subcommand-level restriction 
     });
 
     // -----------------------------------------------------------------
+    // Newline as a command separator (deagy/cadre#215 review, F1) --
+    // mirrors NewlineSeparatorTests in plugin/tools/
+    // test_guard_workspace_mutation.py. Before this, splitTopLevel split
+    // on &&/||/;/| but not newlines, so a two-line command collapsed into
+    // one token list whose first token was the first line's program and
+    // EVERY handler was bypassed. No adversarial intent required.
+    // -----------------------------------------------------------------
+    describe("newline as a command separator (deagy/cadre#215 F1)", () => {
+      it("blocks a newline-separated destructive command, matching the && control", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(await evaluateGitCommand("echo hi && git reset --hard HEAD", repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand("echo hi\ngit reset --hard HEAD", repoDir)).not.toBeNull();
+      });
+
+      it("closes the bypass for every handler, not just worktree", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        writeFileSync(join(repoDir, "untracked.txt"), "junk\n");
+        execFileSync("git", ["branch", "throwaway"], { cwd: repoDir });
+        for (const command of [
+          "cd /tmp\ngit reset --hard HEAD",
+          "cd /tmp\ngit clean -fd",
+          "cd /tmp\ngit branch -D throwaway",
+          "cd /tmp\ngit push --force origin main",
+        ]) {
+          expect(await evaluateGitCommand(command, repoDir), command).not.toBeNull();
+        }
+      });
+
+      it("handles CRLF line endings, blank lines, and leading indentation", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(await evaluateGitCommand("echo hi\r\ngit reset --hard HEAD", repoDir)).not.toBeNull();
+        expect(await evaluateGitCommand("echo one\n\n    git reset --hard HEAD\n", repoDir)).not.toBeNull();
+      });
+
+      it("does not treat a newline inside quotes as a separator", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(await evaluateGitCommand("echo 'first line\ngit reset --hard HEAD'", repoDir)).toBeNull();
+      });
+
+      it("blocks the command following a heredoc, but not the heredoc body itself", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        // Body is text being written to a file -- blocking it would be a
+        // false positive, and writing docs that quote a destructive
+        // command is routine.
+        expect(await evaluateGitCommand("cat <<'EOF' > note.md\ngit reset --hard HEAD\nEOF", repoDir)).toBeNull();
+        // The command after the terminator is a real invocation.
+        expect(
+          await evaluateGitCommand("cat <<'EOF' > note.md\nsome text\nEOF\ngit reset --hard HEAD", repoDir),
+        ).not.toBeNull();
+      });
+
+      it("handles the `<<-` tab-indented-terminator form", async () => {
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(await evaluateGitCommand("cat <<-'EOF' > note.md\ngit reset --hard HEAD\n\tEOF", repoDir)).toBeNull();
+        expect(
+          await evaluateGitCommand("cat <<-'EOF' > note.md\ntext\n\tEOF\ngit reset --hard HEAD", repoDir),
+        ).not.toBeNull();
+      });
+
+      it("does not mistake a here-string (`<<<`) for a heredoc", async () => {
+        // Both the lookbehind and the lookahead are required: with only
+        // the lookahead, `<<<word` matches from the second `<` and the
+        // guard swallows everything after it.
+        writeFileSync(join(repoDir, "README.md"), "uncommitted change\n");
+        expect(await evaluateGitCommand("cat <<<somestring\ngit reset --hard HEAD", repoDir)).not.toBeNull();
+      });
+
+      // No direct `splitTopLevel` unit assertion here (it is module-private
+      // and not worth widening the export surface for): the behavioural
+      // cases above cover the same ground, and the Python suite's
+      // `test_split_top_level_splits_on_newline` pins the splitter itself.
+    });
+
+    // -----------------------------------------------------------------
     // git worktree (deagy/cadre#215) -- mirrors WorktreeTests /
     // WorktreeDocumentedGapTests in plugin/tools/
     // test_guard_workspace_mutation.py. Kept in sync deliberately.
@@ -848,6 +922,32 @@ describe("destructive-git guard (deagy/cadre#129): subcommand-level restriction 
         expect(await evaluateGitCommand(`bash -c "git worktree remove ${wt}"`, repoDir)).not.toBeNull();
         expect(await evaluateGitCommand(`env git worktree remove ${wt}`, repoDir)).not.toBeNull();
         expect(await evaluateGitCommand(`git -C ${repoDir} worktree remove ${wt}`, repoDir)).not.toBeNull();
+      });
+
+      it("documented known gap: `git -c alias.x=... x` injects the alias in the command line itself", async () => {
+        // Unlike the config-file alias gap, nothing external needs reading
+        // to see this one -- but it is still not covered:
+        // parseGitInvocation skips `-c <value>` as a global flag and reads
+        // the alias name as the subcommand, which matches no handler.
+        const wt = addWorktree("wt1", "wt1");
+        expect(await evaluateGitCommand(`git -c alias.wtr='worktree remove' wtr ${wt}`, repoDir)).toBeNull();
+      });
+
+      it("documented known gap: wrapper commands outside WRAPPER_TOKENS", async () => {
+        const wt = addWorktree("wt1", "wt1");
+        for (const wrapper of ["timeout 10", "nice", "stdbuf -o0", "setsid", "ionice"]) {
+          expect(await evaluateGitCommand(`${wrapper} git worktree remove ${wt}`, repoDir)).toBeNull();
+        }
+      });
+
+      it("documented known gap: `git worktree add --force` over a registered-but-missing path", async () => {
+        // Verified against git 2.53.0: plain `add` refuses, `--force`
+        // re-registers the path onto the new branch, and `-f -f` does so
+        // even when the original is locked.
+        const wt = addWorktree("victim", "victim");
+        renameSync(wt, join(wtRoot, "victim-elsewhere"));
+        expect(await evaluateGitCommand(`git worktree add --force ${wt} -b intruder`, repoDir)).toBeNull();
+        expect(await evaluateGitCommand(`git worktree add -f -f ${wt} -b intruder`, repoDir)).toBeNull();
       });
 
       it("documented known gaps: rm -rf of a worktree directory, git gc, and an aliased spelling", async () => {

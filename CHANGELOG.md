@@ -23,6 +23,12 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+### Fixed
+
+- **A newline in a `Bash` command bypassed the workspace-mutation guard entirely** (found reviewing [#215](https://github.com/deagy/cadre/issues/215)). `split_top_level` split on `&&`, `||`, `;`, and `|` but not on newlines, and `shlex.split` treats a newline as ordinary whitespace — so a two-line command collapsed into a single token list whose `tokens[0]` was the first line's program, `parse_git_invocation` returned `None`, and the destructive second line was never inspected. This defeated **every** handler (`reset`, `checkout`, `restore`, `clean`, `branch`, `push`, and the new `worktree`), not just one, and it predates #215. It needed no adversarial intent: multi-line Bash tool calls are routine, so the guard's behaviour flipped on a keystroke nobody would think about.
+
+  Newline is now a separator in both the Python hook and the Cline mirror. Because that alone would make a heredoc *body* parse as if it were a command — blocking `cat <<'EOF' > note.md` / `git reset --hard` / `EOF`, which is just text being written to a file — the fix also skips heredoc bodies and their terminators, while still checking the command that *follows* the terminator. A newline inside quotes is not a separator, and `<<<` here-strings are not mistaken for heredocs.
+
 ### Added
 
 - **The workspace-mutation guard hook now covers `git worktree`** ([#215](https://github.com/deagy/cadre/issues/215)). `workspace-isolation.md`'s "Never remove or prune a worktree yourself" reaches all 159 role wrappers since [#211](https://github.com/deagy/cadre/issues/211) but had no structural enforcement: `_HANDLERS` in `.claude/hooks/guard_workspace_mutation.py` had no `worktree` entry, so every spelling passed unexamined. A new `check_worktree` handler (and its Cline mirror in `cline-plugins/cline-agents/index.ts`) refuses:
@@ -32,9 +38,9 @@ check and reporting "nothing to do". See
   - `git worktree prune`, but only when its own dry run (`git worktree prune -n -v`, with any caller-supplied `--expire` passed through) shows a registration would actually be removed. Prune names no target, so "is this my worktree?" is unanswerable from the command line; the dry run covers the dangerous case exactly — including a teammate's worktree on a momentarily unavailable path — while leaving a no-op prune unblocked. An explicit `-n`/`--dry-run` from the caller is always allowed.
   - `git worktree add -B <branch>`, but only when `<branch>` already exists and points somewhere other than the resolved start point. This is the one guarded spelling of an otherwise explicitly allowed verb: `-B` force-resets the branch, reporting it only as a "resetting branch" note, which is `agent-autonomy.yaml`'s `discard_uncommitted_work_or_move_branches: never`. Plain `add`, `-b`, `--detach`, `list`, `lock`, `unlock`, and `repair` are never blocked.
 
-  Three spellings remain deliberately uncovered and are pinned by tests asserting they are *not* blocked, alongside the alias and recursion-bound gaps already recorded: deleting a worktree directory with `rm` (not a git subcommand, so the hook never sees it), `git gc` (which prunes worktrees as part of its own housekeeping and has no handler), and an aliased spelling of the subcommand.
+  Six spellings remain deliberately uncovered and are each pinned by a test asserting they are *not* blocked, alongside the recursion-bound gap already recorded: deleting a worktree directory with `rm` (not a git subcommand, so the guard never sees it); `git gc` (which prunes worktrees as part of its own housekeeping and has no handler); an aliased spelling of the subcommand, **including one defined inline as `git -c alias.wtr='worktree remove' wtr`** — the pre-existing alias gap was justified by not wanting to read the user's git config, which does not cover this spelling, since the definition is in the command line already being parsed; a command behind a wrapper program outside `_WRAPPER_TOKENS` (`timeout`, `nice`, `stdbuf`, `setsid`, `ionice`, `xargs`, `find -exec`) — that set is not exhaustive and never claimed to be; and `git worktree add --force` over a path a registered-but-missing worktree occupies, which silently re-registers it (`-f -f` does so even when it is locked), verified against git 2.53.0.
 
-  `roster/shared/workspace-isolation.md` gains `move` to its prohibition and a note on what the hook does and does not enforce. The `CADRE_DISABLE_WORKSPACE_MUTATION_GUARD` opt-out is unchanged and still short-circuits ahead of all of it.
+  `roster/shared/workspace-isolation.md` gains `move` to its prohibition and a note on what the guard does and does not enforce — stated as an open-ended list, with the `CADRE_DISABLE_WORKSPACE_MUTATION_GUARD` opt-out named, so no role reads it as unconditional enforcement. The opt-out itself is unchanged and still short-circuits ahead of all of it.
 
 ## [0.20.0] - 2026-08-10
 
