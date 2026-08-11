@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/context-entry.schema.json",
+  "title": "Exported Context-Store Entry (frontmatter)",
+  "description": "The YAML frontmatter of a file written by `cadre context export`. An exported entry is a point-in-time rescue of working material out of a store that would otherwise expire it -- not a mirror of the store, and not a record the store keeps in step. This document constrains the frontmatter mapping only; the body is the entry's stored (already redacted) content, preceded by a provenance banner when untrusted_inputs is true.",
+  "$comment": "Rules deliberately NOT expressed here. (1) Nothing in this schema can establish that an exported file is current, or that the entry still exists in the store -- entries expire by design, so a committed export is expected to outlive its source and no check can distinguish that from staleness. (2) A `restricted` entry can never be exported at all, and `confidential` and untrusted_inputs=true entries require explicit acknowledgement flags; those are refusals enforced in export.py before any file is written, and a document that already exists cannot be validated back into having passed them. (3) content_hash covers the stored redacted content, not the body as rendered here, which carries the banner. This mirrors proposed-knowledge.schema.json's precedent of supplementary Python checks alongside a JSON Schema document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "handle",
+    "label",
+    "scope",
+    "source",
+    "agent",
+    "task_id",
+    "classification",
+    "content_hash",
+    "byte_length",
+    "created_at",
+    "expires_at",
+    "untrusted_inputs",
+    "injection_risk",
+    "tags",
+    "derived_from",
+    "redactions"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "handle": {
+      "type": "string",
+      "pattern": "^ctx_[0-9a-f]{32}$",
+      "description": "The entry's durable identity, and the exported file's name. Random rather than content-derived, so identical content stored twice does not collide onto one handle and reveal that a peer had already stored it."
+    },
+    "label": { "type": "string", "minLength": 1 },
+    "scope": {
+      "enum": ["agent", "dispatch", "project"],
+      "description": "Who could read this in the store. Caller-asserted and unauthenticated there, and meaningless once exported -- a committed file is readable by anyone with the repository."
+    },
+    "source": { "type": "string", "minLength": 1 },
+    "agent": { "type": "string", "minLength": 1 },
+    "task_id": { "type": "string", "minLength": 1 },
+    "dispatch_id": { "type": ["string", "null"] },
+    "classification": {
+      "enum": ["public", "internal", "confidential"],
+      "description": "`restricted` is absent on purpose: export refuses it outright, so a valid exported entry can never carry it."
+    },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "sha256 of the stored redacted content, not of this file's rendered body."
+    },
+    "byte_length": { "type": "integer", "minimum": 0 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the source entry expires (or expired). Never null: the store has no indefinite entry. An exported file does not expire, which is the whole point of exporting one."
+    },
+    "promoted_at": {
+      "type": ["string", "null"],
+      "description": "When a knowledge-store proposal was emitted for this entry, if ever. Records that a proposal was made, never that one was staged or accepted -- promotion writes nothing downstream that this store can observe."
+    },
+    "untrusted_inputs": {
+      "type": "boolean",
+      "description": "True when the entry derives from material that tripped injection detection. Monotonic and never clearable by the writing agent. A true value means the body carries a provenance banner and that exporting required --include-untrusted."
+    },
+    "injection_risk": {
+      "type": "boolean",
+      "description": "Whether the entry's own text tripped detection, as distinct from inheriting the flag from a cited parent."
+    },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "derived_from": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Handles and knowledge citations this entry was derived from. Must not contain an absolute local path, the same rule that governs knowledge citations' source_uri."
+    },
+    "redactions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Labels of secret patterns removed before storage. A non-empty list means the body differs from what the agent submitted."
+    }
+  }
+}

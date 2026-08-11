@@ -1,16 +1,41 @@
-"""Deterministic local and OpenAI-compatible embedding providers."""
+"""Deterministic local and OpenAI-compatible embedding providers.
+
+The offline half -- feature hashing, vector normalization, tokenization, and
+cosine similarity -- now lives in `roster/shared/src/text_embedding.py` and is
+re-exported here. It moved when the context store gained semantic retrieval and
+needed the same offline provider.
+
+**The `openai-compatible` provider deliberately stayed.** It is the only code
+in either store that opens a socket or reads a credential, and keeping it here
+means the context store -- which may not import this module -- structurally
+cannot perform a remote embedding of unreviewed agent working material. See
+`text_embedding.py`'s module docstring for why that boundary is the mechanism
+rather than a side effect.
+"""
 
 from __future__ import annotations
 
-import hashlib
 import json
-import math
 import os
-import unicodedata
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Any
+
+# Appended (never inserted at sys.path[0]), matching config.py's discipline in
+# this same package: a caller's own same-named module always wins first.
+_SHARED_SRC_DIR = Path(__file__).resolve().parents[2] / "shared" / "src"
+if str(_SHARED_SRC_DIR) not in sys.path:
+    sys.path.append(str(_SHARED_SRC_DIR))
+
+from text_embedding import (  # noqa: E402  (sys.path set above; re-exported)
+    cosine_similarity,  # noqa: F401
+    hashing_embedding,
+    normalize_vector as _normalize,
+    tokens as _tokens,  # noqa: F401
+)
 
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 
@@ -22,40 +47,6 @@ class _RejectRedirects(urllib.request.HTTPRedirectHandler):
 
 def _open_request(request: urllib.request.Request, timeout: float) -> Any:
     return urllib.request.build_opener(_RejectRedirects()).open(request, timeout=timeout)
-
-
-def _normalize(vector: list[float]) -> list[float]:
-    if not all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) for value in vector):
-        raise ValueError("Embedding vector must contain only finite numbers")
-    magnitude = math.sqrt(sum(float(value) * float(value) for value in vector))
-    return [float(value) / magnitude for value in vector] if magnitude else [float(value) for value in vector]
-
-
-def _tokens(text: str) -> list[str]:
-    words: list[str] = []
-    current: list[str] = []
-    for character in text.lower():
-        category = unicodedata.category(character)
-        if character in {"_", "-"} or category.startswith(("L", "N")):
-            current.append(character)
-        elif current:
-            words.append("".join(current))
-            current = []
-    if current:
-        words.append("".join(current))
-    return words
-
-
-def hashing_embedding(text: str, dimensions: int) -> list[float]:
-    words = _tokens(text)
-    features = list(words) + [f"{words[index]}::{words[index + 1]}" for index in range(len(words) - 1)]
-    vector = [0.0] * dimensions
-    for feature in features:
-        digest = hashlib.sha256(feature.encode("utf-8")).digest()
-        position = int.from_bytes(digest[0:4], "little") % dimensions
-        sign = 1.0 if int.from_bytes(digest[4:8], "little") % 2 == 0 else -1.0
-        vector[position] += sign
-    return _normalize(vector)
 
 
 def _remote_embeddings(texts: list[str], config: dict[str, Any]) -> list[list[float]]:
@@ -135,11 +126,3 @@ def embed_texts(texts: list[str], config: dict[str, Any]) -> list[list[float]]:
     for start in range(0, len(texts), batch_size):
         vectors.extend(_remote_embeddings(texts[start:start + batch_size], config))
     return vectors
-
-
-def cosine_similarity(left: list[float], right: list[float]) -> float:
-    if len(left) != len(right):
-        return float("-inf")
-    if not all(math.isfinite(value) for value in right):
-        return float("-inf")
-    return sum(left[index] * right[index] for index in range(len(left)))

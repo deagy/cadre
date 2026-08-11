@@ -1,6 +1,7 @@
 select	roster/orchestration/src/select_agents.py	Deterministic agent/gate selection (select_agents.py)
 selection-telemetry	roster/orchestration/src/selection_telemetry.py	Summarize opt-in, local cadre select telemetry (selection_telemetry.py)
 knowledge	roster/knowledge-store/src/cli.py	Vectorized knowledge store CLI (knowledge-store/src/cli.py)
+context	roster/context-store/src/cli.py	Agent context store: park working material outside an agent's context window and get it back by handle (context-store/src/cli.py)
 generate-plugin	roster/orchestration/src/generate_global_plugin.py	Regenerate a deagy/cadre-lifecycle checkout (generate_global_plugin.py; requires --output)
 generate-authority-aides	roster/orchestration/src/generate_authority_aides.py	Regenerate roster/authority/*-aide AGENT.md files (generate_authority_aides.py)
 generate-role-metadata	roster/orchestration/src/generate_role_metadata.py	Regenerate roster/catalog.yaml and routing.yaml knowledge_focus from role metadata (generate_role_metadata.py)

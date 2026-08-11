@@ -1,0 +1,26 @@
+{
+  "database": "./data/context.db",
+  "ingestion": {
+    "redact_secrets": true
+  },
+  "expiry": {
+    "default_ttl_days_by_scope": {
+      "agent": 1,
+      "dispatch": 7,
+      "project": 30
+    },
+    "maximum_ttl_days": 90
+  },
+  "limits": {
+    "max_entry_bytes": 1048576
+  },
+  "chunking": {
+    "max_characters": 2400,
+    "overlap_characters": 240
+  },
+  "embedding": {
+    "provider": "hashing",
+    "model": "feature-hash-v1",
+    "dimensions": 384
+  }
+}
