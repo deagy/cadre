@@ -490,44 +490,50 @@ class WorktreeDocumentedGapTests(GuardTestCase):
         # `workspace-isolation.md` forbids deleting a worktree directory
         # directly in the same sentence as the git verbs, but this hook
         # only inspects `git` invocations -- `rm` is not a git subcommand.
+        # Kept open DELIBERATELY under deagy/cadre#217, which closed the
+        # sibling `git gc` path and reasoned that this one should not be:
+        # deciding whether an arbitrary `rm` target is a registered
+        # worktree, for every `rm` the model runs, is a much broader policy
+        # question than workspace isolation, and a guard that tries and
+        # half-succeeds is worse than one that declares the boundary. This
+        # rule is PROMPT-ONLY for `rm`, and `workspace-isolation.md` says so.
         self.commit_file("a.txt", "one")
         wt = Path(self._tmp) / "wt1"
         _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
         self.assert_allowed(f"rm -rf {wt}")
 
-    def test_git_gc_is_a_documented_gap(self) -> None:
-        # `git gc` prunes worktrees as part of its own housekeeping and
-        # has no handler, so this reaches the same effect unguarded.
+    def test_gc_destructive_object_surface_is_a_documented_gap(self) -> None:
+        # The `gc` handler added under #217 is scoped to worktree
+        # registrations. Reflog expiry and `git gc --prune=now`'s object
+        # pruning are a different problem -- detecting "would this destroy
+        # something otherwise recoverable" reliably is materially harder --
+        # and remain uncovered, which this pins: with no prunable worktree
+        # registration, even the sharpest gc spelling is allowed.
         self.commit_file("a.txt", "one")
-        self.assert_allowed("git gc")
         self.assert_allowed("git gc --prune=now")
+        self.assert_allowed("git reflog expire --expire=now --all")
 
-    def test_aliased_worktree_remove_is_a_documented_gap(self) -> None:
-        # `_HANDLERS` matches literal git subcommand names only; an alias
-        # (`git wtr` for `worktree remove`) is invisible to it. Same gap
-        # already recorded for the other handlers.
+    def test_config_file_alias_remains_a_documented_gap(self) -> None:
+        # Distinct from the `-c` spelling closed under #218: resolving THIS
+        # one means reading and trusting the invoking user's git config,
+        # whereas `-c alias.x=...` is already in the tokens the hook holds.
         self.commit_file("a.txt", "one")
+        wt = Path(self._tmp) / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
         _git(self.repo, "config", "alias.wtr", "worktree remove")
-        self.assert_allowed("git wtr wt1")
+        self.assert_allowed(f"git wtr {wt}")
 
-    def test_dash_c_alias_injection_is_a_documented_gap(self) -> None:
-        # `git -c alias.wtr='worktree remove' wtr <path>` defines the alias
-        # inside the command line itself, so unlike the config-file alias
-        # gap it needs nothing external to be visible. It is still not
-        # covered: `parse_git_invocation` skips `-c <value>` as a global
-        # flag and reads `wtr` as the subcommand, which matches no handler.
+    def test_wrapper_set_remains_non_exhaustive(self) -> None:
+        # #219 extended `_WRAPPER_TOKENS` rather than inverting the design
+        # to scan every token for a `git` invocation, because inverting
+        # reintroduces exactly the false-positive class the heredoc work
+        # exists to avoid. That trade means the set can always be one entry
+        # short, and this pins the consequence with wrappers deliberately
+        # left out.
         self.commit_file("a.txt", "one")
         wt = Path(self._tmp) / "wt1"
         _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
-        self.assert_allowed(f"git -c alias.wtr='worktree remove' wtr {wt}")
-
-    def test_unrecognized_wrapper_commands_are_a_documented_gap(self) -> None:
-        # _WRAPPER_TOKENS is deliberately not exhaustive. `timeout` is the
-        # one a normal agent would plausibly reach for unprompted.
-        self.commit_file("a.txt", "one")
-        wt = Path(self._tmp) / "wt1"
-        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
-        for wrapper in ("timeout 10", "nice", "stdbuf -o0", "setsid", "ionice"):
+        for wrapper in ("firejail", "runuser -u root --", "unbuffer", "doas"):
             self.assert_allowed(f"{wrapper} git worktree remove {wt}")
 
     def test_worktree_add_force_over_a_registered_path_is_a_documented_gap(self) -> None:
@@ -559,6 +565,383 @@ class WorktreeDocumentedGapTests(GuardTestCase):
             wrap_in_bash_c(wrap_in_bash_c(wrap_in_bash_c(f"git worktree remove {wt}")))
         )
         self.assert_allowed(nested)
+
+
+# ---------------------------------------------------------------------------
+# Cumulative `git -C` (issue #220)
+# ---------------------------------------------------------------------------
+
+
+class CumulativeDashCTests(GuardTestCase):
+    """Repeated `-C` is cumulative in git, not last-wins.
+
+    Reproduced before fixing, as #220 asked: `parse_git_invocation` kept the
+    last value, so `git -C .worktrees -C ../ worktree prune` resolved to
+    `<base>/../` -- a different directory -- where the state probe exited
+    non-zero and the handler failed open. Verified against git 2.53.0 from a
+    repository root that `-C sub` reports prefix `sub/`, `-C sub -C deeper`
+    reports `sub/deeper/`, `-C sub -C ..` reports nothing (back at the
+    root), and `-C sub -C /tmp` lands in `/tmp` outright.
+
+    This defeated every handler that decides by inspecting repository state
+    rather than by spelling; `worktree remove`/`move` were immune only
+    because they refuse on the verb alone, which is an argument for flat
+    refusal wherever policy allows it.
+    """
+
+    def test_parse_accumulates_in_order(self) -> None:
+        self.assertEqual(
+            "a/b",
+            guard.parse_git_invocation(["git", "-C", "a", "-C", "b", "status"])[2],
+        )
+
+    def test_absolute_value_resets_the_accumulation(self) -> None:
+        self.assertEqual(
+            "/abs",
+            guard.parse_git_invocation(["git", "-C", "rel", "-C", "/abs", "status"])[2],
+        )
+        self.assertEqual(
+            "/abs/rel",
+            guard.parse_git_invocation(["git", "-C", "/abs", "-C", "rel", "status"])[2],
+        )
+
+    def test_empty_value_is_a_no_op_in_either_position(self) -> None:
+        # Verified against git 2.53.0: `-C "" -C sub` and `-C sub -C ""`
+        # both report prefix `sub/`.
+        self.assertEqual(
+            "sub", guard.parse_git_invocation(["git", "-C", "", "-C", "sub", "s"])[2]
+        )
+        self.assertEqual(
+            "sub", guard.parse_git_invocation(["git", "-C", "sub", "-C", "", "s"])[2]
+        )
+
+    def test_state_probing_handler_reaches_the_right_repository(self) -> None:
+        self.commit_file("a.txt", "one")
+        wt = self.repo / ".worktrees" / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
+        shutil.move(str(wt), str(Path(self._tmp) / "wt1-relocated"))
+        # `.worktrees` then `..` is the repository root again, where the
+        # prune is meaningful. Last-wins resolved this to `<repo>/..`.
+        self.assert_blocked("git -C .worktrees -C .. worktree prune")
+
+    def test_absolute_reset_pointing_outside_a_repository_fails_open(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_allowed(f"git -C {self.repo} -C {self._tmp} reset --hard")
+
+
+# ---------------------------------------------------------------------------
+# `checkout -B` / `switch -C` (issue #221)
+# ---------------------------------------------------------------------------
+
+
+class ForceCreateBranchTests(GuardTestCase):
+    """`-B`/`-C` force-create moves an existing branch off its commits.
+
+    Verified against git 2.53.0 for every spelling asserted here: each
+    reported only "Switched to and reset branch 'existing'" while moving the
+    branch. `check_worktree` has performed this check for `worktree add -B`
+    since #215; #221 closed the same hole in `checkout` and added `switch`.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.commit_file("a.txt", "one")
+        self.commit_file("a.txt", "two", message="second commit")
+        _git(self.repo, "update-ref", "refs/heads/existing", "HEAD~1")
+
+    def test_blocks_checkout_dash_capital_b_with_implicit_head_start_point(self) -> None:
+        decision = self.assert_blocked("git checkout -B existing")
+        self.assertIn("force-resets the existing branch", decision["reason"])
+
+    def test_blocks_attached_and_combined_short_flag_spellings(self) -> None:
+        # `-Bexisting` is a one-space difference; `-fB existing` puts `B`
+        # last in a combined group so its value is the NEXT token.
+        self.assert_blocked("git checkout -Bexisting")
+        self.assert_blocked("git checkout -fB existing")
+
+    def test_blocks_checkout_dash_capital_b_with_explicit_start_point(self) -> None:
+        self.assert_blocked("git checkout -B existing main")
+
+    def test_allows_checkout_dash_capital_b_on_a_name_that_does_not_exist(self) -> None:
+        self.assert_allowed("git checkout -B brand-new")
+
+    def test_allows_checkout_dash_capital_b_when_already_at_the_start_point(self) -> None:
+        _git(self.repo, "update-ref", "refs/heads/same", "HEAD")
+        self.assert_allowed("git checkout -B same")
+
+    def test_allows_plain_dash_b(self) -> None:
+        # Genuinely safe: git refuses `-b` when the branch already exists.
+        self.assert_allowed("git checkout -b feature/new")
+        self.assert_allowed("git checkout -b existing")
+
+    def test_combined_group_with_the_flag_not_last_takes_its_value_inline(self) -> None:
+        # `git checkout -Bf existing` creates a branch named `f` and treats
+        # `existing` as the START POINT -- verified against git 2.53.0. So
+        # this must NOT read `existing` as the branch being forced.
+        self.assert_allowed("git checkout -Bf existing")
+
+    def test_blocks_switch_dash_capital_c_spellings(self) -> None:
+        for command in (
+            "git switch -C existing",
+            "git switch -Cexisting",
+            "git switch -fC existing",
+            "git switch --force-create existing",
+            "git switch --force-create=existing",
+        ):
+            with self.subTest(command=command):
+                self.assert_blocked(command)
+
+    def test_allows_switch_create_detach_and_new_names(self) -> None:
+        self.assert_allowed("git switch -c feature/new")
+        self.assert_allowed("git switch -C brand-new")
+        self.assert_allowed("git switch --detach HEAD")
+        self.assert_allowed("git switch --orphan fresh")
+
+    def test_switch_branch_gets_the_same_dirty_tree_check_as_checkout(self) -> None:
+        # Leaving this out would make the whole branch-switch guard
+        # bypassable by choosing the other spelling of the same operation.
+        _git(self.repo, "branch", "other")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked("git switch other")
+        self.assert_blocked("git checkout other")  # control
+
+    def test_allows_switch_to_a_branch_with_a_clean_tree(self) -> None:
+        _git(self.repo, "branch", "other")
+        self.assert_allowed("git switch other")
+
+    def test_global_dash_capital_c_is_not_mistaken_for_switch_force_create(self) -> None:
+        # `-C <dir>` is consumed as a GLOBAL before the subcommand is read,
+        # so it must never be seen as switch's own `-C`.
+        _git(self.repo, "branch", "other")
+        self.assert_allowed(f"git -C {self.repo} switch other")
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked(f"git -C {self.repo} switch other")
+
+
+# ---------------------------------------------------------------------------
+# `-c alias.<name>=<definition>` expansion (issue #218)
+# ---------------------------------------------------------------------------
+
+
+class CommandLineAliasTests(GuardTestCase):
+    """An alias defined by `-c` on the command line is expanded and re-parsed.
+
+    The pre-existing alias gap's justification -- "resolving aliases would
+    require reading and trusting the invoking user's git config" -- does not
+    apply here: the definition is in the tokens this hook already holds.
+    Behaviour verified against git 2.53.0; see `expand_git_alias`.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.commit_file("a.txt", "one")
+        self.wt = Path(self._tmp) / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(self.wt), "-b", "wt1")
+
+    def test_blocks_aliased_worktree_remove(self) -> None:
+        decision = self.assert_blocked(
+            f"git -c alias.wtr='worktree remove' wtr {self.wt}"
+        )
+        self.assertIn("deregisters a worktree", decision["reason"])
+
+    def test_the_same_shape_defeats_every_handler_not_just_worktree(self) -> None:
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked("git -c alias.nuke='reset --hard' nuke")
+        self.assert_blocked("git -c alias.yolo='push --force' yolo origin main")
+
+    def test_handles_multiple_and_interleaved_dash_c_flags(self) -> None:
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked(
+            "git -c core.pager=cat -c alias.nuke='reset --hard' -c gc.auto=0 nuke"
+        )
+
+    def test_follows_an_alias_that_names_another_alias(self) -> None:
+        self.assert_blocked(
+            f"git -c alias.a=worktree -c alias.b='a remove' b {self.wt}"
+        )
+
+    def test_alias_loop_terminates_and_fails_open(self) -> None:
+        # Git reports "alias loop detected"; this must terminate too.
+        self.assert_allowed("git -c alias.x=y -c alias.y=x x")
+
+    def test_shell_alias_goes_through_the_bounded_shell_recursion(self) -> None:
+        self.assert_blocked(
+            f"git -c alias.sh='!git worktree remove' sh {self.wt}"
+        )
+        self.dirty_file("a.txt", "uncommitted-edit")
+        self.assert_blocked("git -c alias.sh='!cd /tmp && git reset --hard' sh")
+
+    def test_alias_defined_but_not_used_is_allowed(self) -> None:
+        self.assert_allowed("git -c alias.wtr='worktree remove' status")
+
+    def test_alias_cannot_shadow_a_real_subcommand(self) -> None:
+        # Verified against git 2.53.0 that git ignores an alias named after
+        # a builtin, so expanding one here would ALLOW a force push.
+        self.assert_blocked("git -c alias.push=status push --force origin main")
+
+    def test_dash_c_with_no_equals_sign_is_ignored(self) -> None:
+        self.assert_allowed(f"git -c alias.wtr wtr {self.wt}")
+
+    def test_definition_may_carry_global_flags_of_its_own(self) -> None:
+        # `git <definition> <args>` is literally what git runs, so a `-C` in
+        # the definition redirects the invocation. Evaluated from OUTSIDE
+        # the repository so the assertion can only pass if that `-C` was
+        # actually folded into the resolved cwd.
+        self.dirty_file("a.txt", "uncommitted-edit")
+        command = f"git -c alias.n='-C {self.repo} reset --hard' n"
+        self.assertIsNone(guard.evaluate_command(command.replace(str(self.repo), "/nope"), self._tmp))
+        self.assertIsNotNone(guard.evaluate_command(command, self._tmp))
+
+
+# ---------------------------------------------------------------------------
+# Wrapper coverage (issue #219)
+# ---------------------------------------------------------------------------
+
+
+class WrapperCoverageTests(GuardTestCase):
+    """Prefix wrappers and `find -exec`.
+
+    Every layout asserted here was confirmed by EXECUTION to actually run a
+    following `git` command on the verification machine (GNU coreutils
+    `timeout`/`nice`/`stdbuf`, util-linux `ionice`/`setsid`/`chrt`/
+    `taskset`, findutils `xargs`), so the token shapes parsed are the real
+    ones rather than guesses from a manual page.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.commit_file("a.txt", "one")
+        self.wt = self.repo / ".worktrees" / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(self.wt), "-b", "wt1")
+
+    def test_blocks_prefix_wrappers(self) -> None:
+        for wrapper in (
+            "timeout 10",
+            "timeout -s KILL -k 5 10",
+            "timeout --signal=KILL 10",
+            "nice",
+            "nice -n 5",
+            "nice -5",
+            "ionice -c 3",
+            "stdbuf -oL",
+            "stdbuf -o L",
+            "setsid",
+            "chrt -f 10",
+            "taskset 0x1",
+            "taskset -c 0,1",
+            "sudo",
+            "sudo -u root",
+            "setsid ionice -c 3 timeout 10",
+        ):
+            with self.subTest(wrapper=wrapper):
+                self.assert_blocked(f"{wrapper} git worktree remove {self.wt}")
+
+    def test_blocks_xargs_including_after_a_pipe(self) -> None:
+        self.assert_blocked(f"echo {self.wt} | xargs git worktree remove")
+        self.assert_blocked(f"echo {self.wt} | xargs -I{{}} git worktree remove {{}}")
+        self.assert_blocked(f"echo {self.wt} | xargs -I {{}} git worktree remove {{}}")
+        self.assert_blocked(f"echo {self.wt} | xargs -n 1 git worktree remove")
+
+    def test_blocks_find_exec_in_argument_position(self) -> None:
+        # Two things had to change together: `find -exec` is not a prefix,
+        # and the `\;` terminator was splitting the segment before the
+        # scanner learned that an unquoted backslash escapes the next char.
+        self.assert_blocked(
+            f"find {self.repo}/.worktrees -maxdepth 1 -exec git worktree remove {{}} \\;"
+        )
+        self.assert_blocked(
+            f"find {self.repo}/.worktrees -maxdepth 1 -exec git worktree remove {{}} +"
+        )
+        self.assert_blocked(
+            f"find {self.repo}/.worktrees -execdir git worktree remove {{}} ';'"
+        )
+
+    def test_wrappers_do_not_fire_on_a_literal_mention(self) -> None:
+        # The prefix-stripping design is kept, rather than inverting to scan
+        # all tokens, precisely so a destructive command appearing as DATA
+        # stays allowed. Inverting would reintroduce that false-positive
+        # class -- the one the heredoc handling exists to prevent.
+        self.assert_allowed(f"echo 'timeout 10 git worktree remove {self.wt}'")
+        self.assert_allowed(
+            f"cat <<'EOF' > note.md\ntimeout 10 git worktree remove {self.wt}\nEOF"
+        )
+        self.assert_allowed(f"grep -r 'xargs git worktree remove' {self.repo}")
+
+    def test_wrapped_non_destructive_git_is_still_allowed(self) -> None:
+        self.assert_allowed("timeout 10 git status")
+        self.assert_allowed("nice -n 5 git log --oneline")
+        self.assert_allowed(f"find {self.repo} -exec git status \\;")
+
+
+# ---------------------------------------------------------------------------
+# `git gc` (issue #217)
+# ---------------------------------------------------------------------------
+
+
+class GcTests(GuardTestCase):
+    """`git gc`'s worktree-pruning path.
+
+    The empirical picture, verified against git 2.53.0, differs from the
+    issue's framing and is what the handler is built on:
+
+      * plain `git gc` did NOT prune a worktree whose directory had just
+        been moved away, and neither did `git gc --prune=now`/`--prune=all`;
+      * `git -c gc.worktreePruneExpire=now gc` DID deregister it;
+      * once the worktree's administrative files were aged past the default,
+        plain `git gc` deregistered it, and `git worktree prune -n -v
+        --expire 3.months.ago` reported exactly that registration first.
+
+    So `gc`'s own `--prune=<date>` governs loose-object pruning and does not
+    reach worktree registrations; `gc.worktreePruneExpire` does.
+    """
+
+    def _prunable_worktree(self, aged: bool) -> None:
+        self.commit_file("a.txt", "one")
+        wt = self.repo / ".worktrees" / "wt1"
+        _git(self.repo, "worktree", "add", "-q", str(wt), "-b", "wt1")
+        shutil.move(str(wt), str(Path(self._tmp) / "wt1-relocated"))
+        if aged:
+            import os
+            import time
+
+            admin = self.repo / ".git" / "worktrees" / "wt1"
+            old = time.time() - 365 * 24 * 3600
+            for entry in sorted(admin.rglob("*"), reverse=True):
+                os.utime(entry, (old, old))
+            os.utime(admin, (old, old))
+
+    def test_blocks_gc_that_would_deregister_a_worktree(self) -> None:
+        self._prunable_worktree(aged=True)
+        decision = self.assert_blocked("git gc")
+        self.assertIn("prunes worktrees as part of its own housekeeping", decision["reason"])
+
+    def test_allows_gc_when_the_registration_is_not_yet_expired(self) -> None:
+        # Matches what real gc does. Blocking here would be friction with no
+        # safety, and friction is what gets a guard disabled.
+        self._prunable_worktree(aged=False)
+        self.assert_allowed("git gc")
+        self.assert_allowed("git gc --prune=now")
+        self.assert_allowed("git gc --aggressive")
+
+    def test_blocks_gc_with_a_command_line_expire_override(self) -> None:
+        # Only visible because `parse_git_invocation` now records `-c`
+        # pairs -- the same change that closed the alias gap.
+        self._prunable_worktree(aged=False)
+        self.assert_blocked("git -c gc.worktreePruneExpire=now gc")
+
+    def test_honours_a_repository_config_expire(self) -> None:
+        self._prunable_worktree(aged=False)
+        _git(self.repo, "config", "gc.worktreePruneExpire", "now")
+        self.assert_blocked("git gc")
+
+    def test_allows_gc_in_a_repository_with_nothing_prunable(self) -> None:
+        self.commit_file("a.txt", "one")
+        self.assert_allowed("git gc")
+        self.assert_allowed("git gc --auto")
+
+    def test_gc_outside_a_repository_fails_open(self) -> None:
+        self.assert_allowed("git -C /path/does/not/exist gc")
 
 
 # ---------------------------------------------------------------------------

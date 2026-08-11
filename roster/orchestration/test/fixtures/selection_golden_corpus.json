@@ -52,7 +52,38 @@
     "the point: a route that claims no delivery shape (advisory, assessment,",
     "review, governance, support, documentation, evidence, and the",
     "security-, verify-, and operations-phase execution routes) now declares",
-    "'unclassified' deliberately."
+    "'unclassified' deliberately.",
+    "",
+    "11 fixtures changed their expected 'support' in the #223 change that",
+    "removed application-engineer from the execution routes carrying a target",
+    "project's artifacts. application-engineer's own AGENT.md scopes it to",
+    "this suite's own tooling and explicitly directs a target project's",
+    "capability work elsewhere, so those routes dispatched an agent as support",
+    "on work its role definition tells it to decline -- the same defect #213",
+    "fixed for linux-systems-execution, found to be systemic afterwards. Each",
+    "changed expectation carries its own justification in that fixture's",
+    "'description', under the prefix 'Support staffing (#223):', derived route",
+    "by route from the artifact the route matches and from the accountability",
+    "the route's own primary names -- never from the shape or from the other",
+    "routes' staffing. Ten resolved to backend-engineer and one",
+    "(mcp-server-execution) to ai-engineer; that convergence is the catalog's",
+    "existing vocabulary, not a bulk replace -- go-service-execution,",
+    "python-automation-execution, and node-typescript-execution already staff",
+    "backend-engineer for implementers naming that same",
+    "backend-engineer-or-application-engineer pair, and",
+    "javascript-maintenance-execution already resolves its",
+    "'frontend-engineer or application-engineer' pair to frontend-engineer. Two of #223's opening hypotheses did not survive the",
+    "derivation and are recorded where they failed: kernel-module-execution",
+    "and the other on-device routes are not infrastructure-provisioner work",
+    "(the host-platform counterparts linux-systems-execution and",
+    "embedded-linux-platform-execution exist separately and already carry it),",
+    "and mcp-server-execution is not backend-engineer work (its implementer's",
+    "AGENT.md does not offer that role, and the artifact is the model-facing",
+    "surface). No workflow shape and no reviewers slot changed; the six",
+    "execution routes whose artifacts are this suite's own tooling",
+    "(selector-test, agent-workflow, git-operations, dependency-remediation,",
+    "shell-automation, supply-chain-remediation) keep application-engineer",
+    "deliberately, each confirmed against its primary's AGENT.md."
   ],
   "cases": [
     {
@@ -3342,7 +3373,7 @@
     },
     {
       "id": "C_SYSTEMS_EXECUTION_GOLDEN_1",
-      "description": "Narrow c-systems-execution route regression fixture. Workflow shape: C systems code is delivered application/library code.",
+      "description": "Narrow c-systems-execution route regression fixture. Workflow shape: C systems code is delivered application/library code. Support staffing (#223): c-systems-implementer's AGENT.md names `backend-engineer` or `application-engineer` as its accountability, and this route's artifact is a target project's native C under `systems/c/**` -- work application-engineer's own AGENT.md explicitly disclaims -- so `backend-engineer` is the accountability this route can honestly confer. application-engineer is dropped, not supplemented; reviewers are unchanged. This matches go-service-execution and python-automation-execution, whose implementers name the same pair and which already staff `backend-engineer`.",
       "task": "Implement c systems implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3359,7 +3390,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "c-systems-execution"
@@ -3369,7 +3400,7 @@
     },
     {
       "id": "CMAKE_BUILD_EXECUTION_GOLDEN_1",
-      "description": "Narrow cmake-build-execution route regression fixture. Workflow shape: a project's own CMake build system ships with the application it builds, so it is application delivery rather than a CI/CD pipeline definition.",
+      "description": "Narrow cmake-build-execution route regression fixture. Workflow shape: a project's own CMake build system ships with the application it builds, so it is application delivery rather than a CI/CD pipeline definition. Support staffing (#223): cmake-build-implementer's AGENT.md names no accountable role, only \"accountable engineering ownership\". The shape reasoning above is what decides it -- because the build definition ships with the C/C++ application rather than with the pipeline, the accountable role is that application's (`backend-engineer`, the accountability c-systems-implementer and cpp-systems-implementer both name) and not `cicd-engineer`, despite \"CI build glue\" appearing in this implementer's knowledge focus. application-engineer is dropped, not supplemented; reviewers are unchanged.",
       "task": "Implement cmake build implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3386,7 +3417,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "cmake-build-execution"
@@ -3396,7 +3427,7 @@
     },
     {
       "id": "CPP_SYSTEMS_EXECUTION_GOLDEN_1",
-      "description": "Narrow cpp-systems-execution route regression fixture. Workflow shape: C++ systems code is delivered application/library code.",
+      "description": "Narrow cpp-systems-execution route regression fixture. Workflow shape: C++ systems code is delivered application/library code. Support staffing (#223): cpp-systems-implementer's AGENT.md names `backend-engineer` or `application-engineer`, and this route's artifact is a target project's C++ services and libraries under `systems/cpp/**` -- work application-engineer's own AGENT.md explicitly disclaims -- leaving `backend-engineer` as the accountability this route confers. application-engineer is dropped, not supplemented; reviewers are unchanged.",
       "task": "Implement cpp systems implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3413,7 +3444,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "cpp-systems-execution"
@@ -3423,7 +3454,7 @@
     },
     {
       "id": "DEVICE_DRIVER_EXECUTION_GOLDEN_1",
-      "description": "Narrow device-driver-execution route regression fixture. Workflow shape: device-driver integration code and its test harnesses are delivered code artifacts.",
+      "description": "Narrow device-driver-execution route regression fixture. Workflow shape: device-driver integration code and its test harnesses are delivered code artifacts. Support staffing (#223): device-driver-implementer's AGENT.md names no accountable role. Two candidates were weighed. `infrastructure-provisioner` fits the udev-rule and device-permission half of its knowledge focus, but the host-configuration counterparts already exist as separate routes -- linux-systems-execution and embedded-linux-platform-execution, both `infrastructure-change` with an infrastructure reviewer -- while this route's artifact set is driver code reviewed by test-engineer and code-reviewer. kernel-module-implementer, the sibling role whose knowledge focus also covers drivers, names `backend-engineer` explicitly, so that is the accountability adopted here. application-engineer is dropped, not supplemented; reviewers are unchanged.",
       "task": "Implement device driver implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3440,7 +3471,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "device-driver-execution"
@@ -3476,7 +3507,7 @@
     },
     {
       "id": "EBPF_EXECUTION_GOLDEN_1",
-      "description": "Narrow ebpf-execution route regression fixture. Workflow shape: eBPF probes, maps, and loaders are delivered code artifacts.",
+      "description": "Narrow ebpf-execution route regression fixture. Workflow shape: eBPF probes, maps, and loaders are delivered code artifacts. Support staffing (#223): ebpf-implementer's AGENT.md names no accountable role. eBPF programs are kernel-space code compiled and loaded by a userspace loader -- the same artifact family as kernel modules, whose implementer names `backend-engineer` -- rather than declarative host configuration, which is what the `infrastructure-change` routes carry. `observability-sre` was considered because \"observability filters\" appears in this implementer's knowledge focus, but that role is an operations-phase environment_operator owning telemetry and SLO design, not the authoring accountability for privileged kernel code. application-engineer is dropped, not supplemented; reviewers are unchanged. Separately noted, not changed here: this implementer's AGENT.md hands off to \"independent security review\" and this route's reviewers are test-engineer and code-reviewer, with no security-reviewer among them -- out of scope for #223, which changes only `support`.",
       "task": "Implement ebpf implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3493,7 +3524,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "ebpf-execution"
@@ -3529,7 +3560,7 @@
     },
     {
       "id": "EMBEDDED_C_EXECUTION_GOLDEN_1",
-      "description": "Narrow embedded-c-execution route regression fixture. Workflow shape: embedded C compiled into a device image is delivered application code, not declarative platform configuration.",
+      "description": "Narrow embedded-c-execution route regression fixture. Workflow shape: embedded C compiled into a device image is delivered application code, not declarative platform configuration. Support staffing (#223): embedded-c-implementer's AGENT.md names `c-systems-implementer` or `backend-engineer`. The first is itself a bounded execution specialist working under someone else's accountability, so it cannot confer accountability from a support slot; `backend-engineer` is the accountable role this route can name. application-engineer is dropped, not supplemented; reviewers are unchanged.",
       "task": "Implement embedded c implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3546,7 +3577,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "embedded-c-execution"
@@ -3647,7 +3678,7 @@
     },
     {
       "id": "FIRMWARE_EXECUTION_GOLDEN_1",
-      "description": "Narrow firmware-execution route regression fixture. Workflow shape: firmware and board artifacts are delivered code, accountable to engineering rather than to infrastructure provisioning.",
+      "description": "Narrow firmware-execution route regression fixture. Workflow shape: firmware and board artifacts are delivered code, accountable to engineering rather than to infrastructure provisioning. Support staffing (#223): firmware-implementer's AGENT.md names no accountable role, so the shape reasoning above supplies it -- \"accountable to engineering rather than to infrastructure provisioning\" names a category, and `backend-engineer` is the engineering accountability the catalog uses for on-device code (embedded-c-implementer, which authors what compiles into the same image, names it). The platform-image counterpart is a separate route: embedded-linux-platform-execution is `infrastructure-change` and already carries `infrastructure-provisioner`. application-engineer is dropped, not supplemented; reviewers are unchanged.",
       "task": "Implement firmware implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3664,7 +3695,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "firmware-execution"
@@ -3757,7 +3788,7 @@
     },
     {
       "id": "KERNEL_MODULE_EXECUTION_GOLDEN_1",
-      "description": "Narrow kernel-module-execution route regression fixture. Workflow shape: kernel modules and drivers are compiled, delivered code artifacts.",
+      "description": "Narrow kernel-module-execution route regression fixture. Workflow shape: kernel modules and drivers are compiled, delivered code artifacts. Support staffing (#223): kernel-module-implementer's AGENT.md names `backend-engineer` accountability explicitly and singularly -- no alternative to weigh -- so the route staffs the one role its primary's own definition points at. #223 hypothesised that this route might want something closer to `infrastructure-provisioner`; the role definition refutes that, and the host-platform routes that do carry `infrastructure-provisioner` already exist separately. application-engineer is dropped, not supplemented; reviewers are unchanged. Separately noted, not changed here: this implementer's AGENT.md hands off to independent `security-reviewer` and `code-reviewer` review, and this route's reviewers are test-engineer and code-reviewer, with no security-reviewer among them -- out of scope for #223, which changes only `support`.",
       "task": "Implement kernel module implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3774,7 +3805,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "kernel-module-execution"
@@ -3864,7 +3895,7 @@
     },
     {
       "id": "MCP_SERVER_EXECUTION_GOLDEN_1",
-      "description": "Narrow mcp-server-execution route regression fixture. Workflow shape: an MCP server with its tools, schemas, and permission boundaries is a delivered service.",
+      "description": "Narrow mcp-server-execution route regression fixture. Workflow shape: an MCP server with its tools, schemas, and permission boundaries is a delivered service. Support staffing (#223): mcp-server-implementer's AGENT.md names `ai-engineer` or `application-engineer`. #223 hypothesised `backend-engineer`; the role definition does not offer it, and the artifact decides against it -- tools, schemas, and permission boundaries are the model-facing surface, which is exactly the layer ai-engineer's AGENT.md claims (\"the model-facing layer of a product feature, not the surrounding service\") in a target project. application-engineer's own AGENT.md disclaims a target project's capability work, and the sibling `ai/**` execution routes (inference-gateway-execution, model-routing-execution) already staff `ai-engineer` for services of this shape. application-engineer is dropped, not supplemented; reviewers are unchanged. Separately noted, not changed here: this implementer's AGENT.md hands off to independent `security-reviewer` and `code-reviewer` review, and this route's reviewers are test-engineer and code-reviewer, with no security-reviewer among them -- out of scope for #223, which changes only `support`.",
       "task": "Implement mcp server implementation",
       "changed_files": [],
       "classification": "internal",
@@ -3881,7 +3912,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "ai-engineer"
         ],
         "matched_routes": [
           "mcp-server-execution"
@@ -4186,7 +4217,7 @@
     },
     {
       "id": "PROTOCOL_INTEGRATION_EXECUTION_GOLDEN_1",
-      "description": "Narrow protocol-integration-execution route regression fixture. Workflow shape: protocol adapters, parsers, framing, and conformance fixtures are delivered service code.",
+      "description": "Narrow protocol-integration-execution route regression fixture. Workflow shape: protocol adapters, parsers, framing, and conformance fixtures are delivered service code. Support staffing (#223): protocol-integration-implementer's AGENT.md names `backend-engineer` or `api-contract-engineer`. The artifact is adapter and parser implementation, not contract design, and api-contract-engineer's own AGENT.md scopes itself to designing the contract \"not the system architecture around it or its implementation\", handing implementation off to frontend-engineer, backend-engineer, and application-engineer -- of which `backend-engineer` is the one that fits a server-side protocol adapter and that this implementer independently names. application-engineer is dropped, not supplemented; reviewers are unchanged.",
       "task": "Implement protocol integration implementation",
       "changed_files": [],
       "classification": "internal",
@@ -4203,7 +4234,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "protocol-integration-execution"
@@ -4299,7 +4330,7 @@
     },
     {
       "id": "RTOS_INTEGRATION_EXECUTION_GOLDEN_1",
-      "description": "RTOS task and scheduling work selects the narrow RTOS executor under application-engineer accountability, with independent test and code review retained. Workflow shape: RTOS task and scheduling artifacts are delivered embedded code.",
+      "description": "RTOS task and scheduling work selects the narrow RTOS executor under backend-engineer accountability, with independent test and code review retained. Workflow shape: RTOS task and scheduling artifacts are delivered embedded code. Support staffing (#223): rtos-integration-implementer's AGENT.md names no accountable role, but embedded-c-implementer's knowledge focus explicitly covers \"RTOS tasks\", placing this route's artifacts in the embedded-application family whose accountability is `backend-engineer` rather than in the platform-image family that embedded-linux-platform-execution serves under `infrastructure-provisioner`. The previous sentence of this description asserted application-engineer accountability, which the route conferred but application-engineer's own AGENT.md disclaims for a target project's code; it is corrected here rather than left standing. application-engineer is dropped, not supplemented; reviewers are unchanged.",
       "task": "Implement an RTOS integration",
       "changed_files": [
         "rtos/tasks/watchdog.c"
@@ -4318,7 +4349,7 @@
         "support": [
           "product-intent-agent",
           "requirements-agent",
-          "application-engineer"
+          "backend-engineer"
         ],
         "matched_routes": [
           "rtos-integration-execution"
