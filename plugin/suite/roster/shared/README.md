@@ -218,27 +218,64 @@ resolver must not perturb.
 
 Rather than hand-authoring `.agents/shared/<filename>` overlays from scratch,
 run `cadre init --target <project-root>` (see
-`roster/shared/src/init_project.py`) for a guided walkthrough of three
-sections (`--sections` restricts to a comma-separated subset; default: all):
+`roster/shared/src/init_project.py`). It covers three sections (`--sections`
+restricts to a comma-separated subset; default: all):
 
 - **RG-A** — stack/tooling opinions.
 - **RG-B** — governance/autonomy narrowing, via a closed allowlist for
   `agent-autonomy.yaml` (never free text).
 - **RG-C** — guided `platform-impact-profile.yaml` fill-in.
 
+**Start from the defaults; override only what differs.** There are three
+levels of effort, and the first one is the default:
+
+```sh
+cadre init --target <project-root>                       # keep every shipped default
+cadre init --target <project-root> --set platform.hosting_model=cloud --force
+cadre init --target <project-root> --interactive --force  # review every group
+```
+
+A run with no answer source keeps every shipped default and **plans no writes
+at all**. That is not a degraded outcome: overlays are sparse, so "keep the
+default" means "write no overlay for that field", and a project with no
+overlay resolves to exactly the shipped values. It is also the safest run
+available — it cannot weaken a governance posture, because it changes nothing.
+
 Key behavior:
 
 - Nothing is written without `--force` (omitting it previews only), and every
   generated overlay is validated by resolving it exactly as `cadre
   resolve-shared` would before success is reported.
-- Answer the run either non-interactively with `--answers <file.yaml>`
+- `--set [REGION:]PATH=VALUE` (repeatable) overrides one field without an
+  answer file, and records the `field_decisions` entry the schema requires.
+  The region (`stack`, `libraries`, `autonomy`, `platform`) is **derived** by
+  looking the path up in the shipped defaults, never taken from the operator —
+  that is what keeps the `stack`/`governance` category honest. A path no
+  shipped default defines, or one that is ambiguous across regions (e.g.
+  `policy_version`, which exists in both `library-standards.yaml` and
+  `agent-autonomy.yaml`), fails closed and asks for a `REGION:` qualifier.
+  `--set` wins over both `--answers` and `--stack`, and is mutually exclusive
+  with `--interactive`.
+- A `--set` on an `agent-autonomy.yaml` field goes through the same allowlist
+  and narrowing check as every other path: it can only ever *narrow*, and a
+  rejected value is redacted to a hash exactly as in the prompt flow.
+- Answer the run non-interactively with `--answers <file.yaml>`
   (`schema_version: 1`, documented in `init_project.py`'s module docstring —
   the same shape `--print-answers` echoes back, so a prior run is directly
-  reusable) or interactively with `--interactive` (exactly one is required).
-  `--stack <preset-id>` names a static, human-reviewed, RG-A-only starter
+  reusable), or interactively with `--interactive`. `--answers` and
+  `--interactive` are mutually exclusive; neither is required.
+- `--interactive` gates each *group* of fields behind one question (`Review 14
+  stack field(s) under 'frontend'? [y/N]`) rather than prompting per leaf, so
+  the floor is ~30 questions instead of ~160. Declining a group keeps its
+  shipped defaults — safe for RG-B too, since the autonomy check only ever
+  permits narrowing, so a field nobody reviewed keeps the most restrictive
+  value it shipped with.
+- `--stack <preset-id>` names a static, human-reviewed, RG-A-only starter
   preset from `roster/shared/init-presets/*.yaml` (never touches
   `agent-autonomy.yaml` or `cloud-guardrails.md`) as interactive defaults or
-  an `--answers` merge base (the answer file's own values win).
+  an `--answers` merge base (the answer file's own values win). A preset needs
+  no answer file: on a defaults run its `field_decisions` are synthesized,
+  since a preset is structurally forbidden from touching governance.
 - `--print-answers` echoes the resolved, validated answer set for
   reproducibility; `agent-autonomy.yaml`/`cloud-guardrails.md` fields are
   redacted there to an `accepted`/`rejected` status plus a sha256 hash — the
@@ -251,7 +288,11 @@ Key behavior:
 - Every answered field needs a `field_decisions` entry
   (`kept`/`overridden`/`deferred` status, plus a `stack` or `governance`
   category); `cadre init` fails closed (no writes) on a missing decision or a
-  category that doesn't match the field's actual file.
+  category that doesn't match the field's actual file. Coverage is only
+  required for fields an answer set actually supplies a value for, which is
+  why a defaults-only run needs no decisions at all. A hand-authored
+  `--answers` file still fails closed on a missing decision — the synthesis
+  described above applies only to a defaults-mode run.
 
 ## The platform impact profile
 

@@ -324,6 +324,7 @@ class FailClosedTests(unittest.TestCase):
             dry_run=False,
             force=True,
             print_answers=False,
+            set_values=None,
         )
         with tempfile.TemporaryDirectory(prefix="agents-init-audit-") as audit_dir:
             os.environ["AGENTS_INIT_AUDIT_LOG"] = str(Path(audit_dir) / "audit.jsonl")
@@ -472,6 +473,7 @@ class AutonomyAllowlistTests(unittest.TestCase):
             dry_run=False,
             force=True,
             print_answers=False,
+            set_values=None,
         )
         with tempfile.TemporaryDirectory(prefix="agents-init-autonomy-audit-") as audit_dir:
             audit_path = Path(audit_dir) / "audit.jsonl"
@@ -562,6 +564,7 @@ class AuditLogTests(unittest.TestCase):
             dry_run=not force,
             force=force,
             print_answers=False,
+            set_values=None,
         )
         return run_init(args)
 
@@ -753,6 +756,7 @@ class EndToEndDryRunAndForceTests(unittest.TestCase):
             dry_run=False,
             force=False,
             print_answers=False,
+            set_values=None,
         )
         code = run_init(args)
         self.assertEqual(code, 0)
@@ -768,6 +772,7 @@ class EndToEndDryRunAndForceTests(unittest.TestCase):
             dry_run=False,
             force=True,
             print_answers=False,
+            set_values=None,
         )
         code = run_init(args)
         self.assertEqual(code, 0)
@@ -805,6 +810,7 @@ class PrintAnswersRedactionTests(unittest.TestCase):
             dry_run=False,
             force=True,
             print_answers=True,
+            set_values=None,
         )
         with tempfile.TemporaryDirectory(prefix="agents-init-printanswers-audit-") as audit_dir:
             os.environ["AGENTS_INIT_AUDIT_LOG"] = str(Path(audit_dir) / "audit.jsonl")
@@ -1114,13 +1120,28 @@ class InteractivePresetThreadingTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def _scripted_input(self, overrides: dict[str, str]) -> tuple[object, io.StringIO]:
-        """Returns an input_func that answers blank (keep shown default) for
-        every leaf-field prompt except `overrides` (path -> typed answer),
-        plus one trailing blank for the technology-standards.md addendum
-        prompt. Also captures everything written to stdout so a test can
-        assert on the shown defaults."""
-        answers = [overrides.get(path, "") for path in self.leaf_paths]
+    def _grouped_leaf_paths(self) -> dict[str, list[str]]:
+        """Same grouping the collector applies, in the same order: groups in
+        order of first appearance, leaves in `_leaf_paths` order within each."""
+        grouped: dict[str, list[str]] = {}
+        for path in self.leaf_paths:
+            grouped.setdefault(path.split(".")[0], []).append(path)
+        return grouped
+
+    def _scripted_input(
+        self, overrides: dict[str, str], accept_groups: bool = True
+    ) -> tuple[object, io.StringIO]:
+        """Returns an input_func that accepts every group gate (so each leaf is
+        actually prompted), answers blank (keep shown default) for every
+        leaf-field prompt except `overrides` (path -> typed answer), then one
+        trailing blank for the technology-standards.md addendum prompt. Also
+        captures everything written to stdout so a test can assert on the
+        shown defaults."""
+        answers: list[str] = []
+        for _group, paths in self._grouped_leaf_paths().items():
+            answers.append("y" if accept_groups else "")
+            if accept_groups:
+                answers.extend(overrides.get(path, "") for path in paths)
         answers.append("")  # addendum prompt
         captured = io.StringIO()
 
@@ -1129,8 +1150,8 @@ class InteractivePresetThreadingTests(unittest.TestCase):
 
         return input_func, captured
 
-    def _run(self, overrides: dict[str, str]) -> tuple[dict, str]:
-        input_func, _ = self._scripted_input(overrides)
+    def _run(self, overrides: dict[str, str], accept_groups: bool = True) -> tuple[dict, str]:
+        input_func, _ = self._scripted_input(overrides, accept_groups=accept_groups)
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
             answers = run_interactive_flow(
@@ -1235,6 +1256,7 @@ class PartialWriteAuditTrailTests(unittest.TestCase):
             dry_run=False,
             force=True,
             print_answers=False,
+            set_values=None,
         )
 
         real_write_overlay = init_mod._write_overlay
@@ -1264,6 +1286,297 @@ class PartialWriteAuditTrailTests(unittest.TestCase):
             any(e["kind"] == "rejected" and "post-write verification failed" in e.get("detail", "") for e in lines),
             "the mid-loop failure itself must be flushed to the audit log",
         )
+
+
+class DefaultsModeTests(unittest.TestCase):
+    """`cadre init --target X` with no answer source is a legal run that keeps
+    every shipped default. Overlays are sparse, so "keep the default" means
+    "write no overlay for that field" -- a defaults-only run therefore plans
+    no writes at all rather than materializing the defaults into the project."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory(prefix="agents-init-defaults-")
+        self.root = _make_project(Path(self.temporary.name))
+        self.audit = tempfile.TemporaryDirectory(prefix="agents-init-defaults-audit-")
+        os.environ["AGENTS_INIT_AUDIT_LOG"] = str(Path(self.audit.name) / "audit.jsonl")
+
+    def tearDown(self) -> None:
+        os.environ.pop("AGENTS_INIT_AUDIT_LOG", None)
+        self.audit.cleanup()
+        self.temporary.cleanup()
+
+    def _args(self, **overrides: object) -> argparse.Namespace:
+        base = dict(
+            target=self.root,
+            stack=None,
+            answers=None,
+            interactive=False,
+            set_values=None,
+            sections=",".join(init_mod.ALL_SECTIONS),
+            dry_run=False,
+            force=True,
+            print_answers=False,
+        )
+        base.update(overrides)
+        return argparse.Namespace(**base)
+
+    def _run(self, **overrides: object) -> tuple[int, str, str]:
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = run_init(self._args(**overrides))
+        return code, stdout.getvalue(), stderr.getvalue()
+
+    def test_no_answer_source_succeeds_and_writes_nothing(self) -> None:
+        code, out, _err = self._run()
+        self.assertEqual(code, 0)
+        self.assertFalse((self.root / ".agents").exists())
+        self.assertIn("keeps every shipped default", out)
+
+    def test_defaults_run_still_resolves_to_the_shipped_values(self) -> None:
+        self._run()
+        resolved = resolve_mod.resolve_shared_config(
+            init_mod.TEAM_PROFILE_FILENAME, start=self.root
+        )
+        shipped = init_mod._load_structured(
+            init_mod.SHARED_DEFAULTS_DIR / init_mod.TEAM_PROFILE_FILENAME
+        )
+        self.assertEqual(resolved, shipped)
+
+    def test_preset_alone_needs_no_answer_file(self) -> None:
+        """A `--stack` preset supplies RG-A leaves that `require_field_decisions_cover`
+        demands a decision for; defaults mode synthesizes those rather than
+        making the operator hand-author an answer file just to use a preset."""
+        code, _out, err = self._run(stack="golang-postgres-k8s")
+        self.assertEqual(code, 0, err)
+        written = resolve_mod.resolve_shared_config(
+            init_mod.TEAM_PROFILE_FILENAME, start=self.root
+        )
+        self.assertEqual(written["backend"]["database"], "postgresql")
+        self.assertEqual(written["platform"]["orchestration"], "kubernetes")
+
+    def test_answers_mode_still_fails_closed_on_a_missing_decision(self) -> None:
+        """Synthesis is defaults-mode only: a hand-authored answer file keeps
+        the A-006 rev 2 contract that every supplied field carries a decision."""
+        answers_path = self.root / "answers.yaml"
+        answers_path.write_text(
+            "schema_version: 1\nrg_a_stack:\n  platform:\n    hosting_model: cloud\n"
+            "field_decisions: {}\n"
+        )
+        code, _out, err = self._run(answers=answers_path)
+        self.assertEqual(code, 1)
+        self.assertIn("field_decisions is missing an entry", err)
+
+
+class SetOverrideTests(unittest.TestCase):
+    """`--set` is the flag-driven middle ground between "all shipped defaults"
+    and a full answer file / prompt flow."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory(prefix="agents-init-set-")
+        self.root = _make_project(Path(self.temporary.name))
+        self.audit = tempfile.TemporaryDirectory(prefix="agents-init-set-audit-")
+        os.environ["AGENTS_INIT_AUDIT_LOG"] = str(Path(self.audit.name) / "audit.jsonl")
+
+    def tearDown(self) -> None:
+        os.environ.pop("AGENTS_INIT_AUDIT_LOG", None)
+        self.audit.cleanup()
+        self.temporary.cleanup()
+
+    def _run(self, set_values: list[str], **overrides: object) -> tuple[int, str, str]:
+        base = dict(
+            target=self.root,
+            stack=None,
+            answers=None,
+            interactive=False,
+            set_values=set_values,
+            sections=",".join(init_mod.ALL_SECTIONS),
+            dry_run=False,
+            force=True,
+            print_answers=False,
+        )
+        base.update(overrides)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = run_init(argparse.Namespace(**base))
+        return code, stdout.getvalue(), stderr.getvalue()
+
+    # -- region derivation ------------------------------------------------
+
+    def test_derives_region_from_the_shipped_defaults(self) -> None:
+        self.assertEqual(init_mod.resolve_set_region("platform.hosting_model", None), "stack")
+        self.assertEqual(init_mod.resolve_set_region("mutations.production", None), "autonomy")
+        self.assertEqual(
+            init_mod.resolve_set_region("impact_categories.platform-phase.applicability", None),
+            "platform",
+        )
+
+    def test_rejects_a_field_no_shipped_default_defines(self) -> None:
+        with self.assertRaises(InitError) as caught:
+            init_mod.resolve_set_region("no.such.field", None)
+        self.assertIn("no shipped default", str(caught.exception))
+
+    def test_rejects_an_ambiguous_path_instead_of_guessing(self) -> None:
+        """`policy_version` exists in both library-standards.yaml and
+        agent-autonomy.yaml. Guessing could file a governance field under the
+        `stack` category, so this fails closed and asks for a qualifier."""
+        with self.assertRaises(InitError) as caught:
+            init_mod.resolve_set_region("policy_version", None)
+        self.assertIn("ambiguous", str(caught.exception))
+        self.assertEqual(init_mod.resolve_set_region("policy_version", "autonomy"), "autonomy")
+
+    def test_rejects_malformed_arguments(self) -> None:
+        for raw in ("platform.hosting_model", "=cloud", "nope:x=1"):
+            with self.assertRaises(InitError):
+                region, path, _value = init_mod.parse_set_override(raw)
+                init_mod.resolve_set_region(path, region)
+
+    # -- application ------------------------------------------------------
+
+    def test_sets_a_stack_field(self) -> None:
+        code, _out, err = self._run(["platform.hosting_model=cloud"])
+        self.assertEqual(code, 0, err)
+        resolved = resolve_mod.resolve_shared_config(
+            init_mod.TEAM_PROFILE_FILENAME, start=self.root
+        )
+        self.assertEqual(resolved["platform"]["hosting_model"], "cloud")
+
+    def test_sets_a_platform_entry_field(self) -> None:
+        code, _out, err = self._run(
+            [
+                "platform:impact_categories.platform-phase.applicability=not-applicable",
+                "platform:impact_categories.platform-phase.rationale=No platform phase here",
+            ]
+        )
+        self.assertEqual(code, 0, err)
+        resolved = resolve_mod.resolve_shared_config(
+            init_mod.PLATFORM_FILENAME, start=self.root
+        )
+        entry = next(e for e in resolved["impact_categories"] if e["id"] == "platform-phase")
+        self.assertEqual(entry["applicability"], "not-applicable")
+
+    def test_set_wins_over_a_stack_preset(self) -> None:
+        code, _out, err = self._run(
+            ["backend.database=cockroachdb"], stack="golang-postgres-k8s"
+        )
+        self.assertEqual(code, 0, err)
+        resolved = resolve_mod.resolve_shared_config(
+            init_mod.TEAM_PROFILE_FILENAME, start=self.root
+        )
+        self.assertEqual(resolved["backend"]["database"], "cockroachdb")
+        # The rest of the preset must survive.
+        self.assertEqual(resolved["platform"]["orchestration"], "kubernetes")
+
+    # -- governance safety ------------------------------------------------
+
+    def test_category_is_derived_not_operator_supplied(self) -> None:
+        """A `--set` on an autonomy field must be filed as `governance` no
+        matter how it was written, because that label drives --print-answers
+        redaction (B-005)."""
+        answers = init_mod.apply_set_overrides(
+            {"schema_version": 1, "field_decisions": {}},
+            ["mutations.production=human_approval"],
+            list(init_mod.ALL_SECTIONS),
+        )
+        self.assertEqual(
+            answers["field_decisions"]["mutations.production"]["category"], "governance"
+        )
+
+    def test_cannot_loosen_autonomy_and_never_echoes_the_value(self) -> None:
+        code, out, err = self._run(["autonomy:mutations.production=allowed"])
+        self.assertEqual(code, 1)
+        self.assertFalse((self.root / ".agents").exists())
+        self.assertNotIn("allowed", out + err)
+
+    def test_governance_value_is_redacted_in_print_answers(self) -> None:
+        code, out, err = self._run(
+            ["autonomy:mutations.production=human_approval"], print_answers=True, dry_run=True
+        )
+        self.assertEqual(code, 0, err)
+        self.assertIn("category: governance", out)
+        # The raw value only ever reaches the overlay/audit log, never stdout.
+        head = out.split("--- would write")[0]
+        self.assertNotIn("human_approval", head)
+
+    def test_refuses_a_set_targeting_an_excluded_section(self) -> None:
+        code, _out, err = self._run(
+            ["autonomy:mutations.production=human_approval"], sections="rg-a-stack"
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("excluded by --sections", err)
+
+    def test_set_and_interactive_are_mutually_exclusive(self) -> None:
+        code, _out, err = self._run(["platform.hosting_model=cloud"], interactive=True)
+        self.assertEqual(code, 2)
+        self.assertIn("mutually exclusive", err)
+
+
+class InteractiveGroupGatingTests(unittest.TestCase):
+    """The prompt flow gates each group of fields behind one question, so an
+    operator answers ~1 question per group instead of one per leaf field."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory(prefix="agents-init-grouping-")
+        self.root = _make_project(Path(self.temporary.name))
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_declining_every_group_asks_one_question_per_group(self) -> None:
+        base = init_mod._load_structured(
+            init_mod.SHARED_DEFAULTS_DIR / init_mod.TEAM_PROFILE_FILENAME
+        )
+        leaves = init_mod._leaf_paths(base)
+        groups = {path.split(".")[0] for path in leaves}
+        asked: list[str] = []
+
+        def input_func(_prompt_text: str) -> str:
+            asked.append("")
+            return ""
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            answers = run_interactive_flow(
+                target_root=self.root,
+                sections=["rg-a-stack"],
+                preset=None,
+                input_func=input_func,
+            )
+        # One question per group, plus the trailing addendum prompt -- not one
+        # per leaf field.
+        self.assertEqual(len(asked), len(groups) + 1)
+        self.assertLess(len(asked), len(leaves))
+        self.assertEqual(answers["rg_a_stack"], {})
+
+    def test_declined_groups_are_recorded_as_kept(self) -> None:
+        """A declined group writes nothing, but still records a decision, so a
+        --print-answers echo replayed through --answers reproduces the run."""
+        with contextlib.redirect_stdout(io.StringIO()):
+            answers = run_interactive_flow(
+                target_root=self.root,
+                sections=["rg-a-stack"],
+                preset=None,
+                input_func=lambda _prompt: "",
+            )
+        base = init_mod._load_structured(
+            init_mod.SHARED_DEFAULTS_DIR / init_mod.TEAM_PROFILE_FILENAME
+        )
+        for path in init_mod._leaf_paths(base):
+            self.assertEqual(answers["field_decisions"][path]["status"], "kept")
+
+    def test_declining_a_governance_group_keeps_the_restrictive_default(self) -> None:
+        with contextlib.redirect_stdout(io.StringIO()):
+            answers = run_interactive_flow(
+                target_root=self.root,
+                sections=["rg-b-governance"],
+                preset=None,
+                input_func=lambda _prompt: "",
+            )
+        # Nothing to write means nothing can be loosened.
+        self.assertEqual(answers["rg_b_autonomy"], {})
+        decisions = answers["field_decisions"]
+        self.assertTrue(decisions)
+        for entry in decisions.values():
+            self.assertEqual(entry["status"], "kept")
+            self.assertEqual(entry["category"], "governance")
 
 
 if __name__ == "__main__":
