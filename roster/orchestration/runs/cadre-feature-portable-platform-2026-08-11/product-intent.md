@@ -1,15 +1,17 @@
 # Product Intent Record — A roster-neutral platform: separating the knowledge store, the roster, and the lifecycle
 
 **Intent ID:** `INTENT-CADRE-PORTABLE-PLATFORM`
-**Revision:** 8
+**Revision:** 9
 **Status:** **G1 APPROVED** by `@deagy` (Product Owner) on 2026-08-11 against
 Revision 1, and **RE-AFFIRMED by the same authority on 2026-08-11 against
 Revision 6's content** — the revision this one records the re-affirmation into.
 See §17. **OD-12 is closed by that act.**
 **Open decisions closed at Revisions 6–7:** OD-2 (**reversed** — global-only),
 OD-9, OD-11, OD-12, OD-13. OD-7 and OD-10 **withdrawn**, their subjects removed
-by OD-2's reversal. OD-6 closed as "yes". **Nothing open blocks G2; only the G2
-decision itself remains.**
+by OD-2's reversal. OD-6 closed as "yes".
+**G2 APPROVED** by `@deagy` on 2026-08-11 against `requirements.md` Revision 10
+— both required authorities held by one human per OD-13, recorded as such
+(`requirements.md` §8). Open and non-blocking: OD-3, OD-4.
 **Revision note:** Revisions 2 and 3 change **no intent, no scope, and no
 decision**. Both correct factual defects found by review.
 
@@ -714,11 +716,13 @@ The approval in §16 arrives after the fact and does not retroactively make the
 sequencing correct — it makes the baseline reviewable, which is a weaker claim.
 Per that workflow, objective conflicts return to G1 rather than proceeding.
 
-**G2 is not approved, but nothing open now blocks it.** All five decisions that
-did — OD-7, OD-9, OD-10, OD-11, OD-13 — were closed or withdrawn on 2026-08-11
-(§17). G2 requires `product_owner` **and** `engineering_lead`
-(`kernel/contracts/lifecycle-gates.json`), and OD-13 establishes that `@deagy`
-holds both, which the kernel permits.
+**G2 is approved**, by `@deagy` on 2026-08-11 against `requirements.md`
+Revision 10 (`requirements.md` §8). All five decisions that blocked it —
+OD-7, OD-9, OD-10, OD-11, OD-13 — were closed or withdrawn earlier the same day
+(§17). It requires `product_owner` **and** `engineering_lead`
+(`kernel/contracts/lifecycle-gates.json`); OD-13 established that `@deagy` holds
+both and the kernel permits it, and the approval record states that rather than
+letting one signature quietly stand for two.
 
 **OD-12 is closed too, at Revision 7** — G1 re-affirmed against Revision 6's
 content (§18). It had got *sharper* at Revision 6 rather than softer, because

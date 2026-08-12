@@ -1,8 +1,9 @@
 # Requirements Baseline — A roster-neutral platform
 
 **Requirements ID:** `REQ-CADRE-PORTABLE-PLATFORM`
-**Revision:** 10
-**Status:** draft — **G1 approved 2026-08-11 against Revision 1; awaiting G2.**
+**Revision:** 11
+**Status:** **G2 APPROVED** by `@deagy` on 2026-08-11, against Revision 10's
+content. G1 approved and re-affirmed the same day. See §8.
 **No open decision blocks G2 any more.** All five that did were closed or
 withdrawn by the Product Owner on 2026-08-11 (`product-intent.md` §17). **OD-2
 was reversed**: `roster.root` is `SCOPE_GLOBAL_ONLY`, which retracts PP-FR-1b and
@@ -1333,6 +1334,15 @@ churn as a consequence so it is not later misread as a determinism regression.
   but a roster author still needs telling which file is which format — see
   `phase-0-and-d-evidence.md`.
 
+- **G-13: implementation ran ahead of the gate approving its requirements.**
+  Sibling to G-5, which records that this baseline was drafted before G1. Phases
+  A′, B′ and C′ built against requirements G2 had not yet approved. Partially
+  mitigated — every phase followed the Product Owner's detailed dispositions
+  (OD-2, OD-9, OD-11 all closed first), and several requirements were *corrected*
+  by the implementation rather than merely satisfied by it. Approving G2 accepts
+  the baseline as it stands; it does not make the order correct. Disclosed, not
+  closed, on the same terms as G-5.
+
 - **G-11: `_gate_agents()` reads two contract keys that have never existed.**
   `build_dispatch_plan.py:107` calls `.get("author_agents", [])` and
   `.get("review_agents", <default>)` against `kernel/contracts/lifecycle-gates.json`,
@@ -1456,3 +1466,75 @@ OD-6 was closed as "yes" at Revision 6.
 
 Per `roster/workflows/product-intake.md`, objective conflicts return to G1 rather
 than proceeding. Nothing here is approved by its presence in this file.
+
+
+---
+
+## 8. G2 — Requirements Baseline: APPROVED
+
+**Decision.** `@deagy` approved G2 on 2026-08-11, against **Revision 10's
+content** — the revision this one records the approval into, which adds the
+record and nothing else.
+
+**Both authority requirements are satisfied by one human, and that is stated
+rather than implied.** `kernel/contracts/lifecycle-gates.json` requires
+`["product_owner", "engineering_lead"]` for G2. Per **OD-13**, `@deagy` holds
+both roles, which the kernel permits: `validate_repository()`
+(`__init__.py:1948-1963`) requires each role in `AUTHORITY_ROLES` to have *an*
+assignee and contains no check that two roles are two people. The separation the
+kernel does enforce is author-versus-approver, and every author of these records
+is an agent.
+
+Recording it this way is the point of OD-13's disposition. One signature
+covering two required authorities is weaker evidence than two people
+disagreeing, and writing it down is what keeps that weakness visible instead of
+letting a satisfied checkbox imply something it does not.
+
+### What this approval rests on that G1's did not
+
+G1 was granted against a planning record. G2 is granted against a baseline whose
+requirements have since been **executed**: six phases landed (D, 0, A′, C′-1,
+C′-2, B′), with eleven planted defects as attached non-vacuity evidence
+(`phase-0-and-d-evidence.md`), 1276/208/218/309 tests green, no plugin drift,
+and the 175-case golden corpus never edited.
+
+That is an unusually strong evidence base for a requirements gate, and it is
+strong in the specific way this baseline argued for: the claims were not merely
+re-read, they were run. Three of the findings behind those phases — G-12, the
+second closed allowlist, and a guard passing twelve of twelve with the coverage
+wrong — were unreachable by any amount of reading.
+
+### The disclosure this approval does not close
+
+**Implementation ran ahead of the gate that approves its requirements**, and
+that is the same class of ordering defect as **G-5**, which records that this
+baseline was drafted before G1.
+
+Phases D and 0 were genuinely gated on nothing and cost nothing to run early.
+A′, B′ and C′ were not: they built against requirements this gate had not yet
+approved. The mitigation is real but partial — every phase was built against a
+baseline the Product Owner had already dispositioned in detail (OD-2, OD-9,
+OD-11 all closed before A′ started), and several requirements were *corrected*
+by the implementation rather than merely satisfied by it.
+
+Approving G2 now does not retroactively make that ordering correct. It records
+that the baseline is accepted as it stands, including the parts the
+implementation revised. **G-5's disclosure gains a sibling and neither is
+closed** — see G-13.
+
+### What it does not do
+
+- **G-6 stands, and now covers three records.** §16, §17, §18 and this section
+  are all prose transcribed by the authoring session. This repository runs no
+  `.agentic-sdlc/` overlay, so no gate state transitioned, no `agentic-sdlc
+  decide` was invoked, and nothing in CI can verify any of them.
+- **No later gate is implied.** G2 approves the requirements baseline. Phase E
+  remains unbuilt and is not covered by anything here.
+- **The open non-blocking decisions stay open**: OD-3 (naming) and OD-4
+  (`knowledge-store/AGENT.md` location).
+
+**The `.github/CODEOWNERS` merge review remains the only machine-checkable
+corroboration available, and remains unused.** Three transcribed approvals now
+rest on this record set where one did. That review has to happen before this
+branch can merge; cross-referencing it here once given would do more for the
+audit trail than any further prose about what transcription is worth.

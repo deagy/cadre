@@ -1,14 +1,14 @@
 # Implementation Plan — A roster-neutral platform
 
 **Plan ID:** `PLAN-CADRE-PORTABLE-PLATFORM`
-**Revision:** 9
+**Revision:** 10
 **Status:** **four phases landed** (D, 0, A′, C′-1, C′-2). B′ and E remain, and
 neither is blocked. G1 approved 2026-08-11 against intent Revision 1 and
 re-affirmed against the current record the same day (`product-intent.md` §18).
-**No open decision blocks anything.** G2 remains unapproved; nothing else does.
+**No open decision blocks anything, and G2 is approved** (2026-08-11, `requirements.md` §8). Phase E is the only phase left, and it unblocks nothing.
 **Date:** 2026-08-11
-**Implements:** `REQ-CADRE-PORTABLE-PLATFORM` (`requirements.md`, **Revision 10**)
-**Decomposes:** `INTENT-CADRE-PORTABLE-PLATFORM` (`product-intent.md`, **Revision 7**)
+**Implements:** `REQ-CADRE-PORTABLE-PLATFORM` (`requirements.md`, **Revision 11**)
+**Decomposes:** `INTENT-CADRE-PORTABLE-PLATFORM` (`product-intent.md`, **Revision 9**)
 **Revision note:** Revision 2 folded in the OD-2/OD-5 dispositions while still
 citing `requirements.md` Revision 1 — a stale pin that would have landed a
 reader on the retracted PP-NFR-3. Revision 3 fixed the pin and tracked that
