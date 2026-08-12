@@ -1,8 +1,52 @@
 # Product Intent Record — A roster-neutral platform: separating the knowledge store, the roster, and the lifecycle
 
 **Intent ID:** `INTENT-CADRE-PORTABLE-PLATFORM`
-**Revision:** 1 (initial)
-**Status:** **G1 APPROVED** by `@deagy` (Product Owner) on 2026-08-11. See §16.
+**Revision:** 4
+**Status:** **G1 APPROVED** by `@deagy` (Product Owner) on 2026-08-11 against
+Revision 1. See §16.
+**Revision note:** Revisions 2 and 3 change **no intent, no scope, and no
+decision**. Both correct factual defects found by review.
+
+Revision 2 fixed §9's disposition table row 1 (which still stated the
+pre-reversal position §11 and §16/OD-5 reject), §2's `SECURITY.md` citation
+(one heading off), and rewrote §14 — and **Revision 3 rewrites §14 again,
+because Revision 2's replacement was also wrong, in a more confident way.**
+Revision 1 said the store was empty. Revision 2 said the twelve committed
+records prove a retrieval failure. Neither holds: the records are **staged, not
+ingested**, and staging *"confers no retrievability"* by design
+(`.agents/skills/run-agent-orchestration/SKILL.md:94`; `search_store()` scores
+only `chunks` rows, while staged records live in `staged_records`). The
+retrieval behaved correctly. Revision 3 states the real gap, which is neither of
+the first two, and drops the "weakens the G1 approval" disclosure Revision 2
+attached to its own mistake.
+
+Revision 3 also corrects §12 criterion 6 (Revision 2's narrowing was still
+unsatisfiable — see `requirements.md` PP-NFR-1), **withdraws OD-8** from §13
+(its premise was a misreading of `_select_workflow()`'s final stage), and fixes
+two counts: §14's accepted-record count, and §9's list of stale "74 roles"
+sites.
+
+The G1 approval in §16 stands and is not re-opened. Nothing corrected in either
+revision changes the problem, the outcome, the scope, or the constraints it was
+granted against.
+
+**Revision 4** corrects §2, where a claim about `cadre sdlc` turns out to be
+half false — `--provider` already passes through to the kernel; what fails is
+that Cadre's bundle cannot be suppressed, so a foreign provider loads and is
+then rejected for colliding with it. §2's "with no override" and §4's outcome 2
+are restated. It also fixes §2's outbound-import count, §12 criterion 3
+(vacuous as written), and adds **OD-9** to §13. None of this changes the intent
+or the scope; the seam described in §4 is the same seam, and the work behind
+outcome 2 is smaller than stated, not larger.
+
+**The pattern is worth naming, since this record's subject is a repository that
+keeps rediscovering its own failure modes.** Three revisions of §14 produced
+three different confident claims about the knowledge store, each written after
+reading more than the last. And §2 asserted for four revisions that `cadre sdlc`
+offers no provider override, in a record whose whole method is citing
+`file:line` — the line was cited correctly and its behaviour was never checked.
+**Both errors share a shape: reasoning about a running system from its source
+alone.** One shell command falsified each.
 **Author (agent):** product-intent-agent, consolidated by the orchestrating session
 **Date:** 2026-08-11
 **Repository:** `/home/deagy/sdk/cadre`
@@ -75,21 +119,38 @@ The residual coupling is one line. `bin/cadre.py:124`:
     provider = REPO_ROOT / "provider" / "provider.json"
 ```
 
-`cadre sdlc` always injects *this* repository's bundle, with no override. The
-underlying `agentic-sdlc` binary accepts `--provider` as a repeatable global
-option; only the Cadre wrapper hardcodes it.
+`cadre sdlc` always injects *this* repository's bundle. **It is not, however,
+true that there is "no override" — Revisions 1–3 said so and were wrong.**
+`bin/cadre.py:125-127` appends the user's own argv (`*rest`) after the injected
+flag, and the kernel's `--provider` is `action="append"`
+(`kernel/agentic_sdlc/__init__.py:2918-2923`), so a caller's `--provider`
+already reaches the kernel and is already validated. What fails is the
+*combination*:
+
+```console
+$ ./bin/cadre sdlc --provider providers/agentic-sdlc-defaults/provider.json provider list
+{ "error": "provider agentic-sdlc-defaults duplicates profile ids: ['generic']" }
+```
+
+The foreign manifest loaded. It was rejected for colliding with Cadre's, which
+is loaded alongside it and cannot be turned off. So the residual coupling is
+narrower than this record claimed for four revisions, and differently shaped:
+not "no override" but **"no way to run without Cadre's bundle."**
 
 **"Separate the knowledge store."** Also already true, and more so than any
 document claims. `roster/knowledge-store/src/` is stdlib-only, reads neither
-`catalog.yaml` nor `routing.yaml`, and has exactly three outbound imports, all
-into `roster/shared/src/` (`settings`, `content_protection` + `text_chunking`,
-`text_embedding`). Most decisively: **the `--agent` argument is not validated
+`catalog.yaml` nor `routing.yaml`, and reaches outside itself only into
+`roster/shared/src/` — **four modules across five import sites**: `settings`
+(`config.py:21`, `cli.py:23`), `content_protection` and `text_chunking`
+(`content.py:26,31`), and `text_embedding` (`embeddings.py:33`). (Revisions 1–3
+said "three outbound imports", which contradicted A4's own "those four
+modules".) Most decisively: **the `--agent` argument is not validated
 against any roster and selects nothing.** `build_agent_context()`
 (`service.py:164-167`) checks only that it is non-empty; the value then appears
 only in the retrieval audit row (`:176`) and echoed back in the returned bundle
 (`:184`). It is a label, not an access-control key. The store has no principal,
-no identity store, and no role-to-classification mapping — `SECURITY.md:48` says
-so: *"caller flags are not authentication."*
+no identity store, and no role-to-classification mapping — `SECURITY.md:50`
+("Known limitations") says so: *"caller flags are not authentication."*
 
 The consequence is worth stating precisely, because it cuts both ways:
 extracting the store costs almost nothing, **and removes nothing from the trust
@@ -141,7 +202,9 @@ Four seams become real, none of them a directory move:
 1. `cadre select --roster <path>` produces a schema-valid dispatch plan against a
    roster package the binary did not ship with.
 2. `cadre sdlc --provider <other>/provider.json` drives the kernel with a foreign
-   provider bundle.
+   provider bundle **instead of Cadre's**, rather than alongside it. The flag
+   already reaches the kernel today; what does not exist is any way to stop
+   Cadre's bundle loading beside it, which makes the two collide.
 3. The knowledge store's location is resolved rather than computed from
    `parents[2]`, so it runs with no roster present.
 4. A structural test forbids platform code from naming Cadre-specific role ids,
@@ -234,7 +297,7 @@ Its five "what would have to be true" conditions, against this scope:
 
 | Condition | Disposition |
 | --- | --- |
-| 1. `provider.json` becomes a real third-party contract | **Partially.** Extended with roster-side entries; a full third-party contract specification is not attempted. |
+| 1. `provider.json` becomes a real third-party contract | **No — deliberately not.** OD-5 (§16) resolved the opposite of what this row said at Revision 1: `provider.json` is left **untouched**, and roster identity goes into a sibling `roster.json` the kernel never reads. Extending it would have meant editing the kernel's closed `allowed_manifest_keys` inside a change whose constraint is not to. The proposal's condition is therefore *not* met, and that is the chosen answer rather than a shortfall. |
 | 2. The selector runs against a roster it did not ship with | **Directly in scope.** The proposal names this the cheapest falsification and says it should be attempted before anything is moved. This record agrees. |
 | 3. A second roster must exist | **Directly in scope**, as a minimal test fixture. |
 | 4. The distribution story must survive | **Deferred.** Constraint C1/C2 preserve today's story; the "what does a user install first" question is not answered. |
@@ -242,8 +305,10 @@ Its five "what would have to be true" conditions, against this scope:
 
 Two corrections to the proposal, recorded rather than silently applied:
 
-- **It says 74 roles** (lines 24 and 126). The catalog holds **159**. Its
-  argument is unaffected; its numbers are stale.
+- **It says 74 roles** — at lines 24, **73**, and 126. The catalog holds **159**.
+  Its argument is unaffected; its numbers are stale. (Revisions 1–2 listed only
+  two of the three sites, so a reader correcting from this note would have left
+  one behind.)
 - **Its platform/roster table is missing the context store**, which did not exist
   when it was written. `roster/context-store/` landed 2026-08-11 and is platform
   machinery inside `roster/` by the proposal's own criteria — a second instance
@@ -306,18 +371,32 @@ supersedes that document rather than editing it.
 2. A roster package missing `catalog.yaml` or `routing.yaml` fails with a message
    naming the missing file — verified by a test that asserts the failure, not
    just the success.
-3. `cadre sdlc --provider <other>/provider.json` reaches the kernel with that
-   bundle loaded, confirmed via `agentic-sdlc provider list`.
+3. `cadre sdlc --provider providers/agentic-sdlc-defaults/provider.json provider list`
+   lists **only** that provider's profiles and does not error. Revisions 1–3
+   asked only that the bundle "reach the kernel with that bundle loaded", which
+   **passes on unmodified code** — the flag already works. The command above is
+   the one that fails today, with
+   `provider agentic-sdlc-defaults duplicates profile ids: ['generic']`.
 4. `cadre knowledge context …` runs with `CADRE_ROSTER_ROOT` pointing at a
-   directory containing no roster.
+   directory containing no roster. (Also passes today — see `requirements.md`
+   PP-FR-5, which is a regression pin rather than a change.)
 5. A planted violation — a Cadre role id hardcoded into `select_agents.py` —
    **fails** `test_roster_boundary.py`. A guard that passes against a planted
    violation is this repository's most frequently rediscovered failure mode
    (`docs/proposals/durable-knowledge-capture-2026-08.md`), so non-vacuity is a
    criterion, not a nicety.
 6. `cadre generate-plugin --output plugin --check` reports no drift, and
-   `git status --porcelain` shows no change under `plugin/`, `provider/roles/`,
-   or `roster/catalog.yaml`.
+   `git status --porcelain` shows no change under `provider/roles/` or
+   `roster/catalog.yaml`. **Changes under `plugin/` are expected and are
+   enumerated in `requirements.md` PP-NFR-1** — two new files and the mechanical
+   `plugin/suite/` mirror of the platform source this work edits. Anything
+   beyond that list fails this criterion.
+
+   Revision 1 wrote "no change under `plugin/`", Revision 2 narrowed it to one
+   permitted file, and **both were unsatisfiable**: `plugin/suite/` bundles
+   `select_agents.py`, `build_dispatch_plan.py`, and `settings.py`, every one of
+   which this work edits. The criterion is delegated to PP-NFR-1 rather than
+   restated here so the two cannot drift apart again.
 7. No new copy of knowledge-store or selector code appears in `plugin/suite/`,
    `cadre_cli/_vendor/`, or the Cline rewrite table.
 
@@ -332,32 +411,78 @@ supersedes that document rather than editing it.
 | **OD-5** | Extend `provider.json` with roster-side keys, or add a sibling `roster.json` the kernel never reads? | System Architect | **RESOLVED** — sibling manifest (§16). |
 | **OD-6** | Does the mirror boundary guard apply to `roster/context-store/` too? | Engineering Lead | **OPEN**, non-blocking. |
 | **OD-7** | *New, raised by OD-2's answer.* Surfacing the resolved roster id + digest in the dispatch plan adds an emitted field, forcing `selection.schema.json` 6 → 7. Accept the bump, or surface the identity outside the plan? | System Architect | **OPEN — blocking for G2.** See §16. |
+| **OD-9** | *New at Revision 4.* Removing the hardcoded `["code-reviewer"]` gate-reviewer default (`build_dispatch_plan.py:107`) **changes every lifecycle-aware Cadre plan's `support` list** — no gate contract declares `review_agents`, so it fires for all of them — and the golden corpus cannot see it (`test_selection_golden_corpus.py:135` patches lifecycle contracts to `None`). Move the default into roster-declared data (recommended: Cadre's plans stay byte-identical), accept the output change and re-baseline, or leave `:107` alone and narrow PP-FR-6? | Product Owner + Engineering Lead | **OPEN — blocking for G2.** Option 2 alters published dispatch output. |
+| ~~**OD-8**~~ | ~~Does a foreign roster need a route → workflow mapping, or the `workflow` enum opened?~~ | System Architect | **WITHDRAWN at Revision 3 — the premise was wrong.** Raised one revision earlier on a misreading of `_select_workflow()`: its final stage (`build_dispatch_plan.py:255-265`) does **not** branch on Cadre route ids. It reads each matched route's own declared `workflow_shape` from `routing.yaml` — a four-value field the roster supplies (`routing.schema.json:193-201`) — so a fixture roster whose routes declare it reaches `new-service` / `infrastructure-change` / `pipeline-change` today, with no code change and no enum bump. Kept struck through so a reader of Revision 2 finds out what happened to it. |
 
 ## 14. Knowledge retrieval status
 
-**Performed, and immaterial.** Query ID `2ab218a2b25bba60`, retrieved
-2026-08-11T21:30:42Z, agent `product-intent-agent`, classification `internal`,
-project-local tier (`.agents/knowledge-store/config.json`). One result returned,
-score **0.144** — the single committed sample record under
-`roster/knowledge-store/proposed-knowledge/`, concerning Docker Compose volume
-layout and PostgreSQL 18 mount paths. It has no bearing on this work and is not
-relied upon. `untrusted_instruction_risk: false`.
+**Performed, and it behaved correctly. This section has been wrong twice and is
+rewritten a third time; both earlier readings are recorded below, because the
+way they were wrong is more useful than the conclusion.**
 
-Its identifier is deliberately not written out here:
-`test_repository_health.py::test_sample_references_are_limited_to_allowed_archives`
-fails any tracked file outside the allowlist that names the sample task id
-literally, so this record describes it instead of citing it — the same
-accommodation `docs/proposals/governance-as-product-2026-08.md` and the
-2026-08-08 sibling record both make.
+*What was run.* Query ID `2ab218a2b25bba60`, retrieved 2026-08-11T21:30:42Z,
+agent `product-intent-agent`, classification `internal`, project-local tier
+(`.agents/knowledge-store/config.json`). One result returned, score **0.144** —
+a sample record about Docker Compose volume layout and PostgreSQL 18 mount
+paths, with no bearing on this work and not relied upon.
+`untrusted_instruction_risk: false`. Its identifier is deliberately not written
+out: `test_repository_health.py::test_sample_references_are_limited_to_allowed_archives`
+fails any tracked file outside the allowlist naming the sample task id
+literally, the same accommodation `docs/proposals/governance-as-product-2026-08.md`
+and the 2026-08-08 sibling record both make.
 
-This is itself corroborating evidence for
-`docs/proposals/durable-knowledge-capture-2026-08.md`'s central observation: the
-store *"has never received one"* durable finding, and a retrieval against a
-central architectural question returns a single sample record about container
-volumes. **No material knowledge was unavailable — there is essentially no
-knowledge in the store to be unavailable.** Every claim in this record is
-therefore grounded in direct reading of the tree at the cited file:line, not in
-retrieval.
+*What Revision 1 said, and why it was wrong.* It reported the one hit as *"the
+single committed sample record"* in the store and concluded **"there is
+essentially no knowledge in the store to be unavailable."** The committed export
+at `roster/knowledge-store/proposed-knowledge/` holds **twelve records** dated
+2026-07-21 through 2026-08-09, **two** of them `status: "accepted"`
+(`KS-20260808-glob-regex-asymmetries`, `KS-20260809-non-vacuity-fault-injection`).
+"Essentially no knowledge" was not a description of anything that had been
+checked.
+
+*What Revision 2 said, and why it was also wrong — more confidently.* Having
+found twelve records, it concluded **"this is a retrieval failure, not an empty
+store,"** on the reasoning that the store held the answer and did not return it.
+Two of those records are squarely on this work's own subject matter:
+
+- `KS-20260809-a-single-maintainer-repository-cannot-re-16ef457779e1` — *"a
+  single-maintainer repository cannot require pull-request approvals,"* the
+  obstacle to G2's two-authority requirement that §15 and `requirements.md` §7
+  reason out from scratch.
+- `KS-20260809-non-vacuity-fault-injection` (`accepted`) — *"prove a guard is
+  non-vacuous by injecting a fault,"* which is the whole of PP-NFR-4.
+
+**But those records were never retrievable, and that is by design.** They are
+*staged*, not ingested. Staged records live in the `staged_records` table
+(`roster/knowledge-store/src/staged_store.py:44`); `search_store()`
+(`service.py:121-129`) scores only rows from `load_chunks()` — the `chunks`
+table, populated by ingestion. `.agents/skills/run-agent-orchestration/SKILL.md:94`
+says it outright: staging *"is not ingestion, **confers no retrievability**, and
+is not approval."* A steward disposition is what moves a record across that
+line. So the retrieval did exactly what it should have: it searched the ingested
+corpus and returned what was in it.
+
+*The stale citation, corrected.*
+`docs/proposals/durable-knowledge-capture-2026-08.md:38` says the store *"has
+never received one"* durable finding. True when written, superseded by #180,
+which made `proposed-knowledge/` a generated export of the **staged** store
+(`proposed-knowledge/README.md`). Revision 1 quoted it to corroborate emptiness;
+Revision 2 cited #180 to refute it. Both overshot: #180 built the *capture*
+half, and capture is working — twelve records in three weeks.
+
+*What is actually true, stated once.* **Capture works; the pipeline stops at
+staging.** Twelve records were captured, two were dispositioned `accepted`, and
+none of the twelve is reachable by a query, because nothing ingested them.
+Retrieval is not broken and the store is not empty — the two findings this work
+re-derived from scratch were written down by someone who had learned them, and
+then sat one steward action away from being usable. That is a narrower and more
+fixable gap than either earlier revision described, and it is the one worth
+filing.
+
+*Consequence for this record.* None of its claims changes. Every one is grounded
+in direct reading of the tree at the cited `file:line`, which is what makes it
+checkable — and that, rather than an assertion about what the store did or did
+not hold, is what it rests on. See **G-7** in `requirements.md` §6.
 
 ## 15. Handoff
 
