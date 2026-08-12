@@ -22,6 +22,12 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 # colons, unicode, YAML-keyword lookalikes) rather than whatever the real
 # records happen to contain, and must not change meaning when the corpus does.
 RECORDS = Path(__file__).resolve().parent / "fixtures"
+# The fixture corpus deliberately spans every status, so importing it admits
+# dispositioned records and `import-staged` requires a named human for that.
+# Tests whose subject is something else still have to name one -- that is the
+# point of the requirement, not an inconvenience to route around, and a test
+# helper that quietly supplied it would hide the one thing worth noticing.
+IMPORT_AUTHORIZER = "operator@example.invalid"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
@@ -123,7 +129,7 @@ class StagedCliTests(unittest.TestCase):
         # corpus spanning every status, and `propose` now (correctly) refuses
         # to be the door a dispositioned record enters through. Importing is
         # the verb that exists for loading an already-decided corpus.
-        self._run("import-staged", "--directory", str(RECORDS))
+        self._run("import-staged", "--directory", str(RECORDS), "--authorized-by", IMPORT_AUTHORIZER)
         everything = self._run("list-staged")["records"]
         # Partition rather than a two-status sum: the earlier version assumed
         # the corpus held only proposed and accepted records, which was true of
@@ -250,16 +256,139 @@ class ProposalCannotApproveItselfTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self._run("propose", "--input", str(target), "--render-only")
 
-    def test_the_dispositioned_fixture_still_imports(self) -> None:
+    def test_the_dispositioned_fixture_still_imports_with_authorization(self) -> None:
         # The guard is scoped to the proposal door, not to the record shape.
         # `import-staged` re-imports an existing corpus and must keep taking
-        # dispositioned records, or migration breaks.
+        # dispositioned records, or migration breaks -- but it now names who
+        # authorized admitting decisions this store never saw made.
         path, frontmatter = _a_dispositioned_record()
-        directory = Path(self.workspace.name) / "corpus"
-        directory.mkdir()
-        (directory / path.name).write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
-        imported = self._run("import-staged", "--directory", str(directory))
+        directory = self._corpus_of(path)
+        imported = self._run(
+            "import-staged", "--directory", str(directory), "--authorized-by", IMPORT_AUTHORIZER
+        )
         self.assertEqual(imported["ids"], [frontmatter["id"]])
+        self.assertEqual(imported["dispositioned"], [frontmatter["id"]])
+        self.assertEqual(imported["authorized_by"], IMPORT_AUTHORIZER)
+
+    def _corpus_of(self, *paths: Path) -> Path:
+        directory = Path(self.workspace.name) / "corpus"
+        directory.mkdir(exist_ok=True)
+        for path in paths:
+            (directory / path.name).write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+        return directory
+
+
+class ImportRequiresAuthorizationTests(unittest.TestCase):
+    """`import-staged` was the door left standing once `propose` closed.
+
+    It is the only remaining route by which a decision this store never
+    watched being made can enter it. That is a real need -- re-importing an
+    exported corpus, moving a store between machines -- but it is not a
+    proposal, and for a while the only thing stopping an agent from using it
+    to admit a fresh self-approved record was three docs saying "don't". This
+    store has already learned once what that kind of convention is worth.
+
+    The cost is scoped to the risky half: a batch of purely `proposed`
+    records still imports with no ceremony.
+    """
+
+    def setUp(self) -> None:
+        self.workspace = tempfile.TemporaryDirectory()
+        self.addCleanup(self.workspace.cleanup)
+        root = Path(self.workspace.name)
+        self.config_path = root / "config.json"
+        self.config_path.write_text(
+            json.dumps({"database": str(root / "knowledge.db")}), encoding="utf-8"
+        )
+        self.corpus = root / "corpus"
+        self.corpus.mkdir()
+
+    def _run(self, *arguments: str) -> dict:
+        return cli.run([*arguments, "--config", str(self.config_path)])
+
+    def _place(self, path: Path, text: str | None = None, name: str | None = None) -> None:
+        (self.corpus / (name or path.name)).write_text(
+            text if text is not None else path.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+    def test_a_dispositioned_batch_is_refused_without_authorization(self) -> None:
+        path, frontmatter = _a_dispositioned_record()
+        self._place(path)
+        with self.assertRaises(ValueError) as caught:
+            self._run("import-staged", "--directory", str(self.corpus))
+        message = str(caught.exception)
+        self.assertIn("--authorized-by", message)
+        # The refusal names the records it is about, so an operator can tell
+        # which of a large batch triggered it without bisecting the directory.
+        self.assertIn(frontmatter["id"], message)
+        self.assertEqual(self._run("list-staged")["records"], [], "a refused batch wrote rows")
+
+    def test_a_proposed_only_batch_needs_no_authorization(self) -> None:
+        # The common case -- seeding a store from proposals -- must stay
+        # frictionless, or the requirement teaches people to pass
+        # --authorized-by reflexively and it stops meaning anything.
+        path, frontmatter = _a_record()
+        self._place(path)
+        imported = self._run("import-staged", "--directory", str(self.corpus))
+        self.assertEqual(imported["ids"], [frontmatter["id"]])
+        self.assertNotIn("authorized_by", imported)
+
+    def test_one_dispositioned_record_gates_the_whole_batch(self) -> None:
+        # Mixed batches follow the batch, not the record: importing is atomic,
+        # so a partial import that admitted only the proposals would leave the
+        # operator with neither the corpus they asked for nor a clear failure.
+        proposed, _ = _a_record()
+        decided, decided_frontmatter = _a_dispositioned_record()
+        self._place(proposed)
+        self._place(decided)
+        with self.assertRaises(ValueError) as caught:
+            self._run("import-staged", "--directory", str(self.corpus))
+        self.assertIn(decided_frontmatter["id"], str(caught.exception))
+        self.assertEqual(self._run("list-staged")["records"], [])
+
+    def test_a_readme_beside_the_records_is_not_a_record(self) -> None:
+        # `roster/knowledge-store/proposed-knowledge/` ships a README.md, so
+        # before this the canonical snapshot directory could not be imported
+        # at all: the glob picked the README up and the parse failed on its
+        # missing frontmatter before reaching a single record.
+        path, frontmatter = _a_record()
+        self._place(path)
+        self._place(path, text="# Not a record\n\nJust prose.\n", name="README.md")
+        imported = self._run("import-staged", "--directory", str(self.corpus))
+        self.assertEqual(imported["ids"], [frontmatter["id"]])
+
+    def test_any_other_unparseable_file_still_fails_loudly(self) -> None:
+        # The README skip is one name, not a policy of ignoring what does not
+        # parse: a migration that silently drops files delivers a partial
+        # corpus that looks complete.
+        path, _ = _a_record()
+        self._place(path)
+        self._place(path, text="# Not a record\n\nJust prose.\n", name="notes.md")
+        with self.assertRaises(ValueError):
+            self._run("import-staged", "--directory", str(self.corpus))
+
+    def test_authorization_cannot_launder_a_self_approval(self) -> None:
+        # The one thing no named human can vouch for. A steward's decision the
+        # store did not witness is still a decision; a record whose stager and
+        # decider are the same actor is not one, so there is nothing to
+        # authorize. Refused with --authorized-by present and correct.
+        path, _ = _a_dispositioned_record()
+        text = path.read_text(encoding="utf-8")
+        frontmatter, _body = staged_records.parse_record(text)
+        text = text.replace(
+            f"decided_by: {frontmatter['disposition']['decided_by']}",
+            f"decided_by: {frontmatter['staged_by']}",
+        )
+        self._place(path, text=text)
+        with self.assertRaises(ValueError) as caught:
+            self._run(
+                "import-staged", "--directory", str(self.corpus),
+                "--authorized-by", IMPORT_AUTHORIZER,
+            )
+        message = str(caught.exception)
+        self.assertIn(frontmatter["staged_by"], message)
+        self.assertIn("self-approval", message)
+        self.assertEqual(self._run("list-staged")["records"], [])
 
 
 class FromFindingTests(unittest.TestCase):
@@ -490,7 +619,7 @@ class MigrationTests(unittest.TestCase):
             frontmatter, body = staged_records.parse_record(path.read_text(encoding="utf-8"))
             originals[frontmatter["id"]] = (frontmatter, body)
 
-        imported = self._run("import-staged", "--directory", str(RECORDS))
+        imported = self._run("import-staged", "--directory", str(RECORDS), "--authorized-by", IMPORT_AUTHORIZER)
         self.assertEqual(imported["count"], len(originals))
         self.assertEqual(set(imported["ids"]), set(originals))
 
@@ -532,7 +661,7 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(self._run("list-staged")["records"], [], "a rejected batch left rows behind")
 
     def test_export_filters_by_status(self) -> None:
-        self._run("import-staged", "--directory", str(RECORDS))
+        self._run("import-staged", "--directory", str(RECORDS), "--authorized-by", IMPORT_AUTHORIZER)
         accepted = self._run("export-staged", "--output", str(self.exported / "accepted"), "--status", "accepted")
         self.assertTrue(accepted["ids"])
         for record_id in accepted["ids"]:
@@ -575,7 +704,7 @@ class ExportCheckTests(unittest.TestCase):
         return cli.run([*arguments, "--config", str(self.config_path)])
 
     def test_check_reports_clean_immediately_after_a_real_export(self) -> None:
-        self._run("import-staged", "--directory", str(RECORDS))
+        self._run("import-staged", "--directory", str(RECORDS), "--authorized-by", IMPORT_AUTHORIZER)
         self._run("export-staged", "--output", str(self.exported))
         result = self._run("export-staged", "--output", str(self.exported), "--check")
         self.assertEqual(result["status"], "checked")
@@ -587,14 +716,14 @@ class ExportCheckTests(unittest.TestCase):
         self.assertIn("Local-only", result["note"])
 
     def test_check_writes_nothing(self) -> None:
-        self._run("import-staged", "--directory", str(RECORDS))
+        self._run("import-staged", "--directory", str(RECORDS), "--authorized-by", IMPORT_AUTHORIZER)
         result = self._run("export-staged", "--output", str(self.exported), "--check")
         self.assertFalse(self.exported.exists(), "--check must not create the output directory")
         self.assertFalse(result["clean"])
         self.assertTrue(result["missing_from_snapshot"])
 
     def test_check_detects_a_record_the_snapshot_has_gone_stale_on(self) -> None:
-        self._run("import-staged", "--directory", str(RECORDS))
+        self._run("import-staged", "--directory", str(RECORDS), "--authorized-by", IMPORT_AUTHORIZER)
         self._run("export-staged", "--output", str(self.exported))
         record_id = self._run("list-staged", "--status", "proposed")["records"][0]["id"]
         self._run(
@@ -608,7 +737,7 @@ class ExportCheckTests(unittest.TestCase):
         self.assertNotIn(record_id, result["missing_from_snapshot"])
 
     def test_check_detects_a_record_the_snapshot_still_has_after_deletion(self) -> None:
-        self._run("import-staged", "--directory", str(RECORDS))
+        self._run("import-staged", "--directory", str(RECORDS), "--authorized-by", IMPORT_AUTHORIZER)
         self._run("export-staged", "--output", str(self.exported))
         record_id = self._run("list-staged", "--status", "proposed")["records"][0]["id"]
         self._run("delete-staged", "--id", record_id, "--reason", "gone", "--deleted-by", "s")
@@ -617,7 +746,7 @@ class ExportCheckTests(unittest.TestCase):
         self.assertIn(record_id, result["extra_in_snapshot"])
 
     def test_check_ignores_the_readme(self) -> None:
-        self._run("import-staged", "--directory", str(RECORDS))
+        self._run("import-staged", "--directory", str(RECORDS), "--authorized-by", IMPORT_AUTHORIZER)
         self._run("export-staged", "--output", str(self.exported))
         (self.exported / "README.md").write_text("generated, do not edit\n", encoding="utf-8")
         result = self._run("export-staged", "--output", str(self.exported), "--check")
@@ -646,7 +775,7 @@ class DispositionTests(unittest.TestCase):
             )
             if frontmatter["status"] == "proposed"
         )
-        self._run("import-staged", "--directory", str(RECORDS))
+        self._run("import-staged", "--directory", str(RECORDS), "--authorized-by", IMPORT_AUTHORIZER)
 
     def _run(self, *arguments: str) -> dict:
         return cli.run([*arguments, "--config", str(self.config_path)])
@@ -751,7 +880,7 @@ class DeletionTests(unittest.TestCase):
         self.config_path.write_text(
             json.dumps({"database": str(root / "knowledge.db")}), encoding="utf-8"
         )
-        self._run("import-staged", "--directory", str(RECORDS))
+        self._run("import-staged", "--directory", str(RECORDS), "--authorized-by", IMPORT_AUTHORIZER)
         self.proposed = self._first_with_status("proposed")
         self.accepted = self._first_with_status("accepted")
 

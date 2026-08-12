@@ -169,6 +169,16 @@ def _parser() -> argparse.ArgumentParser:
     add_config(show_staged)
     import_staged = subparsers.add_parser("import-staged")
     import_staged.add_argument("--directory", required=True)
+    import_staged.add_argument(
+        "--authorized-by",
+        dest="authorized_by",
+        help=(
+            "required when any record in the batch carries a disposition: the authorized human "
+            "accountable for admitting decisions that this store never saw made. A batch of "
+            "purely 'proposed' records needs no authorization -- it is equivalent to a series "
+            "of propose calls"
+        ),
+    )
     add_config(import_staged)
     disposition = subparsers.add_parser("disposition-staged")
     disposition.add_argument("--id", required=True, dest="record_id")
@@ -415,29 +425,93 @@ def _show_staged(db: Any, record_id: str) -> dict[str, Any]:
     }
 
 
-def _import_staged(db: Any, directory: str) -> dict[str, Any]:
+def _import_staged(db: Any, directory: str, authorized_by: str | None = None) -> dict[str, Any]:
     """Stage every record file in a directory, atomically across the batch.
 
     Migration is the intended use, so a partial import is the wrong outcome:
     a batch that half-succeeds leaves the operator unable to tell which
     records made it without diffing. Every file is validated first, and the
     batch is written only if all of them pass.
+
+    **Why this verb needs an authorization the others do not.** Once `propose`
+    refused pre-dispositioned records, this became the only route by which a
+    decision the store never watched being made can still enter it. That is a
+    legitimate need -- re-importing an exported corpus, moving a store between
+    machines -- but it is not a proposal, and treating it as one is how the
+    self-approval `propose` now blocks would simply relocate here. Prose said
+    "don't route around `propose` with `import-staged`", which is exactly the
+    kind of convention this store has already learned not to rely on.
+
+    So the cost is scoped to the risky half. A batch of purely `proposed`
+    records imports with no ceremony: it is equivalent to a series of
+    `propose` calls, grants nobody anything, and is the common case for
+    seeding a fresh store. A batch containing *any* dispositioned record
+    requires `--authorized-by`, naming the human accountable for admitting
+    decisions this store cannot attribute -- the same pattern, and the same
+    reasoning, as `delete-staged --authorized-by` on an accepted record.
+
+    Self-approval is refused outright here, authorization or not. A named
+    human can vouch for a decision the store did not witness; nobody can
+    vouch for a record whose stager and decider are the same actor, because
+    that is not a decision at all. `ingest_accepted` refuses the same shape
+    at the last step; this catches it at the first, before it is ever stored.
+
+    Like every other actor field in this store, `--authorized-by` is a
+    caller-asserted string authenticated by nobody (see `SECURITY.md`). It
+    makes the act deliberate and attributable, not verified.
     """
     root = Path(directory)
     if not root.is_dir():
         raise ValueError(f"Not a directory: {directory}")
-    sources = sorted(root.glob("*.md"))
+    # README.md is skipped for the same reason `export-staged --check` skips
+    # it: `roster/knowledge-store/proposed-knowledge/` ships one by design, so
+    # the canonical snapshot directory could not be imported at all without
+    # this -- it failed on the README's missing frontmatter before reaching a
+    # single record. Only this one name is skipped; any other unparseable file
+    # is still a loud failure, because silently ignoring files in a migration
+    # is how a partial corpus arrives looking complete.
+    sources = [path for path in sorted(root.glob("*.md")) if path.name != "README.md"]
     if not sources:
         raise ValueError(f"No .md staged-record files found in {directory}")
     parsed = []
+    dispositioned = []
     for path in sources:
         frontmatter, body = parse_record(path.read_text(encoding="utf-8"))
         findings = validate_parsed(frontmatter, body)
         if findings:
             raise ValueError(f"{path.name}: " + "; ".join(findings))
+        disposition = frontmatter.get("disposition")
+        if disposition:
+            decided_by = disposition.get("decided_by")
+            if decided_by is not None and decided_by == frontmatter.get("staged_by"):
+                raise ValueError(
+                    f"{path.name}: {decided_by!r} both staged and dispositioned this record. "
+                    "Importing cannot launder a self-approval, and no --authorized-by permits "
+                    "it: authorship and approval separation is why an agent may write to this "
+                    "store at all. Nothing in the batch was imported."
+                )
+            dispositioned.append(frontmatter["id"])
         parsed.append((path, frontmatter, body))
+
+    if dispositioned and not authorized_by:
+        listed = ", ".join(sorted(dispositioned)[:5])
+        more = "" if len(dispositioned) <= 5 else f" (and {len(dispositioned) - 5} more)"
+        raise ValueError(
+            f"{len(dispositioned)} record(s) in this batch already carry a steward's "
+            f"disposition: {listed}{more}. Importing them admits decisions this store never "
+            "saw made, so it requires --authorized-by naming the human accountable for that. "
+            "A batch of purely 'proposed' records needs no authorization. Nothing was imported."
+        )
+
     imported = [put_record(db, frontmatter, body) for _, frontmatter, body in parsed]
-    return {"status": "imported", "count": len(imported), "ids": sorted(imported)}
+    result: dict[str, Any] = {"status": "imported", "count": len(imported), "ids": sorted(imported)}
+    if dispositioned:
+        # Echoed back so the operator sees what their authorization actually
+        # covered, rather than a count that hides which records were decided
+        # elsewhere.
+        result["dispositioned"] = sorted(dispositioned)
+        result["authorized_by"] = authorized_by
+    return result
 
 
 def _export_staged(db: Any, output: str, status: str | None) -> dict[str, Any]:
@@ -782,7 +856,11 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
             if command == "list-staged":
                 return {"records": list_records(db, options.pop("status", None))}
             if command == "import-staged":
-                return _import_staged(db, options.pop("directory"))
+                return _import_staged(
+                    db,
+                    options.pop("directory"),
+                    authorized_by=options.pop("authorized_by", None),
+                )
             if command == "export-staged":
                 check = options.pop("check", False)
                 output = options.pop("output")

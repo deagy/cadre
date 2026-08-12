@@ -112,12 +112,14 @@ delete-ingested --scope {source|conversation|message} --id <id> --reason <text> 
 propose (--input <file>|- | --from-finding <file>|-) [--render-only]
 list-staged [--status <status>]
 show-staged --id <id>
-import-staged --directory <dir>
+import-staged --directory <dir> [--authorized-by <human>]
 export-staged --output <dir> [--status <status>] [--check]
 disposition-staged --id <id> --action <accepted|rejected|deferred> --reason <text> --classification-used <level> --decided-by <actor> [--diverged-from-proposal]
 delete-staged --id <id> --reason <text> --deleted-by <actor> [--authorized-by <human>]
 deletion-evidence [--source <name> | --all-sources]
 ```
+
+`import-staged` needs `--authorized-by` only when the batch contains a record that already carries a steward's `disposition`. Importing those admits decisions this store never watched being made — a legitimate migration act, but not a proposal, and the only remaining route by which a decision can enter without `disposition-staged` having recorded it. A batch of purely `proposed` records needs nothing extra. A self-approved record (`disposition.decided_by` equal to `staged_by`) is refused either way: a named human can vouch for a decision the store did not witness, but nobody can vouch for one that was never a decision. A `README.md` in the directory is skipped, matching `export-staged --check`; any other unparseable file fails the whole batch.
 
 Without `--config`, configuration is read using the project-local-then-global resolution above; if no config file exists at the resolved location, built-in defaults apply relative to that same directory. An existing config resolves its database path relative to the config directory. A supplied `--config` path must exist and contain a JSON object; otherwise the command fails closed.
 
