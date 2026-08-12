@@ -631,6 +631,22 @@ class DriftDetectionTests(unittest.TestCase):
                 self.assertFalse(fails, describe(differences))
 
 
+def _revert_source_filter_retype(schema: dict) -> None:
+    """Undo the 6 -> 7 `source_filter` retype in a reconstructed old schema.
+
+    A reconstruction built by subtracting from the *current* file accumulates
+    one undo step per schema change that lands after the version it targets.
+    This is the second (the first being `undeclared_workflow_shape_routes`),
+    and it is exactly the decay this suite exists to catch: without this step
+    the reconstruction claims v5 shipped arrays, and the test comparing it to
+    the real released bytes is what noticed.
+    """
+    schema["properties"]["inputs"]["properties"]["source_filter"] = {"$ref": "#/$defs/nonempty"}
+    schema["properties"]["knowledge_context"]["properties"]["source_filter"] = {
+        "$ref": "#/$defs/nonempty"
+    }
+
+
 class V5ReconstructionTests(unittest.TestCase):
     """Subsumes the limitation disclosed on
     `test_undeclared_workflow_shape.py::test_a_pinned_v5_consumer_fails_on_the_version_not_on_the_new_property`.
@@ -643,15 +659,25 @@ class V5ReconstructionTests(unittest.TestCase):
 
     SIGNAL = "undeclared_workflow_shape_routes"
 
-    def _reconstructed_v5(self) -> dict:
+    def _reconstructed_v6(self) -> dict:
+        """The current file minus every change that landed after v6."""
         schema = current_schema()
+        schema["properties"]["schema_version"]["const"] = 6
+        _revert_source_filter_retype(schema)
+        return schema
+
+    def _reconstructed_v5(self) -> dict:
+        schema = self._reconstructed_v6()
         schema["properties"]["schema_version"]["const"] = 5
         del schema["properties"][self.SIGNAL]
         return schema
 
     def test_shipping_the_signal_without_a_bump_would_have_failed_this_guard(self) -> None:
         previous = self._reconstructed_v5()
-        mislabelled = current_schema()
+        # v6, not the current file: this replays #214's rejected proposal,
+        # which is a claim about the v5 -> v6 delta alone. Comparing against
+        # the current file would fold in every later change too.
+        mislabelled = self._reconstructed_v6()
         mislabelled["properties"]["schema_version"]["const"] = 5  # the rejected proposal
 
         differences = field_set_differences(previous, mislabelled)
@@ -663,10 +689,10 @@ class V5ReconstructionTests(unittest.TestCase):
         )
 
     def test_the_bump_that_actually_shipped_passes(self) -> None:
-        differences = field_set_differences(self._reconstructed_v5(), current_schema())
+        differences = field_set_differences(self._reconstructed_v5(), self._reconstructed_v6())
         self.assertEqual(differences["added"], [self.SIGNAL, f"{self.SIGNAL}[]"])
         self.assertNotEqual(
-            schema_version_of(self._reconstructed_v5()), schema_version_of(current_schema())
+            schema_version_of(self._reconstructed_v5()), schema_version_of(self._reconstructed_v6())
         )
 
     def test_the_reconstruction_matches_the_schema_actually_released_as_v5(self) -> None:

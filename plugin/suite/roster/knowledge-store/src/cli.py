@@ -23,7 +23,7 @@ from service import build_agent_context, ingest_file, search_store, stable_query
 from settings import SettingsError
 from staged_records import STATUS_VALUES as STAGED_STATUSES
 from staged_records import parse_record, validate_parsed
-from accepted_ingest import ingest_accepted
+from accepted_ingest import STAGED_SOURCE, ingest_accepted
 from staged_store import (
     delete_record,
     deletion_evidence,
@@ -72,7 +72,12 @@ def _parser() -> argparse.ArgumentParser:
     search.add_argument("--query", required=True)
     search.add_argument("--classification", required=True)
     search.add_argument("--top")
-    search.add_argument("--source")
+    # Repeatable: a caller may need more than one source in a single query --
+    # a project's ingested corpus plus `proposed-knowledge`, the dedicated
+    # source steward-accepted findings land under (`accepted_ingest.py`). That
+    # source still has to be named, so it is reached deliberately rather than
+    # by accident; being repeatable only removes the need for two queries.
+    search.add_argument("--source", action="append", dest="sources", metavar="SOURCE")
     search.add_argument("--all-sources", action="store_true")
     add_config(search)
     context = subparsers.add_parser("context")
@@ -81,7 +86,7 @@ def _parser() -> argparse.ArgumentParser:
     context.add_argument("--query", required=True)
     context.add_argument("--classification", required=True)
     context.add_argument("--top")
-    context.add_argument("--source")
+    context.add_argument("--source", action="append", dest="sources", metavar="SOURCE")
     context.add_argument("--all-sources", action="store_true")
     add_config(context)
     stats = subparsers.add_parser("stats")
@@ -233,14 +238,15 @@ def _enforce_retrieval_scope(tier: str, options: dict[str, Any]) -> None:
     """
     if tier != TIER_GLOBAL_FALLBACK:
         return
-    source = options.get("source")
+    sources = options.get("sources")
     all_sources = options.get("all_sources")
-    if source and all_sources:
+    _enforce_staged_source_scope(tier, sources)
+    if sources and all_sources:
         raise ValueError(
-            "Ambiguous scope: pass either --source <project-identifier> or "
+            "Ambiguous scope: pass either --source <project-identifier> (repeatable) or "
             "--all-sources against the shared global knowledge store, not both."
         )
-    if not source and not all_sources:
+    if not sources and not all_sources:
         raise ValueError(
             "A project scope is required against the shared global knowledge store: "
             "pass --source <project-identifier> to scope this query, or --all-sources "
@@ -510,8 +516,50 @@ def _enforce_staging_scope(tier: str) -> None:
     )
 
 
+def _enforce_staged_source_scope(tier: str, sources: Any) -> None:
+    """Refuse the staged-findings source against the shared global store.
+
+    The retrieval-side mirror of `_enforce_staging_scope`. That function makes
+    staged records per project by refusing to *write* them to the shared
+    store; without this, `proposed-knowledge` was still a flat, unqualified
+    name that any project could ingest under and every project could read --
+    and since a dispatch plan now names it in every retrieval, one project's
+    accepted findings would reach another's agents with no flag and no signal.
+
+    The rule is the same one stated positively: if staged records cannot be
+    written here, nothing here under that source belongs to the caller. A
+    project-local partition is the supported way to have staged findings at
+    all, so the error points at the same remedy `_enforce_staging_scope` does.
+
+    `--source` remains free-form everywhere else; this reserves exactly one
+    name, and only at the tier where the store is shared.
+
+    `--all-sources` still reaches it, and that is deliberate rather than a
+    gap: that flag's whole meaning at this tier is "explicitly opt into
+    cross-project retrieval", so a caller who passes it has already said the
+    thing this check exists to stop people saying by accident. What is refused
+    is naming the source while believing the query is project-scoped.
+    """
+    if tier != TIER_GLOBAL_FALLBACK:
+        return
+    named = [sources] if isinstance(sources, str) else list(sources or [])
+    if STAGED_SOURCE not in named:
+        return
+    raise ValueError(
+        f"{STAGED_SOURCE!r} is the per-project staged-findings source and is not "
+        "readable or writable in the shared global knowledge store -- staged records "
+        "cannot be written here at all (see `propose`), so anything under that name "
+        "here belongs to another project. Create .agents/knowledge-store/config.json "
+        "in this project (an empty {} is enough to claim a project-local partition), "
+        "or pass --config pointing at the store this project owns. To query the "
+        f"shared store anyway, drop --source {STAGED_SOURCE} and name only the "
+        "sources this project ingested."
+    )
+
+
 def _enforce_ingest_scope(tier: str, options: dict[str, Any]) -> None:
     """Gate `ingest` at the shared global-fallback tier only (KS-FR-10..12)."""
+    _enforce_staged_source_scope(tier, options.get("source"))
     if options.get("source"):
         return
     if tier == TIER_GLOBAL_FALLBACK:

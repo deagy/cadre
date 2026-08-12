@@ -3,7 +3,7 @@
 This walks through one real, committed `cadre select` plan so a reader can see
 what the selector actually produces before running it themselves. The
 authoritative shape is [`roster/orchestration/selection.schema.json`](../roster/orchestration/selection.schema.json)
-(`schema_version: 6`); if this page and the schema ever disagree, the schema
+(`schema_version: 7`); if this page and the schema ever disagree, the schema
 wins.
 
 See the [glossary](terminology.md) for definitions of the terms used below
@@ -53,7 +53,7 @@ comment).
 
 ```json
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "task_id": "GOLDEN-CROSS-STACK-1",
   "generated_at": "2026-08-10T18:57:46.976Z",
   "status": "ready",
@@ -68,7 +68,7 @@ comment).
       "services/upload/main.go"
     ],
     "classification": "internal",
-    "source_filter": "deagy/cadre"
+    "source_filter": ["deagy/cadre", "proposed-knowledge"]
   },
   "matched_routes": [
     {
@@ -239,7 +239,7 @@ comment).
   "knowledge_context": {
     "status": "planned",
     "classification": "internal",
-    "source_filter": "deagy/cadre",
+    "source_filter": ["deagy/cadre", "proposed-knowledge"],
     "requests": [
       {
         "agent": "interaction-designer",
@@ -264,7 +264,9 @@ comment).
             "--top",
             "5",
             "--source",
-            "deagy/cadre"
+            "deagy/cadre",
+            "--source",
+            "proposed-knowledge"
           ]
         }
       },
@@ -291,7 +293,9 @@ comment).
             "--top",
             "5",
             "--source",
-            "deagy/cadre"
+            "deagy/cadre",
+            "--source",
+            "proposed-knowledge"
           ]
         }
       },
@@ -318,7 +322,9 @@ comment).
             "--top",
             "5",
             "--source",
-            "deagy/cadre"
+            "deagy/cadre",
+            "--source",
+            "proposed-knowledge"
           ]
         }
       },
@@ -345,7 +351,9 @@ comment).
             "--top",
             "5",
             "--source",
-            "deagy/cadre"
+            "deagy/cadre",
+            "--source",
+            "proposed-knowledge"
           ]
         }
       },
@@ -372,7 +380,9 @@ comment).
             "--top",
             "5",
             "--source",
-            "deagy/cadre"
+            "deagy/cadre",
+            "--source",
+            "proposed-knowledge"
           ]
         }
       },
@@ -399,7 +409,9 @@ comment).
             "--top",
             "5",
             "--source",
-            "deagy/cadre"
+            "deagy/cadre",
+            "--source",
+            "proposed-knowledge"
           ]
         }
       },
@@ -426,7 +438,9 @@ comment).
             "--top",
             "5",
             "--source",
-            "deagy/cadre"
+            "deagy/cadre",
+            "--source",
+            "proposed-knowledge"
           ]
         }
       }
@@ -499,9 +513,11 @@ comment).
   authoritative definition, this is a pointer to it, not a duplicate.
 - **`knowledge_context`** — one retrieval request per selected agent, each
   with the exact CLI invocation to run against the knowledge store
-  (`--source` scoped to this repository's origin remote, `--classification`
-  matched to the task). `status: "planned"` means retrieval is proposed, not
-  performed — `cadre select` never executes retrieval itself.
+  (one `--source` per source in `source_filter` — this repository's origin
+  remote plus `proposed-knowledge`, where steward-accepted findings are
+  ingested — and `--classification` matched to the task). `status: "planned"`
+  means retrieval is proposed, not performed — `cadre select` never executes
+  retrieval itself.
 - **`provenance`** — binds the plan to the exact inputs that produced it:
   content hashes over `catalog.yaml` and the routing configuration, plus
   best-effort `git_commit_sha` / `git_dirty_paths` for the checkout and, when

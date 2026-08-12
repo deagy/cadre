@@ -421,7 +421,7 @@ class TestLifecycleAwareSelection(unittest.TestCase):
                         "task": task, "task_id": "BOUNDARY-1",
                         "repository_root": str(REPO_ROOT), "base": None,
                         "classification": "internal", "changed_files": files,
-                        "changed_file_source": "explicit", "source": "deagy/cadre", "top": 5,
+                        "changed_file_source": "explicit", "sources": ["deagy/cadre"], "top": 5,
                     },
                     require_sdlc=True,
                 )

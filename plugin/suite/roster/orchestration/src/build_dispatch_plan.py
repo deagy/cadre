@@ -538,9 +538,12 @@ def _build_knowledge_context(
             classification,
             "--top",
             str(top),
-            "--source",
-            input_data["source"],
         ]
+        # One --source per entry: the store's flag is repeatable, and naming
+        # each source keeps the retrieval scoped. Never --all-sources, which
+        # on the shared global store would read other projects' corpora.
+        for knowledge_source in input_data["sources"]:
+            args.extend(["--source", knowledge_source])
         requests.append(
             {
                 "agent": agent,
@@ -558,7 +561,7 @@ def _build_knowledge_context(
     return {
         "status": "planned",
         "classification": classification,
-        "source_filter": input_data["source"],
+        "source_filter": list(input_data["sources"]),
         "requests": requests,
     }
 
@@ -817,9 +820,15 @@ def build_dispatch_plan(
     # `workflow_shape: "unclassified"` and omitting the field entirely
     # produces an otherwise byte-identical plan -- excluding this field would
     # make those two genuinely different configurations fingerprint-identical.
+    # 6 -> 7: both `source_filter` fields retyped from a bare string to an
+    # array when `--source` became repeatable, so a plan now scopes retrieval
+    # to the repository's own source *and* `proposed-knowledge`. A retype is
+    # covered by the same rule as an addition -- more plainly so, since a
+    # pinned consumer reading `source_filter` as a string breaks on the value
+    # rather than merely on an unknown key.
     undeclared_workflow_shapes = _undeclared_workflow_shape_routes(matched_routes)
     dispatch = {
-        "schema_version": 6,
+        "schema_version": 7,
         "task_id": task_id,
         "generated_at": generated_at,
         "status": "ready" if selected_agents else "needs-triage",
@@ -831,7 +840,7 @@ def build_dispatch_plan(
             "changed_file_source": input_data["changed_file_source"],
             "changed_files": input_data["changed_files"],
             "classification": input_data.get("classification"),
-            "source_filter": input_data["source"],
+            "source_filter": list(input_data["sources"]),
         },
         "matched_routes": [{"id": match["id"], "reasons": _reasons(match)} for match in matched_routes],
         "matched_risks": [{"id": match["id"], "reasons": _reasons(match)} for match in matched_risks],

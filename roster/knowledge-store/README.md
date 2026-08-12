@@ -25,10 +25,13 @@ enforced partitions for materially different classifications or tenants" rule
 rests on two mechanisms together: a project with materially different
 requirements should use tier 1 (its own store) rather than the shared default,
 and every ingestion/retrieval call against the shared store should carry a
-`--source` that identifies the originating project. `cadre select` uses an
-explicit caller value first, then the target repository's lowercase
+`--source` that identifies the originating project. `cadre select` uses
+explicit caller values first, then the target repository's lowercase
 `owner/repository` origin slug, and finally a
-`local-<basename>-<canonical-path-hash>` fallback.
+`local-<basename>-<canonical-path-hash>` fallback -- and always appends
+`proposed-knowledge`, the dedicated source steward-accepted findings are
+ingested under, so a dispatched agent reaches both halves of what its project
+has authorized in one retrieval rather than none of the accepted half.
 
 ### Enforced scope at the global-fallback tier
 
@@ -100,8 +103,8 @@ For production-quality semantic retrieval, `openai-compatible` sends chunk text 
 ```text
 init
 ingest --input <file> [--source <name>] [--classification <level>] [--retention-days <n>]
-search --query <text> --classification <level> [--top <n>] [--source <name> | --all-sources]
-context --agent <role> --task-id <id> --query <text> --classification <level> [--top <n>] [--source <name> | --all-sources]
+search --query <text> --classification <level> [--top <n>] [--source <name> ... | --all-sources]
+context --agent <role> --task-id <id> --query <text> --classification <level> [--top <n>] [--source <name> ... | --all-sources]
 stats
 retention-report [--as-of <iso-8601 date or timestamp>]
 delete-ingested --scope {source|conversation|message} --id <id> --reason <text> --deleted-by <actor> --authorized-by <human> --trigger <trigger> [--source <name>] [--dry-run]
@@ -119,9 +122,20 @@ deletion-evidence [--source <name> | --all-sources]
 Without `--config`, configuration is read using the project-local-then-global resolution above; if no config file exists at the resolved location, built-in defaults apply relative to that same directory. An existing config resolves its database path relative to the config directory. A supplied `--config` path must exist and contain a JSON object; otherwise the command fails closed.
 
 At the global-fallback tier only (see "Enforced scope at the global-fallback
-tier" above), `search`/`context`/`deletion-evidence` require exactly one of `--source`/
-`--all-sources`, and `ingest`/`delete-ingested` require an explicit
-`--source`. Project-local and explicit-`--config` invocations impose no such
+tier" above), `search`/`context`/`deletion-evidence` require at least one
+`--source` or else `--all-sources`, never both. **`proposed-knowledge` is
+refused entirely at that tier**, on read and on write alike: staged records
+cannot be written to the shared store (`propose` refuses outright), so
+anything under that name there belongs to another project, and a dispatch plan
+names the source in every retrieval. Claim a project-local partition -- an
+empty `{}` in `.agents/knowledge-store/config.json` is enough -- to have
+staged findings at all. `--all-sources` still reaches it, deliberately: that
+flag already means "explicitly opt into cross-project retrieval", and what is
+refused is naming the source while believing the query is project-scoped. `--source` is repeatable on
+`search`/`context` (each entry is a separate source to search, order-preserving
+and de-duplicated); it stays single-valued on `ingest`, `delete-ingested`, and
+`deletion-evidence`, which each act on exactly one source. `ingest`/`delete-ingested`
+require an explicit `--source`. Project-local and explicit-`--config` invocations impose no such
 requirement. `deletion-evidence` is scoped for the same reason retrieval is:
 an evidence row is not content, but it carries the deleting project's
 identifier, its steward's free-text reason, and asserted actor identities, so
@@ -138,7 +152,7 @@ silently sorted against stored values.
 
 `context` is the agent-facing command. It returns a schema-versioned bundle containing trust requirements, citations, and retrieved passages. `search` is a lower-level diagnostic command. Both require an explicit classification and apply exact-match classification and optional source filtering before ranking. `--top` must be an integer from 1 through 20, enforcing the orchestration policy limit.
 
-`context` records `query_hash`, `task_id`, `agent`, `classification`, `source_filter`, embedding provider/model, requested top, result count, and creation time. It does not record an authenticated subject, tenant/project/environment scope, authorization decision or policy version, nor returned chunk/citation identifiers. Production auditing must add those fields and derive access from authenticated claims.
+`context` records `query_hash`, `task_id`, `agent`, `classification`, `source_filter`, embedding provider/model, requested top, result count, and creation time. `source_filter` holds a JSON array of the sources the call named (NULL for `--all-sources`); **rows written before `--source` became repeatable hold a bare source string instead**, and this append-only log is never rewritten, so a reader must accept both encodings. It does not record an authenticated subject, tenant/project/environment scope, authorization decision or policy version, nor returned chunk/citation identifiers. Production auditing must add those fields and derive access from authenticated claims.
 
 Read-only retrieval means agents cannot mutate stored content or lifecycle state. Opening any command, including `context`, can nevertheless create the database directory, SQLite file, schema, and WAL files; `context` also writes retrieval metadata. Grant that operational write access separately from content-steward authority. Citations use `source`, `conversation_id`, `message_id`, `chunk_id`, `content_hash`, `created_at`, and `classification`. The database retains `source_uri` for steward provenance, but retrieval output omits it by default because it may expose a local path. `content_hash` covers stored redacted content, not the original source.
 

@@ -152,9 +152,15 @@ def save_message(
 def load_chunks(db: sqlite3.Connection, embedding: dict[str, Any], filters: dict[str, Any]) -> list[sqlite3.Row]:
     clauses = ["c.embedding_provider = ?", "c.embedding_model = ?", "c.embedding_dimensions = ?"]
     values: list[Any] = [embedding["provider"], embedding["model"], embedding["dimensions"]]
-    if filters.get("source"):
-        clauses.append("m.source = ?")
-        values.append(filters["source"])
+    # A list, because one query may legitimately span a project's ingested
+    # corpus and `proposed-knowledge` (the dedicated source steward-accepted
+    # findings land under). Empty/absent still means "every source", which is
+    # what `--all-sources` resolves to -- the scope gate in cli.py is what
+    # decides whether that is allowed, not this function.
+    sources = filters.get("sources")
+    if sources:
+        clauses.append(f"m.source IN ({', '.join('?' * len(sources))})")
+        values.extend(sources)
     if not filters.get("classification"):
         raise ValueError("A classification filter is required")
     clauses.append("m.classification = ?")
@@ -166,6 +172,24 @@ def load_chunks(db: sqlite3.Connection, embedding: dict[str, Any], filters: dict
       WHERE {' AND '.join(clauses)}""", values).fetchall()
 
 
+def encode_source_filter(sources: list[str] | None) -> str | None:
+    """Encode the retrieval scope for the `retrieval_runs.source_filter` column.
+
+    JSON rather than a delimiter-joined string: a source identifier is
+    caller-supplied and may contain any character, so no separator is safely
+    unambiguous. NULL keeps its existing meaning of "no scope" -- an
+    `--all-sources` read.
+
+    **Rows written before `--source` became repeatable hold a bare source
+    string, not JSON.** This column is an append-only audit log and is not
+    rewritten, so a reader must accept both encodings: try `json.loads` and
+    treat a failure (or a non-list result) as a single legacy source.
+    """
+    if not sources:
+        return None
+    return json.dumps(list(sources))
+
+
 def record_retrieval(db: sqlite3.Connection, retrieval: dict[str, Any]) -> str:
     retrieval_id = str(uuid.uuid4())
     with db:
@@ -173,7 +197,8 @@ def record_retrieval(db: sqlite3.Connection, retrieval: dict[str, Any]) -> str:
           source_filter, embedding_provider, embedding_model, requested_top, result_count, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (
             retrieval_id, retrieval["query_hash"], retrieval["task_id"], retrieval["agent"],
-            retrieval["classification"], retrieval.get("source"), retrieval["embedding"]["provider"],
+            retrieval["classification"], encode_source_filter(retrieval.get("sources")),
+            retrieval["embedding"]["provider"],
             retrieval["embedding"]["model"], retrieval["requested_top"], retrieval["result_count"], _now(),
         ))
     return retrieval_id

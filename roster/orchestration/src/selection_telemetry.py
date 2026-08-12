@@ -71,7 +71,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TextIO
 
-SCHEMA_VERSION = 1
+# 1 -> 2: `source_filter` follows the plan's retype from a bare string to an
+# array of sources. Records are local, append-only, and never validated on
+# read, so nothing rejects a version-1 row -- the bump exists so a log holding
+# both encodings stays self-describing to whoever reads it later.
+SCHEMA_VERSION = 2
 ENV_ENABLE = "CADRE_SELECTION_TELEMETRY"
 ENV_INCLUDE_TASK = "CADRE_SELECTION_TELEMETRY_INCLUDE_TASK"
 ENV_PATH = "CADRE_SELECTION_TELEMETRY_PATH"

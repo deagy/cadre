@@ -52,7 +52,7 @@ def _values(**overrides: object) -> dict[str, object]:
         "changed_files": ["main.tf"],
         "changed_file_source": "test",
         "repository_root": str(AGENTS_ROOT.parent),
-        "source": "example/repository",
+        "sources": ["example/repository"],
         "classification": "internal",
         "task_id": "PROVENANCE-1",
         **overrides,

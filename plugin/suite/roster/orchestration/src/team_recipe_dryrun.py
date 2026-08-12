@@ -316,7 +316,7 @@ def _resolve_task_mode_signals(
             "changed_files": [str(file_name).replace("\\", "/") for file_name in changes["files"]],
             "changed_file_source": changes["source"],
             "classification": None,
-            "source": "team-recipe-dryrun",
+            "sources": ["team-recipe-dryrun"],
             "top": "5",
         },
     )

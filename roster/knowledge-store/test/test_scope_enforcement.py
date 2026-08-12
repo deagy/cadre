@@ -37,6 +37,8 @@ from config import (  # noqa: E402
     TIER_PROJECT_LOCAL,
     load_config,
 )
+from database import open_store  # noqa: E402
+from service import search_store  # noqa: E402
 
 
 class ScopeEnforcementTests(unittest.TestCase):
@@ -139,8 +141,11 @@ class ScopeEnforcementTests(unittest.TestCase):
         select_agents = importlib.import_module("select_agents")
         build_dispatch_plan = importlib.import_module("build_dispatch_plan")
 
-        source = select_agents.resolve_knowledge_source(REPO_ROOT)
-        self.assertTrue(source)
+        sources = select_agents.resolve_knowledge_sources(REPO_ROOT)
+        self.assertTrue(sources)
+        # The dedicated steward-accepted source is always among them, so a
+        # dispatched agent reaches accepted findings without a second query.
+        self.assertIn("proposed-knowledge", sources)
 
         catalog = select_agents.load_catalog(select_agents.ROSTER_ROOT / "catalog.yaml")
         # Mirrors select_agents' own load path, which resolves a project-local
@@ -161,19 +166,22 @@ class ScopeEnforcementTests(unittest.TestCase):
                 "changed_files": ["frontend/login.tsx"],
                 "changed_file_source": "explicit",
                 "classification": "internal",
-                "source": source,
+                "sources": sources,
                 "top": 5,
             },
             require_sdlc=False,
         )
         knowledge = plan.get("knowledge_context")
         self.assertIsNotNone(knowledge)
-        self.assertEqual(source, knowledge["source_filter"])
+        self.assertEqual(sources, knowledge["source_filter"])
         for request in knowledge["requests"]:
             args = request["invocation"]["args"]
             self.assertIn("--source", args)
-            supplied_source = args[args.index("--source") + 1]
-            self.assertTrue(supplied_source)
+            # One --source per source, never --all-sources: the scope gate
+            # this AC exists for is only satisfied by naming each source.
+            supplied = [args[index + 1] for index, arg in enumerate(args) if arg == "--source"]
+            self.assertEqual(sources, supplied)
+            self.assertNotIn("--all-sources", args)
 
     # -- AC-3: core enforcement, unscoped shared-store retrieval rejected --
 
@@ -343,7 +351,11 @@ class ScopeEnforcementTests(unittest.TestCase):
     def test_ac11_source_filter_null_for_all_sources_matches_schema(self) -> None:
         schema = json.loads((ROOT / "agent-context.schema.json").read_text(encoding="utf-8"))
         source_filter_type = schema["properties"]["source_filter"]["type"]
-        self.assertEqual(["string", "null"], source_filter_type)
+        # An array since `--source` became repeatable: a single-source
+        # retrieval reports ["proj-a"], not "proj-a". null still means an
+        # `--all-sources` read, which is what this AC pins.
+        self.assertEqual(["array", "null"], source_filter_type)
+        self.assertEqual(2, schema["properties"]["schema_version"]["const"])
 
         env_patch, cwd_patch = self._global_fallback_env()
         with env_patch, cwd_patch:
@@ -364,7 +376,151 @@ class ScopeEnforcementTests(unittest.TestCase):
                 "--query", "production release approval", "--classification", "internal",
                 "--source", "proj-a",
             ])
-            self.assertEqual("proj-a", scoped_bundle["source_filter"])
+            self.assertEqual(["proj-a"], scoped_bundle["source_filter"])
+            self.assertEqual(2, scoped_bundle["schema_version"])
+
+    def test_repeated_source_spans_both_sources_and_records_the_scope(self) -> None:
+        """A single retrieval reaches a project's corpus and `proposed-knowledge`.
+
+        The gap this closes: steward-accepted findings ingest under a
+        dedicated source (`accepted_ingest.STAGED_SOURCE`), so a query scoped
+        to the project's own source alone never saw them, however many
+        findings had been accepted.
+
+        Project-local, because that is the only tier where the staged source
+        exists: `_enforce_staged_source_scope` refuses it against the shared
+        store, mirroring `_enforce_staging_scope` on the write side.
+        """
+        env_patch, cwd_patch = self._project_local_env()
+        with env_patch, cwd_patch:
+            self._run(["init"])
+            self._run([
+                "ingest", "--input", str(ROOT / "examples" / "chat-export.json"),
+                "--source", "proj-a", "--classification", "internal",
+            ])
+            self._run([
+                "ingest", "--input", str(ROOT / "examples" / "chat-export.json"),
+                "--source", "proposed-knowledge", "--classification", "internal",
+            ])
+
+            single = self._run([
+                "search", "--query", "production release approval",
+                "--classification", "internal", "--source", "proj-a",
+            ])
+            both = self._run([
+                "search", "--query", "production release approval",
+                "--classification", "internal",
+                "--source", "proj-a", "--source", "proposed-knowledge",
+            ])
+            self.assertGreater(len(both["results"]), len(single["results"]))
+            self.assertEqual(
+                {"proj-a", "proposed-knowledge"},
+                {result["citation"]["source"] for result in both["results"]},
+            )
+
+            bundle = self._run([
+                "context", "--agent", "code-reviewer", "--task-id", "REL-5",
+                "--query", "production release approval", "--classification", "internal",
+                "--source", "proj-a", "--source", "proposed-knowledge",
+            ])
+            # Order preserved, so the audit row names the caller's primary
+            # scope first rather than a sorted set.
+            self.assertEqual(["proj-a", "proposed-knowledge"], bundle["source_filter"])
+
+    def test_staged_source_is_refused_against_the_shared_store_both_ways(self) -> None:
+        """`proposed-knowledge` is per project, on read as well as write.
+
+        `_enforce_staging_scope` already refuses to *stage* into the shared
+        store. Without the retrieval-side mirror, the source stayed a flat
+        unqualified name any project could `ingest` under and every project
+        could read -- and since a dispatch plan now names it in every
+        retrieval, one project's accepted findings would reach another
+        project's agents with no flag and no signal.
+        """
+        env_patch, cwd_patch = self._global_fallback_env()
+        with env_patch, cwd_patch:
+            self._run(["init"])
+            for argv, label in (
+                (["ingest", "--input", str(ROOT / "examples" / "chat-export.json"),
+                  "--source", "proposed-knowledge", "--classification", "internal"], "ingest"),
+                (["search", "--query", "release", "--classification", "internal",
+                  "--source", "proposed-knowledge"], "search"),
+                (["context", "--agent", "code-reviewer", "--task-id", "T-1",
+                  "--query", "release", "--classification", "internal",
+                  "--source", "proj-a", "--source", "proposed-knowledge"], "context"),
+            ):
+                with self.subTest(command=label):
+                    with self.assertRaises(ValueError) as raised:
+                        self._run(argv)
+                    self.assertIn("per-project staged-findings source", str(raised.exception))
+
+            # An unrelated source is unaffected -- exactly one name is reserved.
+            self._run([
+                "ingest", "--input", str(ROOT / "examples" / "chat-export.json"),
+                "--source", "proj-a", "--classification", "internal",
+            ])
+            self.assertIn("results", self._run([
+                "search", "--query", "release", "--classification", "internal",
+                "--source", "proj-a",
+            ]))
+
+    def test_the_pre_repeatable_source_key_is_refused_not_ignored(self) -> None:
+        """The retype's fail-open case, pinned.
+
+        `search_store` reads `sources`; an unmigrated caller still passing
+        `source` would match no key, and an absent scope means *every* source
+        rather than none -- silently widening a query the caller believes it
+        scoped. Ignoring the old spelling is the one failure direction this
+        store must not have, so it raises.
+        """
+        env_patch, cwd_patch = self._global_fallback_env()
+        with env_patch, cwd_patch:
+            self._run(["init"])
+            for source in ("proj-a", "other-project"):
+                self._run([
+                    "ingest", "--input", str(ROOT / "examples" / "chat-export.json"),
+                    "--source", source, "--classification", "internal",
+                ])
+            config = load_config()
+            db = open_store(config["database"])
+            try:
+                with self.assertRaises(ValueError) as raised:
+                    search_store(db, config, "production release approval",
+                                 {"classification": "internal", "source": "proj-a"})
+                self.assertIn("sources", str(raised.exception))
+
+                scoped = search_store(db, config, "production release approval",
+                                      {"classification": "internal", "sources": ["proj-a"]})
+                self.assertEqual({"proj-a"}, {r["citation"]["source"] for r in scoped})
+            finally:
+                db.close()
+
+    def test_repeated_source_is_deduplicated_and_json_encoded_in_the_audit_row(self) -> None:
+        env_patch, cwd_patch = self._global_fallback_env()
+        with env_patch, cwd_patch:
+            self._run(["init"])
+            self._run([
+                "ingest", "--input", str(ROOT / "examples" / "chat-export.json"),
+                "--source", "proj-a", "--classification", "internal",
+            ])
+            bundle = self._run([
+                "context", "--agent", "code-reviewer", "--task-id", "REL-6",
+                "--query", "production release approval", "--classification", "internal",
+                "--source", "proj-a", "--source", "proj-a",
+            ])
+            self.assertEqual(["proj-a"], bundle["source_filter"])
+
+            config = load_config()
+            db = sqlite3.connect(config["database"])
+            try:
+                stored = db.execute(
+                    "SELECT source_filter FROM retrieval_runs WHERE task_id = ?", ("REL-6",)
+                ).fetchone()[0]
+            finally:
+                db.close()
+            # JSON, not a delimiter-joined string: a source identifier is
+            # caller-supplied and no separator is safely unambiguous.
+            self.assertEqual(["proj-a"], json.loads(stored))
 
     # -- AC-12: authority boundary unchanged ---------------------------------
 

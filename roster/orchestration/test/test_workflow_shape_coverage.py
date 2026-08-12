@@ -92,7 +92,7 @@ def _inputs() -> list[dict[str, Any]]:
                     "changed_files": case["changed_files"],
                     "changed_file_source": "test",
                     "repository_root": str(AGENTS_ROOT.parent),
-                    "source": "example/repository",
+                    "sources": ["example/repository"],
                     "classification": classification,
                     "task_id": case["task_id"],
                 }
