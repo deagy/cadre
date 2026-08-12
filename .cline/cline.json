@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "hooks": {
+    "SessionStart": {
+      "command": "bash",
+      "args": ["bin/init-cline-memory"],
+      "description": "Auto-initialize Cline memory bank on first session open"
+    }
+  }
+}

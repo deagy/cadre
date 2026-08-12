@@ -1218,3 +1218,44 @@ rule) — `cadre init`'s RG-B allowlist surfaces this key. With it narrowed,
 `workspace-isolation.md`'s Step 1 condition fails for every dispatched
 write-capable role and edits land in-place instead, exactly as they did
 before this change.
+
+## 20. Cline memory bank — auto-initialized on first session
+
+Cline automatically initializes a persistent memory bank the first time it opens
+this repository directory. No manual setup required.
+
+On first Cline session open, a `.cline/cline.json` hook runs the
+`bin/init-cline-memory` script, which creates:
+
+1. **`.cline/memory/PROJECT_CONTEXT.md`** — project architecture, file structure,
+   common tasks, and operator settings reference
+2. **`.cline/memory/BEST_PRACTICES.md`** — contribution guidelines, regeneration
+   sequences, testing strategies, common pitfalls, and architecture rules
+3. **`.agents/cadre.yaml`** — template for project-local operator settings
+   (if missing)
+
+The memory bank persists across Cline sessions and includes:
+
+- Full project context (159 roles, lifecycle gates, architecture)
+- All common commands (tests, regeneration, selection, knowledge store)
+- Contribution best practices with checklists
+- Architecture rules (kernel boundary, authorship ≠ approval, untrusted knowledge,
+  deterministic selection)
+
+The hook is **idempotent**: it skips initialization if memory already exists.
+You can also manually initialize or reinitialize memory at any time:
+
+```sh
+bash bin/init-cline-memory
+```
+
+To create an isolated worktree for development with pre-bootstrapped plugin:
+
+```sh
+# Create a new worktree with plugin and memory auto-initialized
+./bin/bootstrap-cline-worktree                    # current branch
+./bin/bootstrap-cline-worktree --branch main      # specify branch
+./bin/bootstrap-cline-worktree --branch X --path P # custom path
+```
+
+See section 19 for worktree management and cleanup.
