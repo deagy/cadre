@@ -1533,8 +1533,16 @@ closed** — see G-13.
 - **The open non-blocking decisions stay open**: OD-3 (naming) and OD-4
   (`knowledge-store/AGENT.md` location).
 
-**The `.github/CODEOWNERS` merge review remains the only machine-checkable
-corroboration available, and remains unused.** Three transcribed approvals now
-rest on this record set where one did. That review has to happen before this
-branch can merge; cross-referencing it here once given would do more for the
-audit trail than any further prose about what transcription is worth.
+**A GitHub review remains the only machine-checkable corroboration available,
+and remains unused.** Three transcribed approvals now rest on this record set
+where one did. Cross-referencing one here, if given, would do more for the audit
+trail than any further prose about what transcription is worth.
+
+**Corrected before merge:** an earlier revision of this paragraph said that
+review "has to happen before this branch can merge". It does not.
+`.github/CODEOWNERS` auto-requests a review from `@deagy`; `main`'s ruleset sets
+`required_approving_review_count: 0` and `require_code_owner_review: false`, so
+nothing blocks a merge on it — consistent with the decision
+`docs/migration/monorepo-migration.md` records, which this baseline cites
+elsewhere and contradicted here. The review is worth having on its merits, not
+because it is unavoidable.

@@ -824,11 +824,28 @@ no agent in this run held authority to.
 of the pushback against OD-2. All are inputs to decisions, not decisions.
 
 **Worth one line on process, since G-6 records that nothing here is
-machine-checkable.** `.github/CODEOWNERS` already requires `@deagy`'s GitHub
-review before this branch can merge. That approval *is* machine-checkable, in a
-way transcribed prose is not, and it costs nothing extra because the review has
-to happen anyway. Cross-referencing it from this section once given would be
+machine-checkable.** A GitHub review by `@deagy` *is* machine-checkable in a way
+transcribed prose is not, and cross-referencing one from this section would be
 stronger evidence than anything currently offered — see `requirements.md` G-6.
+
+**Corrected before merge: that review is not required, and this section twice
+said it was.** `.github/CODEOWNERS` assigns `@deagy` as owner, which
+auto-*requests* a review; it does not require approval unless a rule enforces
+it, and `main`'s ruleset sets `required_approving_review_count: 0` with
+`require_code_owner_review: false`. So the claim that the review "has to happen
+anyway" — and the conclusion that giving it therefore costs nothing — was wrong
+on both halves.
+
+The correction is worth more than the fact. `docs/migration/monorepo-migration.md`
+records the deliberate decision to keep `required_approving_review_count` at 0,
+and this record set **quotes that document** in OD-13's options while asserting
+the opposite about enforcement three sections later. A citation read correctly
+and characterised wrongly is the precise failure §0 catalogues, committed here
+about this record's own approval mechanism.
+
+What survives: a review would still be the only machine-checkable corroboration
+on offer. What does not: any suggestion that it is free, or that merging waits
+for it.
 
 ---
 
