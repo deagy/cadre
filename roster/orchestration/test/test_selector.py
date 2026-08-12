@@ -31,10 +31,12 @@ from routing import (  # noqa: E402
     validate_routing_config,
 )
 from select_agents import (  # noqa: E402
+    PROJECT_LOCAL_KNOWLEDGE_CONFIG,
     STAGED_KNOWLEDGE_SOURCE,
     _origin_slug,
     discover_changed_files,
     explicit_files,
+    has_project_local_knowledge_store,
     resolve_knowledge_sources,
     resolve_project_knowledge_source,
 )
@@ -2119,12 +2121,85 @@ class SelectorTests(unittest.TestCase):
                     f"local-{expected_name}-{expected_hash}",
                     resolve_project_knowledge_source(root),
                 )
-                # The staged-findings source is appended to whatever the
-                # project resolves to, fallback included.
+                # No project-local knowledge-store config, so this repository's
+                # retrieval resolves to the shared global-fallback store, where
+                # the staged source is refused on read -- see the next test.
+                self.assertEqual(
+                    [f"local-{expected_name}-{expected_hash}"],
+                    resolve_knowledge_sources(root),
+                )
+                # Claim a project-local partition and the staged-findings
+                # source is appended to whatever the project resolves to,
+                # fallback slug included.
+                config = root / ".agents" / "knowledge-store"
+                config.mkdir(parents=True)
+                (config / "config.json").write_text("{}\n", encoding="utf-8")
                 self.assertEqual(
                     [f"local-{expected_name}-{expected_hash}", STAGED_KNOWLEDGE_SOURCE],
                     resolve_knowledge_sources(root),
                 )
+
+    def test_staged_source_is_omitted_where_the_store_would_refuse_it(self) -> None:
+        """A plan must not emit argv its own store rejects.
+
+        `cli._enforce_staged_source_scope` refuses `proposed-knowledge` against
+        the shared global-fallback store on read as well as write, and refusal
+        is per call rather than per source -- so naming it for a repository
+        with no `.agents/knowledge-store/config.json` produced a retrieval that
+        returned *nothing*, including the project's own corpus. The pairing
+        this asserts is the contract: name the staged source exactly where the
+        store will accept it.
+        """
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory).resolve()
+            (root / ".git").mkdir()
+            with patch("select_agents._run_git", return_value="https://github.com/Example/Repo.git"):
+                self.assertFalse(has_project_local_knowledge_store(root))
+                self.assertEqual(["example/repo"], resolve_knowledge_sources(root))
+
+                (root / ".agents" / "knowledge-store").mkdir(parents=True)
+                (root / ".agents" / "knowledge-store" / "config.json").write_text(
+                    "{}\n", encoding="utf-8"
+                )
+                self.assertTrue(has_project_local_knowledge_store(root))
+                self.assertEqual(
+                    ["example/repo", STAGED_KNOWLEDGE_SOURCE], resolve_knowledge_sources(root)
+                )
+
+    def test_project_local_knowledge_config_path_matches_the_store_constant(self) -> None:
+        """`PROJECT_LOCAL_KNOWLEDGE_CONFIG` duplicates `config.PROJECT_LOCAL_RELATIVE_PATH`.
+
+        Duplicated for the same reason as `STAGED_KNOWLEDGE_SOURCE` (this
+        module does not import the store's `src/`), so it needs the same drift
+        guard: if the store moved its project-local config, every plan would
+        keep testing a path nothing writes and silently drop the staged source
+        from projects that do have their own partition.
+        """
+        config_module = AGENTS_ROOT / "knowledge-store" / "src" / "config.py"
+        tree = ast.parse(config_module.read_text(encoding="utf-8"))
+        assignments = [
+            node
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "PROJECT_LOCAL_RELATIVE_PATH"
+                for target in node.targets
+            )
+        ]
+        self.assertEqual(1, len(assignments), "config.py no longer declares PROJECT_LOCAL_RELATIVE_PATH")
+        # `Path(".agents") / "knowledge-store" / "config.json"` -- the string
+        # literals are the path segments. Collected depth-first through
+        # iter_child_nodes (left before right) rather than with ast.walk, whose
+        # breadth-first order would put the outermost `/` operand first.
+        def literals(node: ast.AST) -> list[str]:
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                return [node.value]
+            found: list[str] = []
+            for child in ast.iter_child_nodes(node):
+                found.extend(literals(child))
+            return found
+
+        self.assertEqual(list(PROJECT_LOCAL_KNOWLEDGE_CONFIG.parts), literals(assignments[0].value))
 
     def test_staged_knowledge_source_matches_the_store_constant(self) -> None:
         """`STAGED_KNOWLEDGE_SOURCE` duplicates `accepted_ingest.STAGED_SOURCE`.
@@ -2179,14 +2254,27 @@ class SelectorTests(unittest.TestCase):
             status = subprocess.run(common, cwd=caller, check=True, capture_output=True, text=True)
             status_plan = json.loads(status.stdout)
             self.assertEqual(str(target.resolve()), status_plan["inputs"]["repository_root"])
-            self.assertEqual(["example/targetrepo", "proposed-knowledge"], status_plan["inputs"]["source_filter"])
+            # The staged source is absent because the target claims no
+            # project-local knowledge-store partition, and the sources are
+            # resolved from --root rather than from the caller's directory.
+            self.assertEqual(["example/targetrepo"], status_plan["inputs"]["source_filter"])
             self.assertEqual(["frontend/base.tsx"], status_plan["inputs"]["changed_files"])
 
             diff = subprocess.run([*common, "--base", base], cwd=caller, check=True, capture_output=True, text=True)
             diff_plan = json.loads(diff.stdout)
             self.assertEqual(str(target.resolve()), diff_plan["inputs"]["repository_root"])
-            self.assertEqual(["example/targetrepo", "proposed-knowledge"], diff_plan["inputs"]["source_filter"])
+            self.assertEqual(["example/targetrepo"], diff_plan["inputs"]["source_filter"])
             self.assertEqual(["services/api.go"], diff_plan["inputs"]["changed_files"])
+
+            # Same target, now with its own partition: the staged source is
+            # resolved from the target's config, not the caller's.
+            (target / ".agents" / "knowledge-store").mkdir(parents=True)
+            (target / ".agents" / "knowledge-store" / "config.json").write_text("{}\n", encoding="utf-8")
+            partitioned = subprocess.run(common, cwd=caller, check=True, capture_output=True, text=True)
+            self.assertEqual(
+                ["example/targetrepo", "proposed-knowledge"],
+                json.loads(partitioned.stdout)["inputs"]["source_filter"],
+            )
 
     def test_non_git_root_requires_explicit_files(self) -> None:
         selector = ROOT / "src" / "select_agents.py"

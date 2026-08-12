@@ -28,10 +28,15 @@ and every ingestion/retrieval call against the shared store should carry a
 `--source` that identifies the originating project. `cadre select` uses
 explicit caller values first, then the target repository's lowercase
 `owner/repository` origin slug, and finally a
-`local-<basename>-<canonical-path-hash>` fallback -- and always appends
+`local-<basename>-<canonical-path-hash>` fallback -- and appends
 `proposed-knowledge`, the dedicated source steward-accepted findings are
 ingested under, so a dispatched agent reaches both halves of what its project
-has authorized in one retrieval rather than none of the accepted half.
+has authorized in one retrieval rather than none of the accepted half. That
+second source is appended **only for a repository that has its own
+`.agents/knowledge-store/config.json`**, because it is refused at the shared
+global-fallback tier (below) on read as well as write, and that refusal
+rejects the entire call rather than dropping the one source -- so naming it
+unconditionally cost an unpartitioned repository the retrieval it used to get.
 
 ### Enforced scope at the global-fallback tier
 
@@ -119,17 +124,20 @@ delete-staged --id <id> --reason <text> --deleted-by <actor> [--authorized-by <h
 deletion-evidence [--source <name> | --all-sources]
 ```
 
-`import-staged` needs `--authorized-by` only when the batch contains a record that already carries a steward's `disposition`. Importing those admits decisions this store never watched being made — a legitimate migration act, but not a proposal, and the only remaining route by which a decision can enter without `disposition-staged` having recorded it. A batch of purely `proposed` records needs nothing extra. A self-approved record (`disposition.decided_by` equal to `staged_by`) is refused either way: a named human can vouch for a decision the store did not witness, but nobody can vouch for one that was never a decision. A `README.md` in the directory is skipped, matching `export-staged --check`; any other unparseable file fails the whole batch.
+`import-staged` needs `--authorized-by` only when the batch contains a record that already carries a steward's `disposition`. Importing those admits decisions this store never watched being made — a legitimate migration act, but not a proposal, and the only remaining route by which a decision can enter without `disposition-staged` having recorded it. A batch of purely `proposed` records needs nothing extra. A self-approved record (`disposition.decided_by` equal to `staged_by`) is refused either way: a named human can vouch for a decision the store did not witness, but nobody can vouch for one that was never a decision. The authorization is persisted per admitted record (`staged_record_imports`, shown by `show-staged` as `import_authorizations`), not merely echoed back — "the human accountable" has to still be recorded after the process exits for that phrase to mean anything. A `README.md` in the directory is skipped, matching `export-staged --check`; any other unparseable file fails the whole batch.
+
+`import-staged` also restores each record's `<id>.history.json` sidecar, so the pair with `export-staged` is a real round trip: the sidecar exists because frontmatter holds only the *current* disposition, and importing the `.md` files alone silently dropped every earlier decision (`export-staged --check` reported `history_drift` immediately afterwards). Restoring is append-only — re-importing the same export writes nothing further, and a sidecar contradicting history the store already holds, or contradicting the record it sits beside, refuses the batch instead of overwriting. An absent sidecar is fine; two records in the committed snapshot predate that table.
 
 Without `--config`, configuration is read using the project-local-then-global resolution above; if no config file exists at the resolved location, built-in defaults apply relative to that same directory. An existing config resolves its database path relative to the config directory. A supplied `--config` path must exist and contain a JSON object; otherwise the command fails closed.
 
 At the global-fallback tier only (see "Enforced scope at the global-fallback
 tier" above), `search`/`context`/`deletion-evidence` require at least one
 `--source` or else `--all-sources`, never both. **`proposed-knowledge` is
-refused entirely at that tier**, on read and on write alike: staged records
+refused entirely at that tier**, on read and on write alike -- `search`,
+`context`, `ingest`, `delete-ingested`, and `deletion-evidence`, the
+destructive verb included: staged records
 cannot be written to the shared store (`propose` refuses outright), so
-anything under that name there belongs to another project, and a dispatch plan
-names the source in every retrieval. Claim a project-local partition -- an
+anything under that name there belongs to another project. Claim a project-local partition -- an
 empty `{}` in `.agents/knowledge-store/config.json` is enough -- to have
 staged findings at all. `--all-sources` still reaches it, deliberately: that
 flag already means "explicitly opt into cross-project retrieval", and what is
