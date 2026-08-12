@@ -400,10 +400,15 @@ const envOr = (key: string, fallback: string): string =>
 const DEFAULT_BACKEND_MODE = envOr("CLINE_AGENTS_BACKEND_MODE", "auto");
 
 // Provider and model are operator configuration, never a shipped default.
-// There is deliberately no fallback provider: a bundled default would pick a
+// There is deliberately no hardcoded fallback provider: a bundled default would pick a
 // vendor on the operator's behalf and, where that vendor's credentials happen
-// to be present, silently route task and knowledge-store content to it. See
-// cline-agents/README.md for the configuration this expects.
+// to be present, silently route task and knowledge-store content to it.
+// The one exception is inheriting the *dispatching session's own currently active*
+// provider/model when nothing more specific is configured — that isn't picking a
+// vendor on the operator's behalf, it's continuing whatever the operator's own
+// already-running session is already using; see `resolveProviderAndModel`'s
+// `inheritedModel` parameter and the `parentModelInfo` helper.
+// See cline-agents/README.md for the configuration this expects.
 const env = (key: string): string | undefined => process.env[key]?.trim() || undefined;
 
 // Tagged rather than discriminated by shape: `"missing" in resolved` would
@@ -603,8 +608,11 @@ function warnMissingRoleFidelityAttestation(modelId: string): void {
  * per-call override, the preset's own explicit value, then operator
  * configuration -- per-tier first so a plan's mixed tiers keep their
  * distinction, falling back to a single model for every tier when only that
- * is configured. Returns `{missing}` when nothing resolves, so callers fail
- * closed rather than guessing.
+ * is configured, and — only when *neither* field resolved through any of the
+ * above — the dispatching session's own currently active provider/model, taken
+ * as an atomic pair to avoid mismatching an inherited model id against a
+ * separately configured provider (or vice versa). Returns `{missing}` only
+ * when even that is unavailable, so callers fail closed rather than guessing.
  *
  * A **project**-tier preset's own `providerId`/`modelId` is deliberately
  * ignored. Project presets come from `<cwd>/.cline/agents`, i.e. they arrive
@@ -625,6 +633,7 @@ function resolveProviderAndModel(
     modelTier?: string;
     source?: AgentDefinition["source"];
   },
+  inheritedModel?: { providerId: string; modelId: string },
 ): ProviderResolution {
   const operatorAuthored = def.source !== "project";
   const presetProvider = operatorAuthored ? def.providerId : undefined;
@@ -647,8 +656,15 @@ function resolveProviderAndModel(
   }
   const tier = asModelTier(def.modelTier);
   const { varName: tierVar, modelId: tierModel } = modelForTier(tier);
-  const providerId = overrides.providerId ?? presetProvider ?? env("CLINE_AGENTS_PROVIDER_ID");
-  const modelId = overrides.modelId ?? presetModel ?? tierModel ?? env("CLINE_AGENTS_MODEL_DEFAULT");
+  let providerId = overrides.providerId ?? presetProvider ?? env("CLINE_AGENTS_PROVIDER_ID");
+  let modelId = overrides.modelId ?? presetModel ?? tierModel ?? env("CLINE_AGENTS_MODEL_DEFAULT");
+
+  // Last resort, and only as a pair -- see module comment above on why a
+  // half-configured operator env must not partially inherit.
+  if (!providerId && !modelId && inheritedModel) {
+    providerId = inheritedModel.providerId;
+    modelId = inheritedModel.modelId;
+  }
 
   const missing: string[] = [];
   if (!providerId) missing.push("CLINE_AGENTS_PROVIDER_ID");
@@ -664,10 +680,11 @@ function resolveProviderAndModel(
 
 function providerConfigurationError(presetName: string, missing: string[]): Error {
   return new Error(
-    `Preset "${presetName}" cannot start: no model provider is configured. ` +
-      `Missing: ${missing.join(", ")}. ` +
-      "Set these in your environment, or pass providerId/modelId explicitly. " +
-      "This suite ships no default provider on purpose -- see cline-agents/README.md.",
+    `Preset "${presetName}" cannot start: no model provider is configured, and the dispatching session's ` +
+      `own active model could not be determined either. Missing: ${missing.join(", ")}. ` +
+      "Set these in your environment, pass providerId/modelId explicitly, or dispatch from a session " +
+      "with an active model already selected. This suite ships no default provider on purpose -- see " +
+      "cline-agents/README.md.",
   );
 }
 type SubagentBackendMode = "auto" | "hub" | "local";
@@ -2674,6 +2691,21 @@ function parentSessionId(ctx: AgentToolContext): string | undefined {
   return typeof id === "string" && id.trim() ? id.trim() : undefined;
 }
 
+// The dispatching (parent) session's own currently active provider/model,
+// read from its most recent transcript message that actually recorded one.
+// Last-resort input to resolveProviderAndModel's inheritedModel fallback:
+// not a shipped default, but whatever model the operator's own
+// already-running session is using at dispatch time.
+function parentModelInfo(ctx: AgentToolContext): { providerId: string; modelId: string } | undefined {
+  const messages = ctx.snapshot?.messages;
+  if (!messages) return undefined;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const info = messages[i]?.modelInfo;
+    if (info?.id && info?.provider) return { providerId: info.provider, modelId: info.id };
+  }
+  return undefined;
+}
+
 function sanitizeConversationId(conversationId: string): string {
   const trimmed = conversationId.trim();
   if (!trimmed || !SAFE_ID_RE.test(trimmed)) {
@@ -3165,6 +3197,7 @@ const setup = (api: SetupApi, ctx: SetupContext) => {
     const resolved = resolveProviderAndModel(
       { providerId: input.providerId, modelId: input.modelId },
       def,
+      parentModelInfo(toolCtx),
     );
     if (resolved.status === "unconfigured") {
       // Thrown before any session is started, so a misconfigured dispatch
@@ -3366,14 +3399,14 @@ const setup = (api: SetupApi, ctx: SetupContext) => {
         "List the available subagent presets: the 159 bundled Cadre role presets plus any accepted " +
         "global/project-level definitions.",
       inputSchema: z.toJSONSchema(z.object({}).strict()),
-      execute: async (_input: unknown, _toolCtx: AgentToolContext) => {
+      execute: async (_input: unknown, toolCtx: AgentToolContext) => {
         const baseCwd = requireWorkspaceRoot();
         // Resolved through the same function dispatch uses, deliberately not
         // a second copy of the precedence chain: a listing that disagrees
         // with what would actually run is the inspect-vs-use mismatch this
         // whole change exists to remove.
         const agents = readAgentDefinitions(baseCwd).map((a) => {
-          const resolved = resolveProviderAndModel({}, a);
+          const resolved = resolveProviderAndModel({}, a, parentModelInfo(toolCtx));
           return {
             name: a.name,
             description: a.description,

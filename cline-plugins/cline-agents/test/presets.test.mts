@@ -110,6 +110,25 @@ function findTool(tools: AgentTool[], name: string): AgentTool {
 
 const FAKE_TOOL_CTX = {} as AgentToolContext;
 
+const PARENT_MODEL_TOOL_CTX = {
+  snapshot: {
+    agentId: "parent",
+    status: "running",
+    iteration: 1,
+    messages: [
+      {
+        id: "m1",
+        role: "assistant",
+        content: [],
+        createdAt: Date.now(),
+        modelInfo: { id: "parent/inherited-model", provider: "parent-provider" },
+      },
+    ],
+    pendingToolCalls: [],
+    usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+  },
+} as unknown as AgentToolContext;
+
 // Every config ClineCore.start was called with, module-scoped because the
 // mocked core is cached for the whole file (see the seeding comment below) and
 // the dispatch_selected_roles block needs to assert on it too.
@@ -1626,6 +1645,123 @@ describe("start_subagent / message_subagent / get_subagent against a mocked Clin
     }
   });
 
+  it("inherits the parent session's model when nothing else is configured", async () => {
+    const saved = {
+      provider: process.env.CLINE_AGENTS_PROVIDER_ID,
+      high: process.env.CLINE_AGENTS_MODEL_HIGH,
+      mid: process.env.CLINE_AGENTS_MODEL_MID,
+      low: process.env.CLINE_AGENTS_MODEL_LOW,
+      default: process.env.CLINE_AGENTS_MODEL_DEFAULT,
+    };
+    delete process.env.CLINE_AGENTS_PROVIDER_ID;
+    delete process.env.CLINE_AGENTS_MODEL_HIGH;
+    delete process.env.CLINE_AGENTS_MODEL_MID;
+    delete process.env.CLINE_AGENTS_MODEL_LOW;
+    delete process.env.CLINE_AGENTS_MODEL_DEFAULT;
+    try {
+      const tools = await registerTools(REPO_ROOT);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      await tool.execute(
+        { label: "inherit", task: "t", preset: "security-reviewer" },
+        PARENT_MODEL_TOOL_CTX,
+      );
+      // A session *was* started, using the inherited model
+      expect(startConfigs.length).toBe(before + 1);
+      expect(startConfigs[before].providerId).toBe("parent-provider");
+      expect(startConfigs[before].modelId).toBe("parent/inherited-model");
+    } finally {
+      if (saved.provider !== undefined) process.env.CLINE_AGENTS_PROVIDER_ID = saved.provider;
+      if (saved.high !== undefined) process.env.CLINE_AGENTS_MODEL_HIGH = saved.high;
+      if (saved.mid !== undefined) process.env.CLINE_AGENTS_MODEL_MID = saved.mid;
+      if (saved.low !== undefined) process.env.CLINE_AGENTS_MODEL_LOW = saved.low;
+      if (saved.default !== undefined) process.env.CLINE_AGENTS_MODEL_DEFAULT = saved.default;
+    }
+  });
+
+  it("lets a per-call override beat the inherited parent model", async () => {
+    const saved = {
+      provider: process.env.CLINE_AGENTS_PROVIDER_ID,
+      high: process.env.CLINE_AGENTS_MODEL_HIGH,
+      mid: process.env.CLINE_AGENTS_MODEL_MID,
+      low: process.env.CLINE_AGENTS_MODEL_LOW,
+      default: process.env.CLINE_AGENTS_MODEL_DEFAULT,
+    };
+    delete process.env.CLINE_AGENTS_PROVIDER_ID;
+    delete process.env.CLINE_AGENTS_MODEL_HIGH;
+    delete process.env.CLINE_AGENTS_MODEL_MID;
+    delete process.env.CLINE_AGENTS_MODEL_LOW;
+    delete process.env.CLINE_AGENTS_MODEL_DEFAULT;
+    try {
+      const tools = await registerTools(REPO_ROOT);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      await tool.execute(
+        {
+          label: "override",
+          task: "t",
+          preset: "security-reviewer",
+          providerId: "override-provider",
+          modelId: "override/model",
+        },
+        PARENT_MODEL_TOOL_CTX,
+      );
+      // Override wins, not inherited
+      expect(startConfigs[before].providerId).toBe("override-provider");
+      expect(startConfigs[before].modelId).toBe("override/model");
+    } finally {
+      if (saved.provider !== undefined) process.env.CLINE_AGENTS_PROVIDER_ID = saved.provider;
+      if (saved.high !== undefined) process.env.CLINE_AGENTS_MODEL_HIGH = saved.high;
+      if (saved.mid !== undefined) process.env.CLINE_AGENTS_MODEL_MID = saved.mid;
+      if (saved.low !== undefined) process.env.CLINE_AGENTS_MODEL_LOW = saved.low;
+      if (saved.default !== undefined) process.env.CLINE_AGENTS_MODEL_DEFAULT = saved.default;
+    }
+  });
+
+  it("lets operator env vars beat the inherited parent model", async () => {
+    const tools = await registerTools(REPO_ROOT);
+    const tool = findTool(tools, "start_subagent");
+    const before = startConfigs.length;
+    // With env vars set (file's normal beforeAll state), dispatch with
+    // PARENT_MODEL_TOOL_CTX should use the env vars, not the inherited model.
+    await tool.execute(
+      { label: "env-wins", task: "t", preset: "security-reviewer" },
+      PARENT_MODEL_TOOL_CTX,
+    );
+    expect(startConfigs[before].providerId).toBe("test-provider");
+    expect(startConfigs[before].modelId).toBe("test/mid-model");
+  });
+
+  it("fails closed when only provider is configured, not partially inheriting the model", async () => {
+    const saved = {
+      high: process.env.CLINE_AGENTS_MODEL_HIGH,
+      mid: process.env.CLINE_AGENTS_MODEL_MID,
+      low: process.env.CLINE_AGENTS_MODEL_LOW,
+      default: process.env.CLINE_AGENTS_MODEL_DEFAULT,
+    };
+    delete process.env.CLINE_AGENTS_MODEL_HIGH;
+    delete process.env.CLINE_AGENTS_MODEL_MID;
+    delete process.env.CLINE_AGENTS_MODEL_LOW;
+    delete process.env.CLINE_AGENTS_MODEL_DEFAULT;
+    try {
+      const tools = await registerTools(REPO_ROOT);
+      const tool = findTool(tools, "start_subagent");
+      const before = startConfigs.length;
+      // CLINE_AGENTS_PROVIDER_ID is still set (beforeAll), but no model vars.
+      // Even with PARENT_MODEL_TOOL_CTX, this must fail, not splice the
+      // inherited modelId onto the configured provider (atomic-pair rule).
+      await expect(
+        tool.execute({ label: "half-config", task: "t", preset: "security-reviewer" }, PARENT_MODEL_TOOL_CTX),
+      ).rejects.toThrow(/no model provider is configured/i);
+      expect(startConfigs.length).toBe(before);
+    } finally {
+      if (saved.high !== undefined) process.env.CLINE_AGENTS_MODEL_HIGH = saved.high;
+      if (saved.mid !== undefined) process.env.CLINE_AGENTS_MODEL_MID = saved.mid;
+      if (saved.low !== undefined) process.env.CLINE_AGENTS_MODEL_LOW = saved.low;
+      if (saved.default !== undefined) process.env.CLINE_AGENTS_MODEL_DEFAULT = saved.default;
+    }
+  });
+
   it("fails closed naming the tier variable and the fallback when no model is configured", async () => {
     // The provider-missing branch was covered; this is the branch this change
     // actually invents -- per-tier model configuration -- and its message has
@@ -2643,6 +2779,41 @@ describe("list_agent_presets / list_skills serialization safety", () => {
 
     expect(() => JSON.stringify(result)).not.toThrow();
     expect(JSON.parse(JSON.stringify(result))).toEqual(result);
+  });
+
+  it("list_agent_presets preview reflects inherited parent model when nothing else is configured", async () => {
+    const saved = {
+      provider: process.env.CLINE_AGENTS_PROVIDER_ID,
+      high: process.env.CLINE_AGENTS_MODEL_HIGH,
+      mid: process.env.CLINE_AGENTS_MODEL_MID,
+      low: process.env.CLINE_AGENTS_MODEL_LOW,
+      default: process.env.CLINE_AGENTS_MODEL_DEFAULT,
+    };
+    delete process.env.CLINE_AGENTS_PROVIDER_ID;
+    delete process.env.CLINE_AGENTS_MODEL_HIGH;
+    delete process.env.CLINE_AGENTS_MODEL_MID;
+    delete process.env.CLINE_AGENTS_MODEL_LOW;
+    delete process.env.CLINE_AGENTS_MODEL_DEFAULT;
+    try {
+      const tools = await registerTools(REPO_ROOT);
+      const tool = findTool(tools, "list_agent_presets");
+      const result = (await tool.execute({}, PARENT_MODEL_TOOL_CTX)) as {
+        agents: Array<{ name: string; providerId?: string; modelId?: string }>;
+      };
+
+      // Find security-reviewer in the results
+      const secReviewer = result.agents.find((a) => a.name === "security-reviewer");
+      expect(secReviewer).toBeDefined();
+      // It should have resolved to the inherited model
+      expect(secReviewer?.providerId).toBe("parent-provider");
+      expect(secReviewer?.modelId).toBe("parent/inherited-model");
+    } finally {
+      if (saved.provider !== undefined) process.env.CLINE_AGENTS_PROVIDER_ID = saved.provider;
+      if (saved.high !== undefined) process.env.CLINE_AGENTS_MODEL_HIGH = saved.high;
+      if (saved.mid !== undefined) process.env.CLINE_AGENTS_MODEL_MID = saved.mid;
+      if (saved.low !== undefined) process.env.CLINE_AGENTS_MODEL_LOW = saved.low;
+      if (saved.default !== undefined) process.env.CLINE_AGENTS_MODEL_DEFAULT = saved.default;
+    }
   });
 
   it("list_skills's real, non-cyclic result round-trips through JSON unchanged", async () => {

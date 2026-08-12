@@ -161,6 +161,13 @@ retrieved into a role's instructions — to it. Earlier versions defaulted to
 Anthropic and requested `ANTHROPIC_API_KEY` regardless of how Cline itself was
 configured (issue #142).
 
+The one exception is inheriting the *dispatching session's own currently active*
+provider/model when nothing more specific is configured — that isn't picking a
+vendor on your behalf, it's continuing whatever model your own already-running
+Cline session is already using. This fallback applies only when neither provider
+nor model resolved through any more-specific signal (override, preset pin, or
+operator env var).
+
 Configure at least a provider and one model. A local rig with three models:
 
 ```sh
@@ -186,7 +193,10 @@ provider id is whatever your Cline installation calls it (`ollama`,
 Resolution order, most specific first: a per-call `providerId`/`modelId` on
 `start_subagent` or `dispatch_selected_roles` → an explicit `providerId`/
 `modelId` in a **global** preset's frontmatter (your own agents directory;
-bundled presets set neither) → the per-tier variable → `CLINE_AGENTS_MODEL_DEFAULT`.
+bundled presets set neither) → the per-tier variable → `CLINE_AGENTS_MODEL_DEFAULT`
+→ (only if neither providerId nor modelId resolved through any of the above)
+the dispatching Cline session's own currently active provider/model, as an
+atomic pair → fails closed.
 
 A **project** preset's own `providerId`/`modelId` is ignored. Project presets
 live in `<cwd>/.cline/agents`, so they arrive with a checked-out repository —
@@ -272,8 +282,12 @@ warns on stderr naming the current spelling, and the current variable wins
 where both are set. The old names are read, never recommended — rename when
 convenient.
 
-If nothing resolves, dispatch **fails before any session starts**, naming the
-missing variable. It does not fall back to a vendor.
+If nothing resolves through these signals, dispatch attempts to inherit the
+dispatching Cline session's own currently active provider/model as a last resort.
+This is not a fallback to a vendor — it continues whatever model the session is
+already using. If no such session model is available either, dispatch **fails
+before any session starts**, naming the missing variable. It does not fall back
+to a vendor.
 
 ### Migrating from a version that defaulted to Anthropic
 
