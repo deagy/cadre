@@ -3,7 +3,8 @@
 **Plan ID:** `PLAN-CADRE-PORTABLE-PLATFORM`
 **Revision:** 6
 **Status:** draft — **not scheduled.** G1 approved 2026-08-11 against intent
-Revision 1; blocked on **OD-7, OD-9, OD-10, OD-11, OD-13**, and G2.
+Revision 1; blocked on **OD-7, OD-9, OD-10, OD-11, OD-13**, and G2. Two phases
+(**D** and **0**) are gated on nothing and can start today.
 **Date:** 2026-08-11
 **Implements:** `REQ-CADRE-PORTABLE-PLATFORM` (`requirements.md`, **Revision 6**)
 **Decomposes:** `INTENT-CADRE-PORTABLE-PLATFORM` (`product-intent.md`, **Revision 5**)
@@ -33,27 +34,35 @@ entry point — `cadre mcp-dispatch-server` — was missing from every earlier
 revision. §2's `plugin/` diff is corrected for the fourth time, this time
 against the generator rather than against reasoning about it.
 
-**Revision 6 folds in an eight-role independent review**, and its corrections run
-in a different direction from every previous pass. Revisions 2–5 each found this
-plan had *under-read* the tree. A reviewer re-ran every executable claim in all
-three records and **every one held**; what failed was classification, one-hop
-tracing, and completeness.
+**Revision 6 changes the phase order itself, which no previous revision
+touched.** An eight-role review found that this plan violates its own stated
+principle and double-counts its own work:
 
-- **OD-9's third option is withdrawn, and Phase C's category-A fix is a
-  functional prerequisite rather than hygiene.**
-  `build_dispatch_plan.py:547-551` raises on any selected agent absent from the
-  catalog, so leaving `:107` alone means a foreign roster with lifecycle gates
-  emits **no plan at all**.
-- **Category B is six sites, not "roughly nine."** Five of the nine were
-  `raise ValueError(...)` diagnostics — the category this plan's own rule
-  permits — and two more were already scheduled in Phase A.
+- **The order does not deliver cheapest-falsification-first.** Phase B cannot
+  run until Phase A ships a resolver, a manifest, a schema, a packaging
+  allowlist entry and eight constant rewrites. §0 quotes the parked proposal's
+  *"before anything is moved"* and then moves everything first. **A new Phase 0**
+  — a throwaway spike depending on none of that — is what the principle actually
+  asks for.
+- **Phase A and Phase C schedule the same edits.** `select_agents.py:203-204`
+  and the `routing_overlay.py` / `mcp/*` path fixes appear in both. "Each phase
+  is independently shippable" was false as written, and part of Phase C's
+  Revision 5 growth was counting work twice.
+- **Phase C is oversized by its own headline number.** Category B is **six**
+  sites, not "roughly nine": five of the nine were `raise ValueError(...)`
+  diagnostics that this plan's own category-C rule forbids touching.
+- **Phase C's one fix is a functional prerequisite, not hygiene.** OD-9's third
+  option is withdrawn — see §0.
 - **Phase B's falsification is vacuous as specified**, reproducing the golden
-  corpus's blind spot in the fixture written to expose it.
-- **§2's `plugin/` diff is wrong for the sixth time**, gaining a fifth mirrored
-  file under OD-9 option 1. Revision 6 stops correcting it and demotes it to a
-  hint (`requirements.md` PP-NFR-1).
-- **Phase E's capability is not blocked at all** — `./bin/agentic-sdlc --provider
-  <foreign>` already works; only the `cadre sdlc` ergonomics are broken.
+  corpus's blind spot in the fixture built to detect it.
+- **Phase D moves first.** It is zero-risk, depends on nothing, and is a
+  tripwire for the exact mistake Phase A is most likely to make.
+- **Phase E drops in priority.** `./bin/agentic-sdlc --provider <foreign>` already
+  works today; the capability is not blocked, only the ergonomics.
+
+Also corrected: §2's `plugin/` diff, for the **sixth** time — it gains a fifth
+mirrored file under OD-9 option 1. Revision 6 stops correcting that list and
+demotes it to a hint (`requirements.md` PP-NFR-1).
 
 ---
 
@@ -123,13 +132,79 @@ G2 itself remains unapproved and requires `product_owner` **and**
 The phase order is chosen so the **cheapest falsification comes first**, which is
 also `docs/proposals/governance-as-product-2026-08.md`'s own recommendation:
 *"condition 2 is the cheapest way to find out whether the rest is real, and
-should be attempted before anything is moved."* If Phase A and B do not work,
-nothing later is worth doing, and nothing has been moved.
+should be attempted before anything is moved."*
+
+**Revisions 1–5 stated that principle and then violated it, and Revision 6
+reorders the plan rather than restating the principle a sixth time.** Phase B was
+nominated as the falsification step, but it cannot run until Phase A has shipped
+a resolver, a manifest, a new schema, a packaging allowlist entry and eight
+constant rewrites — and the stop table called Phase A *"safe to stop, a latent
+capability."* Safe, but not cheap, and by then everything has been moved. The
+proposal asks for the answer **before** that.
+
+So the order is now **D → 0 → A′ → B′ → C′ → E**:
+
+- **D first** because it is zero-risk, depends on nothing, and is a tripwire for
+  the specific mistake Phase A is most likely to make.
+- **0 next** because it answers "is the seam real" with a throwaway harness and
+  no production change at all. This is the falsification the principle was
+  asking for.
+- **E last** because a working bypass already exists (`product-intent.md` §2), so
+  it now unblocks nothing.
 
 Each phase is independently shippable and leaves the tree better than it found
-it, so the sequence can stop at any point without stranding work.
+it, so the sequence can stop at any point without stranding work — **which was
+also not true as written.** Phase A and Phase C scheduled the same six edits;
+Revision 6 puts each in exactly one phase.
 
 ## 1. Phases
+
+### Phase D — Knowledge-store regression pin (PP-FR-5). **Do this first.**
+
+Moved from last to first at Revision 6. The content is unchanged and is
+described in full below under its original heading; what changed is *when*.
+
+It depends on nothing, changes no behaviour, and asserts that
+`build_dispatch_plan.py:29` stays `Path(__file__)`-derived. The live risk it
+guards against is created by **Phase A** — an implementer routing `:30` through
+the resolver and taking `:29` with it, same shape, adjacent line, looking like
+tidying. Landing the assertion *before* the phase that can break it is the
+difference between a regression test and a post-mortem.
+
+Zero risk, zero decisions, always safe to stop.
+
+### Phase 0 — Falsification spike (NEW at Revision 6). **Not shipped code.**
+
+**Files:** none in the tree. A disposable script or branch, deleted afterwards.
+
+Monkeypatch or env-redirect the four resolution sites — `select_agents.ROSTER_ROOT`,
+`build_dispatch_plan.ROSTER_ROOT`, `mcp/dispatch_core.CATALOG_PATH`,
+`mcp/dispatch_server._ROUTING_CONFIG` — at a hand-built minimal roster that
+**declares `quality_gates`**, and run both `cadre select` and the MCP dispatch
+path against it end to end.
+
+**Depends on nothing.** No `settings.py` FieldSpec, no `roster.json`, no
+`roster.schema.json`, no `PROVIDER_BUNDLE` entry, no constant rewrites, no
+schema bump, no regeneration. That is the entire point: every one of those is
+Phase A, and Phase A is what the proposal says should come *after* the answer.
+
+**What it answers, that nothing else currently does:**
+
+1. Does lifecycle-aware selection work against a foreign roster at all, or does
+   it hit `build_dispatch_plan.py:547-551` and raise? This is OD-9's real
+   consequence, and it is worth *observing* before the Product Owner decides
+   OD-9 on the strength of a code-reading.
+2. Do the two dispatch surfaces actually diverge, and how visibly? This is
+   OD-10's premise, currently established by reading `dispatch_server.py:48`
+   and `:63` rather than by running the server.
+
+**Safe to stop after — and this is the natural stop if the answer is "the seam
+isn't real."** Nothing has been moved, nothing shipped, nothing to revert but a
+deleted branch. If Phase 0 shows the mechanism cannot work, Phases A–C are
+re-scoped before a line of production code changes, which is exactly what
+Revisions 1–5 intended and their ordering prevented.
+
+**Exempt from the regeneration sequence** (§2), because it is never merged.
 
 ### Phase A — Roster-root resolution (PP-FR-1, PP-FR-2)
 
@@ -166,23 +241,19 @@ it, so the sequence can stop at any point without stranding work.
   `:604` (`path = ROSTER_ROOT / definition`, context-pack definitions). `:29`
   (`KNOWLEDGE_STORE_ROOT`) is Phase D and is **platform**-anchored, not
   roster-anchored.
-- **`roster/orchestration/mcp/dispatch_core.py:56` and `mcp/dispatch_server.py:63`
-  — the second selection entry point, missing from Revisions 1–4.**
-  `cadre mcp-dispatch-server` resolves `catalog.yaml` and `routing.yaml`
-  checkout-relative and entirely independently of `select_agents.py`. Left
-  alone, `--roster <fixture>` redirects `cadre select` while the MCP server
-  keeps serving Cadre's roles — two dispatch surfaces disagreeing about which
-  roles exist, silently.
+- ~~`roster/orchestration/mcp/dispatch_core.py:56` and `mcp/dispatch_server.py:63`~~
+  — **moved to Phase C′-1 at Revision 6.** Revision 5 added the second entry
+  point here *and* listed the same two lines under Phase C's category B. They
+  are one edit, and they belong with the guard that enforces them. The finding
+  that they exist stands; only the phase changed.
 
-  **Under project-tier scope this is not a two-line change, and Revision 5 wrote
-  it as though it were.** `mcp/dispatch_server.py:48` deliberately calls
-  `settings.disable_project_tier_cwd_fallback()` — the server is long-lived and
-  project-agnostic, so its cwd is not the project any given call concerns — and
-  `:63` loads routing at **import time**, before any call knows its project. A
-  project-tier `roster.root` therefore requires converting import-time
-  resolution into per-call resolution with an explicit `start=`. Under
-  global-only scope the module needs no restructuring at all. See OD-2 and
-  OD-10.
+  **Note before scheduling them anywhere: under project-tier scope this is not a
+  two-line change.** `mcp/dispatch_server.py:48` deliberately calls
+  `settings.disable_project_tier_cwd_fallback()` and `:63` loads routing at
+  import time, so a project-tier `roster.root` requires converting import-time
+  resolution to per-call resolution with an explicit `start=`. Under global-only
+  scope the module needs no restructuring at all. See OD-2, OD-10, and
+  `requirements.md` PP-FR-1.
 - `roster/orchestration/src/schema_validate.py` — `:329-332` hardwires two
   instance/schema pairs; `roster.json` needs a third. Small, but it is a fourth
   file mirrored into `plugin/suite/` (see §2).
@@ -249,8 +320,10 @@ Cadre happens to satisfy, which is exactly the blindness condition 3 names. Give
 it role ids, phases, and routing keywords that share nothing with Cadre's, so a
 leaked default shows up as a wrong name rather than a plausible one.
 
-**This is the falsification step.** If a foreign roster cannot produce a plan,
-the seam is theoretical and Phases C–E should not be attempted.
+**This is the falsification step** *(as re-scoped — Phase 0 now takes the
+cheapest part of this job, and this phase makes it permanent)*. If a foreign
+roster cannot produce a plan, the seam is theoretical and Phases C–E should not
+be attempted.
 
 Four acceptance cases, the third being the one that usually gets skipped:
 plan-is-valid, no-match-returns-`needs-triage`, missing-`catalog.yaml`-fails-
@@ -273,9 +346,8 @@ between a falsification and a decoration.**
   the ones that do.** It is the golden corpus's blind spot, rebuilt in the
   fixture written to expose blind spots.
 - **(f) Path-escape rejection**, naming the offending field — symlink, `..`, and
-  absolute-path values enumerated rather than "an escape" generically. PP-FR-2
-  states this acceptance and names this file as its verifier; it was scheduled
-  in no phase.
+  absolute-path values enumerated rather than "an escape." PP-FR-2 states this
+  acceptance and names this file as its verifier; it was scheduled in no phase.
 - **(g) A malformed `roster.json`** — missing key, or a `catalog`/`routing` path
   that does not exist — fails by field name. Only the manifest's total absence
   is currently covered, and the manifest is now the thing most likely to be
@@ -285,7 +357,7 @@ Also confirm the fixture's `AGENT.md` files actually load (frontmatter parsed,
 `role_root` honoured). A broken `role_root` passes (a)–(d) untouched if nothing
 dereferences a `definition` path.
 
-### Phase C — The mirror boundary guard (PP-FR-6). **Blocked on OD-9.**
+### Phase C — The mirror boundary guard (PP-FR-6). **Split in two at Revision 6.**
 
 **This phase has been mis-sized in every revision, in both directions, and
 Revision 5 was wrong in both directions at once.** Revisions 1–2 listed only the
@@ -295,10 +367,18 @@ more violations" — of which **five were not violations** (they are
 `raise ValueError(...)` diagnostics, i.e. the category this plan's own rule
 permits) and **two were already scheduled in Phase A**.
 
-The real shape: **one category-A fix and six category-B sites.** See
-`requirements.md` PP-FR-6 for the corrected table and the AST call-target rule
-that must generate the categories rather than restating them in prose a fourth
-time.
+The real shape: **one category-A fix, six category-B sites, two of which move
+here from Phase A.** See `requirements.md` PP-FR-6 for the corrected table and
+the AST-sink rule that must generate the categories rather than restating them
+in prose a fourth time.
+
+**Split, because the two halves have different blockers:**
+
+- **C′-1 — ungated.** The six category-B path fixes, the boundary test with its
+  self-vacuity guard, the PP-FR-1 assertions on `:18`/`:24`, and the
+  lifecycle-aware detector. None of this waits on OD-9.
+- **C′-2 — hard-blocked on OD-9.** The `["code-reviewer"]` default, plus the
+  ~15 existing `test_selector.py` assertions it moves.
 
 **Files:** new `roster/orchestration/test/test_roster_boundary.py`, a new
 lifecycle-aware selection test (see below), **and** the six category-B path
@@ -350,7 +430,9 @@ cannot make every check pass over an empty set. Add the PP-FR-1 assertions that
 
   **Derive the example sets from the rule once written, rather than carrying any
   of these forward.** Both sets above were hand-classified in prose and both were
-  wrong, in opposite directions. A third hand-classification is not the fix.
+  wrong, in opposite directions. A third hand-classification is not the fix —
+  `requirements.md` PP-FR-6 sketches the AST call-target rule that should
+  generate them.
 
 **A second detector is required, not optional.** The golden corpus cannot see
 category A: `test_selection_golden_corpus.py:135` patches
@@ -396,7 +478,10 @@ phase. **Do not widen the `workflow` enum.**
 Runs after B deliberately: before a second roster exists there is no way to tell
 a guard that works from a guard that cannot fail.
 
-### Phase D — Knowledge-store path resolution (PP-FR-5)
+### Phase D (full detail) — Knowledge-store path resolution (PP-FR-5)
+
+*Scheduled first; see the stub at the head of §1. Kept in place here so a
+reader of Revision 5 finds the content where they left it.*
 
 **Files:** `roster/orchestration/src/build_dispatch_plan.py:29` and `:501`.
 
@@ -471,7 +556,7 @@ injects nothing (`product-intent.md` §2). So the coupling is to one wrapper, no
 to `cadre` and not to the kernel. This phase fixes the ergonomics of the command
 users are actually told to run, which is worth doing — an undocumented byproduct
 of a wrapper's implementation is not a supported interface — but it now unblocks
-nothing.
+nothing and can be deferred past everything else without cost.
 
 **On the implementation: prefer an explicit `--no-default-provider` flag over
 sniffing `--provider` out of `*rest`.** The kernel's flag is `action="append"`,
@@ -482,7 +567,7 @@ substring would fool it. An explicit flag is auditable and cannot misfire:
 
 ```python
 provider_args = [] if options.no_default_provider else ["--provider", str(provider)]
-result = subprocess.run([sdlc_bin, *provider_args, *rest], env=_child_env(interactive))
+result = subprocess.run([sdlc_bin, *provider_args, *rest], ...)
 ```
 
 With no flag, the argument vector stays byte-identical to today's.
@@ -597,13 +682,61 @@ defect, confirm it **fails** naming the real cause, revert, confirm clean.
 
 ## 3. Sequencing and stop points
 
+**Reordered at Revision 6.** The old table is preserved below the new one,
+because its row for Phase C carried the "~9 category-B" figure that oversized
+the phase, and a reader of Revision 5 should be able to see what happened to it.
+
+| Order | Phase | Delivered | Safe to stop? |
+| --- | --- | --- | --- |
+| 1 | **D** | Knowledge store pinned platform-anchored, before the phase that can break it | Yes, always. Gated on nothing |
+| 2 | **0** | **Proof the seam is real** — including for lifecycle-aware selection — with nothing moved | Yes, and this is the natural stop if the answer is "it isn't." Gated on nothing |
+| 3 | **A′** | Roster root resolvable; default unchanged. Identity + schema bump built but **not merged** | Yes — a latent capability, no behaviour change |
+| 4 | **B′** | The fixture roster makes Phase 0's answer permanent and regression-tested | Yes |
+| 5 | **C′-1** | Boundary guard, self-vacuity, `:18`/`:24` assertions, **six** category-B path fixes, the forced lifecycle-aware detector | Yes. Gated on nothing |
+| 6 | **C′-2** | The `code-reviewer` default and the ~15 `test_selector.py` assertions it moves | **Only after OD-9.** The one step that can change default Cadre selection |
+| 7 | **E** | `cadre sdlc` ergonomics | Complete. Deferrable indefinitely — the capability already exists via `bin/agentic-sdlc` |
+
+**Superseded (Revision 5's table), kept for the record:**
+
 | After | Delivered | Safe to stop? |
 | --- | --- | --- |
 | A | Roster root resolvable; default unchanged | Yes — a latent capability, no behaviour change |
 | B | **Proof the seam is real** | Yes, and this is the natural stop if the answer is "it isn't" |
-| C | Boundary guard, **6** category-B path fixes, the lifecycle-aware detector, and (pending OD-9) the `code-reviewer` default | **Only after OD-9.** This is the one phase that can change default Cadre selection, so "safe to stop" depends on which OD-9 option was taken |
+| C | Boundary guard, ~~~9~~ **6** category-B path fixes, the lifecycle-aware detector, and (pending OD-9) the `code-reviewer` default | **Only after OD-9.** This is the one phase that can change default Cadre selection, so "safe to stop" depends on which OD-9 option was taken |
 | D | Knowledge store roster-independent in fact, not just in principle | Yes |
 | E | Kernel reachable with a foreign bundle | Complete |
+
+### 3.1 Decision gating
+
+Which phases can proceed before each open decision, and which would have to be
+**redone** if it goes a particular way. Added at Revision 6 — Revisions 1–5
+recorded blockers without recording what they blocked.
+
+| Phase | OD-2 (scope; RESOLVED, reopening requested) | OD-7 (schema 6 → 7) | OD-9 (options 1–2) | OD-10 (MCP control) | OD-11 (compat window) |
+| --- | --- | --- | --- | --- | --- |
+| **D** | proceed | proceed | proceed | proceed | proceed |
+| **0** | proceed — the spike redirects ad hoc, not via the setting | proceed | proceed, and it *informs* OD-9 by observation | proceed, and it *informs* OD-10 | proceed |
+| **A′** core | proceed; **redone** if scope narrows (simpler FieldSpec, no visibility plumbing, no MCP restructuring) | proceed | proceed | proceed | **gated** — the schema is finalised here |
+| **A′** identity + bump | **gated**; **ceases to exist** if scope narrows | **gated** — must not merge | proceed | proceed | proceed |
+| **B′** | proceed | proceed | proceed | proceed | gated on A′ |
+| **C′-1** | proceed | proceed | proceed | proceed | proceed |
+| **C′-2** | proceed | proceed | **hard-gated** | proceed | proceed |
+| **C′** MCP redirect parity | **ceases to exist** if scope narrows | proceed | proceed | **hard-gated** | proceed |
+| **E** | proceed | proceed | proceed | proceed | proceed |
+
+**If OD-2 narrows to global-only**, four things stop existing rather than being
+decided: **PP-FR-1b** (an explicit `--roster` flag is visible in the invocation,
+so there is no silent redirect to compensate for), **PP-NFR-3b** (no new emitted
+field, so no bump), **OD-7** (no field, no question), and **OD-10** (no
+project-tier redirect for the MCP surface to fail to surface). Phase A′ also
+loses its unpriced MCP restructuring. This is the single largest simplification
+available to this plan, and it is one answer rather than four.
+
+**Critical path**, current disposition: `D → 0 → A′ core → B′ → C′-1`, with
+OD-9 → C′-2 and OD-7 → the A′ merge hanging off the end in parallel. **D, E, and
+the 15-assertion inventory are off the critical path entirely** and are limited
+by attention, not dependencies — the inventory in particular should be produced
+while waiting on OD-9, because it is what OD-9 should be decided against.
 
 ## 4. What this plan does not do
 
