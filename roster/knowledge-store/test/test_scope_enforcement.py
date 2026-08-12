@@ -437,10 +437,29 @@ class ScopeEnforcementTests(unittest.TestCase):
         #
         # The exact set stays pinned so the next lifecycle command still forces
         # this decision rather than pattern-matching on the diff.
+        #
+        # Third re-decision, on `ingest-accepted` (G-7). It reaches ingested
+        # content, so this pin stopped it and made it argue -- which is the
+        # whole reason the set is enumerated rather than pattern-matched.
+        #
+        # It does not touch AC-15's guarantee, and the direction is the tell:
+        # it only ever *creates* ingested content, never removes any. Every
+        # record it ingests has already been through a steward disposition
+        # that `disposition_record` structurally forbids the proposer from
+        # making, and `delete-ingested` remains the sole path back out, with
+        # its evidence table unchanged.
+        #
+        # One honest qualification, since "does not weaken it" is easy to say
+        # and easy to overclaim: this command *enlarges what AC-15 governs*.
+        # Accepted findings become ingested content, so they acquire the same
+        # retention windows, the same `retention-report` visibility, and the
+        # same steward-authorized deletion path as anything else in the
+        # corpus. That is more subject for the guarantee, not less guarantee.
         self.assertEqual(
             {
                 "init",
                 "ingest",
+                "ingest-accepted",
                 "search",
                 "context",
                 "stats",

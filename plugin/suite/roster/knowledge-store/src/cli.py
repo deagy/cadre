@@ -23,6 +23,7 @@ from service import build_agent_context, ingest_file, search_store, stable_query
 from settings import SettingsError
 from staged_records import STATUS_VALUES as STAGED_STATUSES
 from staged_records import parse_record, validate_parsed
+from accepted_ingest import ingest_accepted
 from staged_store import (
     delete_record,
     deletion_evidence,
@@ -171,6 +172,22 @@ def _parser() -> argparse.ArgumentParser:
         help="the classification actually applied differs from the one proposed",
     )
     add_config(disposition)
+    ingest_accepted_parser = subparsers.add_parser(
+        "ingest-accepted",
+        help="make steward-accepted staged records retrievable (G-7)",
+    )
+    ingest_accepted_parser.add_argument(
+        "--id",
+        action="append",
+        dest="record_ids",
+        help="ingest only this record; repeatable. Omit to ingest every accepted record.",
+    )
+    ingest_accepted_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="report what would be ingested and refused, without writing",
+    )
+    add_config(ingest_accepted_parser)
     delete_staged = subparsers.add_parser("delete-staged")
     delete_staged.add_argument("--id", required=True, dest="record_id")
     delete_staged.add_argument("--reason", required=True)
@@ -647,6 +664,7 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
             "export-staged",
             "disposition-staged",
             "delete-staged",
+            "ingest-accepted",
         ):
             _enforce_staging_scope(tier)
             # Installed here rather than inside open_store: the staging table
@@ -675,6 +693,17 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
                     reason=options.pop("reason"),
                     deleted_by=options.pop("deleted_by"),
                     authorized_by=options.pop("authorized_by", None),
+                )
+            if command == "ingest-accepted":
+                # The steward decision is already made and its
+                # authorship/approval separation already enforced by
+                # disposition_record. This executes that decision; it does not
+                # take one, which is why it needs no --decided-by.
+                return ingest_accepted(
+                    db,
+                    config,
+                    record_ids=options.pop("record_ids", None),
+                    dry_run=options.pop("dry_run", False),
                 )
             if command == "disposition-staged":
                 return disposition_record(
