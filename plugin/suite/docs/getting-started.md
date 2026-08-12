@@ -42,13 +42,13 @@ push changes.
 Run the suite-only check with:
 
 ```sh
-python3 -m unittest discover -s roster/knowledge-store/test -p "test_*.py"
+python3 -m unittest discover -b -s roster/knowledge-store/test -p "test_*.py"
 ```
 
 The orchestration tests need no install and run as-is:
 
 ```sh
-python3 -m unittest discover -s roster/orchestration/test -p "test_*.py"
+python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
 ```
 
 Run that way they exercise the selector in **standalone** mode, because the
@@ -59,7 +59,7 @@ launcher this repository already ships; there is still nothing to install:
 
 ```sh
 AGENTIC_SDLC_BIN="$PWD/bin/agentic-sdlc" \
-  python3 -m unittest discover -s roster/orchestration/test -p "test_*.py"
+  python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
 ```
 
 The kernel's own tests (`kernel/test`) are different again: they import the

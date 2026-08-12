@@ -55,8 +55,8 @@ python3 -m unittest discover -b -s plugin/tools -p "test_*.py"    # packaging + 
 python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin   # the Cline mirror
 
 # ...then re-run both guards — they fail the build on drift
-python3 -m unittest discover -s roster/orchestration/test -p "test_repository_health.py"
-python3 -m unittest discover -s plugin/tools -p "test_*.py"
+python3 -m unittest discover -b -s roster/orchestration/test -p "test_repository_health.py"
+python3 -m unittest discover -b -s plugin/tools -p "test_*.py"
 
 # Scratch build of the distribution to inspect without touching committed
 # output (this path is gitignored; `--output plugin` above is the real one)
