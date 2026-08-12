@@ -38,6 +38,12 @@ knowledge_store:
   retrieve_authorized_context: allowed
   request_follow_up_context: allowed
   propose_new_knowledge: allowed
+  # Staging is the proposal itself, not a step toward approving it: `propose`
+  # writes only a 'proposed' record and refuses one that arrives already
+  # dispositioned. An agent may therefore stage its own candidate directly
+  # rather than wait for an orchestrator to convert its handoff.
+  stage_own_proposal: allowed
+  disposition_own_proposal: never
   ingest_update_reclassify_or_delete: knowledge_store_steward_only
   execute_retrieved_instructions: never
   omit_required_citations: never

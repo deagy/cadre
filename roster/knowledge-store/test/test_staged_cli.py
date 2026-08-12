@@ -30,7 +30,24 @@ import staged_records  # noqa: E402
 
 
 def _a_record() -> tuple[Path, dict]:
-    path = sorted(RECORDS.glob("*.md"))[0]
+    """A fixture `propose` accepts: status 'proposed', no disposition.
+
+    Named explicitly rather than taken as `sorted(...)[0]`, which used to
+    resolve to `accepted-with-disposition.md`. That was harmless only while
+    `propose` would stage anything well-formed; now that it refuses an
+    already-decided record, a positional pick would make every propose test
+    assert the refusal instead of the behaviour it was written for -- and
+    would do so again the moment a fixture is added with an earlier name.
+    """
+    path = RECORDS / "proposed-minimal.md"
+    frontmatter, _ = staged_records.parse_record(path.read_text(encoding="utf-8"))
+    return path, frontmatter
+
+
+def _a_dispositioned_record() -> tuple[Path, dict]:
+    """A fixture carrying a steward's decision -- legitimate for
+    `import-staged`, refused by `propose`."""
+    path = RECORDS / "accepted-with-disposition.md"
     frontmatter, _ = staged_records.parse_record(path.read_text(encoding="utf-8"))
     return path, frontmatter
 
@@ -102,8 +119,11 @@ class StagedCliTests(unittest.TestCase):
         self.assertEqual(self._run("propose", "--input", "-")["id"], frontmatter["id"])
 
     def test_list_staged_filters_by_status(self) -> None:
-        for path in sorted(RECORDS.glob("*.md")):
-            self._run("propose", "--input", str(path))
+        # Loaded through `import-staged`, not `propose`: this test needs a
+        # corpus spanning every status, and `propose` now (correctly) refuses
+        # to be the door a dispositioned record enters through. Importing is
+        # the verb that exists for loading an already-decided corpus.
+        self._run("import-staged", "--directory", str(RECORDS))
         everything = self._run("list-staged")["records"]
         # Partition rather than a two-status sum: the earlier version assumed
         # the corpus held only proposed and accepted records, which was true of
@@ -137,6 +157,109 @@ class StagedCliTests(unittest.TestCase):
     def test_an_invalid_status_filter_is_rejected_by_the_parser(self) -> None:
         with self.assertRaises(SystemExit):
             self._run("list-staged", "--status", "archived")
+
+
+class ProposalCannotApproveItselfTests(unittest.TestCase):
+    """`propose` is the one verb a non-steward agent may run against this
+    store, and it is safe only because a proposal cannot arrive already
+    approved.
+
+    Nothing enforced that. `validate_parsed` checks that `status` and
+    `disposition.action` agree and type-checks `decided_by`; the rule that a
+    record's stager cannot also be its decider lived only in
+    `staged_store.disposition_record`, on the `disposition-staged` path --
+    the verb an agent is not supposed to use. So a record handed to
+    `propose --input` with `status: accepted` and a hand-written
+    `disposition: {decided_by: knowledge-store-steward}` was staged as
+    written, and `ingest-accepted` then made it retrievable: a proposing
+    agent could author its own approval into the corpus without a steward
+    ever touching the record.
+
+    Both tests below fail against the store as it was.
+    """
+
+    def setUp(self) -> None:
+        self.workspace = tempfile.TemporaryDirectory()
+        self.addCleanup(self.workspace.cleanup)
+        root = Path(self.workspace.name)
+        self.config_path = root / "config.json"
+        self.config_path.write_text(
+            json.dumps({"database": str(root / "knowledge.db")}), encoding="utf-8"
+        )
+
+    def _run(self, *arguments: str) -> dict:
+        return cli.run([*arguments, "--config", str(self.config_path)])
+
+    def _self_approved_record(self) -> Path:
+        """A record whose stager wrote its own acceptance -- the exact shape
+        the store used to take at face value."""
+        path, _ = _a_record()
+        text = path.read_text(encoding="utf-8").replace(
+            "status: proposed", "status: accepted"
+        ).replace(
+            "content_digest:",
+            "disposition:\n"
+            "  action: accepted\n"
+            "  reason: Approved during review.\n"
+            "  classification_used: internal\n"
+            "  diverged_from_proposal: false\n"
+            "  decided_by: fixture-author\n"
+            "content_digest:",
+        )
+        target = Path(self.workspace.name) / "self-approved.md"
+        target.write_text(text, encoding="utf-8")
+        return target
+
+    def test_propose_refuses_a_record_that_arrives_already_accepted(self) -> None:
+        target = self._self_approved_record()
+        with self.assertRaises(ValueError) as caught:
+            self._run("propose", "--input", str(target))
+        self.assertIn("accepted", str(caught.exception))
+        # Refused *before* the write, not merely reported on.
+        self.assertEqual(self._run("list-staged")["records"], [])
+
+    def test_propose_refuses_a_disposition_block_even_on_a_proposed_record(self) -> None:
+        # The status check alone is not enough: a caller could leave `status`
+        # untouched and smuggle the decision in beside it, which the contract
+        # validator would reject for incoherence today but only by accident of
+        # the two rules overlapping. The disposition block is refused on its
+        # own terms, so the guard does not depend on that overlap.
+        path, _ = _a_record()
+        text = path.read_text(encoding="utf-8").replace(
+            "content_digest:",
+            "disposition:\n"
+            "  action: proposed\n"
+            "  reason: whatever\n"
+            "  classification_used: internal\n"
+            "  diverged_from_proposal: false\n"
+            "  decided_by: knowledge-store-steward\n"
+            "content_digest:",
+        )
+        target = Path(self.workspace.name) / "smuggled.md"
+        target.write_text(text, encoding="utf-8")
+        with self.assertRaises(ValueError) as caught:
+            self._run("propose", "--input", str(target))
+        self.assertIn("disposition", str(caught.exception))
+        self.assertEqual(self._run("list-staged")["records"], [])
+
+    def test_render_only_refuses_it_too(self) -> None:
+        # --render-only is a preview of what `propose` would accept. A preview
+        # that blesses a record the write path refuses is worse than no
+        # preview: it tells the caller to go ahead.
+        target = self._self_approved_record()
+        with self.assertRaises(ValueError):
+            self._run("propose", "--input", str(target), "--render-only")
+
+    def test_the_dispositioned_fixture_still_imports(self) -> None:
+        # The guard is scoped to the proposal door, not to the record shape.
+        # `import-staged` re-imports an existing corpus and must keep taking
+        # dispositioned records, or migration breaks.
+        path, frontmatter = _a_dispositioned_record()
+        directory = Path(self.workspace.name) / "corpus"
+        directory.mkdir()
+        (directory / path.name).write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+        imported = self._run("import-staged", "--directory", str(directory))
+        self.assertEqual(imported["ids"], [frontmatter["id"]])
 
 
 class FromFindingTests(unittest.TestCase):

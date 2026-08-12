@@ -136,7 +136,12 @@ def _parser() -> argparse.ArgumentParser:
     propose = subparsers.add_parser("propose")
     propose_input = propose.add_mutually_exclusive_group(required=True)
     propose_input.add_argument(
-        "--input", help="a fully-authored record file (frontmatter + body), or - for stdin"
+        "--input",
+        help=(
+            "a fully-authored record file (frontmatter + body), or - for stdin; its status "
+            "must be 'proposed' and it may not carry a disposition (use import-staged for "
+            "already-dispositioned records)"
+        ),
     )
     propose_input.add_argument(
         "--from-finding",
@@ -258,6 +263,52 @@ def _read_source(source: str) -> str:
     return sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
 
 
+def _refuse_a_pre_dispositioned_record(frontmatter: dict[str, Any]) -> None:
+    """Refuse a `propose` input that arrives already decided.
+
+    `propose` is the one verb non-steward agents may run against this store,
+    and the whole reason that is safe is that a proposal cannot approve
+    itself. Nothing enforced that. `staged_records.validate_parsed` checks
+    only that `status` and `disposition.action` *agree*, and it type-checks
+    `decided_by`; the rule that a record's stager cannot also be its decider
+    lives in `staged_store.disposition_record`, on the `disposition-staged`
+    path -- the verb an agent is not supposed to use. So a record handed to
+    `propose --input` carrying `status: accepted` and a hand-written
+    `disposition: {decided_by: knowledge-store-steward}` was staged as
+    written, and `ingest-accepted` then made it retrievable. A proposing
+    agent could author its own approval and reach the corpus without a
+    steward touching the record. See the regression tests in
+    `test_staged_cli.py`.
+
+    The fix is scoped to this verb rather than to the contract, deliberately.
+    A dispositioned record is perfectly legitimate elsewhere: `import-staged`
+    re-imports an existing corpus, `export-staged` round-trips one, and
+    `disposition-staged` produces them. What must not happen is a disposition
+    *entering* through the proposal door. Refusing it here keeps
+    `validate_parsed` describing what a well-formed record is, and leaves
+    "who may assert a decision" where it belongs -- at the boundary between
+    an agent and the store.
+
+    `--from-finding` cannot trip this: `finding_record.build_record`
+    generates `status` as `"proposed"` and has no disposition input at all.
+    """
+    status = frontmatter.get("status")
+    if status is not None and status != "proposed":
+        raise ValueError(
+            f"propose refuses a record whose status is {status!r}: a proposal is staged as "
+            "'proposed' and is dispositioned only by a steward, through `disposition-staged`. "
+            "Staging a decided record here would let whoever wrote it record its approval. "
+            "Use `import-staged` to load already-dispositioned records."
+        )
+    if "disposition" in frontmatter:
+        raise ValueError(
+            "propose refuses a record carrying a `disposition` block: the decision is the "
+            "steward's to record through `disposition-staged`, which enforces that a record's "
+            "stager cannot also be its decider. Remove the block and propose the record as "
+            "'proposed'."
+        )
+
+
 def _render_result(frontmatter: dict[str, Any], body: str) -> dict[str, Any]:
     """Validate and format a not-yet-staged record for `--render-only`.
 
@@ -284,9 +335,11 @@ def _render_result(frontmatter: dict[str, Any], body: str) -> dict[str, Any]:
 def _propose(db: Any, options: dict[str, Any]) -> dict[str, Any]:
     """Stage one record, from a fully-authored file or from a structured finding.
 
-    Two input shapes, one write path. `--input` is the original, unchanged:
-    a complete record (frontmatter + body) is read and validated as-is inside
-    `put_record_text`, so a malformed record never reaches the table.
+    Two input shapes, one write path. `--input` is the original: a complete
+    record (frontmatter + body) is read and validated as-is inside
+    `put_record_text`, so a malformed record never reaches the table. It is
+    additionally held to `_refuse_a_pre_dispositioned_record` -- a proposal
+    may not arrive already decided, whichever shape it came in as.
 
     `--from-finding` is the low-friction path this exists to add: a JSON
     mapping with the record's fields (see `finding_record.FINDING_KEYS`) is
@@ -321,9 +374,12 @@ def _propose(db: Any, options: dict[str, Any]) -> dict[str, Any]:
 
     if render_only:
         frontmatter, body = parse_record(_read_source(input_source))
+        _refuse_a_pre_dispositioned_record(frontmatter)
         return _render_result(frontmatter, body)
 
     text = _read_source(input_source)
+    frontmatter, _ = parse_record(text)
+    _refuse_a_pre_dispositioned_record(frontmatter)
     record_id = put_record_text(db, text)
     stored = list_records(db, None)
     summary = next(record for record in stored if record["id"] == record_id)

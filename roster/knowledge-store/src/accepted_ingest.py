@@ -146,6 +146,20 @@ def ingest_accepted(
             })
             continue
 
+        decided_by = (frontmatter.get("disposition") or {}).get("decided_by")
+        staged_by = frontmatter.get("staged_by")
+        if decided_by is not None and decided_by == staged_by:
+            refused.append({
+                "id": record_id,
+                "reason": (
+                    f"{decided_by!r} both staged and dispositioned this record. Authorship and "
+                    "approval separation is the reason a proposing agent may write here at all, "
+                    "so a self-approved record is refused at the last step it could still be "
+                    "caught -- ingestion is what makes a record retrievable."
+                ),
+            })
+            continue
+
         if already_ingested(db, record_id):
             skipped.append({"id": record_id, "reason": "already in the corpus"})
             continue

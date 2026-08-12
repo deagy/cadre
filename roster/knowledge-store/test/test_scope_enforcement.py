@@ -529,6 +529,13 @@ class ScopeEnforcementTests(unittest.TestCase):
         knowledge_store = autonomy["knowledge_store"]
         self.assertEqual("allowed", knowledge_store["retrieve_authorized_context"])
         self.assertEqual("knowledge_store_steward_only", knowledge_store["ingest_update_reclassify_or_delete"])
+        # Agents may stage their own proposals; they may never decide them.
+        # Pinned as a pair: the first without the second is the self-approval
+        # the propose/disposition/ingest guards exist to prevent, and a policy
+        # file that said so while the code enforced it would be the drift
+        # worth catching here.
+        self.assertEqual("allowed", knowledge_store["stage_own_proposal"])
+        self.assertEqual("never", knowledge_store["disposition_own_proposal"])
 
     # -- AC-13: no authentication introduced ---------------------------------
 
