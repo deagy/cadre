@@ -128,6 +128,15 @@ check and reporting "nothing to do". See
   `schema_version` increments". Local selection-telemetry records follow to
   version 2; nothing validates them on read, so old rows still parse.
 
+  **`proposed-knowledge` is now refused against the shared global-fallback
+  store**, on read and write alike, mirroring the existing refusal to stage
+  records there. It was a flat unqualified name any project could ingest under
+  and every project could read, and since a plan now names it in every
+  retrieval, one project's accepted findings would have reached another
+  project's agents with no flag and no signal. Claim a project-local partition
+  to use staged findings; `--all-sources` still reaches it, since that flag
+  already means explicit cross-project retrieval.
+
   The `retrieval_runs.source_filter` audit column now stores a JSON array.
   **Rows written before this change hold a bare source string**, and the log
   is append-only and never rewritten, so a reader must accept both encodings.

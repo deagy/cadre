@@ -386,8 +386,12 @@ class ScopeEnforcementTests(unittest.TestCase):
         dedicated source (`accepted_ingest.STAGED_SOURCE`), so a query scoped
         to the project's own source alone never saw them, however many
         findings had been accepted.
+
+        Project-local, because that is the only tier where the staged source
+        exists: `_enforce_staged_source_scope` refuses it against the shared
+        store, mirroring `_enforce_staging_scope` on the write side.
         """
-        env_patch, cwd_patch = self._global_fallback_env()
+        env_patch, cwd_patch = self._project_local_env()
         with env_patch, cwd_patch:
             self._run(["init"])
             self._run([
@@ -422,6 +426,43 @@ class ScopeEnforcementTests(unittest.TestCase):
             # Order preserved, so the audit row names the caller's primary
             # scope first rather than a sorted set.
             self.assertEqual(["proj-a", "proposed-knowledge"], bundle["source_filter"])
+
+    def test_staged_source_is_refused_against_the_shared_store_both_ways(self) -> None:
+        """`proposed-knowledge` is per project, on read as well as write.
+
+        `_enforce_staging_scope` already refuses to *stage* into the shared
+        store. Without the retrieval-side mirror, the source stayed a flat
+        unqualified name any project could `ingest` under and every project
+        could read -- and since a dispatch plan now names it in every
+        retrieval, one project's accepted findings would reach another
+        project's agents with no flag and no signal.
+        """
+        env_patch, cwd_patch = self._global_fallback_env()
+        with env_patch, cwd_patch:
+            self._run(["init"])
+            for argv, label in (
+                (["ingest", "--input", str(ROOT / "examples" / "chat-export.json"),
+                  "--source", "proposed-knowledge", "--classification", "internal"], "ingest"),
+                (["search", "--query", "release", "--classification", "internal",
+                  "--source", "proposed-knowledge"], "search"),
+                (["context", "--agent", "code-reviewer", "--task-id", "T-1",
+                  "--query", "release", "--classification", "internal",
+                  "--source", "proj-a", "--source", "proposed-knowledge"], "context"),
+            ):
+                with self.subTest(command=label):
+                    with self.assertRaises(ValueError) as raised:
+                        self._run(argv)
+                    self.assertIn("per-project staged-findings source", str(raised.exception))
+
+            # An unrelated source is unaffected -- exactly one name is reserved.
+            self._run([
+                "ingest", "--input", str(ROOT / "examples" / "chat-export.json"),
+                "--source", "proj-a", "--classification", "internal",
+            ])
+            self.assertIn("results", self._run([
+                "search", "--query", "release", "--classification", "internal",
+                "--source", "proj-a",
+            ]))
 
     def test_the_pre_repeatable_source_key_is_refused_not_ignored(self) -> None:
         """The retype's fail-open case, pinned.

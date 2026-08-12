@@ -125,7 +125,15 @@ Without `--config`, configuration is read using the project-local-then-global re
 
 At the global-fallback tier only (see "Enforced scope at the global-fallback
 tier" above), `search`/`context`/`deletion-evidence` require at least one
-`--source` or else `--all-sources`, never both. `--source` is repeatable on
+`--source` or else `--all-sources`, never both. **`proposed-knowledge` is
+refused entirely at that tier**, on read and on write alike: staged records
+cannot be written to the shared store (`propose` refuses outright), so
+anything under that name there belongs to another project, and a dispatch plan
+names the source in every retrieval. Claim a project-local partition -- an
+empty `{}` in `.agents/knowledge-store/config.json` is enough -- to have
+staged findings at all. `--all-sources` still reaches it, deliberately: that
+flag already means "explicitly opt into cross-project retrieval", and what is
+refused is naming the source while believing the query is project-scoped. `--source` is repeatable on
 `search`/`context` (each entry is a separate source to search, order-preserving
 and de-duplicated); it stays single-valued on `ingest`, `delete-ingested`, and
 `deletion-evidence`, which each act on exactly one source. `ingest`/`delete-ingested`
