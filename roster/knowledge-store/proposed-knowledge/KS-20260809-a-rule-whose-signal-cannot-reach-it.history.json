@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Verified PR #164/#171 references are plausible and internally consistent; describes a durable defect shape (signal never reaching evaluator) distinct from a rule being wrong. Overlaps but does not duplicate the non-vacuity record; both are useful for review/test agents assessing new guards.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "knowledge-store-steward",
+    "decided_at": "2026-08-12T16:54:48.969Z"
+  }
+]

@@ -1,7 +1,7 @@
 ---
 id: "KS-20260808-differential-test-witness"
 title: "a differential test can pass with its subject disabled"
-status: "proposed"
+status: "accepted"
 evidence:
   - "roster/orchestration/test/test_glob_containment.py"
   - "PR #163"
@@ -17,6 +17,12 @@ recommended_action: "ingest"
 untrusted_instruction_risk: false
 staged_by: "knowledge-store-steward"
 content_digest: "fa099dd5615ea638b13b1fd57eb0d5f95cff392c66ff11ef3af326c34f8d941e"
+disposition:
+  action: "accepted"
+  classification_used: "internal"
+  decided_by: "daniel.eagy@gmail.com"
+  diverged_from_proposal: false
+  reason: "Durable test-design lesson, not tied to code that can move: a differential test comparing an engine to an oracle can pass with the engine disabled when only one verdict direction is exercised. Cited test_glob_containment.py resolves in the current tree. Human decision, recorded because knowledge-store-steward staged this record and cannot disposition its own proposal."
 ---
 
 ## Summary

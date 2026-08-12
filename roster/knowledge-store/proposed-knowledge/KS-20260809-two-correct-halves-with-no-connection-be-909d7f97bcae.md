@@ -1,7 +1,7 @@
 ---
 id: "KS-20260809-two-correct-halves-with-no-connection-be-909d7f97bcae"
 title: "two correct halves with no connection between them"
-status: "proposed"
+status: "accepted"
 evidence:
   - "PR #183 -- dispatch contract said summary, implementation required body"
   - "PR #170 -- untrusted_instruction_risk had no field to travel in"
@@ -19,6 +19,12 @@ recommended_action: "ingest"
 untrusted_instruction_risk: false
 staged_by: "orchestrator"
 content_digest: "909d7f97bcae75624dbffe1a97f5a34d02295be5af45ee8383bb9ba86be83c11"
+disposition:
+  action: "accepted"
+  classification_used: "internal"
+  decided_by: "knowledge-store-steward"
+  diverged_from_proposal: false
+  reason: "Substantially overlaps KS-20260809-a-rule-whose-signal-cannot-reach-it (two of three cited instances are shared) but contributes a genuinely new instance -- the dispatch-contract summary/body mismatch verified against roster/knowledge-store/src/finding_record.py -- and frames a distinct, complementary rule (run the documented path end-to-end rather than trusting that both halves read correctly). Accepting both; the steward notes the overlap for future consolidation rather than treating it as disqualifying."
 ---
 
 ## Summary

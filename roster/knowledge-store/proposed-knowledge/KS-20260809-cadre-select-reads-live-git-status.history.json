@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Verified build_dispatch_plan.py resolves changed files from live git status when --files is omitted, matching the record's claim. Durable operational lesson for anyone verifying routing changes in this repository's own dirty working tree; explicitly scoped as point-in-time and self-flags re-verification if select's resolution changes.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "knowledge-store-steward",
+    "decided_at": "2026-08-12T16:54:49.074Z"
+  }
+]

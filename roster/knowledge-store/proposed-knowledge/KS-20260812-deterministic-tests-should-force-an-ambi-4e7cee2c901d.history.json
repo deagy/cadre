@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Verified test_selector.py uses AGENTIC_SDLC_AVAILABLE plus skipUnless (silent skip) at multiple call sites, contrasted with test_selection_golden_corpus.py's deterministic mock.patch forcing try_lifecycle_contract to None. Accurate, durable test-authoring guidance with no coupling to unshipped features.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "knowledge-store-steward",
+    "decided_at": "2026-08-12T16:54:50.103Z"
+  }
+]

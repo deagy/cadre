@@ -272,6 +272,13 @@ def _origin_slug(repository_root: Path) -> str | None:
 # `test_selector.py::KnowledgeSourceResolutionTests` fails if the two drift.
 STAGED_KNOWLEDGE_SOURCE = "proposed-knowledge"
 
+# Mirrors `config.PROJECT_LOCAL_RELATIVE_PATH`, duplicated for the same reason
+# as the constant above. Its presence is what makes the knowledge store
+# resolve to a project-local partition rather than the shared global-fallback
+# store, and therefore what makes `STAGED_KNOWLEDGE_SOURCE` a legal source to
+# name -- see `resolve_knowledge_sources`.
+PROJECT_LOCAL_KNOWLEDGE_CONFIG = Path(".agents") / "knowledge-store" / "config.json"
+
 
 def resolve_project_knowledge_source(repository_root: Path) -> str:
     """The project's own ingested-corpus source: its origin slug, or a local id."""
@@ -283,19 +290,51 @@ def resolve_project_knowledge_source(repository_root: Path) -> str:
     return f"local-{basename}-{digest}"
 
 
+def has_project_local_knowledge_store(repository_root: Path) -> bool:
+    """Whether this repository claims its own knowledge-store partition.
+
+    The store resolves a project-local `.agents/knowledge-store/config.json` by
+    walking up from the *caller's* working directory to the project's `.git`
+    boundary (`config.find_project_local_config`); for a retrieval dispatched
+    against this repository, that walk terminates at this file, so checking it
+    directly is the same question asked from the plan's own anchor. Nothing
+    else moves the store off the shared tier -- `KNOWLEDGE_STORE_HOME` and
+    `knowledge_store.home` relocate the *global* store, they do not partition
+    it.
+    """
+    return (repository_root / PROJECT_LOCAL_KNOWLEDGE_CONFIG).is_file()
+
+
 def resolve_knowledge_sources(repository_root: Path) -> list[str]:
     """Every source a dispatched agent should retrieve from, primary first.
 
-    Two, not one. A project's own ingested corpus is only half of what it has
-    authorized: steward-accepted findings land under `proposed-knowledge`
-    (`accepted_ingest.py`), a deliberately separate source so they are reached
-    by name rather than by accident. Naming it here *is* reaching it by name --
-    the plan says which sources it queries, and the retrieval it emits carries
-    one `--source` per entry. Before this, a plan scoped to the project slug
-    alone silently returned nothing from the steward-accepted half of the
-    store, however many findings had been accepted into it.
+    Two, not one, wherever the second is legal. A project's own ingested corpus
+    is only half of what it has authorized: steward-accepted findings land
+    under `proposed-knowledge` (`accepted_ingest.py`), a deliberately separate
+    source so they are reached by name rather than by accident. Naming it here
+    *is* reaching it by name -- the plan says which sources it queries, and the
+    retrieval it emits carries one `--source` per entry. Before this, a plan
+    scoped to the project slug alone silently returned nothing from the
+    steward-accepted half of the store, however many findings had been accepted
+    into it.
+
+    **Omitted for a project with no store of its own.** Staged records are
+    per project: the store refuses to write them to the shared global-fallback
+    store, and `cli._enforce_staged_source_scope` refuses to *read* that source
+    name there too, because rows under it in a shared store belong to whichever
+    project ingested them. So naming it unconditionally made this function and
+    that gate contradict each other in the default configuration: on any
+    repository without `.agents/knowledge-store/config.json` the emitted argv
+    named a source the store would refuse, and refusal is per call, not per
+    source -- the agent got nothing at all, including the project's own corpus
+    it would otherwise have retrieved. A plan must emit a retrieval that can
+    actually run, so the second source appears only where a project-local
+    partition makes it legal.
     """
-    return [resolve_project_knowledge_source(repository_root), STAGED_KNOWLEDGE_SOURCE]
+    sources = [resolve_project_knowledge_source(repository_root)]
+    if has_project_local_knowledge_store(repository_root):
+        sources.append(STAGED_KNOWLEDGE_SOURCE)
+    return sources
 
 
 def main(argv: list[str] | None = None) -> int:

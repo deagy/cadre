@@ -1,7 +1,7 @@
 ---
 id: "KS-20260809-cadre-select-reads-live-git-status"
 title: "cadre select reads live git status when --files is omitted"
-status: "proposed"
+status: "accepted"
 evidence:
   - "roster/orchestration/src/build_dispatch_plan.py"
   - "PR #169 -- routing verification contaminated by concurrent edits in the same tree"
@@ -17,6 +17,12 @@ recommended_action: "ingest"
 untrusted_instruction_risk: false
 staged_by: "orchestrator (session capture, no originating handoff item)"
 content_digest: "b2013d39f01aa7e47cdd2113bbdfa1bd74423b159af4e8428862977f104f5fd5"
+disposition:
+  action: "accepted"
+  classification_used: "internal"
+  decided_by: "knowledge-store-steward"
+  diverged_from_proposal: false
+  reason: "Verified build_dispatch_plan.py resolves changed files from live git status when --files is omitted, matching the record's claim. Durable operational lesson for anyone verifying routing changes in this repository's own dirty working tree; explicitly scoped as point-in-time and self-flags re-verification if select's resolution changes."
 ---
 
 ## Summary

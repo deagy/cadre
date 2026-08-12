@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Substantially overlaps KS-20260809-a-rule-whose-signal-cannot-reach-it (two of three cited instances are shared) but contributes a genuinely new instance -- the dispatch-contract summary/body mismatch verified against roster/knowledge-store/src/finding_record.py -- and frames a distinct, complementary rule (run the documented path end-to-end rather than trusting that both halves read correctly). Accepting both; the steward notes the overlap for future consolidation rather than treating it as disqualifying.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "knowledge-store-steward",
+    "decided_at": "2026-08-12T16:54:49.278Z"
+  }
+]

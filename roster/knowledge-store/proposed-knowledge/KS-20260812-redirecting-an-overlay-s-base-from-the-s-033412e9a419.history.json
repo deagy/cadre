@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Verified against roster/orchestration/runs/cadre-feature-portable-platform-2026-08-11/product-intent.md: OD-2 was REVERSED to global-only at Revision 6, precisely on the grounds this record and its sibling (compensating-control record) raised, and G2-approved 2026-08-11. This record documents the reasoning behind the now-current approved decision rather than conflicting with it -- no escalation trigger fires. Sound general control-design lesson about layered-config trust boundaries, applicable beyond routing.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "knowledge-store-steward",
+    "decided_at": "2026-08-12T16:54:50.008Z"
+  }
+]

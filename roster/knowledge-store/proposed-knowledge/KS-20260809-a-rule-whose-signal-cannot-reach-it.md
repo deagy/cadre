@@ -1,7 +1,7 @@
 ---
 id: "KS-20260809-a-rule-whose-signal-cannot-reach-it"
 title: "a rule that reads correctly can still be unable to fire"
-status: "proposed"
+status: "accepted"
 evidence:
   - "PR #164 -- steward defers on injection risk, but no handoff field carried the signal"
   - "PR #171 -- the settle-wait held only because every call routed through one test helper"
@@ -19,6 +19,12 @@ recommended_action: "ingest"
 untrusted_instruction_risk: false
 staged_by: "orchestrator (session capture, no originating handoff item)"
 content_digest: "2321524ee76be5ea9dffdd0d01fcfd90bc34cce3b6ebf1acb0df7bd1ed4b6319"
+disposition:
+  action: "accepted"
+  classification_used: "internal"
+  decided_by: "knowledge-store-steward"
+  diverged_from_proposal: false
+  reason: "Verified PR #164/#171 references are plausible and internally consistent; describes a durable defect shape (signal never reaching evaluator) distinct from a rule being wrong. Overlaps but does not duplicate the non-vacuity record; both are useful for review/test agents assessing new guards."
 ---
 
 ## Summary

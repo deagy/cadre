@@ -1,7 +1,7 @@
 ---
 id: "KS-20260809-squash-merge-discards-merge-ancestry"
 title: "squash-merging a branch that contains a merge commit discards the merge ancestry"
-status: "proposed"
+status: "accepted"
 evidence:
   - "PR #170 (squash-merged into codex/review-cline-shortcomings)"
   - "PR #164 reported mergeStateStatus DIRTY immediately afterwards"
@@ -18,6 +18,12 @@ recommended_action: "ingest"
 untrusted_instruction_risk: false
 staged_by: "orchestrator (session capture, no originating handoff item)"
 content_digest: "f1445a9b5a7e05291a2a7f1610012020026739ef90b2dfaa98985e7cb9de7c28"
+disposition:
+  action: "accepted"
+  classification_used: "internal"
+  decided_by: "knowledge-store-steward"
+  diverged_from_proposal: false
+  reason: "General property of git's squash-merge strategy, not coupled to any code in this repository, so it will not go stale. Concrete PR evidence (#170, #164) plausible and internally consistent. Reusable for any agent operating a stacked-PR workflow."
 ---
 
 ## Summary

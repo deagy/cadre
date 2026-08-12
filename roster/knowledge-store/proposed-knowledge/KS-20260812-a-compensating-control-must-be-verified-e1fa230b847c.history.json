@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Verified against product-intent.md: OD-2 was reversed to global-only precisely because two reviewers found the compensating control (roster identity in the plan) verified against cadre select only, silently absent on the mcp-dispatch-server surface -- exactly this record's finding. Documents the reasoning behind the now-current approved decision, not a conflict with it. Durable lesson about enumerating every entry point sharing a risky mechanism.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "knowledge-store-steward",
+    "decided_at": "2026-08-12T16:54:50.304Z"
+  }
+]

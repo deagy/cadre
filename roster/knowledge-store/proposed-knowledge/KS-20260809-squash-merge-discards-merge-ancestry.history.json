@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "General property of git's squash-merge strategy, not coupled to any code in this repository, so it will not go stale. Concrete PR evidence (#170, #164) plausible and internally consistent. Reusable for any agent operating a stacked-PR workflow.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "knowledge-store-steward",
+    "decided_at": "2026-08-12T16:54:49.172Z"
+  }
+]

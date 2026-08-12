@@ -113,9 +113,12 @@ check and reporting "nothing to do". See
   none of them. **`--source` is now repeatable** on `cadre knowledge search`
   and `cadre knowledge context` (order-preserving, de-duplicated; still
   mutually exclusive with `--all-sources`), and a plan now names both sources
-  — one `--source` argument per entry, never `--all-sources`. `cadre select
-  --source` is repeatable too; supplying any value replaces the default pair
-  entirely.
+  — one `--source` argument per entry, never `--all-sources` — **for a
+  repository that has its own `.agents/knowledge-store/config.json`.** Without
+  one, retrieval resolves to the shared global-fallback store, where the staged
+  source is refused (below), so a plan for such a repository names its own
+  source only. `cadre select --source` is repeatable too; supplying any value
+  replaces the default set entirely.
 
   **Two schema versions move, and both are breaking for pinned consumers.**
   `selection.schema.json` goes **6 → 7**: `inputs.source_filter` and
@@ -130,10 +133,12 @@ check and reporting "nothing to do". See
 
   **`proposed-knowledge` is now refused against the shared global-fallback
   store**, on read and write alike, mirroring the existing refusal to stage
-  records there. It was a flat unqualified name any project could ingest under
-  and every project could read, and since a plan now names it in every
-  retrieval, one project's accepted findings would have reached another
-  project's agents with no flag and no signal. Claim a project-local partition
+  records there — `search`, `context`, `ingest`, `delete-ingested`, and
+  `deletion-evidence`, the destructive verb included. It was a flat unqualified
+  name any project could ingest under and every project could read, and since a
+  plan names it in every retrieval from a partitioned project, one project's
+  accepted findings would have reached another project's agents with no flag
+  and no signal. Claim a project-local partition
   to use staged findings; `--all-sources` still reaches it, since that flag
   already means explicit cross-project retrieval.
 
@@ -208,6 +213,49 @@ check and reporting "nothing to do". See
 - **The `lifecycle-onboarding` skill resolves authorities at the gate that needs them** rather than interviewing for all 13 up front. It asks for `product_owner` and `engineering_lead` — enough to clear G1 and G2 — carries the gate/authority table from `kernel/contracts/lifecycle-gates.json`, and defers the rest. Unresolved roles are `blockers`, not `errors`: the project stays `valid`, tasks can be planned, and only the gate belonging to an unresolved role is held. The skill also now prefers `--set` over authoring an answer file, and documents that a run record captures authority applicability at creation time — so a role must be assigned before planning the task that needs its gate.
 
 ### Fixed
+
+- **A plan emitted a retrieval its own store would refuse, and the refusal cost
+  the whole query.** The two halves of source routing above were each tested and
+  jointly broken: the selector named `proposed-knowledge` unconditionally, while
+  the store refuses that name at the shared global-fallback tier. Refusal is per
+  *call*, not per source, so on any repository without
+  `.agents/knowledge-store/config.json` — the documented default, and every
+  fresh clone of this one, since that file is gitignored — a dispatched agent
+  received nothing at all, its own project's corpus included, where before it
+  had received that corpus. The selector now appends the staged source only
+  where the store will accept it. The gate is unchanged: a hand-written
+  `--source proposed-knowledge` against the shared store is still refused.
+
+- **`import-staged` discarded the disposition history it was importing.** It
+  globbed `*.md` and never read the `<id>.history.json` sidecars `export-staged`
+  writes, so the round trip its own documentation advertises — re-importing an
+  exported corpus, moving a store between machines — silently dropped every
+  decision but the latest: `export-staged --check` straight after an import
+  reported `history_drift` for all 20 records in the committed snapshot that
+  carry a history, the audit trail those sidecars exist to preserve. Sidecars
+  are now validated against the record beside them and restored. Restoring is
+  **append-only**: re-importing the same export writes nothing further, and a
+  sidecar contradicting either the record or history already in the store
+  refuses the batch rather than overwriting it — otherwise import would have
+  been the one way to erase a decision leaving no evidence behind. A self-
+  approval hidden in a history entry is refused like one in the record's own
+  `disposition`. `import-staged` now reports
+  `disposition_history_rows_restored`.
+
+- **`import-staged --authorized-by` named an accountable human and stored the
+  name nowhere.** It was echoed into the command's JSON output and discarded at
+  process exit, so a dispositioned import left a record with an attributable
+  *decider* and an unattributable *admission* — while the flag's whole
+  justification, and the reason a dispositioned batch is gated at all, is that
+  admitting decisions this store never witnessed is attributable. Each admitted
+  record now gets a `staged_record_imports` row (authorizer, digest, status at
+  import, source directory, timestamp), surfaced by `show-staged` as
+  `import_authorizations` and carrying no foreign key, so it outlives the record
+  it describes. A purely `proposed` batch records nothing, matching the gate.
+
+- **A whitespace-only `--authorized-by` satisfied that gate** and was stored and
+  echoed as the accountable human. It now strips before testing, matching
+  `delete-staged` and `delete-ingested`, which always did.
 
 - **`generate_authority_aides.py` scanned argv for `--check` and treated every
   argv it did not recognise as "no flags given" — the *write* path**

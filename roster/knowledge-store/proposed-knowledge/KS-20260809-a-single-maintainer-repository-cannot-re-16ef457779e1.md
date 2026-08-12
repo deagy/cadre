@@ -1,7 +1,7 @@
 ---
 id: "KS-20260809-a-single-maintainer-repository-cannot-re-16ef457779e1"
 title: "a single-maintainer repository cannot require pull-request approvals"
-status: "proposed"
+status: "accepted"
 evidence:
   - "repos/deagy/cadre/collaborators -- one login"
   - "repos/deagy/cadre/rulesets/19841068 -- bypass_actors empty"
@@ -19,6 +19,12 @@ recommended_action: "ingest"
 untrusted_instruction_risk: false
 staged_by: "orchestrator"
 content_digest: "16ef457779e1f285ef28128c5a9e393c103f54cf4484cfb6da98157d8dcf4913"
+disposition:
+  action: "accepted"
+  classification_used: "internal"
+  decided_by: "knowledge-store-steward"
+  diverged_from_proposal: false
+  reason: "States a general, verifiable GitHub mechanic (self-approval is impossible) applied honestly to this repository's actual single-collaborator state, with an explicit re-verification caveat if the collaborator count changes. Sensitivity reviewed: names only the repository and role, no credentials. Valuable for anyone reasoning about this repo's branch-protection posture."
 ---
 
 ## Summary

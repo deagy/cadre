@@ -17,9 +17,15 @@ Every handoff includes:
   list means none. This is a proposal only, not approval to ingest or mutate
   the knowledge store. The orchestrator stages durable candidates from this
   list via `cadre knowledge propose` during consolidation (see the
-  `run-agent-orchestration` skill's "Consolidate Results"); staging queues a
-  candidate for `knowledge-store-steward` disposition and is neither
-  ingestion nor approval.
+  `run-agent-orchestration` skill's "Consolidate Results"), and a
+  shell-capable agent may stage its own via `cadre knowledge propose
+  --from-finding -` rather than wait for one — a handoff from a
+  directly-invoked agent otherwise reaches no queue at all. Either way the
+  list itself stays required: it is what a reviewer reads, and what a runner
+  with no knowledge store still produces. Staging queues a candidate for
+  `knowledge-store-steward` disposition and is neither ingestion nor
+  approval; `propose` refuses a record that arrives already dispositioned, so
+  the agent that stages a candidate cannot be the one that accepts it.
 - `context_handles`: a list of context-store handles (`ctx_...`) for bulk
   material this handoff refers to rather than inlines — a full test log, a
   complete diff analysis, raw tables. An empty list means none, matching the

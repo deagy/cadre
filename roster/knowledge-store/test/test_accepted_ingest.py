@@ -189,6 +189,44 @@ class TestRefusals(unittest.TestCase):
             self.assertEqual(1, len(report["refused"]))
             self.assertIn("untrusted_instruction_risk", report["refused"][0]["reason"])
 
+    def test_a_self_approved_record_is_refused(self) -> None:
+        """The stager cannot also be the decider -- checked here too.
+
+        `staged_store.disposition_record` refuses `decided_by == staged_by`,
+        and `propose` now refuses a record that arrives already dispositioned.
+        Neither covers `import-staged`, which legitimately takes decided
+        records and is how an outside corpus enters. Ingestion is the step
+        that makes a record retrievable, so it is the last place a
+        self-approval can still be stopped, and it does not assume the
+        earlier two held. Same reasoning as the untrusted-risk refusal above.
+        """
+        with _Store() as store:
+            record_id = "KS-20260101-self-approved"
+            put_record(store.db, _frontmatter(record_id), BODY)
+            store.db.execute(
+                "UPDATE staged_records SET status = 'accepted', frontmatter_json = ? WHERE id = ?",
+                (
+                    json.dumps({
+                        **_frontmatter(record_id),
+                        "status": "accepted",
+                        "disposition": {
+                            "action": "accepted", "reason": "approved during review",
+                            "classification_used": "internal",
+                            "diverged_from_proposal": False,
+                            # The same actor as `staged_by` in _frontmatter.
+                            "decided_by": "proposing-agent",
+                        },
+                    }),
+                    record_id,
+                ),
+            )
+            store.db.commit()
+            report = ingest_accepted(store.db, store.config)
+            self.assertEqual([], report["ingested"])
+            self.assertEqual(1, len(report["refused"]))
+            self.assertIn("proposing-agent", report["refused"][0]["reason"])
+            self.assertFalse(already_ingested(store.db, record_id))
+
 
 class TestClassification(unittest.TestCase):
     def test_the_stewards_classification_wins_over_the_proposers(self) -> None:

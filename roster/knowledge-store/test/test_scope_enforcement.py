@@ -133,18 +133,39 @@ class ScopeEnforcementTests(unittest.TestCase):
 
     # -- AC-2: cadre select backward compatibility ------------------------
 
-    def test_ac2_cadre_select_context_path_always_supplies_source(self) -> None:
+    def _selector_modules(self):
         select_src = REPO_ROOT / "roster" / "orchestration" / "src"
         sys.path.insert(0, str(select_src))
         import importlib
 
-        select_agents = importlib.import_module("select_agents")
-        build_dispatch_plan = importlib.import_module("build_dispatch_plan")
+        return (
+            importlib.import_module("select_agents"),
+            importlib.import_module("build_dispatch_plan"),
+        )
 
-        sources = select_agents.resolve_knowledge_sources(REPO_ROOT)
+    def _partitioned_project(self) -> Path:
+        """A project root that claims its own knowledge-store partition.
+
+        Built here rather than using REPO_ROOT: this repository's own
+        `.agents/knowledge-store/config.json` is gitignored (`SECURITY.md`), so
+        a test anchored on REPO_ROOT asserts the developer's local state and
+        would disagree with CI, where the file does not exist.
+        """
+        project = self.directory / "partitioned-project"
+        (project / ".git").mkdir(parents=True)
+        local_store = project / ".agents" / "knowledge-store"
+        local_store.mkdir(parents=True)
+        (local_store / "config.json").write_text("{}\n", encoding="utf-8")
+        return project
+
+    def test_ac2_cadre_select_context_path_always_supplies_source(self) -> None:
+        select_agents, build_dispatch_plan = self._selector_modules()
+
+        sources = select_agents.resolve_knowledge_sources(self._partitioned_project())
         self.assertTrue(sources)
-        # The dedicated steward-accepted source is always among them, so a
-        # dispatched agent reaches accepted findings without a second query.
+        # For a project with its own partition the dedicated steward-accepted
+        # source is among them, so a dispatched agent reaches accepted findings
+        # without a second query.
         self.assertIn("proposed-knowledge", sources)
 
         catalog = select_agents.load_catalog(select_agents.ROSTER_ROOT / "catalog.yaml")
@@ -182,6 +203,82 @@ class ScopeEnforcementTests(unittest.TestCase):
             supplied = [args[index + 1] for index, arg in enumerate(args) if arg == "--source"]
             self.assertEqual(sources, supplied)
             self.assertNotIn("--all-sources", args)
+
+    def test_ac2_dispatched_retrieval_argv_runs_against_the_shared_store(self) -> None:
+        """The plan's own emitted argv must be a command this store accepts.
+
+        Both halves of source routing were individually tested and jointly
+        broken: the selector named `proposed-knowledge` unconditionally, and
+        `_enforce_staged_source_scope` refuses that name at the global-fallback
+        tier. Refusal is per call, so on any repository without
+        `.agents/knowledge-store/config.json` -- the documented default, and
+        every fresh clone of this one -- a dispatched agent got nothing at all,
+        including the project corpus it had been getting before. Nothing failed
+        loudly; the plan was valid and the retrieval it described could not run.
+
+        So this runs it. The retrieval argv is taken from the plan and executed
+        against a real global-fallback store, which is the assertion no
+        selector-side or store-side test could make alone.
+        """
+        select_agents, build_dispatch_plan = self._selector_modules()
+        unpartitioned = self.directory / "unpartitioned-project"
+        (unpartitioned / ".git").mkdir(parents=True)
+        sources = select_agents.resolve_knowledge_sources(unpartitioned)
+        self.assertNotIn("proposed-knowledge", sources)
+
+        catalog = select_agents.load_catalog(select_agents.ROSTER_ROOT / "catalog.yaml")
+        config, _overlay = select_agents.resolve_effective_routing(
+            select_agents.ORCHESTRATION_ROOT / "routing.json", start=REPO_ROOT
+        )
+        plan = build_dispatch_plan.build_dispatch_plan(
+            config,
+            catalog,
+            {
+                "task": "Fix a bug in the login form",
+                "task_id": "TASK-SCOPE-2",
+                "repository_root": str(unpartitioned),
+                "base": None,
+                "changed_files": ["frontend/login.tsx"],
+                "changed_file_source": "explicit",
+                "classification": "internal",
+                "sources": sources,
+                "top": 5,
+            },
+            require_sdlc=False,
+        )
+        requests = plan["knowledge_context"]["requests"]
+        self.assertTrue(requests)
+
+        env_patch, cwd_patch = self._global_fallback_env()
+        with env_patch, cwd_patch:
+            self._run(["init"])
+            self._run([
+                "ingest", "--input", str(ROOT / "examples" / "chat-export.json"),
+                "--classification", "internal", "--source", sources[0],
+            ])
+            for request in requests:
+                # args[0] is the cli.py path the consumer would invoke; the
+                # rest is exactly what this store's parser receives.
+                result = self._run(request["invocation"]["args"][1:])
+                self.assertEqual(sources, result["source_filter"])
+
+    def test_ac2_staged_source_in_a_plan_is_still_refused_at_the_shared_tier(self) -> None:
+        """The gate stays closed for a caller that names the source anyway.
+
+        The selector omitting it is not a relaxation of the rule -- a plan
+        built elsewhere, or an operator passing `--source proposed-knowledge`
+        by hand, still cannot read another project's staged findings out of the
+        shared store.
+        """
+        env_patch, cwd_patch = self._global_fallback_env()
+        with env_patch, cwd_patch:
+            self._run(["init"])
+            with self.assertRaises(ValueError) as captured:
+                self._run([
+                    "search", "--query", "anything", "--classification", "internal",
+                    "--source", "some/project", "--source", "proposed-knowledge",
+                ])
+            self.assertIn("proposed-knowledge", str(captured.exception))
 
     # -- AC-3: core enforcement, unscoped shared-store retrieval rejected --
 
@@ -436,6 +533,12 @@ class ScopeEnforcementTests(unittest.TestCase):
         could read -- and since a dispatch plan now names it in every
         retrieval, one project's accepted findings would reach another
         project's agents with no flag and no signal.
+
+        Every gated verb that takes a source at this tier is covered here, not
+        only the two the guard was first wired into: `delete-ingested` and
+        `deletion-evidence` reach rows under that name too, and the first of
+        them is the destructive one -- a partial wiring left the shared store's
+        `proposed-knowledge` rows readable and *deletable* by any project.
         """
         env_patch, cwd_patch = self._global_fallback_env()
         with env_patch, cwd_patch:
@@ -448,6 +551,15 @@ class ScopeEnforcementTests(unittest.TestCase):
                 (["context", "--agent", "code-reviewer", "--task-id", "T-1",
                   "--query", "release", "--classification", "internal",
                   "--source", "proj-a", "--source", "proposed-knowledge"], "context"),
+                (["delete-ingested", "--scope", "source", "--id", "proposed-knowledge",
+                  "--reason", "cleanup", "--deleted-by", "knowledge-store-steward",
+                  "--authorized-by", "release-owner", "--trigger", "steward-decision",
+                  "--source", "proposed-knowledge"], "delete-ingested"),
+                (["delete-ingested", "--scope", "message", "--id", "m-1",
+                  "--reason", "cleanup", "--deleted-by", "knowledge-store-steward",
+                  "--authorized-by", "release-owner", "--trigger", "steward-decision",
+                  "--source", "proposed-knowledge", "--dry-run"], "delete-ingested --dry-run"),
+                (["deletion-evidence", "--source", "proposed-knowledge"], "deletion-evidence"),
             ):
                 with self.subTest(command=label):
                     with self.assertRaises(ValueError) as raised:
@@ -463,6 +575,10 @@ class ScopeEnforcementTests(unittest.TestCase):
                 "search", "--query", "release", "--classification", "internal",
                 "--source", "proj-a",
             ]))
+            self.assertIn("deletions", self._run(["deletion-evidence", "--source", "proj-a"]))
+            # --all-sources still reaches everything, unchanged: it is the
+            # explicit cross-project opt-in this guard is not trying to close.
+            self.assertIn("deletions", self._run(["deletion-evidence", "--all-sources"]))
 
     def test_the_pre_repeatable_source_key_is_refused_not_ignored(self) -> None:
         """The retype's fail-open case, pinned.
@@ -529,6 +645,13 @@ class ScopeEnforcementTests(unittest.TestCase):
         knowledge_store = autonomy["knowledge_store"]
         self.assertEqual("allowed", knowledge_store["retrieve_authorized_context"])
         self.assertEqual("knowledge_store_steward_only", knowledge_store["ingest_update_reclassify_or_delete"])
+        # Agents may stage their own proposals; they may never decide them.
+        # Pinned as a pair: the first without the second is the self-approval
+        # the propose/disposition/ingest guards exist to prevent, and a policy
+        # file that said so while the code enforced it would be the drift
+        # worth catching here.
+        self.assertEqual("allowed", knowledge_store["stage_own_proposal"])
+        self.assertEqual("never", knowledge_store["disposition_own_proposal"])
 
     # -- AC-13: no authentication introduced ---------------------------------
 

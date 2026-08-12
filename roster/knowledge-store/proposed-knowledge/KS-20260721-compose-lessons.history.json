@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "rejected",
+    "reason": "Rejected as redundant, not as wrong. This content is already retrievable: it is a 98% match to the chunk ingested under source deagy/cadre on 2026-08-01. Accepting it would place a near-identical copy under proposed-knowledge, and dispatch plans now query both sources, so every matching retrieval would return the same compose lesson twice and spend two of an agent's five result slots on it. Reject at the staged stage is the cheap correction; delete-ingested afterwards would require a named authorized human. Human decision; the staging steward could not decide it.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "daniel.eagy@gmail.com",
+    "decided_at": "2026-08-12T17:42:42.402Z"
+  }
+]

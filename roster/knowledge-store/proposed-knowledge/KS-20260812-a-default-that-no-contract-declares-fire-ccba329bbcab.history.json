@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Verified: current build_dispatch_plan.py:_gate_agents docstring confirms the exact defect (OD-9) and states it has since been fixed by making the default roster-supplied. The specific line citations are now stale (the hardcode is gone, replaced by a parameter) but the record is explicit that its citations would go stale under a fix while the pattern (untested default from an external contract, corpus stubs the contract so it's blind to the default) remains generalizable and durable. Retained for the pattern, with staleness noted.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "knowledge-store-steward",
+    "decided_at": "2026-08-12T16:54:49.803Z"
+  }
+]

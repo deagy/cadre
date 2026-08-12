@@ -517,7 +517,12 @@ comment).
   with the exact CLI invocation to run against the knowledge store
   (one `--source` per source in `source_filter` — this repository's origin
   remote plus `proposed-knowledge`, where steward-accepted findings are
-  ingested — and `--classification` matched to the task). `status: "planned"`
+  ingested — and `--classification` matched to the task). The second source
+  appears here because the checkout this was captured from has its own
+  `.agents/knowledge-store/config.json`; that file is gitignored, so a fresh
+  clone with no partition of its own plans a single-source retrieval instead
+  (`proposed-knowledge` is refused against the shared global-fallback store,
+  and the refusal rejects the whole call). `status: "planned"`
   means retrieval is proposed, not performed — `cadre select` never executes
   retrieval itself.
 - **`provenance`** — binds the plan to the exact inputs that produced it:

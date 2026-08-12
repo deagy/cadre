@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "States a general, verifiable GitHub mechanic (self-approval is impossible) applied honestly to this repository's actual single-collaborator state, with an explicit re-verification caveat if the collaborator count changes. Sensitivity reviewed: names only the repository and role, no credentials. Valuable for anyone reasoning about this repo's branch-protection posture.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "knowledge-store-steward",
+    "decided_at": "2026-08-12T16:54:49.388Z"
+  }
+]

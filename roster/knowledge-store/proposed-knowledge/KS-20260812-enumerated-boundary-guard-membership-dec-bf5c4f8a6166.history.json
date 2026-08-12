@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Verified test_kernel_boundary.py enforces its rule over the roster/ directory via AST walk (not a hand-maintained module list), consistent with the record's contrast between derived and enumerated membership. Complements, does not contradict, the accepted non-vacuity record per its own conflicts_or_staleness note. Durable test-design lesson.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "knowledge-store-steward",
+    "decided_at": "2026-08-12T16:54:49.903Z"
+  }
+]

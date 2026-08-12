@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Verified the cited config.py/routing.py lines against the file contents; the record's claim that both classification errors run in opposite directions in the same requirements table is a plausible, well-evidenced finding. Generalizable lesson about hand-classified taxonomy citations being more failure-prone than shape-based citations; record itself flags that its specific citations will be superseded once the guard is implemented while the lesson persists.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "knowledge-store-steward",
+    "decided_at": "2026-08-12T16:54:50.206Z"
+  }
+]

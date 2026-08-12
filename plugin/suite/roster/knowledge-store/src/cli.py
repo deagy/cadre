@@ -31,12 +31,16 @@ from staged_store import (
     export_records,
     get_history,
     get_record,
+    import_authorizations,
     install_schema,
     list_records,
     put_generated_record,
+    put_history,
     put_record,
     put_record_text,
+    record_import_authorization,
     serialize_record,
+    validate_history,
 )
 
 
@@ -136,7 +140,12 @@ def _parser() -> argparse.ArgumentParser:
     propose = subparsers.add_parser("propose")
     propose_input = propose.add_mutually_exclusive_group(required=True)
     propose_input.add_argument(
-        "--input", help="a fully-authored record file (frontmatter + body), or - for stdin"
+        "--input",
+        help=(
+            "a fully-authored record file (frontmatter + body), or - for stdin; its status "
+            "must be 'proposed' and it may not carry a disposition (use import-staged for "
+            "already-dispositioned records)"
+        ),
     )
     propose_input.add_argument(
         "--from-finding",
@@ -164,6 +173,16 @@ def _parser() -> argparse.ArgumentParser:
     add_config(show_staged)
     import_staged = subparsers.add_parser("import-staged")
     import_staged.add_argument("--directory", required=True)
+    import_staged.add_argument(
+        "--authorized-by",
+        dest="authorized_by",
+        help=(
+            "required when any record in the batch carries a disposition: the authorized human "
+            "accountable for admitting decisions that this store never saw made. A batch of "
+            "purely 'proposed' records needs no authorization -- it is equivalent to a series "
+            "of propose calls"
+        ),
+    )
     add_config(import_staged)
     disposition = subparsers.add_parser("disposition-staged")
     disposition.add_argument("--id", required=True, dest="record_id")
@@ -258,6 +277,52 @@ def _read_source(source: str) -> str:
     return sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
 
 
+def _refuse_a_pre_dispositioned_record(frontmatter: dict[str, Any]) -> None:
+    """Refuse a `propose` input that arrives already decided.
+
+    `propose` is the one verb non-steward agents may run against this store,
+    and the whole reason that is safe is that a proposal cannot approve
+    itself. Nothing enforced that. `staged_records.validate_parsed` checks
+    only that `status` and `disposition.action` *agree*, and it type-checks
+    `decided_by`; the rule that a record's stager cannot also be its decider
+    lives in `staged_store.disposition_record`, on the `disposition-staged`
+    path -- the verb an agent is not supposed to use. So a record handed to
+    `propose --input` carrying `status: accepted` and a hand-written
+    `disposition: {decided_by: knowledge-store-steward}` was staged as
+    written, and `ingest-accepted` then made it retrievable. A proposing
+    agent could author its own approval and reach the corpus without a
+    steward touching the record. See the regression tests in
+    `test_staged_cli.py`.
+
+    The fix is scoped to this verb rather than to the contract, deliberately.
+    A dispositioned record is perfectly legitimate elsewhere: `import-staged`
+    re-imports an existing corpus, `export-staged` round-trips one, and
+    `disposition-staged` produces them. What must not happen is a disposition
+    *entering* through the proposal door. Refusing it here keeps
+    `validate_parsed` describing what a well-formed record is, and leaves
+    "who may assert a decision" where it belongs -- at the boundary between
+    an agent and the store.
+
+    `--from-finding` cannot trip this: `finding_record.build_record`
+    generates `status` as `"proposed"` and has no disposition input at all.
+    """
+    status = frontmatter.get("status")
+    if status is not None and status != "proposed":
+        raise ValueError(
+            f"propose refuses a record whose status is {status!r}: a proposal is staged as "
+            "'proposed' and is dispositioned only by a steward, through `disposition-staged`. "
+            "Staging a decided record here would let whoever wrote it record its approval. "
+            "Use `import-staged` to load already-dispositioned records."
+        )
+    if "disposition" in frontmatter:
+        raise ValueError(
+            "propose refuses a record carrying a `disposition` block: the decision is the "
+            "steward's to record through `disposition-staged`, which enforces that a record's "
+            "stager cannot also be its decider. Remove the block and propose the record as "
+            "'proposed'."
+        )
+
+
 def _render_result(frontmatter: dict[str, Any], body: str) -> dict[str, Any]:
     """Validate and format a not-yet-staged record for `--render-only`.
 
@@ -284,9 +349,11 @@ def _render_result(frontmatter: dict[str, Any], body: str) -> dict[str, Any]:
 def _propose(db: Any, options: dict[str, Any]) -> dict[str, Any]:
     """Stage one record, from a fully-authored file or from a structured finding.
 
-    Two input shapes, one write path. `--input` is the original, unchanged:
-    a complete record (frontmatter + body) is read and validated as-is inside
-    `put_record_text`, so a malformed record never reaches the table.
+    Two input shapes, one write path. `--input` is the original: a complete
+    record (frontmatter + body) is read and validated as-is inside
+    `put_record_text`, so a malformed record never reaches the table. It is
+    additionally held to `_refuse_a_pre_dispositioned_record` -- a proposal
+    may not arrive already decided, whichever shape it came in as.
 
     `--from-finding` is the low-friction path this exists to add: a JSON
     mapping with the record's fields (see `finding_record.FINDING_KEYS`) is
@@ -321,9 +388,12 @@ def _propose(db: Any, options: dict[str, Any]) -> dict[str, Any]:
 
     if render_only:
         frontmatter, body = parse_record(_read_source(input_source))
+        _refuse_a_pre_dispositioned_record(frontmatter)
         return _render_result(frontmatter, body)
 
     text = _read_source(input_source)
+    frontmatter, _ = parse_record(text)
+    _refuse_a_pre_dispositioned_record(frontmatter)
     record_id = put_record_text(db, text)
     stored = list_records(db, None)
     summary = next(record for record in stored if record["id"] == record_id)
@@ -356,32 +426,200 @@ def _show_staged(db: Any, record_id: str) -> dict[str, Any]:
         "body": body,
         "text": serialize_record(frontmatter, body),
         "disposition_history": get_history(db, record_id),
+        # Empty for every record staged here through `propose`. Non-empty only
+        # for one this store admitted already-dispositioned, where the
+        # decision's own `decided_by` says who decided and this says who
+        # authorized letting that decision in.
+        "import_authorizations": import_authorizations(db, record_id),
     }
 
 
-def _import_staged(db: Any, directory: str) -> dict[str, Any]:
+def _import_staged(db: Any, directory: str, authorized_by: str | None = None) -> dict[str, Any]:
     """Stage every record file in a directory, atomically across the batch.
 
     Migration is the intended use, so a partial import is the wrong outcome:
     a batch that half-succeeds leaves the operator unable to tell which
     records made it without diffing. Every file is validated first, and the
     batch is written only if all of them pass.
+
+    **Why this verb needs an authorization the others do not.** Once `propose`
+    refused pre-dispositioned records, this became the only route by which a
+    decision the store never watched being made can still enter it. That is a
+    legitimate need -- re-importing an exported corpus, moving a store between
+    machines -- but it is not a proposal, and treating it as one is how the
+    self-approval `propose` now blocks would simply relocate here. Prose said
+    "don't route around `propose` with `import-staged`", which is exactly the
+    kind of convention this store has already learned not to rely on.
+
+    So the cost is scoped to the risky half. A batch of purely `proposed`
+    records imports with no ceremony: it is equivalent to a series of
+    `propose` calls, grants nobody anything, and is the common case for
+    seeding a fresh store. A batch containing *any* dispositioned record
+    requires `--authorized-by`, naming the human accountable for admitting
+    decisions this store cannot attribute -- the same pattern, and the same
+    reasoning, as `delete-staged --authorized-by` on an accepted record.
+
+    Self-approval is refused outright here, authorization or not. A named
+    human can vouch for a decision the store did not witness; nobody can
+    vouch for a record whose stager and decider are the same actor, because
+    that is not a decision at all. `ingest_accepted` refuses the same shape
+    at the last step; this catches it at the first, before it is ever stored.
+
+    Like every other actor field in this store, `--authorized-by` is a
+    caller-asserted string authenticated by nobody (see `SECURITY.md`). It
+    makes the act deliberate and attributable, not verified -- and attributable
+    means recorded, so it is persisted per admitted record
+    (`staged_record_imports`, readable via `show-staged`) rather than only
+    echoed back to whoever typed it.
+
+    **Histories come with the records.** `export-staged` writes each record's
+    disposition history to a `<id>.history.json` sidecar, because frontmatter
+    cannot hold a list of decisions. Importing the `.md` files alone therefore
+    used to complete the round trip the docstring above claims while dropping
+    every earlier decision -- `export-staged --check` immediately after an
+    import reported `history_drift` for every record that had one. Each
+    sidecar is read, validated against the record it sits beside, and restored
+    through `put_history`.
     """
     root = Path(directory)
     if not root.is_dir():
         raise ValueError(f"Not a directory: {directory}")
-    sources = sorted(root.glob("*.md"))
+    # README.md is skipped for the same reason `export-staged --check` skips
+    # it: `roster/knowledge-store/proposed-knowledge/` ships one by design, so
+    # the canonical snapshot directory could not be imported at all without
+    # this -- it failed on the README's missing frontmatter before reaching a
+    # single record. Only this one name is skipped; any other unparseable file
+    # is still a loud failure, because silently ignoring files in a migration
+    # is how a partial corpus arrives looking complete.
+    sources = [path for path in sorted(root.glob("*.md")) if path.name != "README.md"]
     if not sources:
         raise ValueError(f"No .md staged-record files found in {directory}")
     parsed = []
+    dispositioned = []
     for path in sources:
         frontmatter, body = parse_record(path.read_text(encoding="utf-8"))
         findings = validate_parsed(frontmatter, body)
         if findings:
             raise ValueError(f"{path.name}: " + "; ".join(findings))
-        parsed.append((path, frontmatter, body))
-    imported = [put_record(db, frontmatter, body) for _, frontmatter, body in parsed]
-    return {"status": "imported", "count": len(imported), "ids": sorted(imported)}
+        disposition = frontmatter.get("disposition")
+        if disposition:
+            decided_by = disposition.get("decided_by")
+            if decided_by is not None and decided_by == frontmatter.get("staged_by"):
+                raise ValueError(
+                    f"{path.name}: {decided_by!r} both staged and dispositioned this record. "
+                    "Importing cannot launder a self-approval, and no --authorized-by permits "
+                    "it: authorship and approval separation is why an agent may write to this "
+                    "store at all. Nothing in the batch was imported."
+                )
+            dispositioned.append(frontmatter["id"])
+        history = _load_exported_history(path, frontmatter, db)
+        parsed.append((path, frontmatter, body, history))
+
+    # Whitespace is not a name: the two sibling authorization gates in this
+    # store (`staged_store.delete_record`, `ingested_deletion.delete_ingested`)
+    # both strip before testing, and a gate that "   " satisfies records a
+    # blank as the accountable human.
+    authorizer = (authorized_by or "").strip()
+    if dispositioned and not authorizer:
+        listed = ", ".join(sorted(dispositioned)[:5])
+        more = "" if len(dispositioned) <= 5 else f" (and {len(dispositioned) - 5} more)"
+        raise ValueError(
+            f"{len(dispositioned)} record(s) in this batch already carry a steward's "
+            f"disposition: {listed}{more}. Importing them admits decisions this store never "
+            "saw made, so it requires --authorized-by naming the human accountable for that. "
+            "A batch of purely 'proposed' records needs no authorization. Nothing was imported."
+        )
+
+    imported = []
+    restored = 0
+    for _, frontmatter, body, history in parsed:
+        record_id = put_record(db, frontmatter, body)
+        imported.append(record_id)
+        if history:
+            restored += put_history(db, record_id, history)
+        if frontmatter.get("disposition"):
+            # Written after the record, so an authorization row never describes
+            # an admission that failed. `authorizer` is non-empty here: the gate
+            # above refuses this whole batch otherwise.
+            record_import_authorization(
+                db,
+                record_id,
+                content_digest=frontmatter["content_digest"],
+                status_at_import=frontmatter["status"],
+                authorized_by=authorizer,
+                directory=str(root),
+            )
+    result: dict[str, Any] = {
+        "status": "imported",
+        "count": len(imported),
+        "ids": sorted(imported),
+        # Rows written, not sidecars read: a sidecar whose history the store
+        # already holds is a no-op, so 0 here after a re-import means "nothing
+        # to restore", not "nothing was restored".
+        "disposition_history_rows_restored": restored,
+    }
+    if dispositioned:
+        # Echoed back so the operator sees what their authorization actually
+        # covered, rather than a count that hides which records were decided
+        # elsewhere. Also persisted per record -- see this function's docstring.
+        result["dispositioned"] = sorted(dispositioned)
+        result["authorized_by"] = authorizer
+        result["authorization_recorded"] = True
+    return result
+
+
+def _load_exported_history(
+    path: Path, frontmatter: dict[str, Any], db: Any
+) -> list[dict[str, Any]]:
+    """The `<id>.history.json` sidecar beside a record file, validated, or `[]`.
+
+    Validation happens here, in the batch's pre-write pass, so a malformed or
+    contradictory sidecar refuses the import before any record is written --
+    `put_history` re-checks, but reaching its check mid-batch would already
+    have written earlier records.
+
+    An absent sidecar is not an error: two records in the committed snapshot
+    are dispositioned with no history at all, from before that table existed.
+    But an absent sidecar does not license contradicting history the store
+    *does* hold, so the record is validated against that instead. Otherwise
+    importing a hand-amended `.md` over a dispositioned record would leave it
+    disagreeing with its own retained audit trail -- amending a disposition is
+    `disposition-staged`'s job, which appends rather than overwrites.
+    """
+    sidecar = path.with_name(f"{frontmatter['id']}.history.json")
+    if sidecar.is_file():
+        try:
+            history = json.loads(sidecar.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                f"{sidecar.name}: not valid JSON ({error}). This file is a record's disposition "
+                "history as written by export-staged; nothing in the batch was imported."
+            ) from error
+        findings = validate_history(frontmatter, history)
+        if findings:
+            raise ValueError(f"{sidecar.name}: " + "; ".join(findings) + ". Nothing was imported.")
+        for entry in history:
+            if entry["decided_by"] == frontmatter.get("staged_by"):
+                raise ValueError(
+                    f"{sidecar.name}: {entry['decided_by']!r} both staged this record and "
+                    f"dispositioned it at history entry {entry['sequence']}. Importing cannot "
+                    "launder a self-approval through a history sidecar any more than through a "
+                    "record's own disposition. Nothing in the batch was imported."
+                )
+        return history
+    retained = get_history(db, frontmatter["id"])
+    if retained:
+        findings = validate_history(frontmatter, retained)
+        if findings:
+            raise ValueError(
+                f"{path.name}: this store already holds a disposition history for "
+                f"{frontmatter['id']!r} that the record being imported contradicts -- "
+                + "; ".join(findings)
+                + ". Export this store to see what it holds (the export writes the history "
+                "beside each record), or use disposition-staged to amend a disposition, which "
+                "appends to that history instead of contradicting it. Nothing was imported."
+            )
+    return []
 
 
 def _export_staged(db: Any, output: str, status: str | None) -> dict[str, Any]:
@@ -532,7 +770,11 @@ def _enforce_staged_source_scope(tier: str, sources: Any) -> None:
     all, so the error points at the same remedy `_enforce_staging_scope` does.
 
     `--source` remains free-form everywhere else; this reserves exactly one
-    name, and only at the tier where the store is shared.
+    name, and only at the tier where the store is shared. Every gated verb
+    that takes a source at this tier calls it -- `search`/`context` and
+    `ingest` (read and write), plus `delete-ingested` and `deletion-evidence`,
+    which is where a partial wiring would have hurt most: the destructive verb
+    is the one you least want reaching another project's rows.
 
     `--all-sources` still reaches it, and that is deliberate rather than a
     gap: that flag's whole meaning at this tier is "explicitly opt into
@@ -578,9 +820,17 @@ def _enforce_ingested_deletion_scope(tier: str, options: dict[str, Any]) -> None
     content is exactly the setting where a steward deleting by conversation
     or message id, without also naming the source, is most likely to be
     correcting the wrong project's content by mistake.
+
+    The reserved staged-source name is refused here too, and this is the verb
+    where that matters most: it is the destructive one. Rows sitting under
+    `proposed-knowledge` in the shared store belong to whichever project
+    ingested them before that name was reserved, so deleting them from here is
+    reaching into another project's corpus -- the same reasoning as on the read
+    side, with a worse outcome.
     """
     if tier != TIER_GLOBAL_FALLBACK:
         return
+    _enforce_staged_source_scope(tier, options.get("source"))
     if not options.get("source"):
         raise ValueError(
             "A project scope is required to delete ingested content from the shared global "
@@ -601,11 +851,18 @@ def _enforce_evidence_scope(tier: str, options: dict[str, Any]) -> None:
 
     Project-local and explicit-`--config` tiers are already isolated by
     database, so no new requirement is imposed on them.
+
+    The reserved staged-source name is refused here for the same reason it is
+    on every other scoped path at this tier: evidence rows under that name in
+    the shared store describe another project's deletions. `--all-sources`
+    still reaches them, unchanged -- that flag is the explicit cross-project
+    opt-in.
     """
     if tier != TIER_GLOBAL_FALLBACK:
         return
     source = options.get("source")
     all_sources = options.get("all_sources")
+    _enforce_staged_source_scope(tier, source)
     if source and all_sources:
         raise ValueError(
             "Ambiguous scope: pass either --source <project-identifier> or "
@@ -726,7 +983,11 @@ def run(arguments: list[str] | None = None) -> dict[str, Any]:
             if command == "list-staged":
                 return {"records": list_records(db, options.pop("status", None))}
             if command == "import-staged":
-                return _import_staged(db, options.pop("directory"))
+                return _import_staged(
+                    db,
+                    options.pop("directory"),
+                    authorized_by=options.pop("authorized_by", None),
+                )
             if command == "export-staged":
                 check = options.pop("check", False)
                 output = options.pop("output")

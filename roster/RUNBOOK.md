@@ -193,7 +193,7 @@ python3 roster/orchestration/src/team_recipe_dryrun.py \
 
 Add `--recipe <id>` to focus on one recipe, and `--format json` for a machine-readable explanation (each recipe's object always includes a `fires: bool` verdict plus the specific condition values that decided it). Exits non-zero only on a usage error (an unknown `--recipe` id, an unrecognized `--matched-routes` value, or `--files`/`--base` combined with synthetic mode) — a `NO-FIRE` verdict is not itself a failure. Wired into `roster/orchestration/test/test_team_recipe_dryrun.py` (part of the standard `unittest discover` invocation above).
 
-Edit `orchestration/routing.json` to add repository-specific path conventions. Although its extension is YAML, the Python selector parses its JSON-compatible content with the standard library; the standalone Agentic SDLC executable supplies lifecycle gate contracts separately. A planned knowledge invocation contains a host-neutral Python 3.10+ `launcher` contract and an argv array beginning with the knowledge-store CLI's absolute path (`src/cli.py`), runnable without changing directory — that also means `Path.cwd()` inside `cli.py` reflects wherever the caller actually is, which is what lets its project-local-vs-global config resolution work. `bin/cadre knowledge ...` runs the same script; the plan itself embeds the interpreter-agnostic launcher contract for callers that substitute their own probed interpreter path instead. The plan always carries explicit `--source` arguments, one per entry in `source_filter`, and never `--all-sources` (which against the shared global store would read other projects' corpora). Caller-supplied values win, and replace the default set entirely; otherwise the plan names two sources: the target repository's lowercase `owner/repository` origin slug -- falling back to `local-<basename>-<12-character canonical-path hash>` -- **and `proposed-knowledge`**, the dedicated source `cadre knowledge ingest-accepted` writes steward-accepted findings to. Naming the second one matters: it is deliberately separate so it is reached by name rather than by accident, and a plan scoped to the repository slug alone retrieved nothing from it however many findings had been accepted. Both `inputs.source_filter` and `knowledge_context.source_filter` are arrays; that retype took `schema_version` 6 -> 7. Existing `secure-cloud-agents` records are not migrated automatically: pass that source explicitly for temporary retrieval, then re-ingest under the new repository key through the steward workflow. Selection rejects `--top` outside 1–20; required knowledge-store configuration must fail closed.
+Edit `orchestration/routing.json` to add repository-specific path conventions. Although its extension is YAML, the Python selector parses its JSON-compatible content with the standard library; the standalone Agentic SDLC executable supplies lifecycle gate contracts separately. A planned knowledge invocation contains a host-neutral Python 3.10+ `launcher` contract and an argv array beginning with the knowledge-store CLI's absolute path (`src/cli.py`), runnable without changing directory — that also means `Path.cwd()` inside `cli.py` reflects wherever the caller actually is, which is what lets its project-local-vs-global config resolution work. `bin/cadre knowledge ...` runs the same script; the plan itself embeds the interpreter-agnostic launcher contract for callers that substitute their own probed interpreter path instead. The plan always carries explicit `--source` arguments, one per entry in `source_filter`, and never `--all-sources` (which against the shared global store would read other projects' corpora). Caller-supplied values win, and replace the default set entirely; otherwise the plan names the target repository's lowercase `owner/repository` origin slug -- falling back to `local-<basename>-<12-character canonical-path hash>` -- **plus `proposed-knowledge`, but only when the target repository has its own `.agents/knowledge-store/config.json`**. Naming the second source matters: it is deliberately separate so it is reached by name rather than by accident, and a plan scoped to the repository slug alone retrieved nothing from it however many findings had been accepted. Making it conditional matters for the same reason in reverse: staged findings are per project, so the store refuses that source name against the shared global-fallback store on read as well as write, and refusal is per call rather than per source -- a plan that named it for a repository with no partition of its own emitted argv that returned *nothing*, the repository's own corpus included. A project that wants its accepted findings retrieved claims a partition (an empty `{}` in that file is enough). Both `inputs.source_filter` and `knowledge_context.source_filter` are arrays; that retype took `schema_version` 6 -> 7. Existing `secure-cloud-agents` records are not migrated automatically: pass that source explicitly for temporary retrieval, then re-ingest under the new repository key through the steward workflow. Selection rejects `--top` outside 1–20; required knowledge-store configuration must fail closed.
 
 **Every route declares a `workflow_shape`.** It is the delivery shape that route contributes to the plan's `workflow` field, and it takes one of four values: `infrastructure-change` (declarative platform, host, cluster, or network infrastructure), `pipeline-change` (CI/CD and release-delivery definitions), `new-service` (application, service, library, or product code), or `unclassified` (this route claims no delivery shape). Set it deliberately when adding a route — a route that omits it contributes nothing, which is exactly the defect the field replaced ([#210](https://github.com/deagy/cadre/issues/210): the previous rule tested a hardcoded set of four route ids, so all 86 `*-execution` routes fell through to `unclassified` by omission). `test_selector.py::WorkflowShapeDeclarationTests` fails the build when a route in this repository's `routing.json` leaves it off, and an unrecognized value raises from `validate_routing_config` rather than being silently ignored. That build-time guard covers this repository's own routes only — the field stays optional in `routing.schema.json` for project-local overlay compatibility, so the runtime backstop for both cases is the plan itself: when a route matches with no declared shape, `cadre select` names it in the optional `undeclared_workflow_shape_routes` array ([#214](https://github.com/deagy/cadre/issues/214), see "Customize routing.json with a project-local overlay" below). The array lists route ids in match order (never sorted), names only routes that actually matched, and is emitted only when non-empty. **Adding it took `schema_version` 5 → 6**, per the "When `schema_version` increments" rule above: optional-and-omitted-when-empty is not the carve-out that rule grants, because an overlay consumer — the population this signal exists for — receives the field unconditionally, and their pinned copy of this closed schema would otherwise reject the plan on `additionalProperties` while it truthfully reported a version that copy claims to handle. Unlike `provenance` the array *is* part of the `dispatch_fingerprint` payload, and that is load-bearing rather than tidy: `matched_routes` carries only `id` and `reasons`, never the shape, so a route flipping between `workflow_shape: unclassified` and omitting the field produces an otherwise byte-identical plan — excluding the array would make two genuinely different configurations fingerprint-identically. Declare `unclassified` on purpose for advisory, assessment, review, governance, support, documentation, and evidence routes, and for any route whose shape is decided by one of `_select_workflow()`'s earlier precedence conditions (rollback, production-release, support-escalation, runtime-assurance, knowledge-ingestion, debugging, agent-suite-maintenance, product-intake) — those depend on route *combinations* and on whether a keyword actually fired, which no per-route constant can express. Do not derive the value from the primary role's catalog `phase`: phase is a capability and authority grouping, and several `build`-phase routes (`opentofu-module-execution`, `gitlab-ci-execution`) deliver infrastructure or pipeline artifacts rather than services. `workflow` is narration and a pointer into `workflows/*.md`; it gates nothing, and `required_quality_gates` continue to come from each route's own `quality_gates`.
 
@@ -1218,3 +1218,44 @@ rule) — `cadre init`'s RG-B allowlist surfaces this key. With it narrowed,
 `workspace-isolation.md`'s Step 1 condition fails for every dispatched
 write-capable role and edits land in-place instead, exactly as they did
 before this change.
+
+## 20. Cline memory bank — auto-initialized on first session
+
+Cline automatically initializes a persistent memory bank the first time it opens
+this repository directory. No manual setup required.
+
+On first Cline session open, a `.cline/cline.json` hook runs the
+`bin/init-cline-memory` script, which creates:
+
+1. **`.cline/memory/PROJECT_CONTEXT.md`** — project architecture, file structure,
+   common tasks, and operator settings reference
+2. **`.cline/memory/BEST_PRACTICES.md`** — contribution guidelines, regeneration
+   sequences, testing strategies, common pitfalls, and architecture rules
+3. **`.agents/cadre.yaml`** — template for project-local operator settings
+   (if missing)
+
+The memory bank persists across Cline sessions and includes:
+
+- Full project context (159 roles, lifecycle gates, architecture)
+- All common commands (tests, regeneration, selection, knowledge store)
+- Contribution best practices with checklists
+- Architecture rules (kernel boundary, authorship ≠ approval, untrusted knowledge,
+  deterministic selection)
+
+The hook is **idempotent**: it skips initialization if memory already exists.
+You can also manually initialize or reinitialize memory at any time:
+
+```sh
+bash bin/init-cline-memory
+```
+
+To create an isolated worktree for development with pre-bootstrapped plugin:
+
+```sh
+# Create a new worktree with plugin and memory auto-initialized
+./bin/bootstrap-cline-worktree                    # current branch
+./bin/bootstrap-cline-worktree --branch main      # specify branch
+./bin/bootstrap-cline-worktree --branch X --path P # custom path
+```
+
+See section 19 for worktree management and cleanup.
