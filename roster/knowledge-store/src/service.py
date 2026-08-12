@@ -140,6 +140,17 @@ def normalize_sources(sources: Any) -> list[str] | None:
 
 def search_store(db: Any, config: dict[str, Any], query: str, options: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     options = dict(options or {})
+    # Fail closed on the pre-repeatable-`--source` spelling. Ignoring it would
+    # silently *widen* scope rather than narrow it: no `sources` key means no
+    # source clause at all, so a caller that still passes `source` would read
+    # every source in the store while believing it had scoped the query. That
+    # is the one direction this store must never fail in.
+    if "source" in options:
+        raise ValueError(
+            "Unknown option 'source'; `--source` is repeatable, so retrieval takes 'sources' "
+            "(a list). Passing 'source' would have been ignored and read every source in the "
+            "store. Use {'sources': ['<name>']}, or omit it for an --all-sources read."
+        )
     if not options.get("classification"):
         raise ValueError("A classification filter is required")
     _validate_classification(options["classification"])

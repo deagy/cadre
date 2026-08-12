@@ -106,7 +106,7 @@ class TestTheGapItself(unittest.TestCase):
             before = search_store(
                 store.db, store.config,
                 "prove a guard is non-vacuous by injecting a fault",
-                {"classification": "internal", "source": STAGED_SOURCE, "top": 5},
+                {"classification": "internal", "sources": [STAGED_SOURCE], "top": 5},
             )
             self.assertEqual(
                 [], before,
@@ -121,7 +121,7 @@ class TestTheGapItself(unittest.TestCase):
             after = search_store(
                 store.db, store.config,
                 "prove a guard is non-vacuous by injecting a fault",
-                {"classification": "internal", "source": STAGED_SOURCE, "top": 5},
+                {"classification": "internal", "sources": [STAGED_SOURCE], "top": 5},
             )
             self.assertTrue(
                 after,

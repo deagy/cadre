@@ -37,6 +37,8 @@ from config import (  # noqa: E402
     TIER_PROJECT_LOCAL,
     load_config,
 )
+from database import open_store  # noqa: E402
+from service import search_store  # noqa: E402
 
 
 class ScopeEnforcementTests(unittest.TestCase):
@@ -420,6 +422,37 @@ class ScopeEnforcementTests(unittest.TestCase):
             # Order preserved, so the audit row names the caller's primary
             # scope first rather than a sorted set.
             self.assertEqual(["proj-a", "proposed-knowledge"], bundle["source_filter"])
+
+    def test_the_pre_repeatable_source_key_is_refused_not_ignored(self) -> None:
+        """The retype's fail-open case, pinned.
+
+        `search_store` reads `sources`; an unmigrated caller still passing
+        `source` would match no key, and an absent scope means *every* source
+        rather than none -- silently widening a query the caller believes it
+        scoped. Ignoring the old spelling is the one failure direction this
+        store must not have, so it raises.
+        """
+        env_patch, cwd_patch = self._global_fallback_env()
+        with env_patch, cwd_patch:
+            self._run(["init"])
+            for source in ("proj-a", "other-project"):
+                self._run([
+                    "ingest", "--input", str(ROOT / "examples" / "chat-export.json"),
+                    "--source", source, "--classification", "internal",
+                ])
+            config = load_config()
+            db = open_store(config["database"])
+            try:
+                with self.assertRaises(ValueError) as raised:
+                    search_store(db, config, "production release approval",
+                                 {"classification": "internal", "source": "proj-a"})
+                self.assertIn("sources", str(raised.exception))
+
+                scoped = search_store(db, config, "production release approval",
+                                      {"classification": "internal", "sources": ["proj-a"]})
+                self.assertEqual({"proj-a"}, {r["citation"]["source"] for r in scoped})
+            finally:
+                db.close()
 
     def test_repeated_source_is_deduplicated_and_json_encoded_in_the_audit_row(self) -> None:
         env_patch, cwd_patch = self._global_fallback_env()

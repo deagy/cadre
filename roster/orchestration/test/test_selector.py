@@ -2089,6 +2089,26 @@ class SelectorTests(unittest.TestCase):
             with self.subTest(origin=origin), patch("select_agents._run_git", return_value=origin):
                 self.assertEqual(expected, _origin_slug(AGENTS_ROOT.parent))
 
+    def test_an_empty_source_is_refused_rather_than_silently_defaulted(self) -> None:
+        """`--source ""` must not reach the plan.
+
+        Before `--source` was repeatable, an empty value fell through to the
+        default because a single value was tested for truthiness. A list
+        holding "" is truthy, so the plan would emit `source_filter: [""]` --
+        invalid against its own schema, with the store rejecting the argv only
+        at execution, after the plan had been emitted and possibly consumed.
+        """
+        selector = ROOT / "src" / "select_agents.py"
+        result = subprocess.run(
+            [sys.executable, str(selector), "--task", "Update React",
+             "--files", "frontend/a.tsx", "--task-id", "EMPTY-1",
+             "--classification", "internal", "--source", ""],
+            check=False, capture_output=True, text=True, cwd=str(AGENTS_ROOT.parent),
+        )
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("--source must be a non-empty", result.stderr)
+        self.assertNotIn('""', result.stdout)
+
     def test_repository_source_falls_back_to_canonical_path_hash(self) -> None:
         with tempfile.TemporaryDirectory(prefix="Source Repo ") as temporary_directory:
             root = Path(temporary_directory).resolve()

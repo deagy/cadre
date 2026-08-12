@@ -314,6 +314,21 @@ def main(argv: list[str] | None = None) -> int:
     # Order-preserving de-duplication, matching the store's own normalization
     # (`service.normalize_sources`): a repeated --source must not produce a
     # duplicated scope in the plan or in the store's audit row.
+    #
+    # Empty values are rejected rather than skipped. `--source ""` used to fall
+    # through to the default because the old single value was tested for
+    # truthiness; a list containing "" is truthy, so without this it would
+    # produce `source_filter: [""]` -- a plan that violates its own schema
+    # (`nonemptyStringArray`) and whose argv the store rejects only at
+    # execution, after the invalid plan has been emitted and possibly consumed.
+    if options.sources is not None:
+        blank = [index for index, value in enumerate(options.sources) if not value.strip()]
+        if blank:
+            raise ValueError(
+                f"--source must be a non-empty knowledge-store source name; argument "
+                f"{blank[0] + 1} was empty. Omit --source entirely to use this repository's "
+                f"default sources."
+            )
     sources = list(dict.fromkeys(options.sources)) if options.sources else resolve_knowledge_sources(repository_root)
     # PP-FR-1/PP-FR-2: catalog and routing come from the resolved roster's
     # manifest, not from a path literal. A roster package that cannot be read

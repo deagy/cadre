@@ -120,7 +120,7 @@ class KnowledgeStoreTests(unittest.TestCase):
         db = open_store(config["database"])
         self.connections.append(db)
         ingest_file(db, config, {"input": str(path), "source": "titled", "classification": "internal"})
-        results = search_store(db, config, "unrelated body text", {"classification": "internal", "source": "titled", "top": 1})
+        results = search_store(db, config, "unrelated body text", {"classification": "internal", "sources": ["titled"], "top": 1})
         self.assertTrue(results)
         title = results[0]["citation"]["conversation_title"]
         self.assertIn("[REDACTED:generic-secret]", title)
@@ -154,7 +154,7 @@ class KnowledgeStoreTests(unittest.TestCase):
         public_options = dict(options, source="public-export", classification="public")
         ingest_file(db, config, public_options)
         self.assertEqual(4, store_stats(db)["messages"])
-        results = search_store(db, config, "production release approval immutable artifact", {"classification": "internal", "source": "test-export", "top": 2})
+        results = search_store(db, config, "production release approval immutable artifact", {"classification": "internal", "sources": ["test-export"], "top": 2})
         self.assertTrue(results)
         self.assertTrue(all(item["citation"]["source"] == "test-export" for item in results))
         self.assertTrue(all(item["citation"]["classification"] == "internal" for item in results))
