@@ -11,7 +11,7 @@ Read `roster/RUNBOOK.md` for orchestration and any project-local `AGENTS.md` bef
 Resolve Python 3.10+ as documented in the runbook. From each internal-tool component, run:
 
 ```powershell
-<python> -B -m unittest discover -s test -p "test_*.py"
+<python> -B -m unittest discover -b -s test -p "test_*.py"
 ```
 
 After changing `roster/catalog.yaml`, `roster/`, or `.agents/skills/`, regenerate derived output before committing. `git add` any new files **first** — the generator copies git-tracked files and silently skips untracked ones, so regenerating before staging ships a package referencing a file it does not contain:
@@ -23,7 +23,7 @@ After changing `roster/catalog.yaml`, `roster/`, or `.agents/skills/`, regenerat
 python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin
 ```
 
-The order is load-bearing, `generate-plugin` never touches `cline-plugins/`, and this applies to code and to this file itself — `plugin/suite/` bundles `roster/` and `AGENTS.md`, so a new module under `roster/*/src/` is part of the packaged CLI. Then re-run both guards, whose coverage is not redundant: `roster/orchestration/test/test_repository_health.py` and `python3 -m unittest discover -s plugin/tools -p "test_*.py"`. Run lifecycle integration tests against the in-tree `kernel/`.
+The order is load-bearing, `generate-plugin` never touches `cline-plugins/`, and this applies to code and to this file itself — `plugin/suite/` bundles `roster/` and `AGENTS.md`, so a new module under `roster/*/src/` is part of the packaged CLI. Then re-run both guards, whose coverage is not redundant: `roster/orchestration/test/test_repository_health.py` and `python3 -m unittest discover -b -s plugin/tools -p "test_*.py"`. Run lifecycle integration tests against the in-tree `kernel/`.
 
 **`roster/RUNBOOK.md` §17, "Regenerating derived output", is the canonical version** — it explains why each step exists, why the order matters, what each guard catches, and the `git add` gotcha in both of its directions. Extend it there rather than restating it here.
 

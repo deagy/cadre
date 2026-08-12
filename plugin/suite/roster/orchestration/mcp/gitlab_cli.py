@@ -50,7 +50,7 @@ import gitlab_core as core  # noqa: E402  (sys.path set above)
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="gitlab_cli.py",
+        prog="cadre gitlab-evidence",
         description="GitLab evidence CLI: create-review-subtask / write-wiki-page / write-evidence-comment",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)

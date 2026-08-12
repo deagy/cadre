@@ -26,22 +26,26 @@ Read `AGENTS.md` (repo-wide rules) and `roster/RUNBOOK.md` (the complete operati
 All Python tooling requires Python 3.10+, resolved automatically by `bin/cadre` (`bin/cadre.ps1` on PowerShell) via `python3`/`python`/`py -3` — this does not pin an org-wide Python version. Run commands from the repository root unless noted.
 
 ```sh
-# Core test suites (run standalone; no external services needed)
-python3 -m unittest discover -s roster/knowledge-store/test -p "test_*.py"
-python3 -m unittest discover -s roster/orchestration/test -p "test_*.py"
-python3 -m unittest discover -s roster/shared/test -p "test_*.py"
+# Core test suites (run standalone; no external services needed).
+# -b (--buffer) is not optional dressing: several tests exercise CLI entry
+# points that print, and without it ~350 lines of JSON plans and resolved
+# config land on stdout and bury the OK/FAILED line. Buffered output is still
+# shown for any test that fails, so nothing is lost. CI passes -b too.
+python3 -m unittest discover -b -s roster/knowledge-store/test -p "test_*.py"
+python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
+python3 -m unittest discover -b -s roster/shared/test -p "test_*.py"
 
 # Run a single test file, or a single test within it (no package __init__.py,
 # so `-m unittest <module.path>` doesn't resolve — use discover with -p/-k)
-python3 -m unittest discover -s roster/orchestration/test -p "test_repository_health.py" -v
-python3 -m unittest discover -s roster/orchestration/test -p "test_repository_health.py" -k SomeTestCase.test_method
+python3 -m unittest discover -b -s roster/orchestration/test -p "test_repository_health.py" -v
+python3 -m unittest discover -b -s roster/orchestration/test -p "test_repository_health.py" -k SomeTestCase.test_method
 
 # The kernel is in-tree, so `cadre sdlc` and the lifecycle-contract tests
 # need no install and no AGENTIC_SDLC_BIN. Set it only to point at a
 # different kernel deliberately.
-python3 -B -m unittest discover -s kernel/test -p "test_*.py"   # kernel
-cd engine && uv sync && uv run pytest                            # LangGraph engine
-python3 -m unittest discover -s plugin/tools -p "test_*.py"      # packaging + docs guards
+python3 -B -m unittest discover -b -s kernel/test -p "test_*.py"  # kernel
+cd engine && uv sync && uv run python -m pytest                   # LangGraph engine
+python3 -m unittest discover -b -s plugin/tools -p "test_*.py"    # packaging + docs guards
 
 # Regeneration after editing roster/, .agents/skills/, or AGENTS.md.
 # git add new files FIRST -- untracked files are silently skipped (see below)

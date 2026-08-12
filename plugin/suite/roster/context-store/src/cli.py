@@ -30,7 +30,7 @@ from settings import SettingsError
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="cli.py", description="Local agent context store")
+    parser = argparse.ArgumentParser(prog="cadre context", description="Local agent context store")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     def add_config(command: argparse.ArgumentParser) -> None:

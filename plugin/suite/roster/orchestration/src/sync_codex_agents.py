@@ -160,6 +160,7 @@ def sync_wrappers(source: Path, target: Path) -> dict[str, object]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
+        prog="cadre bootstrap-codex",
         description="Install namespaced Cadre Codex wrappers without touching bare role files.",
         allow_abbrev=False,
     )

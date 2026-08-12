@@ -105,7 +105,7 @@ Use `workflows/debugging.md` when reproducing defects, analyzing runtime failure
 The local selector uses deterministic path, keyword, and risk rules from `orchestration/routing.json`. Plans include provider lifecycle applicability in `required_quality_gates` separately from mutation-oriented `human_gates` (each carrying a `kernel_mutation_gate_id` cross-reference to the Agentic SDLC kernel's own `contracts/mutation-gates.json` id, where one exists); gate semantics and state are owned by the standalone Agentic SDLC kernel. Every plan also carries a `dispatch_disposition` (`staffed`, `advisory-only`, or `no-agents-selected`) that makes explicit whether `agents.primary`/`agents.reviewers` hold an accountable executor or independent reviewer, or whether only `agents.support` was populated (e.g. via generic change-intake keywords) with nothing else selected — an orchestrator must not treat `advisory-only` as authorization to perform the task's work itself with no dispatch and no stated reason (see `.agents/skills/run-agent-orchestration/SKILL.md`'s "Dispatch in Waves"). The selector creates a dispatch plan but does not retrieve knowledge, invoke agents, approve gates, merge, deploy, or mutate infrastructure. Run it through `bin/cadre` (repository root), which resolves a Python 3.10+ interpreter for you across `python3`/`python`/`py -3`; this does not establish an organization-wide Python version. It works standalone by default (`lifecycle_tracking.status: "standalone"` in the emitted plan); when `AGENTIC_SDLC_BIN` or `agentic-sdlc` is also on `PATH`, the plan is automatically enriched with lifecycle-contract-derived, gate-augmented `required_quality_gates` (`status: "integrated"`) — pass `--require-sdlc` to fail instead of silently falling back when that integration is required. Put `bin/cadre` on `PATH` first (see `../README.md` "Put `cadre` on `PATH`") or invoke it as `../../bin/cadre` / `..\bin\cadre.ps1` from this directory.
 
 ```sh
-python3 -m unittest discover -s roster/orchestration/test -p "test_*.py"
+python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
 cadre select \
   --task "Add a React upload form backed by a PostgreSQL API" \
   --files frontend/src/Upload.tsx,services/upload/main.go \
@@ -122,6 +122,32 @@ Every plan carries a `dispatch_fingerprint` (`sha256:<hex>` over the plan's own 
 Read that exception narrowly, by its purpose: it holds only where the consumer's pinned copy never meets the property. `provenance` is the original example and is a *partial* one — it is in fact emitted on an ordinary `cadre select` run (only a direct in-process `build_dispatch_plan()` caller that supplies neither `catalog_path` nor `routing_path` omits it), so "not emitted by default" was never quite accurate about it. **Under this rule as stated, `provenance` would itself bump today; it is recorded here as the historical origin of the exception, not as a live template for a new field.** The exception currently has no fully valid exemplar, and that is the honest state of it — reaching for `provenance` as precedent is the specific mistake to avoid, not the way to apply the rule. It has been made three times now: `dispatch_disposition` (see `CHANGELOG.md`'s 0.19.0 entry, which records the correction), and twice more during [#214](https://github.com/deagy/cadre/issues/214), by an author and independently by a reviewer, each matching `provenance`'s *declaration shape* — optional, absent from `required`, conditionally emitted — without checking the condition that makes the exception valid. Apply the purpose test above, not the analogy. A field emitted to any real consumer population bumps the version, however conditional its emission looks in the code. `undeclared_workflow_shape_routes` ([#214](https://github.com/deagy/cadre/issues/214)) is the worked example: optional, absent from `required`, and omitted when empty, yet it took `schema_version` 5 → 6, because it is emitted unconditionally to precisely the population it exists for — projects running a routing overlay, who are also the customized long-lived installations most likely to be pinned to an older vendored schema. Bumping also produces the *better* failure: a pinned-v5 consumer fails on `schema_version`'s `const` with an error naming the real cause, instead of on `additionalProperties` while the plan truthfully reports the version their copy claims to handle.
 
 Fingerprints are only comparable between plans emitted by the *same* producer version: any change to the set of fields the plan emits (for example giving `matched_routes` its match reasons) changes the hashed payload, so every fingerprint changes with it. That is expected on a selector change and is not a determinism regression — the determinism claim is that identical inputs reproduce an identical plan on one version, never that a fingerprint is stable across versions. `cadre select` additionally attaches an optional, additive `provenance` object (`selection.schema.json`'s `provenance` property; not in the schema's top-level `required` array, so plans generated before this field existed remain valid, and any direct `build_dispatch_plan()` caller that doesn't supply `catalog_path`/`routing_path` — e.g. an in-process fixture or test — simply omits it) that answers the different question "which exact suite-input content produced this plan": `catalog_content_hash`/`routing_content_hash` (`sha256:<hex>` over the exact `catalog.yaml`/`orchestration/routing.json` bytes loaded), and, best-effort, `git_commit_sha` plus `git_dirty_paths` (uncommitted-relative-to-`HEAD` status scoped to exactly those two files, not the whole working tree). Git identity is supplementary and degrades cleanly to fully absent — never a placeholder — when the suite isn't inside a resolvable git working tree or the `git` binary is unavailable; the content hashes are always present whenever `provenance` is present at all, since reading those two files is already mandatory for plan generation to succeed. When `lifecycle_tracking.status` is `"integrated"`, `provenance.agentic_sdlc_contract_version` records the lifecycle-gates contract's own already-consumed `version` integer — this states which contract shape Cadre's own code used, never an assertion about the external `agentic-sdlc` kernel's own repository identity, gate-approval state, or run-record validity (see the two-repo boundary above). `provenance.overlay_applied`/`overlay_content_hash`/`overlay_path` (project-local routing overlay) and `provenance.runner_capabilities_content_hash` (the runner-capability manifest) are reserved in the schema for future extensibility but are never populated today: `select_agents.py`'s dispatch-plan call path does not resolve a routing overlay, and the runner-capability manifest is build/generator-time only (already transitively covered by `catalog_content_hash`) — populating either without an actual causal read path behind it would misrepresent what produced the plan. A reviewer with independent repository access can recompute `sha256sum roster/catalog.yaml roster/orchestration/routing.json` and `git rev-parse HEAD` against a historical checkout and compare directly against an archived plan's `provenance` object, without needing to trust the process that generated it. Recording provenance is never itself an approval: it proves what produced a plan, not that the plan or the suite state that produced it was reviewed or accepted.
+
+#### Read a plan yourself with `--format text`
+
+The JSON plan is the contract every downstream tool consumes, and it stays the
+default. It is also ~260 lines for a routine task, with the answer to "who
+should work on this?" spread across `agents`, `teams`, `dispatch_disposition`,
+and `human_gates`. `--format text` renders the same plan decision-first:
+
+```sh
+cadre select --task "deploy the payment service" --files k8s/payments/deploy.yaml --format text
+```
+
+It is a pure function of the JSON plan — it never re-runs selection and never
+adds a fact the plan does not already carry, so it cannot disagree with the
+`--format json` output for the same invocation. `--output` writes whichever
+format was chosen.
+
+Two things it makes visible that a JSON skim tends to miss: `needs-triage`
+(structurally a valid plan whose agent lists are simply empty, which reads as
+success) is stated in words with the reason attached, and required human gates
+get their own block rather than an id in a list.
+
+**The default does not switch on whether stdout is a terminal.** That is the
+conventional design and it was considered and rejected here: a plan whose shape
+depends on invocation context would undercut the reproducibility the rest of
+this command is built on. Ask for `text` explicitly.
 
 #### Diagnose an unmatched route with `--explain`
 
@@ -650,7 +676,7 @@ Follow `workflows/knowledge-ingestion.md` and read `knowledge-store/SECURITY.md`
 ```sh
 mkdir -p ~/.agents/knowledge-store
 cp roster/knowledge-store/config.example.json ~/.agents/knowledge-store/config.json
-python3 -m unittest discover -s roster/knowledge-store/test -p "test_*.py"
+python3 -m unittest discover -b -s roster/knowledge-store/test -p "test_*.py"
 cadre knowledge init
 ```
 
