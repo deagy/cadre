@@ -49,7 +49,7 @@ check and reporting "nothing to do". See
   GitHub pair takes `issueNumber` where the GitLab pair takes `issueIid`,
   mirroring the forges' own naming rather than normalizing it.
 
-  Five previously unreachable flags are now exposed, all defaulting to off as
+  Four previously unreachable flags are now exposed, all defaulting to off as
   the kernel does. The one that mattered most in practice is
   **`reconcileAssignees`** on both `create_*_gate_issues` tools: when a gate
   issue's forge assignee drifts from `authorities.json`, the kernel reports it
