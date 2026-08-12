@@ -1,14 +1,15 @@
 # Product Intent Record — A roster-neutral platform: separating the knowledge store, the roster, and the lifecycle
 
 **Intent ID:** `INTENT-CADRE-PORTABLE-PLATFORM`
-**Revision:** 6
+**Revision:** 7
 **Status:** **G1 APPROVED** by `@deagy` (Product Owner) on 2026-08-11 against
-Revision 1 — **re-affirmation against this revision is an open question
-(OD-12).** See §16.
-**Open decisions closed at Revision 6:** OD-2 (**reversed** — global-only),
-OD-9, OD-11, OD-13 — all by the Product Owner on 2026-08-12. OD-7 and OD-10
-**withdrawn**, their subjects removed by OD-2's reversal. **G2 is no longer
-blocked by any open decision.**
+Revision 1, and **RE-AFFIRMED by the same authority on 2026-08-11 against
+Revision 6's content** — the revision this one records the re-affirmation into.
+See §17. **OD-12 is closed by that act.**
+**Open decisions closed at Revisions 6–7:** OD-2 (**reversed** — global-only),
+OD-9, OD-11, OD-12, OD-13. OD-7 and OD-10 **withdrawn**, their subjects removed
+by OD-2's reversal. OD-6 closed as "yes". **Nothing open blocks G2; only the G2
+decision itself remains.**
 **Revision note:** Revisions 2 and 3 change **no intent, no scope, and no
 decision**. Both correct factual defects found by review.
 
@@ -76,7 +77,7 @@ was necessary and is not sufficient. Executing a claim tests the claim. It does
 not test the *classification* placed on it, and this record's remaining errors
 are all classification errors stated with the confidence of observations.
 
-**Revision 6 records four Product Owner decisions taken on 2026-08-12, one of
+**Revision 6 records four Product Owner decisions taken on 2026-08-11, one of
 which reverses a disposition this record has carried since Revision 2.** It adds
 no findings and no scope. See §16 for the decisions and their reasoning; §13's
 register is updated to match.
@@ -89,6 +90,19 @@ a subject: PP-FR-1b (roster identity in the plan), PP-NFR-3b (the
 `selection.schema.json` bump), **OD-7**, and **OD-10**. They are withdrawn rather
 than resolved, and struck through rather than deleted, so a reader of Revisions
 2–5 finds out what happened to them.
+
+**Revision 7 records one act and nothing else: the Product Owner's
+re-affirmation of G1 against Revision 6's content** (§17). It adds no finding,
+no requirement, no scope, and no correction beyond one date fix noted below.
+
+**Date correction, applying to Revision 6 throughout.** Revision 6 recorded its
+dispositions as taken on **2026-08-12**. They were taken on **2026-08-11**, the
+same day as the original G1 approval. The wrong date was written by the
+transcribing session and is corrected here rather than left to be discovered.
+It is a small error and it is the kind this record is least entitled to make:
+in a governance record, *when* a decision was taken is not decoration around the
+decision, it is part of the evidence.
+
 **Author (agent):** product-intent-agent, consolidated by the orchestrating session
 **Date:** 2026-08-11
 **Repository:** `/home/deagy/sdk/cadre`
@@ -474,7 +488,7 @@ being wrong. What Revision 5 does is put the argument in front of the decision
 rather than behind it — see **OD-12** on whether the evidence base has changed
 enough that the surrounding approval needs restating too.
 
-**Outcome, at Revision 6: the Product Owner reversed it on 2026-08-12.**
+**Outcome, at Revision 6: the Product Owner reversed it on 2026-08-11.**
 `roster.root` is `SCOPE_GLOBAL_ONLY` (§17). The deciding argument turned out not
 to be any of the three grounds above but a fourth nobody had put: global-only →
 project-local later is additive, project-local → global-only later takes a
@@ -561,7 +575,7 @@ not predict which argument will settle them.**
 | ID | Decision | Owner | Status |
 | --- | --- | --- | --- |
 | **OD-1** | Bring the parked `governance-as-product-2026-08` proposal forward, against the 2026-08-09 deferral? | Product Owner (`@deagy`) | **RESOLVED** — yes, by the G1 approval itself (§16). |
-| **OD-2** | `roster.root` trust scope. | Product Owner | **RESOLVED — REVERSED at Revision 6.** Was project-local, overlay-style (Revision 2). Now **`SCOPE_GLOBAL_ONLY`**, matching every other path setting, with `--roster` as the sole per-invocation redirect. Decided 2026-08-12 after two reviewers returned `request-changes` on three grounds (§11) plus OD-10. See §16 for the reasoning, including why reversibility settled it. |
+| **OD-2** | `roster.root` trust scope. | Product Owner | **RESOLVED — REVERSED at Revision 6.** Was project-local, overlay-style (Revision 2). Now **`SCOPE_GLOBAL_ONLY`**, matching every other path setting, with `--roster` as the sole per-invocation redirect. Decided 2026-08-11 after two reviewers returned `request-changes` on three grounds (§11) plus OD-10. See §16 for the reasoning, including why reversibility settled it. |
 | **OD-3** | `provider.json`'s `"id": "cadre"` names the *roster*; `README.md` names the repository. If the platform is a distinct thing, one of them needs a new name. | Product Owner | **OPEN**, non-blocking. Recording is enough; renaming is out of scope (§6). |
 | **OD-4** | Where does `roster/knowledge-store/AGENT.md` live? It is a *roster role definition* (`roster/catalog.yaml:596-597`) sitting inside what this work declares platform. | Engineering Lead | **OPEN**, non-blocking. The seam works either way; a tidiness call. |
 | **OD-5** | Extend `provider.json` with roster-side keys, or add a sibling `roster.json` the kernel never reads? | System Architect | **RESOLVED** — sibling manifest (§16). |
@@ -570,7 +584,7 @@ not predict which argument will settle them.**
 | **OD-9** | *New at Revision 4, re-scoped at Revision 5.* Where does the gate-reviewer default at `build_dispatch_plan.py:107` live? | Product Owner + Engineering Lead | **RESOLVED at Revision 6 — option 1, via `routing.yaml`.** A new `default_gate_review_agents` key, which a foreign roster already supplies through `roster.json`'s `routing` path. Cadre declares `["code-reviewer"]`, so its own output stays byte-identical and the ~15 `test_selector.py` assertions do not move; a foreign roster omitting the key gets an empty list rather than a `ValueError`. The fork inside option 1 is settled with it — **not** provider-profile `gate_bindings`, which is kernel-side and binds gates to approval authority, a different axis. See §16. |
 | ~~**OD-10**~~ | ~~OD-2's compensating control does not exist on the second dispatch surface.~~ | System Architect | **WITHDRAWN at Revision 6 — OD-2's reversal removed its subject.** With `roster.root` global-only there is no project-tier redirect for `cadre mcp-dispatch-server` to fail to surface, and no reason to convert its import-time resolution to per-call. The underlying *observation* stands and is worth keeping: the two dispatch surfaces resolve independently, so PP-FR-6 must still cover both. Only the trust question dissolved. |
 | **OD-11** | *New at Revision 5.* Does `roster.json` get a compatibility window? | System Architect | **RESOLVED at Revision 6 — no window; `schema_version` only.** The simplest manifest that works, with the cost accepted explicitly rather than overlooked: a `roster.json` authored against different selector semantics fails however its differences happen to present, not by name, and a window cannot be added later without a breaking change. **Mitigation adopted with it:** the loader must *reject* an unrecognised `schema_version` rather than ignoring it, which recovers a coarse fail-by-name signal for nothing. See §16. |
-| **OD-12** | *New at Revision 5.* **Does the G1 approval extend to this revision?** It was granted against Revision 1. Revision 4 rewrote §2's problem statement (PP-FR-4's premise was half false), Revision 5 narrowed it again, and Revisions 4–5 raised OD-9, OD-10 and OD-11 — three blocking decisions the Product Owner did not have at approval time. This record has asserted through four revisions that its corrections are immaterial to the approval. **That is a materiality judgment, and `roster/workflows/product-intake.md` reserves it to the human Product Owner, not to the authoring session assessing its own corrected work.** | Product Owner | **OPEN.** §16's approval stands as recorded; this asks whether it should be restated against Revision 5. |
+| **OD-12** | *New at Revision 5.* Does the G1 approval, granted against Revision 1, extend to the current revision? | Product Owner | **RESOLVED at Revision 7 — yes, re-affirmed.** By `@deagy` on 2026-08-11, against Revision 6's content. The question was raised because Revisions 4–5 rewrote §2's problem statement and raised three blocking decisions after the fact, and it sharpened at Revision 6 when the Product Owner reversed one of their own dispositions (OD-2). The re-affirmation answers it directly rather than by assertion from the authoring session, which is what the question was actually about. See §17. |
 | **OD-13** | *New at Revision 5.* How is G2's second authority discharged? | Product Owner | **RESOLVED at Revision 6 — both roles assigned to `@deagy`, recorded.** No exception is needed and none is taken: the kernel requires each authority role to have *an* assignee (`__init__.py:1948-1963`) and nowhere requires two roles to be two people. The separation invariant it does enforce is `author_cannot_review_or_approve_same_revision`, which is author-versus-approver — and the authors here are agents. So one human holding both roles satisfies G2 as written. See §16. |
 | ~~**OD-8**~~ | ~~Does a foreign roster need a route → workflow mapping, or the `workflow` enum opened?~~ | System Architect | **WITHDRAWN at Revision 3 — the premise was wrong.** Raised one revision earlier on a misreading of `_select_workflow()`: its final stage (`build_dispatch_plan.py:254-265`) does **not** branch on Cadre route ids. It reads each matched route's own declared `workflow_shape` from `routing.yaml` — a four-value field the roster supplies (`routing.schema.json:193-201`) — so a fixture roster whose routes declare it reaches `new-service` / `infrastructure-change` / `pipeline-change` today, with no code change and no enum bump. Kept struck through so a reader of Revision 2 finds out what happened to it. |
 
@@ -692,21 +706,22 @@ sequencing correct — it makes the baseline reviewable, which is a weaker claim
 Per that workflow, objective conflicts return to G1 rather than proceeding.
 
 **G2 is not approved, but nothing open now blocks it.** All five decisions that
-did — OD-7, OD-9, OD-10, OD-11, OD-13 — were closed or withdrawn on 2026-08-12
+did — OD-7, OD-9, OD-10, OD-11, OD-13 — were closed or withdrawn on 2026-08-11
 (§17). G2 requires `product_owner` **and** `engineering_lead`
 (`kernel/contracts/lifecycle-gates.json`), and OD-13 establishes that `@deagy`
 holds both, which the kernel permits.
 
-What stands between this baseline and G2 is therefore the decision itself, plus
-**OD-12** — whether the G1 approval granted against Revision 1 extends to a
-record that has since had its problem statement rewritten twice and one of its
-own dispositions reversed. **That question got sharper at Revision 6, not
-softer.** OD-2's reversal is the Product Owner overturning their own recorded
-decision, which changes the approval's evidence base more than any of the
-corrections that prompted OD-12 in the first place.
+**OD-12 is closed too, at Revision 7** — G1 re-affirmed against Revision 6's
+content (§18). It had got *sharper* at Revision 6 rather than softer, because
+OD-2's reversal is the Product Owner overturning their own recorded decision,
+which changes the approval's evidence base more than any of the factual
+corrections that prompted the question. Answering it directly is what closes it;
+a further assertion from the authoring session that the corrections were
+immaterial would not have.
 
-The non-blocking remainder is OD-3 and OD-4. OD-6 was closed as "yes" at
-Revision 6, on the grounds that it was never a decision (§13).
+**So what stands between this baseline and G2 is the G2 decision itself, and
+nothing else.** The non-blocking remainder is OD-3 and OD-4. OD-6 was closed as
+"yes" at Revision 6, on the grounds that it was never a decision (§13).
 
 ## 16. Decisions taken
 
@@ -804,7 +819,7 @@ stronger evidence than anything currently offered — see `requirements.md` G-6.
 
 ---
 
-## 17. Decisions taken 2026-08-12
+## 17. Decisions taken 2026-08-11
 
 Four Product Owner decisions, taken after the Revision 5 review. Recorded here
 rather than folded into §16, so the order in which this record learned things
@@ -909,4 +924,47 @@ than two people disagreeing; recording it is what makes that weakness visible
 instead of implied.
 
 **G2 is no longer blocked by any open decision.** What remains before it is the
-approval itself, and OD-12.
+approval itself.
+
+---
+
+## 18. G1 re-affirmed — 2026-08-11
+
+**G1 — Intent: RE-AFFIRMED.** By `@deagy`, Product Owner per `.github/CODEOWNERS`
+and `roster/RUNBOOK.md:730`, on 2026-08-11, against **Revision 6's content**.
+**OD-12 is closed by this.**
+
+**What was re-affirmed against.** Revision 6, not Revision 1. That distinction is
+the whole point of the exercise, so it is worth being exact: the intent approved
+in §16 was granted against a record whose §2 has since been rewritten twice, and
+which has since acquired and shed five open decisions and reversed one of its own
+dispositions. This re-affirmation is granted against the record as it now reads.
+
+Revision 7 — the revision recording this — adds no substance beyond the
+re-affirmation and one date correction, so "Revision 6's content" and "Revision
+7's content" differ by nothing an approval could turn on. Stated rather than
+left implicit, because an approval recorded into the revision it approves is
+circular unless someone says which way it runs.
+
+**What this does not do, and none of it is closed by the re-affirmation:**
+
+- **G-5 stands.** The requirements baseline was drafted before G1 rather than
+  after, contrary to `roster/workflows/product-intake.md` step 4. Re-affirming
+  the intent gate does not retroactively reorder the work that followed it. The
+  disclosure stays exactly where it is.
+- **G-6 stands, and applies to this record too.** This is a **prose record of a
+  human decision, transcribed by the authoring session** — the same evidence
+  class as §16, carrying the same weight and the same limits. There is no
+  `.agentic-sdlc/` overlay here, so no gate state transitioned, no
+  `agentic-sdlc decide` was invoked, and nothing in CI can verify this line.
+- **G2 is not approved and is not implied.** It requires `product_owner` **and**
+  `engineering_lead`, both now assigned to `@deagy` per OD-13, and it is a
+  separate decision against a separate artifact (`requirements.md`).
+
+**The stronger evidence is still available and still unused.**
+`.github/CODEOWNERS` requires `@deagy`'s GitHub review before this branch can
+merge. That approval is machine-checkable in a way none of §16, §17, or this
+section is, and it costs nothing extra because the review must happen anyway.
+**Two transcribed approvals now rest on this record where one did.** If the
+merge review is given, cross-referencing it from here would do more for the
+audit trail than a third paragraph of prose about what transcription is worth.

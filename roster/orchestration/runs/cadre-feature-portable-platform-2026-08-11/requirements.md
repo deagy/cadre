@@ -1,13 +1,14 @@
 # Requirements Baseline — A roster-neutral platform
 
 **Requirements ID:** `REQ-CADRE-PORTABLE-PLATFORM`
-**Revision:** 7
+**Revision:** 8
 **Status:** draft — **G1 approved 2026-08-11 against Revision 1; awaiting G2.**
 **No open decision blocks G2 any more.** All five that did were closed or
-withdrawn by the Product Owner on 2026-08-12 (`product-intent.md` §17). **OD-2
+withdrawn by the Product Owner on 2026-08-11 (`product-intent.md` §17). **OD-2
 was reversed**: `roster.root` is `SCOPE_GLOBAL_ONLY`, which retracts PP-FR-1b and
-PP-NFR-3b and withdraws OD-7 and OD-10 outright. OD-12 (whether G1 extends to
-this revision) is open and non-blocking.
+PP-NFR-3b and withdraws OD-7 and OD-10 outright. **OD-12 is also closed** — G1
+was re-affirmed against the current intent record on 2026-08-11
+(`product-intent.md` §18). Only the G2 decision itself remains.
 **Revision note:** Revision 2 folded in the Product Owner's OD-2 and OD-5
 dispositions (`product-intent.md` §16), which resolve PP-FR-1's scope and
 PP-FR-2's manifest shape, and **retracted PP-NFR-3** — OD-2's answer forces a
@@ -366,7 +367,7 @@ separates a guard from a comment, and in this case it is also the difference
 between shipping the feature and shipping the vulnerability. *Verifier:*
 `test_roster_package.py`.
 
-**Scope: `SCOPE_GLOBAL_ONLY`** (OD-2, **reversed** 2026-08-12 —
+**Scope: `SCOPE_GLOBAL_ONLY`** (OD-2, **reversed** 2026-08-11 —
 `product-intent.md` §17). `roster.root` behaves exactly like its three sibling
 path/executable settings: `agentic_sdlc.bin_path` (`settings.py:665-672`),
 `knowledge_store.home` (`:673-680`), and `context_store.home` (`:690-697`). Env
@@ -1152,8 +1153,16 @@ churn as a consequence so it is not later misread as a determinism regression.
 - **G-4: `docs/sample-selection-output.md` still has no drift guard.** Recorded as
   G-1 in the 2026-08-08 sibling record and still open; PP-NFR-1 does not close it.
 - **G-5: this baseline was drafted before its own G1** (§0.1). G1 approved
-  2026-08-11, after the fact. The gap is disclosed, not closed.
-- **G-6: the G1 approval has no machine-checkable evidence.** This repository
+  2026-08-11, after the fact, and **re-affirmed against the current intent
+  record later the same day** (`product-intent.md` §18). **Neither act closes
+  this gap and the re-affirmation does not touch it** — approving an intent gate
+  does not retroactively reorder the requirements work that ran ahead of it. The
+  gap is disclosed, not closed, and stays that way.
+- **G-6: the G1 approval has no machine-checkable evidence — and there are now
+  two of them.** The 2026-08-11 re-affirmation (`product-intent.md` §18) is the
+  same evidence class as the original: prose transcribed by the authoring
+  session. The `.github/CODEOWNERS` merge review remains the available,
+  machine-checkable corroboration and remains unused. This repository
   runs no `.agentic-sdlc/` overlay and holds no run records, so the approval
   exists as prose transcribed by the authoring agent (`product-intent.md` §16).
   Nothing in CI can verify it, and no `agentic-sdlc decide` was invoked because
@@ -1305,7 +1314,7 @@ should come from a mapping in `roster.json` or from opening a published schema
 enum. `_select_workflow()` already answers it from roster-declared
 `workflow_shape`. Nothing was blocked and there was nothing to decide.
 
-**All blockers cleared on 2026-08-12** (`product-intent.md` §17). For the record,
+**All blockers cleared on 2026-08-11** (`product-intent.md` §17). For the record,
 since five revisions of this baseline were organised around them:
 
 | Was blocking | Outcome |

@@ -1,14 +1,15 @@
 # Implementation Plan — A roster-neutral platform
 
 **Plan ID:** `PLAN-CADRE-PORTABLE-PLATFORM`
-**Revision:** 7
+**Revision:** 8
 **Status:** draft — **schedulable.** G1 approved 2026-08-11 against intent
-Revision 1. **No open decision blocks any phase**: all five were closed or
-withdrawn on 2026-08-12 (`product-intent.md` §17). G2 remains unapproved, and
-OD-12 is open and non-blocking.
+Revision 1 and **re-affirmed against the current intent record** the same day
+(`product-intent.md` §18). **No open decision blocks any phase**: all five were
+closed or withdrawn on 2026-08-11 (§17), and OD-12 closed with the
+re-affirmation. G2 remains unapproved; nothing else does.
 **Date:** 2026-08-11
-**Implements:** `REQ-CADRE-PORTABLE-PLATFORM` (`requirements.md`, **Revision 7**)
-**Decomposes:** `INTENT-CADRE-PORTABLE-PLATFORM` (`product-intent.md`, **Revision 6**)
+**Implements:** `REQ-CADRE-PORTABLE-PLATFORM` (`requirements.md`, **Revision 8**)
+**Decomposes:** `INTENT-CADRE-PORTABLE-PLATFORM` (`product-intent.md`, **Revision 7**)
 **Revision note:** Revision 2 folded in the OD-2/OD-5 dispositions while still
 citing `requirements.md` Revision 1 — a stale pin that would have landed a
 reader on the retracted PP-NFR-3. Revision 3 fixed the pin and tracked that
@@ -65,7 +66,7 @@ Also corrected: §2's `plugin/` diff, for the **sixth** time — it gains a fift
 mirrored file under OD-9 option 1. Revision 6 stops correcting that list and
 demotes it to a hint (`requirements.md` PP-NFR-1).
 
-**Revision 7 records the Product Owner's dispositions of 2026-08-12 and shrinks
+**Revision 7 records the Product Owner's dispositions of 2026-08-11 and shrinks
 the plan accordingly.** Nothing is added; three things are removed.
 
 - **OD-2 reversed to `SCOPE_GLOBAL_ONLY`.** Phase A loses the roster-identity
@@ -92,7 +93,7 @@ Three decisions that gated this plan at Revision 1 were taken by the Product
 Owner on 2026-08-11 (`product-intent.md` §16):
 
 - **OD-1 — resolved.** The 2026-08-09 deferral is reversed; this proceeds.
-- **OD-2 — resolved, then REVERSED on 2026-08-12.** It was project-local,
+- **OD-2 — resolved, then REVERSED on 2026-08-11.** It was project-local,
   overlay-style, conditional on roster identity surfacing in the plan
   (PP-FR-1b). It is now **`SCOPE_GLOBAL_ONLY`**, like every other path setting,
   with `--roster <path>` as the sole per-invocation redirect. The visibility
@@ -798,18 +799,18 @@ move, not an input to a decision, since OD-9 chose the option that preserves it.
   supersession pointer). All are real, all are adjacent, all deserve their own
   change.
 - No G1 or G2 approval. `@deagy` decides both.
-- ~~No resolution of **OD-9**.~~ **Resolved 2026-08-12** — option 1 via a
+- ~~No resolution of **OD-9**.~~ **Resolved 2026-08-11** — option 1 via a
   `routing.yaml` key, with the fork inside it settled against provider-profile
   `gate_bindings` (`product-intent.md` §17). The reasoning stands and is worth
   keeping: whether Cadre's `support` lists may lose `code-reviewer` was never an
   implementation detail for whoever reached Phase C first, and the option chosen
   is the one under which they do not.
 - ~~No resolution of OD-10, OD-11, OD-12, or OD-13.~~ **OD-10, OD-11 and OD-13
-  were closed on 2026-08-12** (`product-intent.md` §17). **OD-12 remains open**
+  were closed on 2026-08-11** (`product-intent.md` §17). **OD-12 remains open**
   and this plan does not touch it: whether G1 extends to the current revision is
   the Product Owner's judgment, and it got sharper rather than softer once they
   reversed one of their own dispositions.
-- ~~No reversal of OD-2.~~ **Reversed by the Product Owner on 2026-08-12**, to
+- ~~No reversal of OD-2.~~ **Reversed by the Product Owner on 2026-08-11**, to
   `SCOPE_GLOBAL_ONLY`. This plan recorded the reopening request and held no
   authority to decide it; the decision was made where it belonged.
 - **No fix for G-11** (`_gate_agents()` reads two contract keys the kernel has
