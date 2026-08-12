@@ -15,6 +15,32 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.21.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.21.0) - 2026-08-12
+
+### Added
+
+- **`cadre select --roster <path>`, and the `roster.root` setting behind it (`CADRE_ROSTER_ROOT`, or `roster.root` in user-global config).** Runs selection against a roster package the plugin did not ship with — its own catalog, routing rules, and role definitions — declared by a `roster.json` manifest (`schema_version`, `id`, `version`, `catalog`, `routing`, `role_root`, `shared_policy_root`), with every declared path resolved relative to the manifest and rejected if it escapes. With neither the flag nor the setting present, selection is unchanged and default plans are byte-identical. **Worth knowing:** `roster.root` is global-scope-only, like `agentic_sdlc.bin_path` and `knowledge_store.home` — a project-local `.agents/cadre.yaml` cannot redirect it, because that file arrives with `git clone` and this setting chooses the role prose an agent is handed as its operating instructions. Per-invocation redirection is the explicit `--roster` flag, visible in shell history and CI logs.
+
+- **`cadre select --format text`.** A rendering that leads with the decision — who works on this, what the workflow is, which gates need a human — instead of the ~260-line plan. The JSON plan is the contract every downstream tool reads and stays the default, byte-for-byte unchanged; the default deliberately does *not* switch on whether stdout is a terminal, so a plan's shape never depends on invocation context. The text form is a pure function of the plan dict and never re-runs selection, so it cannot disagree with the JSON for the same invocation. It also gives `needs-triage` words, which in JSON reads as a successful plan with empty agent lists.
+
+- **`cadre knowledge ingest-accepted`**, the step that makes a steward-accepted finding retrievable. Accepting a proposal previously recorded the disposition without putting the content anywhere retrieval could reach it.
+
+- **`cadre sdlc --no-default-provider`**, to run the kernel with no provider bundle injected, and **`default_gate_review_agents` in `routing.json`** — reviewer ids injected into a plan's `support` for each configured lifecycle gate that declares no `review_agents` of its own. Cadre declares `["code-reviewer"]`, so its own plans are unchanged; a roster omitting the key injects nothing.
+
+### Changed
+
+- **Eight subcommands identified themselves by their implementation filename in usage and error messages; they now use their public name.** `cadre select --task ...` answered a usage error as `select_agents.py`, and `knowledge` and `context` both answered as `cli.py` — indistinguishable from each other in the one message meant to tell you what you had just mistyped.
+
+- **`cadre generate-authority-aides` now rejects an unknown flag instead of treating it as "no flags given".** That fallback was the *write* path: `--help` regenerated the eight aide files, and so would a typo. **Required action:** if you run this in CI, a misspelled `--check` previously rewrote the tree and exited 0 — reporting success while masking the drift the check exists to catch. It now fails.
+
+- **`cadre mcp-dispatch-server --help` prints help.** It parsed no argv at all, so `--help` started the stdio server and sat reading stdin, which reads as a hang.
+
+- **Selection is faster, with identical output.** Route and risk-rule matchers are now memoized and keyword matchers are skipped when a cheap necessary-condition test proves they cannot match: a one-shot `cadre select` goes 231 ms → 130 ms, and repeated selection in a long-lived process (`cadre mcp-dispatch-server`) goes 188 ms → 2 ms warm. The 175-case golden corpus passes unchanged and plans are byte-identical.
+
+- **`roster/orchestration/routing.yaml` is renamed to `routing.json`**, matching what the file has always contained. **Required action:** if you reference that path — an overlay, a tool, a doc of your own — update it.
+
+- **The `agents_select` MCP tool and the Cline runner notes now describe Cline's real hook surface.** Beside `setup(api, ctx)` there is a config-file subprocess hook system with `UserPromptSubmit` and `PreToolUse` events, and the two are not equivalent: a `PreToolUse` hook's stdout is parsed, a `UserPromptSubmit` hook's is discarded. So a mutation gate is real on Cline; per-prompt context injection via a hook file is not, and it fails silently in both directions — the hook runs, exits 0, and nothing reports that its output went nowhere. `runner-capabilities.json` records this per runner as `prompt_hook_support`/`tool_gate_support`, as build-time descriptive data with a test forbidding any dispatch-time consumer.
+
 ## [0.20.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.20.0) - 2026-08-11
 
 ### Added
