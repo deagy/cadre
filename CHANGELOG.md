@@ -67,6 +67,21 @@ check and reporting "nothing to do". See
 
 - **`cadre sdlc --no-default-provider`**, to run the kernel with no provider
   bundle injected. See the `cadre sdlc` note under Changed for the commoner case.
+- **`cadre knowledge ingest-accepted`**, the step that makes a steward-accepted
+  staged record retrievable. Staged records live in `staged_records`; retrieval
+  scores `chunks`; **nothing joined the two**, so a finding could be proposed,
+  accepted, and permanently unreachable by any query. Sessions re-derived from
+  scratch findings the store already held.
+
+  Deliberately separate from `disposition-staged`: the steward decides, this
+  executes a decision already made. Idempotent (a second run skips what is
+  already in the corpus), with `--dry-run` and repeatable `--id`. Refuses any
+  record whose `untrusted_instruction_risk` is `true` or `unknown`, and ingests
+  at the steward's `disposition.classification_used` rather than the proposer's
+  `proposed_classification` — a proposer cannot widen classification by asking.
+
+  Ingested records carry the dedicated source `proposed-knowledge`, so they are
+  attributable and filterable as what they are.
 
 - **`cadre init --set [REGION:]PATH=VALUE`**, repeatable, overrides one field without an answer file and records the `field_decisions` entry the answer schema requires. The region (`stack`, `libraries`, `autonomy`, `platform`) is derived by looking the path up in the shipped defaults rather than taken from the caller — that is what keeps the `stack`/`governance` category honest, since that label drives `--print-answers` redaction. Unknown paths fail closed; a path ambiguous across regions (`policy_version`, which exists in both `library-standards.yaml` and `agent-autonomy.yaml`) requires a `REGION:` qualifier. Mapping values are refused, because a mapping does not override the named leaf — it grafts leaves below it that no shipped default defines. `--set` wins over `--answers` and `--stack`, and is mutually exclusive with `--interactive`.
 
