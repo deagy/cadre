@@ -87,7 +87,57 @@ check and reporting "nothing to do". See
 
 - A `--stack` preset no longer needs an answer file: on a defaults run the RG-A `field_decisions` a preset implies are synthesized. Safe because `load_stack_preset` structurally forbids a preset from touching governance. A hand-authored `--answers` file still fails closed on a missing decision.
 
+- **`cadre select --format text`** ([#244](https://github.com/deagy/cadre/issues/244)),
+  a rendering that leads with the decision rather than with the plan. The JSON
+  plan is the contract every downstream tool reads and stays the default,
+  unchanged byte-for-byte; it is also ~260 lines for a routine task, with the
+  answer to "who should work on this?" spread across `agents`, `teams`,
+  `dispatch_disposition`, and `human_gates`. `plan_text_format.py` is a pure
+  function of the plan dict and never re-runs selection, so it cannot disagree
+  with the JSON for the same invocation. It also gives `needs-triage` words: a
+  structurally valid plan whose agent lists are simply empty reads as success in
+  JSON. **The default deliberately does not switch on whether stdout is a
+  terminal** — the conventional design, rejected here because a plan whose shape
+  depends on invocation context undercuts the reproducibility the rest of this
+  command is built on. The reasoning is recorded in the flag's own `--help` and
+  in `RUNBOOK.md`.
+
 ### Changed
+
+- **Eight of sixteen subcommands identified themselves by their implementation
+  filename** ([#244](https://github.com/deagy/cadre/issues/244)). `cadre select
+  --task ...` answered a usage error as `select_agents.py`, and `knowledge` and
+  `context` both answered as `cli.py` — indistinguishable from each other in the
+  one message meant to tell a user what they had just mistyped. Each parser now
+  sets `prog="cadre <name>"`, matching the convention `init`/`profile`/`doctor`/
+  `config` already used. `test_cli_surface.py` walks `bin/subcommands.tsv`
+  itself, so a new row is covered without anyone remembering to extend a list,
+  and asserts that running the whole `--help` surface leaves the working tree
+  byte-identical.
+
+- **Selection compiles the matchers it needs, not the whole ruleset**
+  ([#243](https://github.com/deagy/cadre/issues/243),
+  [#245](https://github.com/deagy/cadre/issues/245)). `match_rule` rebuilt every
+  route's and risk rule's regex on every call, leaning on `re`'s own 512-entry
+  compile cache against ~1,220 distinct patterns — so it evicted faster than it
+  filled and its hit rate collapsed to roughly zero, putting ~94% of selection
+  wall time inside `re._compile`. Both matchers are now memoized (keyed on the
+  pattern alone, never on caller-supplied task text, and bounded at 8192 because
+  `mcp-dispatch-server` is long-lived and serves many projects' overlays), and
+  keyword compilation is gated on a necessary condition — every
+  whitespace-separated token of the keyword appears in the text — which admits a
+  mean of 3.6 of 870 keywords across the golden corpus's 175 tasks. The gate is
+  necessary rather than heuristic (zero false negatives across all 152,250
+  (task, keyword) pairs) and never decides a match: `_keyword_regex` remains the
+  sole authority and the gate can only skip work that would have returned
+  `False`. Cold in-process selection 100.6 ms → 6.3 ms, one-shot `cadre select`
+  231 ms → 130 ms, warm selection 188 ms → 2 ms, the orchestration suite 203 s →
+  46 s. Output is unchanged: the 175-case golden corpus passes as-is and plans
+  are byte-identical across sampled tasks. `test_selection_cost.py` keeps it
+  that way — the regression accumulated silently across three roster expansions
+  because nothing measured it, so the primary assertion is the invariant (a warm
+  ruleset compiles nothing further, checked through `lru_cache`'s own
+  bookkeeping) rather than a numeric budget people learn to raise reflexively.
 
 - **`cadre sdlc` no longer injects Cadre's provider bundle when the caller
   supplies their own `--provider`.** Previously it always injected, so
@@ -121,6 +171,16 @@ check and reporting "nothing to do". See
 - **The `lifecycle-onboarding` skill resolves authorities at the gate that needs them** rather than interviewing for all 13 up front. It asks for `product_owner` and `engineering_lead` — enough to clear G1 and G2 — carries the gate/authority table from `kernel/contracts/lifecycle-gates.json`, and defers the rest. Unresolved roles are `blockers`, not `errors`: the project stays `valid`, tasks can be planned, and only the gate belonging to an unresolved role is held. The skill also now prefers `--set` over authoring an answer file, and documents that a run record captures authority applicability at creation time — so a role must be assigned before planning the task that needs its gate.
 
 ### Fixed
+
+- **`generate_authority_aides.py` scanned argv for `--check` and treated every
+  argv it did not recognise as "no flags given" — the *write* path**
+  ([#244](https://github.com/deagy/cadre/issues/244)). `--help` regenerated the
+  eight aide files, and so would a typo: a CI step running `--chek` would have
+  rewritten the tree and exited 0, reporting success while masking exactly the
+  drift the check exists to catch. Separately, `dispatch_server.py` parsed no
+  argv at all, so `cadre mcp-dispatch-server --help` started the stdio server
+  and sat reading stdin, which reads as a hang rather than as help. Both now
+  parse with `argparse`, which rejects an unknown flag instead of guessing.
 
 - **A `platform-impact-profile.yaml` overlay dropped every entry the run did not answer.** `deep_merge` replaces lists wholesale rather than merging by id, but `build_platform_overlay` emitted only the entries a run touched — collapsing the resolved profile from 14 impact categories to 1 after a single override, and taking the `applicability: unknown` entries that block G3/G4/G5/G7 with it. The overlay now carries the complete list: shipped entries, then the project's existing overlay, then the run's overrides.
 
