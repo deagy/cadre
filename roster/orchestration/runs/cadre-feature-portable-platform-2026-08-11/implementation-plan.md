@@ -1,11 +1,11 @@
 # Implementation Plan — A roster-neutral platform
 
 **Plan ID:** `PLAN-CADRE-PORTABLE-PLATFORM`
-**Revision:** 10
+**Revision:** 11
 **Status:** **four phases landed** (D, 0, A′, C′-1, C′-2). B′ and E remain, and
 neither is blocked. G1 approved 2026-08-11 against intent Revision 1 and
 re-affirmed against the current record the same day (`product-intent.md` §18).
-**No open decision blocks anything, and G2 is approved** (2026-08-11, `requirements.md` §8). Phase E is the only phase left, and it unblocks nothing.
+**No open decision blocks anything, and G2 is approved** (2026-08-11, `requirements.md` §8). **All seven phases are landed.**
 **Date:** 2026-08-11
 **Implements:** `REQ-CADRE-PORTABLE-PLATFORM` (`requirements.md`, **Revision 11**)
 **Decomposes:** `INTENT-CADRE-PORTABLE-PLATFORM` (`product-intent.md`, **Revision 9**)
@@ -654,7 +654,44 @@ and roster-free (`requirements.md` §0.4). The three `sys.path.append` sites int
 `roster/shared/src/` stay; Phase C's guard converts "these four modules are
 platform" from convention into a test.
 
-### Phase E — Let `cadre sdlc` run *without* Cadre's provider (PP-FR-4)
+### Phase E — Let `cadre sdlc` run *without* Cadre's provider (PP-FR-4). **LANDED 2026-08-11.**
+
+**Delivered:** `bin/cadre.py`'s `_resolve_provider_injection()` and six
+dispatcher tests. Suite 1276 → 1282. Acceptance (a) and (b) both met:
+
+```console
+$ ./bin/cadre sdlc --provider providers/agentic-sdlc-defaults/provider.json provider list
+[{"id": "agentic-sdlc-defaults", "version": "0.3.0", …}]     # was: duplicates profile ids
+$ ./bin/cadre sdlc provider list
+[{"id": "cadre", …}]                                          # argv byte-identical to before
+```
+
+**Implemented against the review's recommendation, and the deviation is the
+point.** The implementation review proposed an explicit `--no-default-provider`
+flag *instead of* detecting the caller's `--provider`, on the ground that the
+kernel's flag is `action="append"`, accepts `--provider=X` and `--provider X`,
+may repeat, and that a wrapper-side scan must reproduce argparse's tokenisation
+exactly or silently over- or under-suppress.
+
+**That objection is correct about string scanning and is answered by not doing
+any.** Detection uses `argparse.parse_known_args`, so the tokenisation is not
+reproduced — it is the same implementation. The property that makes this safe is
+not cleverness but identity: for a genuinely ambiguous argv, the wrapper reads
+it exactly as the kernel will, because both are argparse with `--provider` as an
+appending option. A wrapper that guessed *differently* from the kernel would be
+the actual hazard, and this cannot.
+
+Without detection, acceptance (a) as written could not pass — the flag alone
+would still require a second flag beside it. Both are implemented: detection for
+(a), and `--no-default-provider` for the case detection cannot cover, running
+the kernel with no provider at all.
+
+**One bug caught before it shipped.** An earlier draft prepended each supplied
+`--provider` in turn and silently reversed the order for any caller passing more
+than one. `action="append"` means list order is the caller's stated precedence.
+Fixed and pinned.
+
+---
 
 **Files:** `bin/cadre.py:125-127`.
 

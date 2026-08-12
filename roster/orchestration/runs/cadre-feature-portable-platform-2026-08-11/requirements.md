@@ -1,7 +1,7 @@
 # Requirements Baseline — A roster-neutral platform
 
 **Requirements ID:** `REQ-CADRE-PORTABLE-PLATFORM`
-**Revision:** 11
+**Revision:** 12
 **Status:** **G2 APPROVED** by `@deagy` on 2026-08-11, against Revision 10's
 content. G1 approved and re-affirmed the same day. See §8.
 **No open decision blocks G2 any more.** All five that did were closed or

@@ -302,3 +302,48 @@ there were none.** Fixed with one predicate, `is_role_definition()`, defined in
 `generate_role_metadata.py` and imported by `test_repository_health.py` rather
 than duplicated — two copies would let the generator and its guard drift into
 disagreeing about what a role is.
+
+---
+
+## Phase E — provider suppression (PP-FR-4)
+
+`bin/cadre.py` and six dispatcher tests. Suite 1276 → 1282.
+
+### The failure this requirement is named for, recorded before the change
+
+```console
+$ ./bin/cadre sdlc --provider providers/agentic-sdlc-defaults/provider.json provider list
+{ "error": "provider agentic-sdlc-defaults duplicates profile ids: ['generic']" }
+```
+
+The plan requires this run be recorded rather than described: without it,
+PP-FR-4's Revision 1–4 acceptance passed against unmodified code, because the
+half that already worked was the half being tested.
+
+### After
+
+```console
+$ ./bin/cadre sdlc --provider providers/agentic-sdlc-defaults/provider.json provider list
+[{"id": "agentic-sdlc-defaults", …}]      # (a) only the caller's provider
+
+$ ./bin/cadre sdlc provider list
+[{"id": "cadre", …}]                       # (b) argv byte-identical to before
+
+$ ./bin/cadre sdlc --no-default-provider provider list
+[]                                         # suppression with no replacement
+```
+
+### Non-vacuity
+
+Suppression reverted in `bin/cadre.py`; **four of the six tests failed**, and the
+original `duplicates profile ids: ['generic']` error reproduced exactly. The two
+that kept passing are the ones that should — acceptance (b) and the
+malformed-argv fallback both describe the unchanged path.
+
+### One bug caught before it shipped
+
+An earlier draft prepended each supplied `--provider` in turn, silently
+reversing the order for any caller passing more than one. The kernel's flag is
+`action="append"`, so list order is the caller's stated precedence. Found by
+enumerating argv forms rather than by a test — the test that pins it was written
+afterwards, which is the honest order to record.
