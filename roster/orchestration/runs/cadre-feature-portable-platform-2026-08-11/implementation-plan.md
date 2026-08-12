@@ -1,14 +1,13 @@
 # Implementation Plan — A roster-neutral platform
 
 **Plan ID:** `PLAN-CADRE-PORTABLE-PLATFORM`
-**Revision:** 8
-**Status:** draft — **schedulable.** G1 approved 2026-08-11 against intent
-Revision 1 and **re-affirmed against the current intent record** the same day
-(`product-intent.md` §18). **No open decision blocks any phase**: all five were
-closed or withdrawn on 2026-08-11 (§17), and OD-12 closed with the
-re-affirmation. G2 remains unapproved; nothing else does.
+**Revision:** 9
+**Status:** **four phases landed** (D, 0, A′, C′-1, C′-2). B′ and E remain, and
+neither is blocked. G1 approved 2026-08-11 against intent Revision 1 and
+re-affirmed against the current record the same day (`product-intent.md` §18).
+**No open decision blocks anything.** G2 remains unapproved; nothing else does.
 **Date:** 2026-08-11
-**Implements:** `REQ-CADRE-PORTABLE-PLATFORM` (`requirements.md`, **Revision 8**)
+**Implements:** `REQ-CADRE-PORTABLE-PLATFORM` (`requirements.md`, **Revision 10**)
 **Decomposes:** `INTENT-CADRE-PORTABLE-PLATFORM` (`product-intent.md`, **Revision 7**)
 **Revision note:** Revision 2 folded in the OD-2/OD-5 dispositions while still
 citing `requirements.md` Revision 1 — a stale pin that would have landed a
@@ -245,7 +244,34 @@ Revisions 1–5 intended and their ordering prevented.
 
 **Exempt from the regeneration sequence** (§2), because it is never merged.
 
-### Phase A — Roster-root resolution (PP-FR-1, PP-FR-2)
+### Phase A′ — Roster-root resolution (PP-FR-1, PP-FR-2). **LANDED 2026-08-11.**
+
+**Delivered:** `roster/orchestration/roster.schema.json`, `roster/roster.json`,
+`roster/orchestration/src/roster_manifest.py`, the `roster.root` FieldSpec at
+`SCOPE_GLOBAL_ONLY`, the `--roster` flag, `schema_validate.py`'s third
+instance/schema pair, and 21 tests. Suite 1235 → 1249, golden corpus untouched.
+
+**One item deferred, with the reason recorded rather than left to a reader to
+reconstruct: `provider/roster.json` and its `PROVIDER_BUNDLE` entry.** This
+plan scheduled both here, on the intent record's finding that `provider/` is
+"already a complete roster package missing exactly two files". That finding is
+correct — and it is exactly why the manifest cannot land yet. `provider/`
+contains neither `catalog.yaml` nor `routing.json`, so a `roster.json` there
+would declare two files that do not exist and fail its own loader. **Shipping a
+manifest that names absent files is worse than shipping none**, so the order is
+inverted from what §2 assumed: the two files must be generated into `provider/`
+first, and that is new generated content with its own PP-NFR-1 surface. Deferred
+to whichever increment makes `provider/` a valid roster package, which is not
+this one.
+
+**A second finding, and it is the same trap this plan already warned about.**
+`generate_global_plugin.py` has a **second closed allowlist** — for roster-root
+files, distinct from `PROVIDER_BUNDLE`. `roster.json` was silently skipped and
+seven `test_repository_health` tests failed against a packaged selector that
+could not find its own manifest. §2 warned about the `provider/` allowlist in
+bold; nobody knew there were two. Now listed, with a comment saying why.
+
+---
 
 **Files:**
 - `roster/shared/src/settings.py` — new `roster.root` FieldSpec after
@@ -406,7 +432,42 @@ Also confirm the fixture's `AGENT.md` files actually load (frontmatter parsed,
 `role_root` honoured). A broken `role_root` passes (a)–(d) untouched if nothing
 dereferences a `definition` path.
 
-### Phase C — The mirror boundary guard (PP-FR-6). **Split in two at Revision 6.**
+### Phase C′ — The mirror boundary guard (PP-FR-6). **LANDED 2026-08-11.**
+
+**Delivered:** `roster/orchestration/test/test_roster_boundary.py` (14 tests),
+the six category-B path fixes, and OD-9's `default_gate_review_agents` key.
+Suite 1249 → 1263. Cadre's plans byte-identical; the golden corpus unedited.
+
+**The seam works end to end.** `cadre select --roster <fixture>` against a
+roster sharing no id, phase or keyword with Cadre's now emits a schema-valid
+plan — `status: ready`, `workflow: new-service`, `lifecycle: integrated`, only
+fixture roles, zero leakage. The same command raised `ValueError: Routing
+selected an unknown agent: code-reviewer` before C′-2.
+
+**Fault injection found a hole the suite could not**, and it is worth recording
+against PP-NFR-4's own framing. Five defects planted; four failed correctly and
+the fifth — a Cadre role id in `mcp/dispatch_core.py` — **passed**, because
+category A had been scoped to `build_dispatch_plan.py` where the known defect
+lived. Twelve of twelve green, with the coverage wrong, in the file whose own
+self-vacuity section warns about exactly that. PP-NFR-4 asks whether a guard
+*can* fail; this was a guard that could fail and still did not cover the thing
+it was for. Category A now runs across every platform module with role ids read
+from `catalog.yaml` rather than hand-listed.
+
+Two corrections the plants then forced: role ids match as whole kebab-case
+tokens (the gate id `halt-authority-determination` contains the role id
+`halt-authority` and is unrelated — a guard that cries wolf teaches its reader
+to loosen it); and `build_dispatch_plan.py:354-355` emitted human-gate
+descriptions naming `halt-authority` and `architecture-authority` into every
+plan, fixed rather than exempted.
+
+**And the guard rejected this implementation's own first draft.** Both MCP and
+overlay resolvers originally caught a manifest error at import and fell back to
+Cadre's hardcoded layout. Intent §7 C4 forbids degrading to the built-in roster;
+a fallback reproducing Cadre's directory layout is that degradation wearing a
+robustness costume. Both fail closed now.
+
+---
 
 **This phase has been mis-sized in every revision, in both directions, and
 Revision 5 was wrong in both directions at once.** Revisions 1–2 listed only the
@@ -760,15 +821,23 @@ defect, confirm it **fails** naming the real cause, revert, confirm clean.
 because its row for Phase C carried the "~9 category-B" figure that oversized
 the phase, and a reader of Revision 5 should be able to see what happened to it.
 
-| Order | Phase | Delivered | Safe to stop? |
+| Order | Phase | Delivered | Status |
 | --- | --- | --- | --- |
-| 1 | **D** | Knowledge store pinned platform-anchored, before the phase that can break it | Yes, always. Gated on nothing |
-| 2 | **0** | **Proof the seam is real** — including for lifecycle-aware selection — with nothing moved | Yes, and this is the natural stop if the answer is "it isn't." Gated on nothing |
-| 3 | **A′** | Roster root resolvable; default unchanged. Identity + schema bump built but **not merged** | Yes — a latent capability, no behaviour change |
-| 4 | **B′** | The fixture roster makes Phase 0's answer permanent and regression-tested | Yes |
-| 5 | **C′-1** | Boundary guard, self-vacuity, `:18`/`:24` assertions, **six** category-B path fixes, the forced lifecycle-aware detector | Yes. Gated on nothing |
-| 6 | **C′-2** | The `code-reviewer` default and the ~15 `test_selector.py` assertions it moves | **Only after OD-9.** The one step that can change default Cadre selection |
-| 7 | **E** | `cadre sdlc` ergonomics | Complete. Deferrable indefinitely — the capability already exists via `bin/agentic-sdlc` |
+| 1 | **D** | Knowledge store pinned platform-anchored, before the phase that can break it | **Landed.** 7 tests, evidence attached |
+| 2 | **0** | Proof the seam is real, with nothing moved | **Run and discarded.** Also found G-12 |
+| 3 | **A′** | Roster root resolved from a manifest; default unchanged | **Landed.** `provider/roster.json` deferred — see the phase |
+| 4 | **C′-1** | Boundary guard, self-vacuity, `:18`/`:24` assertions, six category-B fixes, forced lifecycle detector | **Landed.** Ran ahead of B′ — see below |
+| 5 | **C′-2** | OD-9's roster-declared gate reviewer | **Landed.** Cadre byte-identical |
+| 6 | **B′** | The fixture roster makes Phase 0's answer permanent and regression-tested | Next. Gated on nothing |
+| 7 | **E** | `cadre sdlc` ergonomics | Deferrable indefinitely — the capability already exists via `bin/agentic-sdlc` |
+
+**C′ ran before B′, inverting Revision 6's order, and the reason is worth
+recording.** That order existed so the guard could be written against a real
+second roster — *"before a second roster exists there is no way to tell a guard
+that works from a guard that cannot fail."* The Phase 0 spike supplied that
+roster without B′ having landed, so the guard was written and fault-injected
+against a genuine foreign roster anyway. The dependency was on **a** second
+roster, not on B′ specifically, and Revision 6 conflated the two.
 
 **Superseded (Revision 5's table), kept for the record:**
 

@@ -1,7 +1,7 @@
 # Requirements Baseline — A roster-neutral platform
 
 **Requirements ID:** `REQ-CADRE-PORTABLE-PLATFORM`
-**Revision:** 9
+**Revision:** 10
 **Status:** draft — **G1 approved 2026-08-11 against Revision 1; awaiting G2.**
 **No open decision blocks G2 any more.** All five that did were closed or
 withdrawn by the Product Owner on 2026-08-11 (`product-intent.md` §17). **OD-2
@@ -410,9 +410,21 @@ Resolved at OD-5 (2026-08-11). Chosen because it requires **zero** change to
 `kernel/` and `engine/`; see §4 for the constraint this places on
 implementation.
 The kernel never reads it. It declares, at minimum: `schema_version`, `id`,
-`version`, `catalog` (path to `catalog.yaml`), `routing` (path to `routing.yaml`),
-`role_root` (path under which `definition` entries resolve), and
-`shared_policy_root`. Every path resolves relative to the manifest directory and
+`version`, `catalog`, `routing`, `role_root` (path under which `definition`
+entries resolve), and `shared_policy_root`.
+
+**The two data files are in different formats, and the manifest must say so
+rather than leaving a roster author to infer it from an extension.** Added at
+Revision 10, as G-12's disposition required: **`catalog` is YAML** and
+**`routing` is JSON**. That asymmetry is not incidental — it is the entire
+reason G-12 existed. One roster package carried both behind `.yaml` extensions,
+`schema_validate.py` quietly kept a loader for each (`:71`, `:76`), and the
+first foreign roster author to write actual YAML got
+`JSONDecodeError: Expecting value: line 1 column 1 (char 0)`.
+
+Renaming `routing.yaml` to `routing.json` makes the extensions honest but does
+not remove the asymmetry, so the requirement states it. `roster.schema.json`'s
+field descriptions carry it too, which is where an author will actually look. Every path resolves relative to the manifest directory and
 must reject escapes, porting the containment logic the kernel already applies in
 `provider_resource()` (`kernel/agentic_sdlc/__init__.py:159-169`).
 A `roster.schema.json` alongside `routing.schema.json` and
@@ -974,6 +986,31 @@ made checkable rather than asserted.
   than predicting it"*). Treat items 1–5 as a **hint about where to look**, not
   as an acceptance criterion — the acceptance criterion is item 6 plus
   `--check`, which costs one command and has never been wrong.
+
+  **Observed at Revision 10, after Phases A′ and C′ actually ran.** The list
+  above was a prediction; this is what the generator produced. It is recorded
+  as an observation, not promoted back into a criterion:
+
+  - `plugin/suite/roster/roster.json` — new, **and it did not arrive by
+    itself.** `generate_global_plugin.py` has a **second closed allowlist** for
+    roster-root files, separate from `PROVIDER_BUNDLE` at `:101` and unmentioned
+    in any revision of this baseline. `roster.json` was silently skipped by it,
+    and seven `test_repository_health` tests failed against a packaged selector
+    that could not find its own manifest. **This baseline recorded that exact
+    trap for `provider/` and did not know there were two of them.**
+  - `plugin/suite/roster/orchestration/roster.schema.json` — new, automatic via
+    the `:1426` prefix copy, exactly as predicted.
+  - `plugin/suite/roster/orchestration/routing.json` — modified, by OD-9's
+    `default_gate_review_agents` key. Predicted at Revision 6.
+  - `plugin/suite/` mirrors of `select_agents.py`, `build_dispatch_plan.py`,
+    `routing_overlay.py`, `settings.py`, `schema_validate.py`,
+    `roster_manifest.py` (new), `mcp/dispatch_core.py`, `mcp/dispatch_server.py`.
+  - `selection.schema.json` — **unchanged**, as PP-NFR-3b's retraction requires.
+  - The golden corpus — **unedited**, verified after every phase.
+
+  The prediction was closer this time and still incomplete, in a way no amount
+  of re-reading would have closed: nobody knew the second allowlist existed
+  until a file needed to pass through it.
 
 - **The corpus does not prove what the first bullet claims it proves.**
   "Corpus unedited ⇒ default selection unchanged" holds only for behaviour the
