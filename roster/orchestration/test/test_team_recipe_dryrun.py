@@ -409,7 +409,7 @@ class RealRoutingConfigurationTests(unittest.TestCase):
                 "changed_files": ["frontend/src/Upload.tsx", "services/upload/main.go"],
                 "changed_file_source": "explicit",
                 "classification": "internal",
-                "source": "test-fixture",
+                "sources": ["test-fixture"],
                 "top": 20,
             },
         )

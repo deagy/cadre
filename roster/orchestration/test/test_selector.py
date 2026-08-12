@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import copy
 import hashlib
 import json
@@ -30,10 +31,12 @@ from routing import (  # noqa: E402
     validate_routing_config,
 )
 from select_agents import (  # noqa: E402
+    STAGED_KNOWLEDGE_SOURCE,
     _origin_slug,
     discover_changed_files,
     explicit_files,
-    resolve_knowledge_source,
+    resolve_knowledge_sources,
+    resolve_project_knowledge_source,
 )
 
 CONFIG = load_routing(ROOT / "routing.json")
@@ -59,7 +62,7 @@ def plan(**overrides: object) -> dict[str, object]:
         "changed_files": [],
         "changed_file_source": "test",
         "repository_root": str(AGENTS_ROOT.parent),
-        "source": "example/repository",
+        "sources": ["example/repository"],
         **overrides,
     }
     return build_dispatch_plan(CONFIG, CATALOG, values)
@@ -860,7 +863,7 @@ class SelectorTests(unittest.TestCase):
             task="Deploy to production with Terraform",
             changed_files=["terraform/service/main.tf"],
         )
-        self.assertEqual(result["schema_version"], 6)
+        self.assertEqual(result["schema_version"], 7)
         self.assertEqual(result["workflow"], "production-release")
         self.assertEqual(self.quality_gate_ids(result), ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9"])
         production_gate = next(
@@ -1119,7 +1122,7 @@ class SelectorTests(unittest.TestCase):
             task="Update the React navigation",
             changed_files=["frontend/src/Nav.tsx"],
             classification="confidential",
-            source="approved-decisions",
+            sources=["approved-decisions", "proposed-knowledge"],
             top=3,
             task_id="UI-8",
         )
@@ -1160,8 +1163,13 @@ class SelectorTests(unittest.TestCase):
                         "confidential",
                         "--top",
                         "3",
+                        # One --source per entry, in the order the caller named
+                        # them. The argv contract is what the Cline consumer
+                        # executes verbatim, so the repetition is the contract.
                         "--source",
                         "approved-decisions",
+                        "--source",
+                        "proposed-knowledge",
                     ],
                 },
             },
@@ -2089,8 +2097,35 @@ class SelectorTests(unittest.TestCase):
             with patch("select_agents._run_git", side_effect=RuntimeError("no origin")):
                 self.assertEqual(
                     f"local-{expected_name}-{expected_hash}",
-                    resolve_knowledge_source(root),
+                    resolve_project_knowledge_source(root),
                 )
+                # The staged-findings source is appended to whatever the
+                # project resolves to, fallback included.
+                self.assertEqual(
+                    [f"local-{expected_name}-{expected_hash}", STAGED_KNOWLEDGE_SOURCE],
+                    resolve_knowledge_sources(root),
+                )
+
+    def test_staged_knowledge_source_matches_the_store_constant(self) -> None:
+        """`STAGED_KNOWLEDGE_SOURCE` duplicates `accepted_ingest.STAGED_SOURCE`.
+
+        Duplicated deliberately (see the constant's comment), so the drift
+        this test catches is the whole reason the duplication is acceptable:
+        if the store renames its dedicated source, every dispatched plan would
+        otherwise keep naming the old one and silently retrieve nothing from
+        the steward-accepted half of the corpus.
+        """
+        accepted_ingest = AGENTS_ROOT / "knowledge-store" / "src" / "accepted_ingest.py"
+        tree = ast.parse(accepted_ingest.read_text(encoding="utf-8"))
+        declared = {
+            target.id: node.value.value
+            for node in tree.body
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant)
+            for target in node.targets
+            if isinstance(target, ast.Name)
+        }
+        self.assertIn("STAGED_SOURCE", declared, "accepted_ingest.py no longer declares STAGED_SOURCE")
+        self.assertEqual(declared["STAGED_SOURCE"], STAGED_KNOWLEDGE_SOURCE)
 
     def test_cli_root_targets_unrelated_git_repository_for_status_and_base(self) -> None:
         selector = ROOT / "src" / "select_agents.py"
@@ -2124,13 +2159,13 @@ class SelectorTests(unittest.TestCase):
             status = subprocess.run(common, cwd=caller, check=True, capture_output=True, text=True)
             status_plan = json.loads(status.stdout)
             self.assertEqual(str(target.resolve()), status_plan["inputs"]["repository_root"])
-            self.assertEqual("example/targetrepo", status_plan["inputs"]["source_filter"])
+            self.assertEqual(["example/targetrepo", "proposed-knowledge"], status_plan["inputs"]["source_filter"])
             self.assertEqual(["frontend/base.tsx"], status_plan["inputs"]["changed_files"])
 
             diff = subprocess.run([*common, "--base", base], cwd=caller, check=True, capture_output=True, text=True)
             diff_plan = json.loads(diff.stdout)
             self.assertEqual(str(target.resolve()), diff_plan["inputs"]["repository_root"])
-            self.assertEqual("example/targetrepo", diff_plan["inputs"]["source_filter"])
+            self.assertEqual(["example/targetrepo", "proposed-knowledge"], diff_plan["inputs"]["source_filter"])
             self.assertEqual(["services/api.go"], diff_plan["inputs"]["changed_files"])
 
     def test_non_git_root_requires_explicit_files(self) -> None:
@@ -2382,7 +2417,7 @@ class SelectorTests(unittest.TestCase):
                     "changed_files": ["main.tf"],
                     "changed_file_source": "test",
                     "repository_root": str(AGENTS_ROOT.parent),
-                    "source": "example/repository",
+                    "sources": ["example/repository"],
                 },
                 require_sdlc=True,
             )
@@ -2569,7 +2604,7 @@ class WorkflowShapeDeclarationTests(unittest.TestCase):
                 "changed_files": ["infrastructure/cluster.tf"],
                 "changed_file_source": "test",
                 "repository_root": str(AGENTS_ROOT.parent),
-                "source": "example/repository",
+                "sources": ["example/repository"],
             },
         )
         self.assertNotEqual(baseline["workflow"], mutated["workflow"])

@@ -159,7 +159,7 @@ class TestEmittedKnowledgeCliPath(unittest.TestCase):
                 "classification": "internal",
                 "changed_files": ["src/login.tsx"],
                 "changed_file_source": "explicit",
-                "source": "deagy/cadre",
+                "sources": ["deagy/cadre"],
                 "top": 5,
             },
             require_sdlc=False,

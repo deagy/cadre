@@ -108,7 +108,7 @@ class TelemetryOnTests(unittest.TestCase):
             lines = telemetry_path.read_text(encoding="utf-8").splitlines()
             self.assertEqual(1, len(lines))
             record = json.loads(lines[0])
-            self.assertEqual(1, record["schema_version"])
+            self.assertEqual(2, record["schema_version"])
             self.assertEqual(plan["status"], record["status"])
             self.assertEqual(plan["workflow"], record["workflow"])
             # The record keeps bare ids; the plan's entries carry a full

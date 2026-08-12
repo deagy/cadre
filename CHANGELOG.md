@@ -104,6 +104,34 @@ check and reporting "nothing to do". See
 
 ### Changed
 
+- **A dispatched agent never saw steward-accepted knowledge.** `cadre knowledge
+  ingest-accepted` writes accepted findings to a dedicated source,
+  `proposed-knowledge`, deliberately separate so they are reached by name
+  rather than by accident. But `cadre select` scoped every plan's retrieval to
+  the repository's own source alone, so no dispatched agent ever named the
+  other one: a store could hold any number of accepted findings and return
+  none of them. **`--source` is now repeatable** on `cadre knowledge search`
+  and `cadre knowledge context` (order-preserving, de-duplicated; still
+  mutually exclusive with `--all-sources`), and a plan now names both sources
+  — one `--source` argument per entry, never `--all-sources`. `cadre select
+  --source` is repeatable too; supplying any value replaces the default pair
+  entirely.
+
+  **Two schema versions move, and both are breaking for pinned consumers.**
+  `selection.schema.json` goes **6 → 7**: `inputs.source_filter` and
+  `knowledge_context.source_filter` are arrays of source names, not bare
+  strings. `agent-context.schema.json` goes **1 → 2** for the same retype on
+  the retrieval bundle's own `source_filter` (`null` still means an
+  `--all-sources` read). Both files are vendored into the wheel, so a pinned
+  copy would otherwise reject a fresh document while it truthfully reported
+  the version that copy claims to handle — see RUNBOOK.md's "When
+  `schema_version` increments". Local selection-telemetry records follow to
+  version 2; nothing validates them on read, so old rows still parse.
+
+  The `retrieval_runs.source_filter` audit column now stores a JSON array.
+  **Rows written before this change hold a bare source string**, and the log
+  is append-only and never rewritten, so a reader must accept both encodings.
+
 - **Eight of sixteen subcommands identified themselves by their implementation
   filename** ([#244](https://github.com/deagy/cadre/issues/244)). `cadre select
   --task ...` answered a usage error as `select_agents.py`, and `knowledge` and

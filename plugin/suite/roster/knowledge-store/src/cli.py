@@ -72,7 +72,12 @@ def _parser() -> argparse.ArgumentParser:
     search.add_argument("--query", required=True)
     search.add_argument("--classification", required=True)
     search.add_argument("--top")
-    search.add_argument("--source")
+    # Repeatable: a caller may need more than one source in a single query --
+    # a project's ingested corpus plus `proposed-knowledge`, the dedicated
+    # source steward-accepted findings land under (`accepted_ingest.py`). That
+    # source still has to be named, so it is reached deliberately rather than
+    # by accident; being repeatable only removes the need for two queries.
+    search.add_argument("--source", action="append", dest="sources", metavar="SOURCE")
     search.add_argument("--all-sources", action="store_true")
     add_config(search)
     context = subparsers.add_parser("context")
@@ -81,7 +86,7 @@ def _parser() -> argparse.ArgumentParser:
     context.add_argument("--query", required=True)
     context.add_argument("--classification", required=True)
     context.add_argument("--top")
-    context.add_argument("--source")
+    context.add_argument("--source", action="append", dest="sources", metavar="SOURCE")
     context.add_argument("--all-sources", action="store_true")
     add_config(context)
     stats = subparsers.add_parser("stats")
@@ -233,14 +238,14 @@ def _enforce_retrieval_scope(tier: str, options: dict[str, Any]) -> None:
     """
     if tier != TIER_GLOBAL_FALLBACK:
         return
-    source = options.get("source")
+    sources = options.get("sources")
     all_sources = options.get("all_sources")
-    if source and all_sources:
+    if sources and all_sources:
         raise ValueError(
-            "Ambiguous scope: pass either --source <project-identifier> or "
+            "Ambiguous scope: pass either --source <project-identifier> (repeatable) or "
             "--all-sources against the shared global knowledge store, not both."
         )
-    if not source and not all_sources:
+    if not sources and not all_sources:
         raise ValueError(
             "A project scope is required against the shared global knowledge store: "
             "pass --source <project-identifier> to scope this query, or --all-sources "

@@ -85,7 +85,7 @@ def _values(**overrides: object) -> dict[str, object]:
         "changed_files": ["notes.txt"],
         "changed_file_source": "test",
         "repository_root": str(REPOSITORY_ROOT),
-        "source": "example/repository",
+        "sources": ["example/repository"],
         "classification": "internal",
         "task_id": "ISSUE-214-1",
         **overrides,
@@ -263,18 +263,48 @@ class SchemaCompatibilityTests(unittest.TestCase):
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         schema["properties"]["schema_version"]["const"] = 5
         del schema["properties"][SIGNAL]
+        # The 6 -> 7 `source_filter` retype landed after v5, so subtracting
+        # only this change's deltas no longer reaches v5. Kept in step with
+        # `test_schema_release_drift.py::_revert_source_filter_retype`, which
+        # checks the reconstruction against the real released bytes.
+        schema["properties"]["inputs"]["properties"]["source_filter"] = {"$ref": "#/$defs/nonempty"}
+        schema["properties"]["knowledge_context"]["properties"]["source_filter"] = {
+            "$ref": "#/$defs/nonempty"
+        }
         return schema
 
-    def test_schema_version_is_6(self) -> None:
-        """Adding an emitted field bumps the version -- RUNBOOK.md's "When
-        `schema_version` increments" rule. Optional-and-omitted-when-empty is
+    @staticmethod
+    def _as_v6_plan(plan: dict) -> dict:
+        """The plan as v6 emitted it, for tests about the v5/v6 boundary.
+
+        This class's counterfactual is "what if `undeclared_workflow_shape_routes`
+        had shipped without a bump" -- a question about one field. The later
+        `source_filter` retype (6 -> 7) would otherwise add a second, unrelated
+        validation error and blunt the assertion that the *only* complaint is
+        the unknown property. Collapsing the arrays back to their v6 scalar
+        keeps this test measuring what it claims to.
+        """
+        plan = json.loads(json.dumps(plan))
+        for holder in (plan.get("inputs"), plan.get("knowledge_context")):
+            if isinstance(holder, dict) and isinstance(holder.get("source_filter"), list):
+                holder["source_filter"] = holder["source_filter"][0]
+        return plan
+
+    def test_schema_version_is_current(self) -> None:
+        """Adding *or retyping* an emitted field bumps the version -- RUNBOOK.md's
+        "When `schema_version` increments" rule. Optional-and-omitted-when-empty is
         not the carve-out that rule grants, because an overlay consumer
         receives this field unconditionally. Pinned so the schema constant and
         the producer cannot drift apart, in either direction.
+
+        6 -> 7 was the `source_filter` retype (string -> array of sources),
+        which is why this is no longer named for a fixed number: the field
+        this class covers did not change, but the version it asserts moves
+        whenever any emitted field does.
         """
-        self.assertEqual(self.schema["properties"]["schema_version"]["const"], 6)
-        self.assertEqual(_plan(load_routing(ROUTING_PATH))["schema_version"], 6)
-        self.assertEqual(_plan(_config_with_overlay_route())["schema_version"], 6)
+        self.assertEqual(self.schema["properties"]["schema_version"]["const"], 7)
+        self.assertEqual(_plan(load_routing(ROUTING_PATH))["schema_version"], 7)
+        self.assertEqual(_plan(_config_with_overlay_route())["schema_version"], 7)
 
     def test_signal_is_optional_but_that_did_not_make_it_additive(self) -> None:
         self.assertIn(SIGNAL, self.schema["properties"])
@@ -304,7 +334,7 @@ class SchemaCompatibilityTests(unittest.TestCase):
         reported the version their copy claims to handle, sending them to
         debug the wrong thing.
         """
-        plan = _plan(_config_with_overlay_route())
+        plan = self._as_v6_plan(_plan(_config_with_overlay_route()))
         self.assertIn(SIGNAL, plan)
         pinned = self._pinned_v5_schema()
 

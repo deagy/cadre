@@ -113,7 +113,17 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--base", help="Git base ref used with <base>...HEAD")
     parser.add_argument("--task-id", help="Stable caller-supplied task identifier")
     parser.add_argument("--classification", help="Authorized knowledge classification")
-    parser.add_argument("--source", help="Optional knowledge-store source filter")
+    parser.add_argument(
+        "--source",
+        action="append",
+        dest="sources",
+        metavar="SOURCE",
+        help=(
+            "Knowledge-store source to retrieve from; repeatable. Defaults to this "
+            "repository's own source plus 'proposed-knowledge' (steward-accepted "
+            "findings). Supplying any --source replaces that default entirely."
+        ),
+    )
     parser.add_argument("--top", help="Maximum knowledge results per agent", default="5")
     parser.add_argument("--output", help="Write the plan to this path, in the --format chosen")
     parser.add_argument(
@@ -253,13 +263,39 @@ def _origin_slug(repository_root: Path) -> str | None:
     return slug if re.fullmatch(r"[a-z0-9._-]+/[a-z0-9._-]+", slug) else None
 
 
-def resolve_knowledge_source(repository_root: Path) -> str:
+# Mirrors `accepted_ingest.STAGED_SOURCE`, the dedicated source that
+# steward-accepted findings are ingested under. Duplicated rather than
+# imported: this module does not put the knowledge store's `src/` on
+# `sys.path` (it emits a `cli.py` path for the *consumer* to run -- see
+# `test_knowledge_store_anchor.py`), and adding an import to reach one string
+# would couple plan construction to the store being importable in-process.
+# `test_selector.py::KnowledgeSourceResolutionTests` fails if the two drift.
+STAGED_KNOWLEDGE_SOURCE = "proposed-knowledge"
+
+
+def resolve_project_knowledge_source(repository_root: Path) -> str:
+    """The project's own ingested-corpus source: its origin slug, or a local id."""
     slug = _origin_slug(repository_root)
     if slug:
         return slug
     digest = hashlib.sha256(str(repository_root.resolve()).encode("utf-8")).hexdigest()[:12]
     basename = re.sub(r"[^a-z0-9._-]+", "-", repository_root.name.lower()).strip("-") or "repository"
     return f"local-{basename}-{digest}"
+
+
+def resolve_knowledge_sources(repository_root: Path) -> list[str]:
+    """Every source a dispatched agent should retrieve from, primary first.
+
+    Two, not one. A project's own ingested corpus is only half of what it has
+    authorized: steward-accepted findings land under `proposed-knowledge`
+    (`accepted_ingest.py`), a deliberately separate source so they are reached
+    by name rather than by accident. Naming it here *is* reaching it by name --
+    the plan says which sources it queries, and the retrieval it emits carries
+    one `--source` per entry. Before this, a plan scoped to the project slug
+    alone silently returned nothing from the steward-accepted half of the
+    store, however many findings had been accepted into it.
+    """
+    return [resolve_project_knowledge_source(repository_root), STAGED_KNOWLEDGE_SOURCE]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -275,7 +311,10 @@ def main(argv: list[str] | None = None) -> int:
         if supplied_files is not None
         else discover_changed_files(options.base, repository_root)
     )
-    source = options.source or resolve_knowledge_source(repository_root)
+    # Order-preserving de-duplication, matching the store's own normalization
+    # (`service.normalize_sources`): a repeated --source must not produce a
+    # duplicated scope in the plan or in the store's audit row.
+    sources = list(dict.fromkeys(options.sources)) if options.sources else resolve_knowledge_sources(repository_root)
     # PP-FR-1/PP-FR-2: catalog and routing come from the resolved roster's
     # manifest, not from a path literal. A roster package that cannot be read
     # fails by name here rather than degrading to the built-in roster (intent
@@ -312,7 +351,7 @@ def main(argv: list[str] | None = None) -> int:
             "changed_files": [str(file_name).replace("\\", "/") for file_name in changes["files"]],
             "changed_file_source": changes["source"],
             "classification": options.classification,
-            "source": source,
+            "sources": sources,
             "top": options.top,
         },
         require_sdlc=options.require_sdlc,

@@ -90,7 +90,7 @@ def _run_selection() -> dict[str, Any]:
         "changed_files": CASE["changed_files"],
         "changed_file_source": "test",
         "repository_root": str(AGENTS_ROOT.parent),
-        "source": "example/repository",
+        "sources": ["example/repository"],
         "classification": CASE.get("classification", "internal"),
         "task_id": CASE["task_id"],
     }

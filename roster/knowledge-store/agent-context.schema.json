@@ -6,13 +6,18 @@
   "additionalProperties": false,
   "required": ["schema_version", "task_id", "agent", "query_id", "retrieved_at", "classification", "trust", "requirements", "results"],
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "const": 2 },
     "task_id": { "type": "string", "minLength": 1 },
     "agent": { "type": "string", "minLength": 1 },
     "query_id": { "type": "string", "pattern": "^[a-f0-9]{16}$" },
     "retrieved_at": { "type": "string", "format": "date-time" },
     "classification": { "enum": ["public", "internal", "confidential", "restricted"] },
-    "source_filter": { "type": ["string", "null"] },
+    "source_filter": {
+      "type": ["array", "null"],
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "The retrieval scope, as the caller named it: one entry per --source, order preserved (primary scope first), de-duplicated. null means no scope -- an --all-sources read. Retyped from a bare string when --source became repeatable, so a single-source retrieval now reports [\"proj\"] rather than \"proj\"; that retype took schema_version 1 -> 2, because this file is vendored into the wheel (pyproject.toml) and a pinned copy would otherwise reject a fresh bundle while it truthfully reported the version that copy claims to handle."
+    },
     "trust": { "const": "untrusted_reference" },
     "requirements": { "type": "array", "minItems": 1, "items": { "type": "string" } },
     "results": {

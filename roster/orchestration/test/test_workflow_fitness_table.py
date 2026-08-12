@@ -74,7 +74,7 @@ def _run_case(case: dict[str, Any]) -> dict[str, Any]:
         "changed_files": case["changed_files"],
         "changed_file_source": "test",
         "repository_root": str(AGENTS_ROOT.parent),
-        "source": "example/repository",
+        "sources": ["example/repository"],
         "classification": case.get("classification", "internal"),
         "task_id": case["task_id"],
     }

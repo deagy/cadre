@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["schema_version", "task_id", "dispatch_fingerprint", "generated_at", "status", "workflow", "inputs", "matched_routes", "matched_risks", "context_packs", "agents", "dispatch_disposition", "teams", "lifecycle_tracking", "required_quality_gates", "ignored_quality_gates", "human_gates", "knowledge_context"],
   "properties": {
-    "schema_version": { "const": 6 },
+    "schema_version": { "const": 7 },
     "task_id": { "$ref": "#/$defs/nonempty" },
     "dispatch_fingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "generated_at": { "type": "string", "format": "date-time" },
@@ -23,7 +23,10 @@
         "changed_file_source": { "$ref": "#/$defs/nonempty" },
         "changed_files": { "$ref": "#/$defs/stringArray" },
         "classification": { "type": ["string", "null"], "enum": ["public", "internal", "confidential", "restricted", null] },
-        "source_filter": { "$ref": "#/$defs/nonempty" }
+        "source_filter": {
+          "$ref": "#/$defs/nonemptyStringArray",
+          "description": "Knowledge-store sources this plan's retrieval is scoped to, in the order the caller named them (primary first), de-duplicated. Defaults to the repository's own source plus 'proposed-knowledge', the dedicated source steward-accepted findings ingest under -- a plan scoped to the repository source alone silently returned nothing from the steward-accepted half of the store. Retyped from a bare string when `--source` became repeatable; that retype took schema_version 6 -> 7."
+        }
       }
     },
     "matched_routes": {
@@ -172,7 +175,10 @@
         "status": { "enum": ["not-applicable", "authorization-required", "planned"] },
         "reason": { "$ref": "#/$defs/nonempty" },
         "classification": { "enum": ["public", "internal", "confidential", "restricted"] },
-        "source_filter": { "$ref": "#/$defs/nonempty" },
+        "source_filter": {
+          "$ref": "#/$defs/nonemptyStringArray",
+          "description": "The sources each request in this block retrieves from. Mirrors inputs.source_filter; every entry appears as its own `--source` argument in each request's invocation args."
+        },
         "requests": {
           "type": "array",
           "items": {

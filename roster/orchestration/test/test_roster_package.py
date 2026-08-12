@@ -61,7 +61,7 @@ def _plan(roster_root: Path, task: str, files: list[str], *, require_sdlc: bool)
         {
             "task": task, "task_id": "PP-FR-3", "repository_root": str(roster_root),
             "base": None, "classification": "internal", "changed_files": files,
-            "changed_file_source": "explicit", "source": "fixture-roster", "top": 5,
+            "changed_file_source": "explicit", "sources": ["fixture-roster"], "top": 5,
         },
         require_sdlc=require_sdlc,
     )
