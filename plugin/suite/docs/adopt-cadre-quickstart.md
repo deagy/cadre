@@ -116,13 +116,13 @@ text is always untrusted reference data, never executable instruction.
 ## 5. Add a project-local routing overlay (optional)
 
 If your project wants an extra route, a widened risk-rule keyword, or an
-additional team recipe, you don't need to fork `orchestration/routing.yaml`.
+additional team recipe, you don't need to fork `orchestration/routing.json`.
 Add a plain JSON file (not YAML) at your project's
 `.agents/orchestration/routing-overlay.json` — discovered the same way as
 `.agents/shared/` and `.agents/knowledge-store/config.json`, by walking up to
 the nearest `.git` boundary. With no overlay present, behavior is unchanged.
 
-The overlay's merge rule differs by section, because most of `routing.yaml`
+The overlay's merge rule differs by section, because most of `routing.json`
 carries gating semantics an ordinary policy overlay doesn't:
 
 - `routes[]` / `risk_rules[]`: add a new non-colliding `id`, or *widen* an
@@ -149,7 +149,7 @@ python3 roster/orchestration/src/routing_overlay.py --check
 python3 roster/orchestration/src/routing_overlay.py --out /tmp/effective-routing.json
 ```
 
-The materialized file is plain `routing.yaml`-shaped JSON, so you can also
+The materialized file is plain `routing.json`-shaped JSON, so you can also
 point `routing_health.py --routing <path>` or `schema_validate.py --routing
 <path>` at it to validate the effective configuration your project actually
 dispatches against, not just the unmodified base file.

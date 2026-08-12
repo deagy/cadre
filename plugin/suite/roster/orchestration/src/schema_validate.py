@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """Strict, standalone JSON Schema validation for `roster/catalog.yaml` and
-`roster/orchestration/routing.yaml`.
+`roster/orchestration/routing.json`.
 
 This is a distinct, complementary check from two existing ones -- it does
 not replace or overlap either:
 
 - `routing_health.py` (idea #1): reachability/orphan/dangling-reference
-  coverage between already-well-typed catalog.yaml and routing.yaml. It
+  coverage between already-well-typed catalog.yaml and routing.json. It
   presumes both files already parsed and are internally well-shaped.
 - `generate_role_metadata.py --check`: generation-drift detection ("did you
   forget to regenerate after editing AGENT.md frontmatter"), scoped to
-  catalog.yaml and routing.yaml's `knowledge_focus` block, and only useful
+  catalog.yaml and routing.json's `knowledge_focus` block, and only useful
   when the corresponding AGENT.md sources are available to regenerate
   against.
 
@@ -32,7 +32,7 @@ property compared against a sibling array's length) are implemented here as
 supplementary Python checks, run in addition to -- never instead of -- the
 schema validation.
 
-Regenerate nothing; this module never mutates catalog.yaml or routing.yaml.
+Regenerate nothing; this module never mutates catalog.yaml or routing.json.
 
 Run:
 
@@ -57,7 +57,7 @@ import yaml
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_ROSTER_ROOT = REPOSITORY_ROOT / "roster"
 DEFAULT_CATALOG = DEFAULT_ROSTER_ROOT / "catalog.yaml"
-DEFAULT_ROUTING = DEFAULT_ROSTER_ROOT / "orchestration" / "routing.yaml"
+DEFAULT_ROUTING = DEFAULT_ROSTER_ROOT / "orchestration" / "routing.json"
 DEFAULT_CATALOG_SCHEMA = DEFAULT_ROSTER_ROOT / "catalog.schema.json"
 DEFAULT_ROUTING_SCHEMA = DEFAULT_ROSTER_ROOT / "orchestration" / "routing.schema.json"
 
@@ -83,7 +83,7 @@ def _format_error(error: jsonschema.exceptions.ValidationError) -> str:
     message = f"{pointer}: {error.message}"
     if error.context:
         # `oneOf`/`allOf` failures (e.g. catalog.yaml's model/codex_model/
-        # reasoning_effort tier-consistency check, routing.yaml's
+        # reasoning_effort tier-consistency check, routing.json's
         # team_recipes[] fixed-vs-dynamic field-set check) report only the
         # aggregate "not valid under any of the given schemas" at the
         # container path by default -- surface jsonschema's own best-guess

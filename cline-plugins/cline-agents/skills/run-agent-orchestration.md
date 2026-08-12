@@ -930,7 +930,7 @@ Codex.
 **Roles**: `code-reviewer` + `infrastructure-reviewer` +
 `pipeline-security-reviewer` + `supply-chain-security-reviewer`.
 
-**Selector trigger**: `team_recipes` id `parallel-review` in `routing.yaml` —
+**Selector trigger**: `team_recipes` id `parallel-review` in `routing.json` —
 fires when 2 or more of `frontend`/`backend`/`infrastructure`/`pipeline`/
 `supply-chain` routes match and at least 2 of the four roles above are
 already selected; the emitted `teams` entry's `members` is that intersection,
@@ -965,7 +965,7 @@ findings synthesize. `RUNBOOK.md` documents this ordering explicitly
 mapping depends on security-reviewer's consolidated risk assessment, so it
 can't run as an independent peer in the same team.
 
-**Gates**: G6–G8 (per `routing.yaml`'s `infrastructure` and `pipeline` routes).
+**Gates**: G6–G8 (per `routing.json`'s `infrastructure` and `pipeline` routes).
 
 ## Cross-stack build team
 
@@ -973,7 +973,7 @@ can't run as an independent peer in the same team.
 `infrastructure-provisioner` + `cicd-engineer`.
 
 **Selector trigger**: `team_recipes` id `cross-stack-build` in
-`routing.yaml`, sharing its trigger with the existing `cross_stack` block
+`routing.json`, sharing its trigger with the existing `cross_stack` block
 (2 or more of `frontend`/`backend`/`infrastructure`/`pipeline` routes match
 the same task) — that block separately adds any of `frontend-engineer`/
 `backend-engineer` not already selected as `primary` into `support` (a
@@ -1006,7 +1006,7 @@ built on multiple instances of a *single* role pursuing different theories,
 not multiple different roles.
 
 **Selector trigger**: `team_recipes` id `competing-hypotheses-debugging` in
-`routing.yaml`, `type: dynamic` — fires when the `debugging` route matches,
+`routing.json`, `type: dynamic` — fires when the `debugging` route matches,
 `debugging-engineer` is selected, and the task text carries an
 intermittent/flaky/recurring/unconverged signal. The emitted `teams` entry
 gives a `role` and an `instances: {min: 2, max: 4}` range, not fixed

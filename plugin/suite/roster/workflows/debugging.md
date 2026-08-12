@@ -9,7 +9,7 @@ flowchart LR
     Review -.->|"production impact, persistent data, secrets, or critical/high risk"| Human["Accountable Human (escalation-policy.md)"]
 ```
 
-This workflow carries no fixed lifecycle gate (`routing.yaml`'s `debugging`
+This workflow carries no fixed lifecycle gate (`routing.json`'s `debugging`
 route declares no `quality_gates`); stop conditions are governed by
 `orchestration/escalation-policy.md` instead.
 

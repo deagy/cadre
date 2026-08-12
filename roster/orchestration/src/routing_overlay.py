@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Resolve a project-local overlay of `roster/orchestration/routing.yaml`.
+"""Resolve a project-local overlay of `roster/orchestration/routing.json`.
 
 Implements idea #6 (`roster/orchestration/runs/cadre-idea-6-routing-overlay-
 2026-07-29/requirements.md`, `REQ-CADRE-BACKLOG-6`) -- a project-local
 customization surface for routing configuration, analogous to
 `roster/shared/`'s `.agents/shared/<filename>` overlay (`roster/shared/src/
-resolve.py`) but with per-`routing.yaml`-construct merge rules instead of a
-single deep-merge/narrowing-only rule, because most of `routing.yaml`'s
+resolve.py`) but with per-`routing.json`-construct merge rules instead of a
+single deep-merge/narrowing-only rule, because most of `routing.json`'s
 sections carry gating/review-separation semantics `roster/shared/`'s
 policy-preference files do not (RO-FR-3..RO-FR-15, requirements.md SS4/SS5).
 
@@ -17,7 +17,7 @@ same algorithm `roster/shared/src/resolve.py::find_project_overlay` and
 `roster/knowledge-store/src/config.py` already use, reused here via
 `resolve.find_file_at_project_root` rather than reimplemented (this
 mechanism is JSON-only, unlike `.agents/shared/`'s YAML-or-JSON files, so it
-does not need a PyYAML dependency -- `routing.yaml` itself is JSON despite
+does not need a PyYAML dependency -- `routing.json` itself is JSON despite
 its `.yaml` filename; see RO-NFR-3).
 
 Per-section merge rules (RO-FR-3..RO-FR-15, `requirements.md` SS4/SS5):
@@ -64,10 +64,10 @@ entry's `keywords`/`keyword_groups`/`paths` (RO-NFR-2).
 
 When no project-local overlay is found, the effective configuration is the
 base file's own bytes, unchanged (RO-FR-2, AC-1) -- this module never
-reformats `routing.yaml` when there is nothing to merge.
+reformats `routing.json` when there is nothing to merge.
 
 The materialized effective configuration is a plain JSON file in
-`routing.yaml`'s own shape, so `routing_health.py --routing <path>` and
+`routing.json`'s own shape, so `routing_health.py --routing <path>` and
 `schema_validate.py --routing <path>` (idea #10) can consume it with their
 existing, unmodified `--routing` CLI argument -- zero code changes to either
 checker (OD-4, RO-FR-16, RO-FR-17).
@@ -99,15 +99,15 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "roster" / "shared" / "src"))
 from resolve import deep_merge, find_file_at_project_root  # noqa: E402
 from routing import load_routing  # noqa: E402
 
-DEFAULT_ROUTING = REPOSITORY_ROOT / "roster" / "orchestration" / "routing.yaml"
+DEFAULT_ROUTING = REPOSITORY_ROOT / "roster" / "orchestration" / "routing.json"
 
 # G-2 (requirements.md SS9): the overlay's own filename/location is a
 # design-phase choice, not mandated by the requirements baseline. This
 # mirrors `.agents/shared/<filename>`'s shape but lives under
 # `.agents/orchestration/` (not `.agents/shared/`) because it overlays
-# `roster/orchestration/routing.yaml`, a distinct artifact class from the
+# `roster/orchestration/routing.json`, a distinct artifact class from the
 # `roster/shared/` policy-preference files. JSON-only (not YAML-or-JSON like
-# `.agents/shared/`) because routing.yaml itself is JSON-shaped and this
+# `.agents/shared/`) because routing.json itself is JSON-shaped and this
 # avoids a PyYAML dependency for a single small hand-authored file
 # (RO-NFR-3).
 OVERLAY_RELATIVE_PATH = Path(".agents") / "orchestration" / "routing-overlay.json"
@@ -130,7 +130,7 @@ _KNOWN_TOP_LEVEL_KEYS = frozenset(
 
 
 class RoutingOverlayError(ValueError):
-    """A project-local routing.yaml overlay is malformed or violates a merge rule."""
+    """A project-local routing.json overlay is malformed or violates a merge rule."""
 
 
 def find_routing_overlay(start: Path | None = None) -> Path | None:
@@ -534,7 +534,7 @@ def materialize_effective_routing(
     (RO-FR-16/RO-FR-17, OD-4). RO-FR-2/AC-1: with no overlay, `out_path`
     receives the base file's own bytes verbatim -- never a re-serialized
     round-trip -- so the no-overlay case is byte-for-byte identical to
-    `routing.yaml` itself, not merely equivalent JSON. Returns the overlay
+    `routing.json` itself, not merely equivalent JSON. Returns the overlay
     path that was applied, or `None` if no overlay was found.
     """
     effective, base_text, resolved_overlay_path = _resolve(base_path, start, overlay_path)
@@ -548,10 +548,10 @@ def materialize_effective_routing(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="routing_overlay.py",
-        description="Resolve a project-local overlay of roster/orchestration/routing.yaml",
+        description="Resolve a project-local overlay of roster/orchestration/routing.json",
     )
     parser.add_argument(
-        "--routing", type=Path, default=DEFAULT_ROUTING, help="Base routing.yaml to resolve an overlay against"
+        "--routing", type=Path, default=DEFAULT_ROUTING, help="Base routing.json to resolve an overlay against"
     )
     parser.add_argument(
         "--project",
@@ -591,7 +591,7 @@ def main(argv: list[str] | None = None) -> int:
         if resolved_overlay_path is None:
             print(
                 "routing overlay check passed: no project-local overlay found; "
-                "effective configuration is the base routing.yaml unchanged"
+                "effective configuration is the base routing.json unchanged"
             )
         else:
             print(f"routing overlay check passed: {resolved_overlay_path} resolves cleanly against {args.routing}")

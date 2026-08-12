@@ -61,7 +61,7 @@ Every handoff includes:
   tests, findings, and evidence using the target project's lifecycle contract.
 - platform impact-profile reference when applicable, including every `unknown`
   applicability or undefined-semantics blocker.
-- For any `team_recipes` dispatch (`roster/orchestration/routing.yaml`): the
+- For any `team_recipes` dispatch (`roster/orchestration/routing.json`): the
   `communication_mode` that actually executed — `peer` or its
   `orchestrator-relayed` fallback — per team, stated explicitly rather than
   assumed from the recipe's declared default. This applies regardless of

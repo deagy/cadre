@@ -16,7 +16,7 @@ calls* the vendored `bin/cadre.py`'s own `main()` function in-process.
 
 Why this works with zero changes to `bin/cadre.py`: every dispatched script
 under `roster/` resolves its own resource roots (roster/catalog.yaml,
-roster/orchestration/routing.yaml, role AGENT.md files, etc.) purely from its
+roster/orchestration/routing.json, role AGENT.md files, etc.) purely from its
 own `Path(__file__).resolve()` position, walking a fixed number of parents —
 never from an environment variable or the caller's cwd. `bin/cadre.py` itself
 computes `REPO_ROOT = Path(__file__).resolve().parent.parent` the same way.
@@ -82,7 +82,7 @@ _VENDORED_CADRE_PY = VENDOR_ROOT / "bin" / "cadre.py"
 # its default (write) mode has the exact same "writes back into this
 # repository's own tree" problem -- from an installed distribution it would
 # silently regenerate the *installed package's own vendored copy* of
-# roster/catalog.yaml / roster/orchestration/routing.yaml under
+# roster/catalog.yaml / roster/orchestration/routing.json under
 # site-packages, never a real user project, which is pointless/misleading
 # even though it doesn't crash. Its `--check` mode is different: it only
 # reads, verifying the installed package's own bundled metadata is
@@ -160,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 "cadre generate-role-metadata (without --check) requires a "
                 "full repository checkout (it writes regenerated "
-                "roster/catalog.yaml / roster/orchestration/routing.yaml back "
+                "roster/catalog.yaml / roster/orchestration/routing.json back "
                 "into a real project tree, not this installed package's own "
                 "site-packages copy); use --check from an installed "
                 "distribution to verify the installed metadata is current, "

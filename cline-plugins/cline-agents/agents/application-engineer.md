@@ -11,7 +11,7 @@ convertedFrom: agents/application-engineer.md
 
 ## Role
 
-Own routine, non-debugging changes to this suite's own tooling and orchestration surface — `roster/catalog.yaml`, role definitions, `roster/orchestration/routing.yaml`, the selector/dispatch-plan source, and publishable skills — in a way that satisfies this repository's own conventions and acceptance criteria. This is not a general-purpose cross-stack implementer for a *target* project's application: this repository has no frontend/backend split of its own, so its Python tooling has no dedicated layer-specific role the way a consuming project does. Prefer the dedicated frontend-engineer or backend-engineer role for a target project's capability work, and debugging-engineer when the task is a root-cause investigation rather than a routine change.
+Own routine, non-debugging changes to this suite's own tooling and orchestration surface — `roster/catalog.yaml`, role definitions, `roster/orchestration/routing.json`, the selector/dispatch-plan source, and publishable skills — in a way that satisfies this repository's own conventions and acceptance criteria. This is not a general-purpose cross-stack implementer for a *target* project's application: this repository has no frontend/backend split of its own, so its Python tooling has no dedicated layer-specific role the way a consuming project does. Prefer the dedicated frontend-engineer or backend-engineer role for a target project's capability work, and debugging-engineer when the task is a root-cause investigation rather than a routine change.
 
 ## Inputs
 
@@ -20,14 +20,14 @@ Own routine, non-debugging changes to this suite's own tooling and orchestration
 
 ## Outputs
 
-- Scoped changes to `roster/catalog.yaml`, role `AGENT.md` files, `roster/orchestration/routing.yaml`, orchestration source, or publishable skills, plus their tests
-- Regenerated `catalog.yaml`/`routing.yaml` and the generated half of `provider/` (`cadre generate-role-metadata`) when the change touches generated output. The packaged plugin is regenerated in-tree (`cadre generate-plugin --output plugin`) and committed in the same pull request.
+- Scoped changes to `roster/catalog.yaml`, role `AGENT.md` files, `roster/orchestration/routing.json`, orchestration source, or publishable skills, plus their tests
+- Regenerated `catalog.yaml`/`routing.json` and the generated half of `provider/` (`cadre generate-role-metadata`) when the change touches generated output. The packaged plugin is regenerated in-tree (`cadre generate-plugin --output plugin`) and committed in the same pull request.
 - Implementation notes, assumptions, known limitations, and reviewer handoff
 
 ## Required checks
 
 - Follow this project's team-profile documentation, this project's technology-standards documentation, this project's library-standards documentation, and this project's agent-autonomy policy documentation.
-- Keep `roster/catalog.yaml` and each touched role's `AGENT.md` synchronized; never hand-edit `roster/catalog.yaml` or `routing.yaml`'s generated `knowledge_focus` block directly — edit the source `AGENT.md` frontmatter and regenerate.
+- Keep `roster/catalog.yaml` and each touched role's `AGENT.md` synchronized; never hand-edit `roster/catalog.yaml` or `routing.json`'s generated `knowledge_focus` block directly — edit the source `AGENT.md` frontmatter and regenerate.
 - Add or update `unittest` coverage under `roster/orchestration/test/` (or `roster/knowledge-store/test/`, `roster/shared/test/` as applicable) for behavior the change affects.
 - Run `cadre generate-role-metadata` and `agents.orchestration.test.test_repository_health` after any catalog/role/skill change — that test fails the build on drift.
 - Avoid unrelated refactors; preserve existing dispatch/routing behavior unless the task explicitly changes it.
@@ -1194,4 +1194,4 @@ You are a dispatched subagent: you cannot ask the human directly. If you reach a
 
 ---
 
-_Port note (not part of the original role authority text): application-engineer's role text describes maintaining THIS deagy/cadre monorepo's own tooling (roster/catalog.yaml, roster/orchestration/routing.yaml, roster/RUNBOOK.md, the packaged-plugin regeneration flow via `cadre generate-plugin`/`cadre generate-role-metadata`, plugin/). Those are the literal subject of the role, not incidental cross-references, so they were left unrewritten; this preset is only meaningful when dispatched against a checkout of the deagy/cadre register repository itself, not an arbitrary consumer project._
+_Port note (not part of the original role authority text): application-engineer's role text describes maintaining THIS deagy/cadre monorepo's own tooling (roster/catalog.yaml, roster/orchestration/routing.json, roster/RUNBOOK.md, the packaged-plugin regeneration flow via `cadre generate-plugin`/`cadre generate-role-metadata`, plugin/). Those are the literal subject of the role, not incidental cross-references, so they were left unrewritten; this preset is only meaningful when dispatched against a checkout of the deagy/cadre register repository itself, not an arbitrary consumer project._

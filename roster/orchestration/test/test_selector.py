@@ -36,7 +36,7 @@ from select_agents import (  # noqa: E402
     resolve_knowledge_source,
 )
 
-CONFIG = load_routing(ROOT / "routing.yaml")
+CONFIG = load_routing(ROOT / "routing.json")
 CATALOG = load_catalog(AGENTS_ROOT / "catalog.yaml")
 AGENTIC_SDLC_AVAILABLE = bool(os.environ.get("AGENTIC_SDLC_BIN") or shutil.which("agentic-sdlc"))
 
@@ -69,7 +69,7 @@ class RouteMatchReasonTests(unittest.TestCase):
     """`matched_routes` must explain every route match in the plan itself.
 
     Route reasons were computed and then discarded, so answering "why did this
-    route fire?" meant reading `routing.yaml` and `routing.py` instead of the
+    route fire?" meant reading `routing.json` and `routing.py` instead of the
     plan. Each entry now carries its own `reasons`, in the same shape
     `matched_risks` uses.
     """
@@ -316,7 +316,7 @@ class SelectorTests(unittest.TestCase):
 
     def test_repository_version_files_route_to_agent_suite_governance(self) -> None:
         # These exact files carry Cadre's own package/module version markers.
-        # They must not be represented by a generic Python glob: routing.yaml
+        # They must not be represented by a generic Python glob: routing.json
         # ships as the base ruleset to consuming projects, whose source trees
         # have no Cadre-specific routing meaning (#196).
         for relative_path in ("cadre_cli/__init__.py", "cadre_cli/_version.py"):
@@ -1030,7 +1030,7 @@ class SelectorTests(unittest.TestCase):
         )
 
     def test_selects_authority_aides_narrowly_per_role(self) -> None:
-        # `routing.yaml`'s declared quality_gates per route (standalone mode:
+        # `routing.json`'s declared quality_gates per route (standalone mode:
         # Agentic SDLC unavailable, gates pass through as declared). When
         # AGENTIC_SDLC_BIN/agentic-sdlc *is* available (integrated mode, as in
         # CI's python-contracts job), the kernel enriches required_quality_gates
@@ -1229,7 +1229,7 @@ class SelectorTests(unittest.TestCase):
     def test_selects_debugging_engineer_for_agent_tune_up(self) -> None:
         result = plan(
             task="Inspect agents, find routing issues, and tune agent definitions",
-            changed_files=["roster/orchestration/routing.yaml", "roster/engineering/debugging-engineer/AGENT.md"],
+            changed_files=["roster/orchestration/routing.json", "roster/engineering/debugging-engineer/AGENT.md"],
             classification="internal",
             task_id="AGENT-DBG-1",
         )
@@ -1457,7 +1457,7 @@ class SelectorTests(unittest.TestCase):
         # packaging route no longer carries packaging/** at all -- a copy of
         # agent-suite-governance's pre-existing imprecise glob was not a
         # license to duplicate that imprecision onto a second route and
-        # double its blast radius, and routing.yaml is a base ruleset a
+        # double its blast radius, and routing.json is a base ruleset a
         # consumer can only widen, never narrow. packaging/plugin-README.md
         # therefore keeps exactly the routing it had before this change --
         # agent-suite-governance only -- and the packaging route (now scoped
@@ -1635,7 +1635,7 @@ class SelectorTests(unittest.TestCase):
     def test_bootstrap_sdlc_keyword_matches_embedded_in_a_longer_token(self) -> None:
         # #189 re-review finding 3 (LOW, code-reviewer by reading, reproduced
         # live by test-engineer): bootstrap_sdlc.py is the only
-        # underscore-containing keyword in routing.yaml, and
+        # underscore-containing keyword in routing.json, and
         # _keyword_matches's boundary class ([a-z0-9-]) excludes hyphens but
         # not underscores or dots -- so it fires embedded in a longer token.
         # This is a documented, accepted quirk of this one keyword (see the
@@ -1847,7 +1847,7 @@ class SelectorTests(unittest.TestCase):
     def test_selects_engineering_and_review_for_orchestration_config_only(self) -> None:
         result = plan(
             task="Adjust configuration behavior",
-            changed_files=["roster/orchestration/routing.yaml"],
+            changed_files=["roster/orchestration/routing.json"],
         )
         self.assertEqual(result["agents"]["primary"], ["application-engineer", "debugging-engineer"])
         self.assertEqual(result["agents"]["reviewers"], ["test-engineer", "code-reviewer"])
@@ -2196,7 +2196,7 @@ class SelectorTests(unittest.TestCase):
     def test_load_routing_rejects_malformed_keyword_groups(self) -> None:
         for keyword_groups in ("destroy delete", [[]], [["destroy", ""]], [["destroy", 42]]):
             with self.subTest(keyword_groups=keyword_groups):
-                config = json.loads((ROOT / "routing.yaml").read_text(encoding="utf-8"))
+                config = json.loads((ROOT / "routing.json").read_text(encoding="utf-8"))
                 config["risk_rules"][-1]["keyword_groups"] = keyword_groups
                 with tempfile.TemporaryDirectory() as temporary_directory:
                     path = Path(temporary_directory) / "routing.json"
@@ -2205,7 +2205,7 @@ class SelectorTests(unittest.TestCase):
                         load_routing(path)
 
     def test_load_routing_rejects_inverted_dynamic_team_range(self) -> None:
-        config = json.loads((ROOT / "routing.yaml").read_text(encoding="utf-8"))
+        config = json.loads((ROOT / "routing.json").read_text(encoding="utf-8"))
         config["team_recipes"][-1]["instances"] = {"min": 4, "max": 2}
         with tempfile.TemporaryDirectory() as temporary_directory:
             path = Path(temporary_directory) / "routing.json"
@@ -2448,7 +2448,7 @@ class WorkflowShapeDeclarationTests(unittest.TestCase):
         self.assertEqual(
             undeclared,
             [],
-            "every route in routing.yaml must declare workflow_shape (one of "
+            "every route in routing.json must declare workflow_shape (one of "
             f"{sorted(WORKFLOW_SHAPES)}); a route that claims no delivery shape "
             'declares "unclassified" explicitly',
         )
@@ -2582,14 +2582,14 @@ class WorkflowShapeCombinationTests(unittest.TestCase):
     """The delivery-shape combination rule itself, with no route ids involved.
 
     Every other test of this stage reaches it through real routes, which
-    couples the assertion to routing.yaml's current path/keyword rules: the
+    couples the assertion to routing.json's current path/keyword rules: the
     combination under test can stop being reachable because a route was
     narrowed, and the test still passes while covering nothing. That is the
     #207 failure mode one level down.
 
     These cases drive `_select_workflow` with synthetic route dicts carrying
     only a shape, so they pin the rule #210 actually changed and stay valid
-    across any routing.yaml edit. Synthetic ids are deliberately not real
+    across any routing.json edit. Synthetic ids are deliberately not real
     route ids -- every precedence check above the fallback keys on specific
     ids ("rollback", "debugging", ...), so unrecognized ids fall straight
     through to the stage under test.

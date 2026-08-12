@@ -85,7 +85,7 @@ def _keyword_matches(text: str, keyword: str) -> bool:
 
     The boundary class is `[a-z0-9-]` only — it does NOT exclude underscore
     or `.`, so a keyword containing either of those characters CAN match
-    embedded in a longer token. `routing.yaml`'s `bootstrap_sdlc.py` keyword
+    embedded in a longer token. `routing.json`'s `bootstrap_sdlc.py` keyword
     is the one keyword in the current ruleset with this shape: it matches
     inside `legacy_bootstrap_sdlc.py_old` and `my_bootstrap_sdlc.py_v2`, not
     just the exact filename on its own. This is a known, accepted quirk of
@@ -151,7 +151,7 @@ def validate_routing_config(config: dict[str, Any]) -> dict[str, Any]:
         or not isinstance(config.get("routes"), list)
         or not isinstance(config.get("risk_rules"), list)
     ):
-        raise ValueError("routing.yaml must contain version 1 routes and risk_rules")
+        raise ValueError("routing.json must contain version 1 routes and risk_rules")
     ids = [
         rule.get("id")
         for rule in [*config["routes"], *config["risk_rules"], *config.get("team_recipes", [])]
@@ -173,7 +173,7 @@ def validate_routing_config(config: dict[str, Any]) -> dict[str, Any]:
                 f"{rule.get('id', 'rule')} keyword_groups must contain non-empty string groups"
             )
     # `workflow_shape` is validated by value, not required by presence. Every
-    # route in this repository's own routing.yaml declares one and
+    # route in this repository's own routing.json declares one and
     # test_selector.py::WorkflowShapeDeclarationTests fails the build if one
     # stops doing so; a project-local overlay (routing_overlay.py) may add a
     # route without the field, which still contributes no delivery shape.
@@ -195,7 +195,7 @@ def validate_routing_config(config: dict[str, Any]) -> dict[str, Any]:
             )
     context_packs = config.get("context_packs", [])
     if not isinstance(context_packs, list):
-        raise ValueError("routing.yaml context_packs must be a list")
+        raise ValueError("routing.json context_packs must be a list")
     # Context pack ids live in the SAME namespace as route, risk rule, and
     # team recipe ids -- not a private one. A dispatch plan puts
     # `matched_routes[].id`, `matched_risks[].id`, and `context_packs[].id`
@@ -206,10 +206,10 @@ def validate_routing_config(config: dict[str, Any]) -> dict[str, Any]:
     claimed_ids = set(ids)
     for pack in context_packs:
         if not isinstance(pack, dict):
-            raise ValueError("routing.yaml context_packs entries must be objects")
+            raise ValueError("routing.json context_packs entries must be objects")
         pack_id, definition, version = pack.get("id"), pack.get("definition"), pack.get("version")
         if not isinstance(pack_id, str) or not pack_id or not isinstance(definition, str) or not definition:
-            raise ValueError("routing.yaml context_packs entries require non-empty id and definition")
+            raise ValueError("routing.json context_packs entries require non-empty id and definition")
         if not isinstance(version, int) or isinstance(version, bool) or version < 1:
             raise ValueError(f"{pack_id} context pack version must be a positive integer")
         if pack_id in claimed_ids:

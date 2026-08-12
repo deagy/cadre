@@ -33,6 +33,25 @@ check and reporting "nothing to do". See
 
 ### Changed
 
+- **`roster/orchestration/routing.yaml` is renamed to `routing.json`.** The file
+  has always been JSON — `routing_overlay.py` parses it with `json.loads`, and
+  its sibling `roster/catalog.yaml` really is YAML, so one roster package
+  carried two formats behind one extension with nothing stating it. A foreign
+  roster authored as actual YAML failed with
+  `json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)`,
+  naming neither the file nor the format.
+
+  Parsing YAML instead was rejected on evidence rather than taste: this is a
+  *keyword-matching* file, and YAML 1.1 coerces bare `no`/`on`/`off`/`yes` to
+  booleans, so a routing keyword would stop matching silently with no error.
+  JSON is the safer parser here; the filename now says so.
+
+  **No selection behaviour changes** — the 175-case golden corpus is untouched
+  and default plans are byte-identical. Consumers referencing the packaged path
+  should update it; project-local *overlays* are unaffected, since they are a
+  separate file with a separate name.
+
+
 - **`cadre init --interactive` gates a group of fields behind one question** instead of prompting per leaf, taking the floor from ~160 questions to ~30. Declining a group keeps its shipped defaults, and declined groups still record a `kept` decision so a `--print-answers` echo replayed through `--answers` reproduces the run. Safe for RG-B because the autonomy check only ever permits narrowing.
 
 - **The `lifecycle-onboarding` skill resolves authorities at the gate that needs them** rather than interviewing for all 13 up front. It asks for `product_owner` and `engineering_lead` — enough to clear G1 and G2 — carries the gate/authority table from `kernel/contracts/lifecycle-gates.json`, and defers the rest. Unresolved roles are `blockers`, not `errors`: the project stays `valid`, tasks can be planned, and only the gate belonging to an unresolved role is held. The skill also now prefers `--set` over authoring an answer file, and documents that a run record captures authority applicability at creation time — so a role must be assigned before planning the task that needs its gate.

@@ -31,7 +31,7 @@ ROSTER_ROOT = Path(__file__).resolve().parents[2]
 STANDALONE_REASON = "Agentic SDLC executable not found; team dispatch is unaffected."
 # Cross-references the Agentic SDLC kernel's own mutation-gate taxonomy
 # (contracts/mutation-gates.json) rather than parallel-defining it here.
-# Cadre's own ids are kept as-is (routing.yaml and existing consumers
+# Cadre's own ids are kept as-is (routing.json and existing consumers
 # already depend on them) -- this is an explicit, additive pointer to
 # the kernel's authoritative id, not a rename. `None` where cadre has no
 # kernel mutation-gate counterpart. Module-level (not a local in
@@ -160,7 +160,7 @@ def _select_workflow(
     ):
         return "knowledge-ingestion"
     # "debugging" and "agent-suite-governance"/"orchestration" share paths
-    # by design (roster/catalog.yaml, roster/**/AGENT.md, routing.yaml,
+    # by design (roster/catalog.yaml, roster/**/AGENT.md, routing.json,
     # etc. -- editing a role or routing rule is simultaneously "roster
     # self-maintenance" and something the debugging route's broad
     # agent-tune-up paths also cover), so path overlap alone cannot decide
@@ -199,7 +199,7 @@ def _select_workflow(
     # conditions are not expressible as a per-route constant and stay here.
     #
     # What follows is the delivery-shape fallback, and it reads each matched
-    # route's own declared `workflow_shape` (routing.yaml; see
+    # route's own declared `workflow_shape` (routing.json; see
     # routing.schema.json for the field's definition and the four permitted
     # values). Until #210 this stage instead tested a hardcoded id set,
     # {"frontend", "backend", "infrastructure", "pipeline"}, so every route
@@ -238,7 +238,7 @@ def _select_workflow(
     # KUBERNETES_OPERATOR_EXECUTION_GOLDEN_1, whose golden expectation moved
     # from infrastructure-change to new-service in #210 -- so the remaining
     # 84 will first appear in a real dispatch, not in a test diff. Recount
-    # with the enumeration above if the shape assignments in routing.yaml
+    # with the enumeration above if the shape assignments in routing.json
     # change rather than trusting these numbers.
     #
     # Both checks stay ahead of the architecture-change risk check for the
@@ -268,7 +268,7 @@ def _select_workflow(
 def _undeclared_workflow_shape_routes(matched_routes: list[dict[str, Any]]) -> list[str]:
     """Name every matched route that declared no `workflow_shape` at all.
 
-    #210 gave every route in this repository's own `routing.yaml` an explicit
+    #210 gave every route in this repository's own `routing.json` an explicit
     `workflow_shape`, and `test_selector.py::WorkflowShapeDeclarationTests`
     keeps it that way. That guarantee stopped at the overlay boundary (#214).
     `routing.schema.json` leaves the field optional on purpose so an overlay

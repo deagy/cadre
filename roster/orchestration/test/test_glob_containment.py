@@ -277,7 +277,7 @@ class BudgetTests(unittest.TestCase):
     def test_the_real_routing_patterns_stay_far_inside_the_budget(self) -> None:
         from routing import load_routing
 
-        config = load_routing(ROOT.parent / "orchestration" / "routing.yaml")
+        config = load_routing(ROOT.parent / "orchestration" / "routing.json")
         for section in ("routes", "risk_rules"):
             for rule in config.get(section, []):
                 excludes = rule.get("exclude_paths") or []

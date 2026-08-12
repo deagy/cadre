@@ -1,7 +1,7 @@
 # Product Intent Record — A roster-neutral platform: separating the knowledge store, the roster, and the lifecycle
 
 **Intent ID:** `INTENT-CADRE-PORTABLE-PLATFORM`
-**Revision:** 7
+**Revision:** 8
 **Status:** **G1 APPROVED** by `@deagy` (Product Owner) on 2026-08-11 against
 Revision 1, and **RE-AFFIRMED by the same authority on 2026-08-11 against
 Revision 6's content** — the revision this one records the re-affirmation into.
@@ -328,7 +328,16 @@ and role catalog are byte-identical afterwards.
   product." The parked proposal left it open deliberately and this record does
   not close it. Architecture and go-to-market can have different answers.
 - **No engine release work.**
-- **No renaming.** See OD-3.
+- **No renaming** *of Cadre, the platform, or `provider.json`'s `"id"`* — see
+  OD-3, which is what this exclusion was always about.
+
+  **Narrowed at Revision 8, and the narrowing is real rather than editorial.**
+  G-12's disposition renames `roster/orchestration/routing.yaml` to
+  `routing.json`. That is a file rename inside the roster package, authorised by
+  the Product Owner on 2026-08-11 after the Phase 0 spike found the extension
+  was lying about the format. It changes no role, no routing rule, and no
+  selection outcome; it does change a published path in the distribution, so
+  PP-NFR-1 is amended to match rather than left contradicting it.
 
 ## 7. Constraints
 

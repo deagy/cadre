@@ -937,7 +937,7 @@ def role_wrapper_inputs(agent_id: str, metadata: dict[str, Any]) -> dict[str, An
     shared_content = "\n\n".join(shared_sections)
     # A migrated role's AGENT.md carries `---`-delimited frontmatter
     # ahead of its prose body (see role_metadata.py); that frontmatter
-    # is generated-file bookkeeping for catalog.yaml/routing.yaml, not
+    # is generated-file bookkeeping for catalog.yaml/routing.json, not
     # role instructions, so it must never be embedded into the wrapper.
     role_body = strip_frontmatter((AGENTS_ROOT / definition).read_text(encoding="utf-8")).strip()
     description = f"Secure cloud agent suite role for the {phase} phase ({agent_id})."
@@ -1011,7 +1011,7 @@ def codex_wrapper_contents(catalog: dict[str, dict[str, Any]]) -> dict[str, str]
 
     Returns content rather than writing, so generate_role_metadata.py can fold
     these into the same rendered-content map it uses for catalog.yaml and
-    routing.yaml and get --check for free.
+    routing.json and get --check for free.
     """
     contents: dict[str, str] = {}
     for agent_id, metadata in sorted(catalog.items()):

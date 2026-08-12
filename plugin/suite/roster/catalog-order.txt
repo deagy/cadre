@@ -5,12 +5,12 @@
 # roster/catalog.yaml's role-block order and, once a role is migrated to
 # frontmatter, roster/orchestration/src/generate_role_metadata.py's merge of
 # that role into the generated files. Caveat: this ordering source governs
-# roster/catalog.yaml's key order exactly, but NOT routing.yaml's
+# roster/catalog.yaml's key order exactly, but NOT routing.json's
 # knowledge_focus block -- that block never reorders an already-present
 # role and always appends a newly-added role at the very end, regardless of
 # where the role sits here (see splice_knowledge_focus()'s docstring in
 # generate_role_metadata.py). Regenerate roster/catalog.yaml and
-# roster/orchestration/routing.yaml after changing this file:
+# roster/orchestration/routing.json after changing this file:
 #
 #   python3 roster/orchestration/src/generate_role_metadata.py
 #

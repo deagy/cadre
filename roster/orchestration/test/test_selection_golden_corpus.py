@@ -3,7 +3,7 @@ selector.
 
 Fixtures live in fixtures/selection_golden_corpus.json (a git-tracked,
 reviewable data file — see B-FR-1/B-FR-4/B-FR-6 in the requirements
-baseline) rather than as Python literals in this module, so a routing.yaml
+baseline) rather than as Python literals in this module, so a routing.json
 change and the corresponding fixture update show up as one focused data-file
 diff instead of being buried inside test code.
 
@@ -47,21 +47,21 @@ test suite by reverting this fixture's expected workflow back to
 "debugging".
 
 Route-category coverage: test_corpus_covers_every_required_route_category
-below derives its required-route set from routing.yaml's routes[] array at
+below derives its required-route set from routing.json's routes[] array at
 import time (CONFIG["routes"]), rather than a hardcoded literal list, so a
-routing.yaml edit that adds or removes a route category is itself a failure
+routing.json edit that adds or removes a route category is itself a failure
 here (an added route needs a new fixture; a removed route needs the
 corresponding fixture(s) pruned) instead of the assertion silently going
-stale. The corpus covers every route category currently in routing.yaml's
+stale. The corpus covers every route category currently in routing.json's
 routes[] array (see the fixtures file's _comment block for the rationale for
 cases where two routes' paths or keywords genuinely overlap), matching
 B-FR-5's "initial corpus covers every existing route category" requirement.
 The route id count is not hardcoded here or in the fixtures file's own
 comment because it drifts every time a route is added, removed, or renamed
--- routing.yaml's routes[] array is the live list. The same test also
+-- routing.json's routes[] array is the live list. The same test also
 requires the 'production' and 'destructive' risk_rules to each be pinned by a fixture
 independently (they have distinct keyword_groups, human_gate, and
-reviewers in routing.yaml; one triggering does not excuse the other from
+reviewers in routing.json; one triggering does not excuse the other from
 also being exercised).
 """
 
@@ -85,7 +85,7 @@ import build_dispatch_plan as build_dispatch_plan_module  # noqa: E402
 from build_dispatch_plan import build_dispatch_plan  # noqa: E402
 from routing import load_catalog, load_routing  # noqa: E402
 
-CONFIG = load_routing(ROOT / "routing.yaml")
+CONFIG = load_routing(ROOT / "routing.json")
 CATALOG = load_catalog(AGENTS_ROOT / "catalog.yaml")
 
 # The four fields the requirements baseline (B-FR-1/B-FR-2) requires every
@@ -178,7 +178,7 @@ class SelectionGoldenCorpusTests(unittest.TestCase):
         # Pins B-FR-5's coverage requirement: a future edit that removes the
         # last fixture covering one of these categories is itself a failure,
         # not a silent corpus shrink. The required set is derived from
-        # routing.yaml itself (not a hardcoded literal) so a route category
+        # routing.json itself (not a hardcoded literal) so a route category
         # added or removed there is caught here too, per the module
         # docstring's "Route-category coverage" note.
         matched_route_ids = {
@@ -195,7 +195,7 @@ class SelectionGoldenCorpusTests(unittest.TestCase):
             for risk in _run_case(case)["matched_risks"]
         }
         # 'production' and 'destructive' are distinct risk_rules with their
-        # own keyword_groups/human_gate/reviewers in routing.yaml; each must
+        # own keyword_groups/human_gate/reviewers in routing.json; each must
         # be independently pinned by a fixture rather than accepting either
         # one silently substituting for the other (see PRODUCTION-RISK-1 and
         # DESTRUCTIVE-RISK-1 in the fixtures file).
@@ -229,7 +229,7 @@ class SelectionGoldenCorpusTests(unittest.TestCase):
                         "'needs-triage' (no route/risk matched task/changed_files) "
                         "but is not marked expect_needs_triage=true; either the "
                         "fixture's task/changed_files no longer match any route "
-                        "(routing.yaml drifted) or the fixture needs updating."
+                        "(routing.json drifted) or the fixture needs updating."
                     )
                 if expect_needs_triage and actual["status"] != "needs-triage":
                     self.fail(

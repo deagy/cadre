@@ -4,7 +4,7 @@ This module is the parsing/rendering layer only -- it knows how to detect
 whether an `AGENT.md` file carries `---`-delimited frontmatter, how to parse
 and render that frontmatter's flat `key: value` scalar shape, and how to
 strip it back out to recover the file's prose body byte-identically. It does
-not know about `catalog.yaml`, `routing.yaml`, or the validation rules that
+not know about `catalog.yaml`, `routing.json`, or the validation rules that
 turn every role's frontmatter into the generated files -- that orchestration
 lives in `generate_role_metadata.py`, which imports this module. Kept
 dependency-free (stdlib only), matching every other module in this package

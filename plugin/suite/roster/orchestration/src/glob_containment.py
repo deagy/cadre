@@ -8,7 +8,7 @@ describes regular languages, so the question has an exact yes/no answer.
 It is used to detect a routing rule whose `exclude_paths` fully shadow one of
 its own `paths` globs (issue #162), where the answer must be trustworthy in
 both directions: a false "shadowed" verdict fails CI on a correct
-routing.yaml, and a false "alive" verdict is the silent coverage loss the
+routing.json, and a false "alive" verdict is the silent coverage loss the
 check exists to catch.
 
 An earlier version of that check sampled synthesized probe paths and reported
@@ -82,7 +82,7 @@ _SEPARATOR = "/"
 _NEWLINE = "\n"
 
 # Bound on explored product states. Reaching it yields UNDETERMINED rather
-# than a verdict. routing.yaml's real patterns explore a few dozen.
+# than a verdict. routing.json's real patterns explore a few dozen.
 _MAX_PRODUCT_STATES = 50_000
 
 

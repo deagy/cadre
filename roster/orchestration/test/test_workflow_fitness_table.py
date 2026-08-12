@@ -9,7 +9,7 @@ will always agree -- the golden corpus previously never even compared
 now extended). This module instead compares the real `workflow` output
 against fixtures/workflow_fitness_table.json, a small hand-authored table
 whose 'expected_workflow' values were each reasoned independently from
-roster/workflows/*.md and routing.yaml, not from _select_workflow()'s
+roster/workflows/*.md and routing.json, not from _select_workflow()'s
 current behavior -- see that file's own '_comment' block for the full
 methodology.
 
@@ -43,7 +43,7 @@ import build_dispatch_plan as build_dispatch_plan_module  # noqa: E402
 from build_dispatch_plan import build_dispatch_plan  # noqa: E402
 from routing import load_catalog, load_routing  # noqa: E402
 
-CONFIG = load_routing(ROOT / "routing.yaml")
+CONFIG = load_routing(ROOT / "routing.json")
 CATALOG = load_catalog(AGENTS_ROOT / "catalog.yaml")
 
 def _load_workflow_enum() -> set[str]:

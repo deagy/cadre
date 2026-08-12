@@ -10,11 +10,11 @@
     "always agree. This file is deliberately NOT derived from _select_workflow()",
     "or from the golden corpus. Every 'expected_workflow' value below was",
     "reasoned independently from roster/workflows/*.md (the human-authored",
-    "description of what each workflow shape means) and from routing.yaml's",
+    "description of what each workflow shape means) and from routing.json's",
     "route/risk semantics, then checked against selection.schema.json's closed",
     "'workflow' enum. Where an entry's task/changed_files were reused from",
     "selection_golden_corpus.json or test_selector.py (to guarantee a known",
-    "route/risk match without re-deriving routing.yaml's matching rules), the",
+    "route/risk match without re-deriving routing.json's matching rules), the",
     "'reasoning' field says so explicitly -- reuse of INPUT text is fine;",
     "copying the EXPECTED OUTPUT would defeat the point of this file.",
     "",
@@ -40,7 +40,7 @@
     "",
     "Five cases were added with #210, which replaced _select_workflow()'s",
     "hardcoded four-route-id delivery-shape test with an explicit per-route",
-    "'workflow_shape' in routing.yaml. They cover what that change made",
+    "'workflow_shape' in routing.json. They cover what that change made",
     "expressible and what it must not swallow: a narrow execution route",
     "contributing new-service on its own; execution routes contributing",
     "infrastructure-change and pipeline-change rather than the new-service",
@@ -87,7 +87,7 @@
       "classification": "internal",
       "task_id": "FITNESS-NEW-SERVICE-2",
       "expected_workflow": "new-service",
-      "reasoning": "new-service.md step 3 names the architecture phase (Cloud Architect, G3) as an explicit stage of this same lifecycle shape, so a task that trips routing.yaml's 'architecture-change' risk rule (System Architect boundary/ADR work) belongs to new-service even when no frontend/backend/infrastructure/pipeline route also matched. Task/files reused verbatim from selection_golden_corpus.json's ARCHITECTURE-DESIGN-1."
+      "reasoning": "new-service.md step 3 names the architecture phase (Cloud Architect, G3) as an explicit stage of this same lifecycle shape, so a task that trips routing.json's 'architecture-change' risk rule (System Architect boundary/ADR work) belongs to new-service even when no frontend/backend/infrastructure/pipeline route also matched. Task/files reused verbatim from selection_golden_corpus.json's ARCHITECTURE-DESIGN-1."
     },
     {
       "id": "WF-PRODUCT-INTAKE-1",
@@ -111,7 +111,7 @@
       "classification": "internal",
       "task_id": "FITNESS-PRODUCT-INTAKE-2",
       "expected_workflow": "product-intake",
-      "reasoning": "product-intake.md step 4: Requirements Agent decomposes approved intent into requirement IDs/acceptance criteria/traceability -- the requirements-baseline route's own G1/G2 quality_gates in routing.yaml match product-intake.md's G1/G2 handoff, still strictly before new-service.md's G3 architecture stage. Task/files reused verbatim from selection_golden_corpus.json's REQUIREMENTS-BASELINE-1."
+      "reasoning": "product-intake.md step 4: Requirements Agent decomposes approved intent into requirement IDs/acceptance criteria/traceability -- the requirements-baseline route's own G1/G2 quality_gates in routing.json match product-intake.md's G1/G2 handoff, still strictly before new-service.md's G3 architecture stage. Task/files reused verbatim from selection_golden_corpus.json's REQUIREMENTS-BASELINE-1."
     },
     {
       "id": "WF-RUNTIME-ASSURANCE-1",
@@ -148,7 +148,7 @@
       "task_id": "FITNESS-INFRASTRUCTURE-CHANGE-1",
       "expected_workflow": "infrastructure-change",
       "reasoning": "infrastructure-change.md's Classify -> Provision+Plan -> Infrastructure Reviewer -> gated approval -> Apply shape is exactly an IaC-only change with no frontend/backend/pipeline overlap. Task/files reused verbatim from selection_golden_corpus.json's INFRA-1.",
-      "known_gate": "infrastructure-change.md cross-checks G3/G4/G5/G6/G7/G8 against routing.yaml's infrastructure route -- consistent with no risk rule firing here."
+      "known_gate": "infrastructure-change.md cross-checks G3/G4/G5/G6/G7/G8 against routing.json's infrastructure route -- consistent with no risk rule firing here."
     },
     {
       "id": "WF-PIPELINE-CHANGE-1",
@@ -208,7 +208,7 @@
       "classification": "internal",
       "task_id": "FITNESS-PRODUCTION-RELEASE-1",
       "expected_workflow": "production-release",
-      "reasoning": "production-release.md's G8 precondition-check -> G9 deploy-immutable-artifact -> verify -> G10 shape matches routing.yaml's 'production' risk rule (deploy/release/production keyword groups) exactly. Task/files reused verbatim from selection_golden_corpus.json's PRODUCTION-RISK-1."
+      "reasoning": "production-release.md's G8 precondition-check -> G9 deploy-immutable-artifact -> verify -> G10 shape matches routing.json's 'production' risk rule (deploy/release/production keyword groups) exactly. Task/files reused verbatim from selection_golden_corpus.json's PRODUCTION-RISK-1."
     },
     {
       "id": "WF-ROLLBACK-EXECUTION-1",

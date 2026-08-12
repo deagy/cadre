@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate `roster/catalog.yaml` and `roster/orchestration/routing.yaml`'s
+"""Regenerate `roster/catalog.yaml` and `roster/orchestration/routing.json`'s
 `knowledge_focus` block from role metadata.
 
 This is the generator half of the frontmatter-based role-metadata format
@@ -9,7 +9,7 @@ from that frontmatter, with no fallback to any other source -- a field
 missing from frontmatter is a hard error, never silently inherited. An
 `AGENT.md` that does not carry frontmatter (see `role_metadata.is_migrated`)
 is a generator error, not a supported transitional state: `catalog.yaml` and
-`routing.yaml` are purely generated output now, never an input for role
+`routing.json` are purely generated output now, never an input for role
 metadata.
 
 `roster/catalog-order.txt` supplies the dispatch-precedence order both
@@ -17,7 +17,7 @@ generated files are built in, and is the source of truth for which role ids
 exist at all -- see that file's own header comment.
 
 Every run derives `roster/catalog.yaml` and
-`roster/orchestration/routing.yaml`'s `knowledge_focus` block entirely from
+`roster/orchestration/routing.json`'s `knowledge_focus` block entirely from
 each role's `AGENT.md` frontmatter; re-running this generator after editing
 catalog-order.txt or a role's frontmatter is how those two files get updated.
 
@@ -61,7 +61,7 @@ from routing import load_routing  # noqa: E402
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_ROSTER_ROOT = REPOSITORY_ROOT / "roster"
 DEFAULT_CATALOG = DEFAULT_ROSTER_ROOT / "catalog.yaml"
-DEFAULT_ROUTING = DEFAULT_ROSTER_ROOT / "orchestration" / "routing.yaml"
+DEFAULT_ROUTING = DEFAULT_ROSTER_ROOT / "orchestration" / "routing.json"
 DEFAULT_ORDER = DEFAULT_ROSTER_ROOT / "catalog-order.txt"
 DEFAULT_HEADER_TEMPLATE = DEFAULT_ROSTER_ROOT / "_catalog_header.yaml.tmpl"
 
@@ -261,7 +261,7 @@ def _find_knowledge_focus_block(original_text: str) -> tuple[int, int]:
     occurrences = [match.start() for match in re.finditer(re.escape(KNOWLEDGE_FOCUS_ANCHOR), original_text)]
     if len(occurrences) != 1:
         raise RoleMetadataError(
-            f"expected exactly one {KNOWLEDGE_FOCUS_ANCHOR!r} anchor line in routing.yaml, "
+            f"expected exactly one {KNOWLEDGE_FOCUS_ANCHOR!r} anchor line in routing.json, "
             f"found {len(occurrences)}"
         )
     anchor_start = occurrences[0]
@@ -294,12 +294,12 @@ def _find_knowledge_focus_block(original_text: str) -> tuple[int, int]:
 
 def splice_knowledge_focus(original_text: str, order_ids: list[str], roles: dict[str, dict[str, str]]) -> str:
     """Surgically replace only the `"knowledge_focus": { ... }` region of
-    `original_text` (routing.yaml's raw source), leaving every other byte
+    `original_text` (routing.json's raw source), leaving every other byte
     untouched.
 
     Row order within the rebuilt block preserves each already-present role
     id's existing position (so an unchanged role set reproduces the
-    original bytes exactly, even though today's routing.yaml key order does
+    original bytes exactly, even though today's routing.json key order does
     not match catalog-order.txt's dispatch-precedence order -- the two
     orders are independent and this generator does not attempt to force
     them to match); any role id newly present in `roles` that was not
@@ -331,7 +331,7 @@ def splice_knowledge_focus(original_text: str, order_ids: list[str], roles: dict
         if key == "knowledge_focus":
             continue
         if after.get(key) != before.get(key):
-            raise RoleMetadataError(f"splice unexpectedly altered routing.yaml key {key!r}")
+            raise RoleMetadataError(f"splice unexpectedly altered routing.json key {key!r}")
     if set(after.get("knowledge_focus", {})) != set(roles):
         raise RoleMetadataError("knowledge_focus id-set mismatch after splice")
 
@@ -412,7 +412,7 @@ def load_catalog_content(catalog_content: str) -> dict[str, dict[str, str]]:
 
 
 def _validate_routing_content(text: str) -> None:
-    """Validate spliced routing.yaml content with the real `load_routing()`
+    """Validate spliced routing.json content with the real `load_routing()`
     before it is ever written, by round-tripping it through a temporary
     file rather than duplicating `load_routing`'s validation logic.
     """

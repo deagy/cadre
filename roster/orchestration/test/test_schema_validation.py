@@ -1,5 +1,5 @@
 """JSON Schema validation tests for `roster/catalog.yaml` and
-`roster/orchestration/routing.yaml`.
+`roster/orchestration/routing.json`.
 
 Distinct from, and additive to, two existing checks that this file's tests
 must not weaken or duplicate:
@@ -7,7 +7,7 @@ must not weaken or duplicate:
 - `test_routing_coverage.py` (idea #1's `routing_health.py`): reachability/
   orphan/dangling-reference coverage, not shape/type/enum validity.
 - `test_role_metadata.py` (`generate_role_metadata.py --check`): generation-
-  drift between catalog.yaml/routing.yaml and AGENT.md frontmatter.
+  drift between catalog.yaml/routing.json and AGENT.md frontmatter.
 
 This module tests `roster/orchestration/src/schema_validate.py` -- a third,
 independent question ("is this file's own shape/type/enum content valid"),
@@ -50,7 +50,7 @@ if JSONSCHEMA_AVAILABLE:
     import schema_validate as sv  # noqa: E402
 
 CATALOG_PATH = REPOSITORY_ROOT / "roster" / "catalog.yaml"
-ROUTING_PATH = REPOSITORY_ROOT / "roster" / "orchestration" / "routing.yaml"
+ROUTING_PATH = REPOSITORY_ROOT / "roster" / "orchestration" / "routing.json"
 CATALOG_SCHEMA_PATH = REPOSITORY_ROOT / "roster" / "catalog.schema.json"
 ROUTING_SCHEMA_PATH = REPOSITORY_ROOT / "roster" / "orchestration" / "routing.schema.json"
 VALIDATOR_SCRIPT = ROOT / "src" / "schema_validate.py"

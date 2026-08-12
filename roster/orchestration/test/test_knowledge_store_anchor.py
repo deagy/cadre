@@ -145,7 +145,7 @@ class TestEmittedKnowledgeCliPath(unittest.TestCase):
     def _plan(repository_root: Path) -> dict:
         catalog = select_agents.load_catalog(select_agents.ROSTER_ROOT / "catalog.yaml")
         config, _overlay = select_agents.resolve_effective_routing(
-            select_agents.ORCHESTRATION_ROOT / "routing.yaml", start=repository_root
+            select_agents.ORCHESTRATION_ROOT / "routing.json", start=repository_root
         )
         select_agents.validate_routing_config(config)
         return build_dispatch_plan.build_dispatch_plan(

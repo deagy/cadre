@@ -1,7 +1,7 @@
 """Every declared `workflow_shape` must be pinned by at least one fixture.
 
 `test_selector.py::WorkflowShapeDeclarationTests` asserts that all 146 routes
-in routing.yaml declare a shape. That is a completeness check on the *file*,
+in routing.json declare a shape. That is a completeness check on the *file*,
 and it measures the wrong thing on its own: a route can declare a shape that
 no test would notice being changed, because every input that matches it also
 matches a broad route (`frontend`/`backend`) already contributing
@@ -52,7 +52,7 @@ from routing import (  # noqa: E402
     match_rule,
 )
 
-CONFIG = load_routing(ROOT / "routing.yaml")
+CONFIG = load_routing(ROOT / "routing.json")
 CATALOG = load_catalog(AGENTS_ROOT / "catalog.yaml")
 
 # One route cannot be pinned by any input, and it is exempted here by name
@@ -67,7 +67,7 @@ CATALOG = load_catalog(AGENTS_ROOT / "catalog.yaml")
 # change could.
 #
 # The exemption is not taken on trust: SubsumedRouteExemptionTests below
-# re-derives the premise from routing.yaml on every run. If ai-feature is
+# re-derives the premise from routing.json on every run. If ai-feature is
 # ever narrowed the way the frontend route was in #207 -- the change that
 # surfaced this whole defect class -- that test fails, and this route has to
 # earn a real pin instead of keeping an exemption whose reason expired.
@@ -180,7 +180,7 @@ class WorkflowShapeDecisivenessTests(unittest.TestCase):
 
 
 class SubsumedRouteExemptionTests(unittest.TestCase):
-    """Re-derive every STRUCTURALLY_UNPINNABLE exemption's premise from routing.yaml.
+    """Re-derive every STRUCTURALLY_UNPINNABLE exemption's premise from routing.json.
 
     An allowlist entry whose reason has quietly expired is worse than no
     allowlist: it looks examined. Each assertion below states one half of

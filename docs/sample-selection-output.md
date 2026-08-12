@@ -450,17 +450,17 @@ comment).
   should not be treated as reviewable guidance. `workflow` is the single
   matched high-level shape (here `new-service`, since this task combines the
   `frontend` and `backend` routes).
-- **`matched_routes`** — the `roster/orchestration/routing.yaml` routes whose
+- **`matched_routes`** — the `roster/orchestration/routing.json` routes whose
   paths or keywords matched this task's files/description, each as an `id`
   plus the `reasons` it matched: the literal `keywords`, conjunctive
   `keyword_groups`, and `paths` (each a `pattern`/`file` pair) that fired.
   Each route carries its own primary/reviewer/support role list; `agents.*`
   below is the union across every matched route. Read `reasons` when a route
   matched that you did not expect — it names the trigger without requiring a
-  read of `routing.yaml`. Above, `frontend` matched on both the keyword
+  read of `routing.json`. Above, `frontend` matched on both the keyword
   `react` and two path patterns, while `backend` matched on `api` and
   `postgresql` plus its own two patterns.
-- **`matched_risks`** — routing.yaml `risk_rules` (for example `production`
+- **`matched_risks`** — routing.json `risk_rules` (for example `production`
   or `destructive`) that matched, in the same `{id, reasons}` shape as
   `matched_routes`. Empty here because this task is neither.
 - **`context_packs`** — the non-authoring reference packs
@@ -476,7 +476,7 @@ comment).
   only `agents.support` was populated with nothing else selected;
   `"no-agents-selected"` otherwise. An orchestrator must not treat
   `"advisory-only"` as authorization to do the work itself.
-- **`teams`** — deterministic `team_recipes` (routing.yaml) triggered by the
+- **`teams`** — deterministic `team_recipes` (routing.json) triggered by the
   matched route combination; never adds a role that wasn't already in
   `agents.*`. This example's `cross-stack-build` recipe fires because both
   `frontend` and `backend` matched. `communication_mode: "peer"` /
@@ -490,7 +490,7 @@ comment).
 - **`required_quality_gates` / `ignored_quality_gates`** — the G1–G10 gates
   this task's matched routes and lifecycle phase require, each with the
   route(s) that contributed it, versus any gates explicitly ignored by
-  `routing.yaml`'s `ignored_gates`.
+  `routing.json`'s `ignored_gates`.
 - **`human_gates`** — gates requiring an accountable human decision (risk
   acceptance, production authorization, policy exception); empty here because
   this task reaches no such gate. Each entry also carries a
@@ -533,13 +533,13 @@ cadre select --task "improve cross-runner UX documentation" --explain
 ```
 --explain: no near-miss routes for this task -- no unmatched route had a
 partially satisfied keyword_groups entry (see route_near_miss.py's relevance
-threshold; most routes in the current routing.yaml use plain keywords/paths,
+threshold; most routes in the current routing.json use plain keywords/paths,
 which have no partial-match state to report).
 ```
 
 That "no near misses" answer is correct and expected here: `pipeline` did
 match this task (on the `runner` keyword — see `matched_routes` above), and
-as of this writing no route in `routing.yaml` declares a `keyword_groups`
+as of this writing no route in `routing.json` declares a `keyword_groups`
 entry (only `risk_rules` do), so there is currently nothing conjunctive for
 any route to be *partially* close on. When a route does define
 `keyword_groups`, an unmatched near-miss looks like this (shown here against

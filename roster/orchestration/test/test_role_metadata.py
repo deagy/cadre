@@ -1,11 +1,11 @@
 """Unit tests for role_metadata.py and generate_role_metadata.py.
 
 Every role's AGENT.md now carries `---`-delimited frontmatter, and
-roster/catalog.yaml / roster/orchestration/routing.yaml are purely generated
+roster/catalog.yaml / roster/orchestration/routing.json are purely generated
 output derived from it -- never an input for role metadata. The single most
 important test here is test_generator_is_identity_on_current_repository: run
 the generator against a full copy of the real repository tree and assert
-roster/catalog.yaml and roster/orchestration/routing.yaml come back
+roster/catalog.yaml and roster/orchestration/routing.json come back
 byte-identical. Everything else uses small synthetic, frontmatter-only
 fixtures.
 """
@@ -93,7 +93,7 @@ def _write_migrated_role(
 
 def _build_two_role_fixture(root: Path) -> None:
     """role-a and role-b are both migrated (frontmatter) roles; catalog.yaml
-    and routing.yaml are written to already match what the generator would
+    and routing.json are written to already match what the generator would
     derive from that frontmatter, so `--check` fixtures start clean.
     """
     agents_root = root / "roster"
@@ -104,7 +104,7 @@ def _build_two_role_fixture(root: Path) -> None:
     knowledge_focus = {"role-a": "role-a knowledge focus", "role-b": "role-b knowledge focus"}
 
     _write(agents_root / "catalog.yaml", _catalog_text(catalog_entries))
-    _write(agents_root / "orchestration" / "routing.yaml", _routing_text(knowledge_focus))
+    _write(agents_root / "orchestration" / "routing.json", _routing_text(knowledge_focus))
     _write(agents_root / "catalog-order.txt", "role-a\nrole-b\n")
     _write(agents_root / "_catalog_header.yaml.tmpl", HEADER_TEMPLATE)
 
@@ -114,7 +114,7 @@ def _paths(root: Path) -> tuple[Path, Path, Path, Path, Path]:
     return (
         agents_root,
         agents_root / "catalog.yaml",
-        agents_root / "orchestration" / "routing.yaml",
+        agents_root / "orchestration" / "routing.json",
         agents_root / "catalog-order.txt",
         agents_root / "_catalog_header.yaml.tmpl",
     )
@@ -301,7 +301,7 @@ class GeneratorIdentityTests(unittest.TestCase):
             copy_root = Path(directory) / "roster"
             shutil.copytree(REPOSITORY_ROOT / "roster", copy_root)
             catalog_path = copy_root / "catalog.yaml"
-            routing_path = copy_root / "orchestration" / "routing.yaml"
+            routing_path = copy_root / "orchestration" / "routing.json"
             before_catalog = catalog_path.read_bytes()
             before_routing = routing_path.read_bytes()
 
@@ -477,12 +477,12 @@ class CheckModeFixtureTests(unittest.TestCase):
             result = self._run_check(root)
             self.assertNotEqual(0, result.returncode)
             self.assertIn("Role metadata derived files are stale", result.stderr)
-            self.assertIn("routing.yaml", result.stderr)
+            self.assertIn("routing.json", result.stderr)
 
 
 class RoleModelBuildTests(unittest.TestCase):
     """`build_role_model` now reads role metadata exclusively from each
-    `AGENT.md`'s frontmatter; catalog.yaml/routing.yaml are not read here at
+    `AGENT.md`'s frontmatter; catalog.yaml/routing.json are not read here at
     all (only the tests' own `--check` fixtures still write them, as
     expected *rendered output* for `CheckModeFixtureTests`).
     """
@@ -703,7 +703,7 @@ class KnowledgeFocusSpliceInvariantGuardTests(unittest.TestCase):
     safety-net checks (not the "exactly one anchor" checks, which already
     have coverage in KnowledgeFocusSpliceTests). These two `RoleMetadataError`
     sites exist purely to catch a bug in the splice algorithm itself, not any
-    real-world routing.yaml content -- so a dedicated fixture has to
+    real-world routing.json content -- so a dedicated fixture has to
     deliberately misuse the function to trigger them.
     """
 
@@ -711,7 +711,7 @@ class KnowledgeFocusSpliceInvariantGuardTests(unittest.TestCase):
         # `roles` claims "role-b" exists, but neither the original
         # knowledge_focus block nor order_ids mentions it, so the rebuilt
         # block can never actually contain it -- the id-set invariant must
-        # catch this rather than silently emitting a routing.yaml whose
+        # catch this rather than silently emitting a routing.json whose
         # knowledge_focus block is missing an id the caller asked for.
         original = _routing_text({"role-a": "role-a focus"})
         roles = {
@@ -762,7 +762,7 @@ class KnowledgeFocusSpliceInvariantGuardTests(unittest.TestCase):
             grm, "_find_knowledge_focus_block", return_value=(open_brace_index, close_brace_index)
         ):
             with self.assertRaisesRegex(
-                grm.RoleMetadataError, "splice unexpectedly altered routing.yaml key 'change_intake'"
+                grm.RoleMetadataError, "splice unexpectedly altered routing.json key 'change_intake'"
             ):
                 grm.splice_knowledge_focus(original, ["role-a"], roles)
 
@@ -832,7 +832,7 @@ class KnowledgeFocusSpliceTests(unittest.TestCase):
         roles = {"role-a": {"knowledge_focus": "updated focus"}}
         spliced = grm.splice_knowledge_focus(original, ["role-a"], roles)
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "routing.yaml"
+            path = Path(directory) / "routing.json"
             path.write_text(spliced, encoding="utf-8")
             config = load_routing(path)
         self.assertEqual({"role-a": "updated focus"}, config["knowledge_focus"])
@@ -844,7 +844,7 @@ class RoutingIdNamespaceTests(unittest.TestCase):
 
     These live beside `test_spliced_result_passes_load_routing` above because
     `load_routing` is exactly the validator this module's generator runs over
-    the routing.yaml content it is about to write (`_validate_routing_content`),
+    the routing.json content it is about to write (`_validate_routing_content`),
     so what `load_routing` rejects is what the generator cannot emit.
 
     The collision matters because a dispatch plan puts `matched_routes[].id`
@@ -859,7 +859,7 @@ class RoutingIdNamespaceTests(unittest.TestCase):
         from routing import load_routing  # noqa: E402
 
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "routing.yaml"
+            path = Path(directory) / "routing.json"
             path.write_text(_routing_text({"role-a": "role-a focus"}, extra), encoding="utf-8")
             return load_routing(path)
 
@@ -898,7 +898,7 @@ class RoutingIdNamespaceTests(unittest.TestCase):
 
     def test_distinct_context_pack_id_still_loads(self) -> None:
         # The pooling must not reject the ordinary case: routes and packs with
-        # different ids coexist, which is what every real routing.yaml does.
+        # different ids coexist, which is what every real routing.json does.
         config = self._load(
             {
                 "routes": [{"id": "route-id", "keywords": ["alpha"]}],

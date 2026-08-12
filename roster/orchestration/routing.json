@@ -244,7 +244,7 @@
     {
       "id": "agent-suite-governance",
       "workflow_shape": "unclassified",
-      "paths": ["roster/catalog.yaml", "roster/**/AGENT.md", "roster/workflows/**", "roster/shared/**", "roster/orchestration/routing.yaml", "roster/orchestration/selection.schema.json", "roster/orchestration/handoff-contracts.md", "roster/orchestration/task-brief-template.md", "roster/orchestration/src/**", "roster/orchestration/test/**", ".agents/skills/**", "provider/**", "packaging/**", "cadre_cli/__init__.py", "cadre_cli/_version.py", "README.md", "AGENTS.md"],
+      "paths": ["roster/catalog.yaml", "roster/**/AGENT.md", "roster/workflows/**", "roster/shared/**", "roster/orchestration/routing.json", "roster/orchestration/selection.schema.json", "roster/orchestration/handoff-contracts.md", "roster/orchestration/task-brief-template.md", "roster/orchestration/src/**", "roster/orchestration/test/**", ".agents/skills/**", "provider/**", "packaging/**", "cadre_cli/__init__.py", "cadre_cli/_version.py", "README.md", "AGENTS.md"],
       "keywords": ["review project", "review repository", "repo structure", "repository structure", "project structure", "agent suite", "agents skills structure", "agents, skills, structure", "review agents", "audit agents", "audit publishable skills", "publishable skills", "skill packaging", "workflow mapping", "orchestration quality", "catalog integrity", "routing coverage", "governance review"],
       "primary": ["application-engineer", "debugging-engineer"],
       "reviewers": ["test-engineer", "code-reviewer"],
@@ -253,7 +253,7 @@
     {
       "id": "orchestration",
       "workflow_shape": "unclassified",
-      "paths": ["roster/orchestration/routing.yaml", "roster/orchestration/selection.schema.json", "roster/orchestration/src/**", "roster/orchestration/test/**", ".agents/skills/run-agent-orchestration/**"],
+      "paths": ["roster/orchestration/routing.json", "roster/orchestration/selection.schema.json", "roster/orchestration/src/**", "roster/orchestration/test/**", ".agents/skills/run-agent-orchestration/**"],
       "keywords": ["agent orchestration", "agent selector", "agent routing", "dispatch plan"],
       "primary": ["application-engineer"],
       "reviewers": ["test-engineer", "code-reviewer"]

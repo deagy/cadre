@@ -126,7 +126,7 @@ def _model_tiers_from_manifest(path: Path) -> dict[str, str]:
 MODEL_TIERS = _model_tiers_from_manifest(RUNNER_CAPABILITIES_PATH)
 
 # Applied in order, each a plain (non-regex) substring replacement, except
-# ROUTING_YAML_RE below which is applied first since the source text spans
+# ROUTING_CONFIG_RE below which is applied first since the source text spans
 # a line break. Longer/more-specific strings are listed before shorter ones
 # that could otherwise partially match inside them.
 PATH_SUBSTITUTIONS: list[tuple[str, str]] = [
@@ -213,8 +213,13 @@ PATH_SUBSTITUTIONS: list[tuple[str, str]] = [
     ("`roster/RUNBOOK.md`", "this project's operating runbook"),
     ("roster/RUNBOOK.md", "this project's operating runbook"),
 ]
-ROUTING_YAML_RE = re.compile(r"roster/orchestration/\s+routing\.yaml's")
-ROUTING_YAML_REPLACEMENT = "this project's routing configuration's"
+# Matches the line-wrapped form, where `roster/orchestration/` ends one line and
+# the filename begins the next. Renamed from routing.yaml at the G-12 disposition
+# (2026-08-11); the escaped dot is why a bare rename sweep does not reach this
+# pattern, and the port fails closed with "unrecognized source-repo-relative
+# reference" rather than shipping a leaked path when it drifts.
+ROUTING_CONFIG_RE = re.compile(r"roster/orchestration/\s+routing\.json's")
+ROUTING_CONFIG_REPLACEMENT = "this project's routing configuration's"
 SHARED_POLICY_HEADER_RE = re.compile(r"^# Shared policy: roster/shared/", re.MULTILINE)
 SHARED_POLICY_HEADER_REPLACEMENT = "# Shared policy: "
 ROLE_HEADING_RE = re.compile(r"\A\n# Role: [a-z0-9-]+\n\n")
@@ -244,7 +249,7 @@ ROLE_OVERRIDES: dict[str, list[tuple[str, str]]] = {
 }
 
 # application-engineer's whole purpose is maintaining this suite's own
-# tooling -- `roster/catalog.yaml`, `roster/orchestration/routing.yaml`,
+# tooling -- `roster/catalog.yaml`, `roster/orchestration/routing.json`,
 # `roster/RUNBOOK.md`, `AGENT.md`/`AGENTS.md`, etc. are the literal subject
 # of the role body (outside the shared-policy boilerplate block, which
 # still gets the normal table applied), not incidental cross-references.
@@ -254,7 +259,7 @@ APPLICATION_ENGINEER_PORT_NOTE = (
     "_Port note (not part of the original role authority text): "
     "application-engineer's role text describes maintaining THIS "
     "deagy/cadre monorepo's own tooling (roster/catalog.yaml, "
-    "roster/orchestration/routing.yaml, roster/RUNBOOK.md, the packaged-plugin "
+    "roster/orchestration/routing.json, roster/RUNBOOK.md, the packaged-plugin "
     "regeneration flow via `cadre generate-plugin`/`cadre generate-role-metadata`, "
     "plugin/). Those are the literal subject of the role, not "
     "incidental cross-references, so they were left unrewritten; this preset is "
@@ -288,7 +293,7 @@ def _convert_agent_body(role: str, body: str) -> str:
         if source not in body:
             raise SystemExit(f"{role}: expected override text not found: {source!r}")
         body = body.replace(source, target, 1)
-    body = ROUTING_YAML_RE.sub(ROUTING_YAML_REPLACEMENT, body)
+    body = ROUTING_CONFIG_RE.sub(ROUTING_CONFIG_REPLACEMENT, body)
     # The full table applies uniformly to every role, including
     # application-engineer -- its shared-policy boilerplate block gets
     # rewritten exactly like every other role's. Only its own substantive
@@ -390,10 +395,10 @@ SKILL_PATH_SUBSTITUTIONS: list[tuple[str, str]] = [
     ("`roster/catalog.yaml`", "this repository's bundled role catalog"),
     ("roster/catalog.yaml", "this repository's bundled role catalog"),
     (
-        "`roster/orchestration/routing.yaml`",
+        "`roster/orchestration/routing.json`",
         "this repository's bundled routing configuration",
     ),
-    ("roster/orchestration/routing.yaml", "this repository's bundled routing configuration"),
+    ("roster/orchestration/routing.json", "this repository's bundled routing configuration"),
     (
         "`roster/orchestration/src/select_agents.py`",
         "the bundled selector implementation",

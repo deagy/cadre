@@ -1,4 +1,4 @@
-"""Tests for the project-local routing.yaml overlay mechanism (idea #6,
+"""Tests for the project-local routing.json overlay mechanism (idea #6,
 `roster/orchestration/runs/cadre-idea-6-routing-overlay-2026-07-29/
 requirements.md`, `REQ-CADRE-BACKLOG-6`).
 
@@ -38,13 +38,13 @@ from routing_overlay import (  # noqa: E402
     resolve_effective_routing,
 )
 
-ROUTING_PATH = REPOSITORY_ROOT / "roster" / "orchestration" / "routing.yaml"
+ROUTING_PATH = REPOSITORY_ROOT / "roster" / "orchestration" / "routing.json"
 
 
 def _minimal_base() -> dict:
-    """A small, self-contained base config matching routing.yaml's real
+    """A small, self-contained base config matching routing.json's real
     shape, used for merge-rule unit tests so fixtures stay readable and
-    independent of the live repository routing.yaml's exact content.
+    independent of the live repository routing.json's exact content.
     """
     return {
         "version": 1,
@@ -131,7 +131,7 @@ class ProjectOverlayFixture(unittest.TestCase):
         return overlay_path
 
     def _write_base(self, config: dict) -> Path:
-        base_path = self.root / "routing.yaml"
+        base_path = self.root / "routing.json"
         base_path.write_text(json.dumps(config), encoding="utf-8")
         return base_path
 
@@ -644,7 +644,7 @@ class CliTests(ProjectOverlayFixture):
 
 
 class RegressionAgainstRealRoutingYamlTests(unittest.TestCase):
-    """Sanity: the real repository routing.yaml still loads/validates
+    """Sanity: the real repository routing.json still loads/validates
     cleanly through load_routing, independent of the overlay mechanism --
     a baseline the AC-8/no-overlay tests above depend on.
     """
@@ -794,7 +794,7 @@ class SelectionPathIntegrationTests(ProjectOverlayFixture):
         return json.loads(result.stdout)
 
     def _widen_documentation(self, extra: str) -> None:
-        base = load_routing(REPOSITORY_ROOT / "roster" / "orchestration" / "routing.yaml")
+        base = load_routing(REPOSITORY_ROOT / "roster" / "orchestration" / "routing.json")
         route = next(r for r in base["routes"] if r["id"] == "documentation")
         self._write_overlay({"routes": [{"id": "documentation",
                                          "keywords": [*route["keywords"], extra]}]})
@@ -836,7 +836,7 @@ class SelectionPathIntegrationTests(ProjectOverlayFixture):
         an implementation detail worth pinning, since rebuilding would
         silently strip every pack from any project that has an overlay.
         """
-        base = load_routing(REPOSITORY_ROOT / "roster" / "orchestration" / "routing.yaml")
+        base = load_routing(REPOSITORY_ROOT / "roster" / "orchestration" / "routing.json")
         self.assertTrue(base.get("context_packs"), "base config should ship context packs")
         route = next(r for r in base["routes"] if r["id"] == "documentation")
         effective = merge_routing(

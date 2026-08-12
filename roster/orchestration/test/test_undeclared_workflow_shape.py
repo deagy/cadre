@@ -2,7 +2,7 @@
 
 Covers issue #214, which finishes #210 at the project-local overlay boundary.
 
-#210 gave every route in this repository's own `routing.yaml` an explicit
+#210 gave every route in this repository's own `routing.json` an explicit
 `workflow_shape`, enforced by `test_selector.py::WorkflowShapeDeclarationTests`.
 That build-time guard reaches this repository's routes and nothing else:
 
@@ -66,12 +66,12 @@ except ImportError:  # pragma: no cover - exercised only where jsonschema is abs
 
 SELECT_AGENTS = ROOT / "src" / "select_agents.py"
 CATALOG_PATH = AGENTS_ROOT / "catalog.yaml"
-ROUTING_PATH = ROOT / "routing.yaml"
+ROUTING_PATH = ROOT / "routing.json"
 SCHEMA_PATH = ROOT / "selection.schema.json"
 SIGNAL = "undeclared_workflow_shape_routes"
 
 # A route id and keyword pair chosen to be inert against the live
-# routing.yaml: nothing in the base configuration claims either, so a plan
+# routing.json: nothing in the base configuration claims either, so a plan
 # built with this overlay matches this route and nothing else, which is what
 # isolates the shape fallback under test.
 OVERLAY_ROUTE_ID = "widget-cabinet-fabrication"
@@ -111,7 +111,7 @@ def _overlay_route(route_id: str, keyword: str, **route_fields: object) -> dict:
 
 
 def _config_with_overlay_routes(*routes: dict) -> dict:
-    """The live routing.yaml plus the given added routes, mimicking what
+    """The live routing.json plus the given added routes, mimicking what
     `routing_overlay.merge_routing` produces for overlay-added entries (it
     appends `dict(overlay_entry)` verbatim in configuration order -- see
     `_merge_route_or_risk_rule_section`), without re-testing the merge itself.

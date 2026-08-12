@@ -1274,7 +1274,7 @@ class ConcurrencyLimiter:
         """Blocking variant used only by team dispatch: waits for a free
         slot in the same shared pool `try_acquire()` guards, instead of
         failing immediately. A team of N members can exceed
-        MAX_CONCURRENT_CHILDREN by design (e.g. routing.yaml's
+        MAX_CONCURRENT_CHILDREN by design (e.g. routing.json's
         `competing-hypotheses-debugging` team recipe allows up to 4
         instances against a default cap of 3) -- immediate denial would make
         dispatching any such team larger than the global cap unusable.
@@ -2356,7 +2356,7 @@ def dispatch_team(
 ) -> dict[str, Any]:
     """Dispatch every member of `members` (each `{"role_id": str, "brief": str}`,
     duplicates of the same role_id allowed -- e.g. several debugging-engineer
-    instances pursuing distinct hypotheses, matching routing.yaml's
+    instances pursuing distinct hypotheses, matching routing.json's
     `competing-hypotheses-debugging` team recipe shape) and return only once
     every member has reached a terminal state (dispatched, denied,
     unavailable). `runner` applies to every member identically -- a team

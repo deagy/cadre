@@ -1,7 +1,7 @@
 # Requirements Baseline — A roster-neutral platform
 
 **Requirements ID:** `REQ-CADRE-PORTABLE-PLATFORM`
-**Revision:** 8
+**Revision:** 9
 **Status:** draft — **G1 approved 2026-08-11 against Revision 1; awaiting G2.**
 **No open decision blocks G2 any more.** All five that did were closed or
 withdrawn by the Product Owner on 2026-08-11 (`product-intent.md` §17). **OD-2
@@ -900,9 +900,26 @@ made checkable rather than asserted.
   emitted field leave it untouched, and it keeps meaning what PP-NFR-1 needs it
   to mean. Had it pinned either, this requirement and PP-NFR-3b would have been
   in direct conflict and one would have had to give.
-- `git status --porcelain` shows no change under `provider/roles/`,
-  `roster/catalog.yaml`, or `roster/orchestration/routing.yaml`. **Under
-  `plugin/`, the diff must match this list exactly:**
+- `git status --porcelain` shows no change under `provider/roles/` or
+  `roster/catalog.yaml`.
+
+  **Amended at Revision 9: `roster/orchestration/routing.yaml` is exempt,
+  because G-12's disposition renames it to `routing.json`.** This is a
+  deliberate, Product-Owner-authorised narrowing of "Cadre is observably
+  unchanged", and it is the first one. It is recorded rather than quietly
+  applied because PP-NFR-1 is the requirement that makes the whole "leave Cadre
+  alone" constraint checkable, and an exemption slipped into it silently would
+  hollow it out. The rename also changes 159 generated Codex wrappers, which
+  item 6 below forbade; item 6 is narrowed to match.
+
+  **What PP-NFR-1 still means, undiminished:** Cadre's *roles*, *routing rules*,
+  *selection behaviour*, and *CLI surface* do not change. The golden corpus
+  stays unedited and default selection stays byte-identical. A file rename that
+  the generator propagates is a different class of change from a behavioural
+  one, and this exemption covers only the former.
+
+  **Under `plugin/`, the diff must match this list exactly, plus the rename's
+  mechanical propagation:**
 
   1. **`plugin/roster.json`** — new. Note the path: `generate_global_plugin.py:813,819`
      copies each `PROVIDER_BUNDLE` member to `plugin_root / name`, so the bundle
@@ -931,8 +948,13 @@ made checkable rather than asserted.
      Note the net effect on this list across two revisions: item 3 left and
      item 5 arrived, so the count is unchanged and the contents are not. That is
      the whole argument for item 6.
-  6. Nothing else. In particular: no change to any generated subagent wrapper,
-     `skills/`, `agent-catalog.json`, `provider/roles/`, or any plugin manifest.
+  6. **The rename's propagation**: `plugin/suite/roster/orchestration/routing.json`
+     replacing `routing.yaml`, and the `routing.yaml` → `routing.json` string in
+     every generated Codex wrapper and Cline port. Mechanical, generator-driven,
+     and covered by `--check`.
+  7. Nothing else. In particular: no change to `agent-catalog.json`,
+     `provider/roles/` content, or any plugin manifest, and **no change to any
+     wrapper beyond the renamed path string**.
 
   **This bullet has been unsatisfiable in every revision to date, including
   both revisions whose stated purpose was to fix it.** Revision 1: "no change
@@ -1235,10 +1257,43 @@ churn as a consequence so it is not later misread as a determinism regression.
   specifies a `routing` path in `roster.json`, and PP-FR-3 requires a fixture
   with "its own `routing.yaml`". None of it noticed the format.
 
-  Not fixed here — parse YAML, rename the file, or fail with a message naming
-  the format are three different answers with different packaging blast radii.
-  **PP-FR-2 must state the required format explicitly** whichever is chosen, and
-  PP-FR-3's fixture must be authored in it. See
+  **RESOLVED 2026-08-11: rename `routing.yaml` to `routing.json`.** Product
+  Owner decision. The file says what it is, and the trap is removed permanently
+  rather than labelled.
+
+  Two options were rejected with evidence. **Parsing YAML instead is actively
+  dangerous for this file**: `yaml.safe_load("keywords: [no, on, off, yes]")`
+  returns `[False, True, False, True]`, and this is a *keyword-matching* file —
+  a routing keyword coerced to a boolean stops matching silently, with no error
+  and no test failure unless someone happens to pin that exact keyword. JSON is
+  the safer parser here, which is plausibly why it was chosen and was never
+  written down. **Improving the error message alone** was rejected as labelling
+  the trap rather than removing it.
+
+  **Scope of the rename, which is narrower than a `grep` suggests.** 1,099
+  occurrences across 622 files, of which 517 are generated or mirrored and
+  regenerate for free. Three further categories are excluded **on doctrine, not
+  convenience**, and a naive `sed` across all of them would do real damage:
+
+  - **Historical run records** (nine sibling directories under
+    `roster/orchestration/runs/`). They record decisions taken when the file
+    genuinely was `routing.yaml`. Rewriting them falsifies the archive, on the
+    same principle that makes `docs/proposals/` never-revised
+    (`test_repository_health.py:2154`).
+  - **`docs/proposals/`** — same rule, stated directly by that test.
+  - **`fixtures/selection_golden_corpus.json`** — its 18 occurrences are all
+    inside `notes` prose explaining route overlaps, never in path resolution.
+    Editing them would touch the one file PP-NFR-1 relies on staying untouched,
+    for no functional gain.
+  - **`roster/knowledge-store/proposed-knowledge/*.md`** — staged records carry
+    a `content_digest` over their body; hand-editing invalidates it.
+
+  **PP-FR-2 must still state the required format explicitly**, because the
+  rename fixes one file and not the underlying gap: **`catalog.yaml` is real
+  YAML and `routing.yaml` was JSON**, two siblings in one roster package with
+  one extension between them. `schema_validate.py` carries both loaders
+  (`:71` yaml, `:76` json) to cope. After the rename the extensions are honest,
+  but a roster author still needs telling which file is which format — see
   `phase-0-and-d-evidence.md`.
 
 - **G-11: `_gate_agents()` reads two contract keys that have never existed.**

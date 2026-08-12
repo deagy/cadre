@@ -201,7 +201,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     source = options.source or resolve_knowledge_source(repository_root)
     catalog_path = ROSTER_ROOT / "catalog.yaml"
-    routing_path = ORCHESTRATION_ROOT / "routing.yaml"
+    routing_path = ORCHESTRATION_ROOT / "routing.json"
     # A project-local `.agents/orchestration/routing-overlay.json` is merged
     # into the base ruleset before selection, so the configuration the
     # selector dispatches against is the same effective configuration the
@@ -253,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     if options.explain:
         # Printed to stderr, after the machine-readable plan, and derived
         # only from data the plan already exposes (matched_routes' ids) plus
-        # a fresh read of routing.yaml -- this never touches `plan` or
+        # a fresh read of routing.json -- this never touches `plan` or
         # `serialized`, so the JSON plan is byte-identical with and without
         # --explain.
         matched_route_ids = {match["id"] for match in plan["matched_routes"]}

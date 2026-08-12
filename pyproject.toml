@@ -98,7 +98,7 @@ packages = ["cadre_cli"]
 "roster/workflows" = "cadre_cli/_vendor/roster/workflows"
 
 # Non-authoring vendor/platform context packs. These are a *runtime* resource,
-# not a build-time one: routing.yaml's context_packs rules name a `definition`
+# not a build-time one: routing.json's context_packs rules name a `definition`
 # path under roster/context-packs/, and build_dispatch_plan.py's
 # _build_context_packs() opens each matched pack to hash its exact bytes,
 # raising "Context pack definition is missing" when it cannot. That is a hard
@@ -127,7 +127,7 @@ packages = ["cadre_cli"]
 "roster/orchestration/handoff-contracts.md" = "cadre_cli/_vendor/roster/orchestration/handoff-contracts.md"
 "roster/orchestration/knowledge-retrieval-policy.yaml" = "cadre_cli/_vendor/roster/orchestration/knowledge-retrieval-policy.yaml"
 "roster/orchestration/review-response-template.md" = "cadre_cli/_vendor/roster/orchestration/review-response-template.md"
-"roster/orchestration/routing.yaml" = "cadre_cli/_vendor/roster/orchestration/routing.yaml"
+"roster/orchestration/routing.json" = "cadre_cli/_vendor/roster/orchestration/routing.json"
 "roster/orchestration/selection.schema.json" = "cadre_cli/_vendor/roster/orchestration/selection.schema.json"
 "roster/orchestration/task-brief-template.md" = "cadre_cli/_vendor/roster/orchestration/task-brief-template.md"
 "roster/orchestration/src" = "cadre_cli/_vendor/roster/orchestration/src"

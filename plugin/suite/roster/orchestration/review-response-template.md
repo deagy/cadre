@@ -15,7 +15,7 @@
 - Target environment:
 - Inputs examined:
 - Exclusions:
-- Team communication mode (only when dispatched as part of a `team_recipes` entry from `roster/orchestration/routing.yaml`): state which `communication_mode` actually executed for that team — `peer` or its `orchestrator-relayed` fallback (see `.agents/skills/run-agent-orchestration/references/runner-adapters.md`). Leave blank/`not-applicable` for an ordinary non-team dispatch.
+- Team communication mode (only when dispatched as part of a `team_recipes` entry from `roster/orchestration/routing.json`): state which `communication_mode` actually executed for that team — `peer` or its `orchestrator-relayed` fallback (see `.agents/skills/run-agent-orchestration/references/runner-adapters.md`). Leave blank/`not-applicable` for an ordinary non-team dispatch.
 
 ## Findings
 
