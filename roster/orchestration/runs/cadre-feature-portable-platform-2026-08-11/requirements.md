@@ -1,9 +1,11 @@
 # Requirements Baseline — A roster-neutral platform
 
 **Requirements ID:** `REQ-CADRE-PORTABLE-PLATFORM`
-**Revision:** 5
-**Status:** draft — **G1 approved 2026-08-11; awaiting G2.** OD-7 blocking;
-**OD-9 new and blocking G2.**
+**Revision:** 6
+**Status:** draft — **G1 approved 2026-08-11 against Revision 1; awaiting G2.**
+**Five decisions block G2: OD-7, OD-9, OD-10, OD-11, OD-13** — and OD-2, marked
+RESOLVED, has a reopening request against it that is upstream of three of them
+(`product-intent.md` §11, §15).
 **Revision note:** Revision 2 folded in the Product Owner's OD-2 and OD-5
 dispositions (`product-intent.md` §16), which resolve PP-FR-1's scope and
 PP-FR-2's manifest shape, and **retracted PP-NFR-3** — OD-2's answer forces a
@@ -67,11 +69,47 @@ what this work is.** A third review ran the code instead of only reading it:
   `schema_validate.py` must change too, adding a fourth mirror.
 - **PP-FR-6's forbidden-token rule has many more than one violation**, so
   Phase C as scoped cannot go green.
+
+**Revision 6 follows an eight-role independent review, and its corrections run
+in a different direction from every previous revision's.** Revisions 2–5 each
+found that this baseline had *under-read* the tree. Revision 6 finds the
+opposite in two places: PP-FR-6's category table forbids work that must not be
+done, and inflates the phase's size by the same mistake.
+
+- **PP-FR-6's category B is wrong in both directions at once, and the count is
+  six, not "roughly nine."** `routing.py:154,198,209,212,279` — listed as
+  forbidden — are all `raise ValueError(...)` diagnostics, i.e. the category
+  this baseline explicitly permits. Meanwhile `config.py:79,136,183`, offered as
+  the *evidence* for that permission, do not demonstrate it: two are path
+  construction and the third contains no path at all.
+- **OD-9 is not an output-churn decision and its third option is
+  non-viable.** `build_dispatch_plan.py:547-551` raises on any selected agent
+  absent from the catalog, so the `["code-reviewer"]` default makes a foreign
+  roster with lifecycle gates emit **no plan at all**.
+- **PP-FR-3's acceptance cases cannot observe that**, because none requires the
+  fixture to declare `quality_gates`. The fixture reproduces the golden corpus's
+  blind spot.
+- **PP-FR-1's project-tier scope has an unpriced implementation cost**:
+  `mcp/dispatch_server.py` resolves routing at import time and disables
+  project-tier resolution deliberately.
+- **PP-NFR-1's `plugin/` diff is wrong for the sixth time** — under OD-9 option 1
+  it gains a fifth mirrored file.
+- **PP-FR-2 has no compatibility window** (now OD-11), and points at the wrong
+  containment helper.
+
+Every executable claim in Revisions 1–5 was re-run and **all held**. The
+corrections above are all classification, tracing, or completeness — none is a
+claim that was checkable by running something and was not run.
+
 **Author (agent):** requirements-agent, consolidated by the orchestrating session
 **Date:** 2026-08-11
 **Repository:** `/home/deagy/sdk/cadre`
 **Classification:** internal
-**Decomposes:** `INTENT-CADRE-PORTABLE-PLATFORM` (`product-intent.md`, Revision 3)
+**Decomposes:** `INTENT-CADRE-PORTABLE-PLATFORM` (`product-intent.md`, **Revision 5**)
+**Revision-pin note:** Revisions 3–5 of this baseline all carried "Revision 3"
+on that line while the intent record moved to 4. A stale pin in the trailer of a
+document whose §0 is about stale pins — the same defect `implementation-plan.md`
+§0 records against itself one revision earlier.
 
 ---
 
@@ -101,6 +139,38 @@ not that the reader read too little. It is that a document describing a running
 system was written entirely by reading it. **Where a claim is executable, execute
 it**: the acceptance criteria in this baseline are now marked with whether they
 pass against unmodified code, because three of them did and nobody had checked.
+
+**Revision 6 tested that discipline directly, and it passed — which is why the
+remaining errors are interesting.** An independent reviewer re-ran every
+executable claim in this baseline: the provider collision, the `support` list,
+the absence of `review_agents` from every gate contract, the corpus figures, all
+five suites, the drift check, determinism. **Every one held.** The discipline
+§0 arrived at works.
+
+The errors Revision 6 corrects were unreachable by it. Three classes:
+
+1. **Classification.** PP-FR-6's category table sorts string literals into
+   forbidden and permitted. Running a command does not test a sort. Both example
+   sets turned out wrong, *in opposite directions within one table* — which is
+   the tell, because a systematic bias would push both the same way. What
+   produced it is that categorisation is a judgment call written in the
+   grammar of an observation.
+2. **Tracing.** OD-9's real consequence is one function call past a line this
+   baseline cited correctly five times. `cadre select` against Cadre's own
+   roster succeeds, so no available command exposes it; the failure exists only
+   against a roster that does not exist yet.
+3. **Completeness.** A guard's module list, a manifest's key set, and a
+   non-vacuity checklist are all propositions about what is *absent*. Nothing
+   you can run enumerates what you failed to include.
+
+So the method note, restated once more and hopefully last: **execution
+falsifies claims, and this baseline's remaining failures are not claims.** They
+are classifications, one-hop consequences, and omissions. The countermeasures
+differ per class — derive a categorisation from the rule that will enforce it
+rather than hand-sorting candidates; ask what a cited line's callee does; and
+derive membership lists from directory structure rather than enumerating them.
+None of the three is "read more carefully," which is what Revisions 3 and 4 both
+concluded and neither achieved.
 
 Four corrections from Revisions 1–2 are load-bearing and are recorded here
 rather than silently applied.
@@ -219,6 +289,32 @@ Cadre's roster — two surfaces disagreeing about which roles exist, with no
 error. Both sites route through the resolver, and both are added to PP-FR-6's
 platform-module list so the guard covers them.
 
+**"Both sites route through the resolver" is not a small edit under project
+scope, and Revision 5 wrote it as though it were.** Two properties of that
+module make a project-tier setting structurally hard to deliver there, and both
+are deliberate:
+
+- `mcp/dispatch_server.py:48` calls `settings.disable_project_tier_cwd_fallback()`
+  **on purpose** — the server is long-lived and project-agnostic, so its cwd is
+  wherever the host CLI was launched and is *not* the project any given tool
+  call concerns.
+- `:63` loads `_ROUTING_CONFIG` at **import time**, before any call knows which
+  project it is about.
+
+So a project-tier `roster.root` cannot reach this surface without converting
+import-time resolution into per-call resolution with an explicit `start=` — real
+scope appearing in no phase estimate. Under **global-only** scope the module
+needs no restructuring at all: it resolves once at import, exactly as today.
+This is one of three places where OD-2's disposition changes the size of the
+work rather than only its risk.
+
+**And the compensating control OD-2 was granted in exchange for does not exist
+here.** PP-FR-1b places roster identity *in the dispatch plan*; this surface
+emits no dispatch plan — it dispatches child agents directly
+(`dispatch_core.py:511-528`, `:985-1005`). A redirect is silent. Registered as
+**OD-10** (`product-intent.md` §13) rather than settled here, because it asks
+whether a prior deliberate design decision should be reversed.
+
 **"Rewritten," not "left alone" — this is the single most dangerous line in the
 baseline and Revision 3 got it backwards.** Both constants are *derived from*
 `ROSTER_ROOT` today:
@@ -319,12 +415,78 @@ The kernel never reads it. It declares, at minimum: `schema_version`, `id`,
 `version`, `catalog` (path to `catalog.yaml`), `routing` (path to `routing.yaml`),
 `role_root` (path under which `definition` entries resolve), and
 `shared_policy_root`. Every path resolves relative to the manifest directory and
-must reject escapes, reusing the containment logic the kernel already applies in
-`provider_resource()` (`kernel/agentic_sdlc/__init__.py:159-169`) — or
-`roster/orchestration/src/glob_containment.py`, which exists in-tree for related
-work. A `roster.schema.json` alongside `routing.schema.json` and
+must reject escapes, porting the containment logic the kernel already applies in
+`provider_resource()` (`kernel/agentic_sdlc/__init__.py:159-169`).
+A `roster.schema.json` alongside `routing.schema.json` and
 `selection.schema.json`, validated by `roster/orchestration/src/schema_validate.py`
 and its pre-commit hook.
+
+**`glob_containment.py` is not an alternative, and Revisions 1–5 offered it as
+one.** It answers glob-language subset containment — whether one glob pattern's
+matches are a subset of another's, for `exclude_paths` shadowing. That is a
+different question from filesystem path escape, and reaching for it here would
+produce a containment check that compiles, passes its own tests, and does not
+contain anything. Port `provider_resource()`'s two lines:
+
+```python
+candidate = (root / value).resolve()
+if not candidate.is_relative_to(root):
+    raise ValueError(f"roster {field} escapes its manifest directory")
+```
+
+Vectors this covers, and the one condition it depends on:
+
+| Vector | Covered | Note |
+| --- | --- | --- |
+| `..` after resolution | yes | `.resolve()` collapses before the check |
+| absolute-path value | yes, **incidentally** | `Path("/a") / "/etc/passwd"` is `Path("/etc/passwd")` — caught by `is_relative_to`, but via a pathlib join quirk rather than a visible `is_absolute()` guard, so it needs its own test or a later refactor can silently remove it |
+| symlink escape | yes, **conditionally** | only if `root` is itself `.resolve()`d before the call. The kernel's caller does this; the roster loader must too, or it will both under-reject and raise false positives |
+| case/Unicode normalisation | no | same limitation as the kernel's; out of scope |
+| TOCTOU | no | manifest is read once from a local checkout |
+
+Put it in **one** module under `roster/orchestration/src/`, imported by both the
+selector and the MCP loader. Two copies of a containment check is the failure
+mode PP-NFR-2 exists to prevent, applied to the one function where drift is a
+security bug rather than a maintenance cost.
+
+**PP-FR-2 has no compatibility window, and `provider.json` — the thing it is
+modelled on — does.** `provider.json` declares `kernel_compatibility`, which
+`load_provider()` checks against the consuming kernel's version with an
+actionable error (`kernel/agentic_sdlc/__init__.py:208-220`). The key set above
+has no equivalent, so a `roster.json` authored against one selector's semantics
+and loaded by another fails in whatever way its differences happen to produce,
+rather than by name.
+
+That is exactly the failure PP-NFR-3b argues the schema bump exists to prevent —
+*"a silent failure naming the wrong cause"* — reproduced one layer down, in the
+manifest the bump is being made for. `schema_version` does not cover it: it
+versions the document, not the platform behaviour the document depends on.
+
+And it is not optional to get right first time. `product-intent.md` §9
+dispositions the parked proposal's condition 1 — *"`provider.json` becomes a real
+third-party contract"* — as **"No, deliberately not."** `roster.json` must then
+satisfy that condition itself, inheriting none of `provider.json`'s answers. A
+schema shipped without a compatibility window cannot gain one compatibly later.
+
+Recommended shape, registered as **OD-11** rather than adopted here:
+
+```json
+"platform_compatibility": {"minimum": "<semver>", "maximum_exclusive": "<semver>"}
+```
+
+checked as `load_provider()` checks its own, against a `SELECTOR_VERSION`
+constant bumped whenever roster-manifest-consuming behaviour changes.
+
+**A second, smaller gap: nothing binds `roster.json` to its sibling
+`provider.json`.** They describe one bundle with two ids and two versions, and
+`test_repository_health.py:890-891` already pins `catalog.yaml` ↔
+`provider/agent-catalog.json` agreement — so this would be the only
+role-describing document in the tree with no binding test. Suggested: an
+**optional** `paired_provider: {"id", "version"}` checked only when a
+`provider.json` is actually present. Optional rather than required, because
+PP-FR-3's fixture roster has no provider bundle and a required key would break
+it. Whether `provider/roster.json` itself must declare it is a second call,
+folded into OD-11.
 
 **That last clause said "no new validation machinery" until Revision 5, and it
 was wrong.** `schema_validate.py:329-332` hardwires exactly two instance/schema
@@ -382,8 +544,44 @@ that *does* match a fixture route produces a `workflow` other than
 `unclassified`.** *Verifier:* `test_roster_package.py`. **(c) is the non-vacuity
 case and is not optional** — see PP-NFR-4.
 
+**(e), added at Revision 6, and without it (a)–(d) can all pass while the seam
+is broken.** The fixture must declare `quality_gates` on at least one route, and
+that case must run **with lifecycle contracts resolvable**. As scoped through
+five revisions, none of (a)–(d) requires either — so `_gate_agents()` never
+executes against the fixture, and the one known blocker for a foreign roster
+(category A: `build_dispatch_plan.py:107` → `:547-551` → `ValueError`) is
+invisible to the test written to falsify exactly that.
+
+This is worth stating as plainly as the baseline states it about the corpus.
+PP-NFR-1 correctly identifies that `test_selection_golden_corpus.py:135` patches
+`try_lifecycle_contract` to `None`, making 175 cases structurally blind to
+lifecycle-derived agents. **PP-FR-3 then specifies a new fixture with the same
+blind spot**, in the section whose stated purpose is *"if a foreign roster
+cannot produce a plan, the seam is theoretical."* Finding a failure mode, naming
+it precisely, and rebuilding it two requirements later is a distinct error from
+the ones §0 catalogues — not under-reading, but failing to apply a diagnosis to
+the next artifact.
+
+**(f)** A manifest whose declared path escapes its directory is rejected naming
+the offending field. PP-FR-2 states this acceptance and names
+`test_roster_package.py` as its verifier, but it appears in none of (a)–(e) —
+so the security-relevant case is specified in one requirement and scheduled in
+neither. Cover symlink, `..`, and absolute-path values explicitly rather than
+"an escape" generically.
+
+**(g)** A malformed `roster.json` — missing a required key, or naming a
+`catalog`/`routing` path that does not exist — fails by field name, the same way
+(c) fails by file name. C4 is "fail closed naming the file"; a manifest is now
+the thing most likely to be wrong, and only its total absence is currently
+tested.
+
+**Also worth pinning, though it needs no new case:** the fixture's role
+definitions must be shown to actually load — frontmatter parsed, `role_root`
+honoured — not merely that selection resolves ids. A broken `role_root` passes
+(a)–(d) unchanged if nothing ever dereferences a `definition` path.
+
 **(d) needs no code change, and Revision 3 was wrong to claim it did.**
-`_select_workflow()`'s final stage (`build_dispatch_plan.py:255-265`) does not
+`_select_workflow()`'s final stage (`build_dispatch_plan.py:254-265`) does not
 branch on Cadre route ids: it collects each matched route's own declared
 `workflow_shape` from `routing.yaml` — a four-value roster-supplied field
 (`routing.schema.json:193-201`) — and maps it to `new-service`,
@@ -394,7 +592,7 @@ the fixture would otherwise be free to lose. It is stated as such rather than
 dropped, because "already works" is exactly the claim that stops being true
 without a test.
 
-The *earlier* precedence stages (`:151-196`) do branch on Cadre route ids
+The *earlier* precedence stages (`:150-196`) do branch on Cadre route ids
 (`rollback`, `production`, `support`, …), so a foreign roster cannot reach
 `rollback` or `production-release`. That is a real limitation, and it is **not**
 a PP-FR-6 violation — those are route ids, which the forbidden-token list does
@@ -508,24 +706,88 @@ violations in three distinct categories, only one of which is a defect.
 
 | Category | Examples | Disposition |
 | --- | --- | --- |
-| **A. Cadre role ids in resolution logic** | `build_dispatch_plan.py:107` `["code-reviewer"]` | **Forbidden.** Real defect — see OD-9. |
-| **B. Roster-package filenames in path resolution** | `select_agents.py:203-204`; `routing.py:154,198,209,212,279`; `routing_overlay.py:97,102`; `mcp/dispatch_core.py:56`; `mcp/dispatch_server.py:63` | **Forbidden**, and PP-FR-2 already prescribes the fix: these paths come from `roster.json`, not from string literals. This is the bulk of the work. |
-| **C. Paths in user-facing message text** | `knowledge-store/src/{staged_records.py:141,147, finding_record.py:139, config.py:79,136,183}` | **Permitted, explicitly.** A diagnostic naming the file a user must edit is not a resolution path. The guard must exempt them by *rule* — literals reachable only from error/help strings — not by an ad-hoc file allowlist, which is how a guard stops meaning anything. |
+| **A. Cadre role ids in resolution logic** | `build_dispatch_plan.py:107` `["code-reviewer"]` | **Forbidden.** Real defect, and larger than "boundary hygiene" — see OD-9 and the category-A note below. |
+| **B. Roster-package filenames in path resolution** | `select_agents.py:203`, `:204`; `routing_overlay.py:97`, `:102`; `mcp/dispatch_core.py:56`; `mcp/dispatch_server.py:63` — **six sites, enumerated exhaustively** | **Forbidden**, and PP-FR-2 already prescribes the fix: these paths come from `roster.json`, not from string literals. |
+| **C. Paths in user-facing message text** | `routing.py:154,198,209,212,279`; `knowledge-store/src/{staged_records.py:141,147, finding_record.py:139}` | **Permitted, explicitly.** A diagnostic naming the file a user must edit is not a resolution path. The guard must exempt them by *rule* — see the rule sketch below — not by an ad-hoc file allowlist, which is how a guard stops meaning anything. |
 
-**Consequence: Phase C as Revision 4 scoped it (one fix) cannot go green.**
-Category B is the real body of PP-FR-6 and it is not small; it is also the work
-that makes PP-FR-2's manifest load-bearing rather than decorative. Revision 3
-said "two violations", Revision 4 said "one"; the answer is one of category A,
-roughly nine of category B, and a rule that has to be written carefully enough
-to let category C through.
+**Corrected at Revision 6, and the correction runs in both directions inside
+this one table.** Revisions 3–5 sized category B at "two", "one", and "roughly
+nine" respectively. The answer is **six**, and the drift came from
+misclassification rather than miscounting:
 
-**The category-A violation is not small, and Revision 4 called it small without
-running anything.** `build_dispatch_plan.py:107` defaults a gate's reviewers to
-`["code-reviewer"]` whenever a lifecycle gate contract declares no
-`review_agents`. **No gate in `kernel/contracts/lifecycle-gates.json` declares
-one** — the string does not appear in the file — so the default fires for every
-configured gate on every lifecycle-aware plan, and `:673` appends the result to
-`support`. Observed, not inferred:
+- **`routing.py:154,198,209,212,279` were listed as forbidden and are
+  permitted.** All five are string literals inside `raise ValueError(...)`:
+  `"routing.yaml must contain version 1 routes and risk_rules"`,
+  `"routing.yaml context_packs must be a list"`, and so on. None constructs a
+  `Path`, opens a file, or resolves anything. By this table's own category-C
+  rule they are diagnostics. Left uncorrected, an implementer working the table
+  literally would rewrite five error messages to resolve through `roster.json` —
+  work this baseline forbids, done in the name of a requirement that forbids it.
+- **`config.py:79,136,183` were offered as evidence for category C and do not
+  demonstrate it.** `:79` is `PROJECT_LOCAL_RELATIVE_PATH = Path(".agents") /
+  "knowledge-store" / "config.json"` and `:136` is the `Path.home()` fallback —
+  both path *construction*, feeding a real filesystem walk. `:183` is a
+  `raise ValueError` with no path fragment in it at all. And none of the three
+  contains a `roster/`-relative literal: `grep -n roster` on that file matches
+  only comments at `:13`, `:43`, `:119`. Whatever exempts them, it is not the
+  rule as stated — they are self-referential `.agents/knowledge-store/`
+  construction inside the store's own module, which is a different exemption
+  and needs saying so.
+
+**Consequence for Phase C's size, in the opposite direction from Revision 5.**
+Revision 5 grew the phase on the strength of "roughly nine more violations."
+Six of the nine were real; five of what it counted were not violations at all
+and two real ones (`select_agents.py:203-204`) were already scheduled in Phase A.
+Category B is still the phase's body and still makes PP-FR-2's manifest
+load-bearing rather than decorative — it is simply a six-line change, not a
+nine-plus-unknown one.
+
+**The exemption must be a rule over call targets, not over files, and
+`test_context_boundary.py`'s existing method cannot express it.** That test's
+`_non_docstring_string_literals()` returns bare `ast.Constant` nodes with no
+parent pointer, which is sufficient there because that boundary has no
+legitimate use of its forbidden tokens anywhere. This one does. Sketch:
+
+- build an `{id(child): parent}` map in one `ast.walk()` pass (Python's `ast`
+  carries no parent links);
+- for each candidate literal, walk to the nearest enclosing `ast.Call`;
+- **category C** iff that call's target is in a closed sink set — `raise`
+  statement values, `ValueError`/`RuntimeError`/exception subclasses, `print`,
+  `logging.*`, `sys.stderr.write`;
+- **category B** iff not a C-sink and the literal is a roster-package filename
+  or joins into a `roster/`-relative path inside a `Path(...)`/`open(...)`;
+- **category A** iff not a C-sink and the literal equals a role id drawn from
+  `catalog.yaml` — a *generated* set, matching this requirement's own preference
+  against hand-maintained allowlists.
+
+**Re-derive the example sets from that rule once it exists, rather than carrying
+the ones above forward.** Both example sets in this table were hand-classified
+in prose and both were wrong; a third hand-classification is not the fix.
+
+**The category-A violation is larger than every revision has recorded, and this
+is the finding that most changes what PP-FR-6 is for.** Revisions 4 and 5 framed
+it as changing Cadre's `support` lists. One call further on,
+`build_dispatch_plan.py:547-551`:
+
+```python
+raise ValueError(f"Routing selected an unknown agent: {agent}")
+```
+
+Every selected agent is validated against the catalog. A foreign roster has no
+`code-reviewer`, so for any roster whose routes declare `quality_gates`, with
+lifecycle contracts resolvable, **the selector raises and emits no plan** — PP-FR-1's
+own acceptance criterion. So PP-FR-6 category A is not boundary hygiene that can
+be deferred or narrowed; it is a **functional prerequisite** for PP-FR-1 and
+PP-FR-3. OD-9's option 3 is withdrawn on this basis (`product-intent.md` §13).
+
+**Why it fires universally, and why no existing detector sees it.**
+`build_dispatch_plan.py:107` defaults a gate's reviewers to `["code-reviewer"]`
+whenever a lifecycle gate contract declares no `review_agents`. **No gate in
+`kernel/contracts/lifecycle-gates.json` declares one** — the string does not
+appear in the file, and neither does `author_agents`, so `_gate_agents()`
+returns exactly `["code-reviewer"]` and nothing else. The default fires for
+every configured gate on every lifecycle-aware plan, and `:673` appends the
+result to `support`. Observed, not inferred, and re-observed at Revision 6:
 
 ```console
 $ ./bin/cadre select --task "Update the OpenTofu module for the VPC" ...
@@ -543,8 +805,8 @@ at all.** How to resolve it is **OD-9**.
 **Revision 3 claimed a second violation in `_select_workflow()`. There is
 none — it was a misreading, and it is withdrawn along with OD-8.** The function
 does not classify a foreign roster to `"unclassified"`: its final stage
-(`:255-265`) reads each matched route's declared `workflow_shape`, which the
-roster supplies. Revision 3 read the earlier precedence branches (`:151-196`),
+(`:254-265`) reads each matched route's declared `workflow_shape`, which the
+roster supplies. Revision 3 read the earlier precedence branches (`:150-196`),
 which *do* name Cadre route ids, and stopped there — never reaching the stage
 that actually decides the common case. It then registered a blocking open
 decision (OD-8) proposing to open a published schema enum to fix a problem that
@@ -609,19 +871,34 @@ made checkable rather than asserted.
      **`schema_validate.py`** (PP-FR-2 needs new arguments there; see below),
      `mcp/dispatch_core.py`, `mcp/dispatch_server.py`, and `bin/`. `suite/` is a
      **copy** of that source; editing the source *is* editing `plugin/`.
-  5. Nothing else. In particular: no change to any generated subagent wrapper,
+  5. **`plugin/suite/roster/orchestration/routing.yaml` — modified, under OD-9
+     option 1 only.** Added at Revision 6. If the gate-reviewer default moves
+     into roster-declared data, `routing.yaml` gains a
+     `default_gate_review_agents` key — and `routing.yaml` is carried into
+     `suite/` by the same `:1426` prefix copy as the schemas. Under option 2 it
+     does not change. A fifth mirrored file, in a list whose previous four
+     revisions each claimed to be the complete one.
+  6. Nothing else. In particular: no change to any generated subagent wrapper,
      `skills/`, `agent-catalog.json`, `provider/roles/`, or any plugin manifest.
 
-  **This bullet has been unsatisfiable in every revision to date, including the
-  one whose stated purpose was to fix it.** Revision 1: "no change under
-  `plugin/`", while scheduling edits to three bundled files. Revision 2: "the
-  only change is `provider/roster.json`", same problem. Revision 4: an exact
-  four-item list that named a directory which does not exist, omitted a modified
-  file it had just finished explaining, and missed a fourth mirror. The gate
-  that makes "leave Cadre alone" checkable is the single most-revised and
-  most-wrong thing in this baseline — because nobody ran `generate-plugin` and
-  looked. Item 5 is where the real constraint lives; items 1–4 are bookkeeping
-  and should be **regenerated and read**, not reasoned about.
+  **This bullet has been unsatisfiable in every revision to date, including
+  both revisions whose stated purpose was to fix it.** Revision 1: "no change
+  under `plugin/`", while scheduling edits to three bundled files. Revision 2:
+  "the only change is `provider/roster.json`", same problem. Revision 4: an
+  exact four-item list that named a directory which does not exist, omitted a
+  modified file it had just finished explaining, and missed a fourth mirror.
+  Revision 5 corrected all three of those and missed `routing.yaml`. **Six
+  revisions, six wrong lists, each one produced by reasoning about the
+  generator instead of running it.** The gate that makes "leave Cadre alone"
+  checkable is the most-revised and most-wrong thing in this baseline.
+
+  **Revision 6 stops correcting the list and deletes the instruction to trust
+  it.** Item 6 is where the real constraint lives. Items 1–5 are bookkeeping
+  with a 100% historical error rate, and the plan already says the right thing
+  (`implementation-plan.md` §2: *"generate the package and read the diff rather
+  than predicting it"*). Treat items 1–5 as a **hint about where to look**, not
+  as an acceptance criterion — the acceptance criterion is item 6 plus
+  `--check`, which costs one command and has never been wrong.
 
 - **The corpus does not prove what the first bullet claims it proves.**
   "Corpus unedited ⇒ default selection unchanged" holds only for behaviour the
@@ -635,6 +912,48 @@ made checkable rather than asserted.
   Without it this requirement asserts an invariant it cannot check, which is
   this repository's most frequently rediscovered failure mode occurring inside
   the requirement that cites it.
+
+  **"With the in-tree kernel resolvable" is ambiguous, and one reading
+  reintroduces the host-dependence the corpus exists to remove.** Resolved at
+  Revision 6. Two existing tests already make this assertion —
+  `test_selector.py:964` and the gate-agents subtest at `:1109-1114` — and both
+  are `@unittest.skipUnless(AGENTIC_SDLC_AVAILABLE, ...)`, where availability is
+  `os.environ.get("AGENTIC_SDLC_BIN") or shutil.which("agentic-sdlc")`
+  (`:41`). That is *ambient* resolvability. It passes in CI because
+  `.github/workflows/validate.yml:46` sets the variable, and on a developer
+  machine where the kernel happens to be pip-installed — and **silently skips**,
+  not fails, on a bare checkout. A detector that disappears on the hosts least
+  likely to have the dependency is not a detector.
+
+  **Force it instead.** `bin/agentic-sdlc` is an in-tree wrapper that runs
+  `kernel/` with no install (verified: `./bin/agentic-sdlc show-contract
+  lifecycle-gates` returns the live contract on a bare checkout, no network).
+  Point at it explicitly inside the test:
+
+  ```python
+  with mock.patch.dict(os.environ, {"AGENTIC_SDLC_BIN": str(IN_TREE_WRAPPER)}, clear=False):
+      result = plan(task="Update the OpenTofu module for the VPC", ...)
+  self.assertIn("code-reviewer", result["agents"]["support"])
+  ```
+
+  This is deterministic, checkout-only, and symmetrical with how the corpus
+  forces the *opposite* condition. One gate-bearing task suffices for OD-9's
+  defect specifically — it is binary and uniform across gate-bearing routes —
+  but pin the negative case too (a route with no `required_quality_gates` must
+  *not* acquire `code-reviewer`), which is what `:1109-1114` already asserts and
+  is cheaper to extend than to duplicate. Note `_fetch_contract` is
+  `@lru_cache(maxsize=1)` keyed on the executable path, so resolve inside the
+  patched block rather than before it.
+
+- **Phase C changes roughly fifteen existing assertions, and no revision has
+  said so.** `test_selector.py` asserts `code-reviewer in agents.support` at
+  `:342`, `:466`, `:964`, `:979`, `:1109-1114` and elsewhere, all currently
+  green under CI's forced `AGENTIC_SDLC_BIN`. Under OD-9 option 2 they all
+  change; under option 1 they must be confirmed unchanged, which is the point.
+  **Produce that inventory before OD-9 is decided, not after** — the decision is
+  between "Cadre's output is preserved" and "Cadre's output changes," and the
+  people making it should see the real number rather than an abstraction about
+  corpus blindness.
 
 **PP-NFR-2 — No fourth copy.** Knowledge-store code exists in three places today:
 `plugin/suite/roster/knowledge-store/` (15 files, selected by
@@ -671,6 +990,34 @@ PP-FR-3(c), and PP-FR-6: plant the defect, confirm the check **fails** with a
 message naming the real cause, revert, confirm the tree is clean. Recorded in the
 pull request. This is the repository's settled bar and, given §0's history, not
 discretionary.
+
+**Three gaps in the coverage, found at Revision 6 by checking the requirement
+against `implementation-plan.md` §2's actual list rather than against its
+intent.**
+
+1. **The second entry point has no planted-defect case.** `mcp/dispatch_core.py`
+   and `mcp/dispatch_server.py` are added to PP-FR-6's platform list precisely
+   because five revisions missed them, yet the only planted role-id case targets
+   `select_agents.py`. That is backwards: plant it in the module most recently
+   discovered to be out of scope, because the self-vacuity guard detects an
+   **empty** module list and never an **incomplete** one.
+2. **Category B has no planted-defect case at all**, though it is the phase's
+   body. Reintroduce a literal `"catalog.yaml"` into a resolution path and
+   confirm the guard names it.
+3. **The category-C rule needs a false-positive case.** A guard that is
+   non-vacuous can still be over-broad. Confirm a genuine diagnostic literal
+   inside a `raise ValueError(...)` **passes** — otherwise the rule earns its
+   category-C exemption by never being tested against one, and the correction at
+   PP-FR-6 above shows exactly how easily that goes wrong in prose.
+
+**And one item's evidence must become an artifact rather than an assertion.**
+PP-FR-5's non-vacuity is a scratch branch on which `build_dispatch_plan.py:29`
+follows the resolver. Every other item in the list plants a defect *in the tree*
+and can be reproduced by a reviewer; this one is the sole item an implementer
+can claim without leaving anything checkable behind. Require the scratch
+branch's diff and the failing output be attached to the pull request. Phase D
+changes no behaviour, so this run is the only thing distinguishing it from two
+assertions that have always passed.
 
 **PP-NFR-5 — Determinism preserved; fingerprint churn expected.** Revision 1
 required `dispatch_fingerprint` to be *identical before and after* for a default-
@@ -776,6 +1123,49 @@ churn as a consequence so it is not later misread as a determinism regression.
   half and #180 built it; nothing yet drives disposition-to-ingestion. Adjacent
   to this work only in that this work tripped over it. Worth filing.
 
+  **Confirmed again at Revision 6, and the cost is now measured rather than
+  argued.** The review's own retrieval returned one result at score 0.033 — an
+  unrelated Compose/PostgreSQL sample — and then re-derived from scratch two
+  findings already sitting in `staged_records`. It also proposed **six new
+  durable findings**, which are now staged alongside the twelve and equally
+  unreachable. The staging half works so well that the gap widens with every
+  session that uses it.
+
+- **G-8: PP-FR-6's forbidden-token list does not cover route ids or risk ids,
+  and `_select_workflow()` is full of them.** `build_dispatch_plan.py:129-265`
+  names Cadre route ids at `:150`, `:154`, `:156`, `:158-159`, `:177`, `:181`,
+  `:183`, `:185-196` and risk ids at `:152` and `:263` — the last **inside** the
+  stage PP-FR-3 describes as roster-driven. The rule covers role ids, phase
+  names, and `roster/`-relative paths, so success criterion 5 (plant a role id →
+  guard fails) can pass while a dozen Cadre identifiers remain in the function
+  assigning every plan's workflow. Intent §4 outcome 4 would be met in letter
+  and not in substance.
+
+  PP-FR-3 already records the *consequence* — a foreign roster cannot reach
+  `rollback`, `production-release`, or `support-escalation` — as a known
+  limitation. What was not recorded is that **those are the three workflows
+  bound to human gates**, which makes "roster-neutral except for the highest-risk
+  paths" a scope statement rather than a footnote. Whether that is acceptable is
+  a decision; it is deliberately not raised as one here because the answer may
+  well be yes, but it should be answered rather than inherited.
+
+- **G-9: the golden corpus has no generator.** 195 KB, 4,727 lines, 175 cases,
+  maintained by run-test/read-diff/hand-edit. PP-NFR-1 leans on "the corpus is
+  not edited" as its primary signal, which makes the file a change-detector that
+  is itself hand-maintained — and a reviewer approving a 175-case diff by eye is
+  the same trust-the-shape failure PP-NFR-4 exists to prevent everywhere else.
+  Out of scope here and correctly so; worth filing.
+
+- **G-10: `docs/proposals/` has no supersession pointer and no index.**
+  `test_repository_health.py:2154` makes those records point-in-time and never
+  revised, so cite-and-supersede is the conforming handling and this work did it
+  correctly. But `governance-as-product-2026-08.md` still reads `Status:
+  BACKLOG — explicitly parked` with nothing indicating it was reversed, and its
+  filename is the more discoverable entry point than this run directory. A
+  reader who opens it first gets a stale picture. A one-line `Superseded by:`
+  treated as metadata rather than revision, or a directory index, would close it
+  without touching the decision content.
+
 ## 7. Handoff
 
 **To:** the human Product Owner (`@deagy`) **and Engineering Lead** for a **G2**
@@ -813,16 +1203,70 @@ Engineering Lead call because (2) alters published dispatch output. **Either
 way PP-NFR-1 needs the lifecycle-aware detector**, because the corpus's blind
 spot exists regardless of which option is chosen.
 
+**Option (3) is withdrawn at Revision 6** — see PP-FR-6's category-A note.
+`build_dispatch_plan.py:547-551` raises on an agent absent from the catalog, so
+leaving `:107` alone does not preserve a documented wart; it makes PP-FR-1's own
+acceptance unreachable for any roster that uses lifecycle gates. It must not be
+offered as a choice.
+
+**And (1) has a live disagreement about *where* the default should live, which
+the choice between (1) and (2) does not settle.** Two reviewers reached opposite
+conclusions independently:
+
+- `architecture-authority` observes that the kernel already models gate → agent
+  binding as provider-profile `gate_bindings`
+  (`kernel/agentic_sdlc/__init__.py:1643-1646`, `:1761-1771`), and that
+  `_gate_agents` currently reads two keys — `author_agents`, `review_agents` —
+  from a kernel contract that has **never declared either**. Homing the default
+  in profile data would retire those reads rather than relocate them, collapsing
+  a duplicated concept instead of adding a third location.
+- `application-engineer` argues against precisely that: `gate_bindings` binds
+  gates to *approval authority*, a different axis from dispatch reviewer
+  selection, and conflating them crosses the kernel-ownership boundary §4
+  forbids this work from touching. It proposes a `routing.yaml` key
+  (`default_gate_review_agents`), which a foreign roster already supplies via
+  `roster.json`'s `routing` path, and which keeps Cadre byte-identical by
+  declaring the same literal the Python default held.
+
+Neither saw the other's reasoning. **This is a genuine architectural fork inside
+OD-9 and is recorded rather than resolved** — it touches the kernel boundary, so
+it is not the authoring session's to settle in either direction. Note the second
+option is the one that adds `routing.yaml` to PP-NFR-1's mirrored-file list.
+
 **OD-8, raised at Revision 3 as blocking Phase C, is withdrawn at Revision 4.**
 It asked a System Architect whether a foreign roster's workflow classification
 should come from a mapping in `roster.json` or from opening a published schema
 enum. `_select_workflow()` already answers it from roster-declared
 `workflow_shape`. Nothing was blocked and there was nothing to decide.
 
-Non-blocking: OD-3, OD-4, OD-6.
+**Three further blockers, all raised at Revision 6** and registered in
+`product-intent.md` §13:
+
+- **OD-10** — OD-2's compensating control does not exist on the MCP dispatch
+  surface, which emits no plan and deliberately disables project-tier
+  resolution. System Architect.
+- **OD-11** — `roster.json` has no compatibility window, and a schema shipped
+  without one cannot gain one compatibly. System Architect.
+- **OD-13** — G2's second authority. Structurally upstream of OD-9, which is
+  assigned to the same pair, so it gates the gate *and* one of the gate's
+  prerequisites.
+
+**Answer OD-2 before any of them.** It is not on the blocking list — it is
+recorded RESOLVED — but two reviewers have asked to reopen it, and it is
+upstream of three blockers rather than beside them. If `roster.root` narrows to
+global scope: PP-FR-1b loses its purpose, PP-NFR-3b loses its cause, **OD-7
+ceases to exist rather than being decided**, OD-10 dissolves, and PP-FR-1's
+unpriced MCP restructuring disappears. One decision removes roughly half the
+open surface of this baseline. See `product-intent.md` §11 for the three grounds
+and §15 for the consequence chain.
+
+Non-blocking: OD-3, OD-4, OD-6, OD-12 (though OD-12 asks whether the approval
+this baseline rests on still covers it, which is non-blocking only in the sense
+that nothing stops the question being asked late).
 
 **Resolved and folded in at Revision 2:** OD-1 (proceed), OD-2 (project-local,
-overlay-style), OD-5 (sibling manifest).
+overlay-style — with a reopening request against it as of Revision 6),
+OD-5 (sibling manifest).
 
 Per `roster/workflows/product-intake.md`, objective conflicts return to G1 rather
 than proceeding. Nothing here is approved by its presence in this file.

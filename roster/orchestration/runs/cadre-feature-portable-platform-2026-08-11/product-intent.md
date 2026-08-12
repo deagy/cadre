@@ -1,9 +1,10 @@
 # Product Intent Record — A roster-neutral platform: separating the knowledge store, the roster, and the lifecycle
 
 **Intent ID:** `INTENT-CADRE-PORTABLE-PLATFORM`
-**Revision:** 4
+**Revision:** 5
 **Status:** **G1 APPROVED** by `@deagy` (Product Owner) on 2026-08-11 against
-Revision 1. See §16.
+Revision 1 — **re-affirmation against this revision is now an open question
+(OD-12).** See §16.
 **Revision note:** Revisions 2 and 3 change **no intent, no scope, and no
 decision**. Both correct factual defects found by review.
 
@@ -47,6 +48,29 @@ offers no provider override, in a record whose whole method is citing
 `file:line` — the line was cited correctly and its behaviour was never checked.
 **Both errors share a shape: reasoning about a running system from its source
 alone.** One shell command falsified each.
+
+**Revision 5 follows an independent multi-agent review** (task
+`cadre-review-portable-platform-2026-08-11`, eight roles: architecture-authority,
+security-reviewer, compliance-reviewer, code-reviewer, debugging-engineer,
+test-engineer, delivery-sequencer, application-engineer). **It changes no intent
+and no scope, and it resolves nothing.** It records four new open decisions, one
+correction to §2, and one correction to §13's OD-9 that narrows a three-option
+choice to two.
+
+The review's own finding about this record's method is worth keeping, because it
+is the opposite of the one §0 above draws. Every executable claim in all three
+records was re-run and **every one held** — the collision error, the `support`
+list, the test counts, the corpus figures, the drift check, determinism. What
+did not hold was a different layer: **categorisation** (§13's OD-9 severity, and
+`requirements.md` PP-FR-6's three-category table, which miscounts in *both*
+directions at once), **consequence-tracing** (OD-9's second consequence, one hop
+past the line already cited), and **control adequacy** (OD-2's compensating
+control, verified against one dispatch surface and silently absent on the other).
+
+So the discipline §0 arrives at — *"where a claim is executable, execute it"* —
+was necessary and is not sufficient. Executing a claim tests the claim. It does
+not test the *classification* placed on it, and this record's remaining errors
+are all classification errors stated with the confidence of observations.
 **Author (agent):** product-intent-agent, consolidated by the orchestrating session
 **Date:** 2026-08-11
 **Repository:** `/home/deagy/sdk/cadre`
@@ -136,6 +160,29 @@ The foreign manifest loaded. It was rejected for colliding with Cadre's, which
 is loaded alongside it and cannot be turned off. So the residual coupling is
 narrower than this record claimed for four revisions, and differently shaped:
 not "no override" but **"no way to run without Cadre's bundle."**
+
+**Narrower again at Revision 5, and this is the fifth correction to the same
+paragraph.** The coupling is not to the kernel and not to `cadre`; it is to
+*one wrapper*. Skip the wrapper and it is already gone:
+
+```console
+$ ./bin/agentic-sdlc --provider providers/agentic-sdlc-defaults/provider.json provider list
+{ "providers": [ { "id": "agentic-sdlc-defaults", ... } ] }
+```
+
+`bin/agentic-sdlc` runs the in-tree kernel directly and injects nothing, so a
+foreign provider drives the kernel *today*, with no change to anything. What
+`cadre sdlc` adds on top is the injection that collides. This does not remove
+PP-FR-4 — an undocumented escape hatch that exists as a byproduct of one
+wrapper's implementation is not a supported interface, and the wrapper is the
+command users are told to run. But it does mean **the capability is not
+blocked, only the ergonomics are**, and PP-FR-4 should be scheduled as such
+rather than as an enabler for anything else.
+
+Worth stating flatly, because this paragraph has now been wrong in five
+successive revisions in five different ways: every one of those errors was a
+claim about what a *command* does, and every one was falsified by running that
+command. The paragraph's cost so far is roughly one correction per revision.
 
 **"Separate the knowledge store."** Also already true, and more so than any
 document claims. `roster/knowledge-store/src/` is stdlib-only, reads neither
@@ -364,10 +411,65 @@ supersedes that document rather than editing it.
 - **The minimal second roster is a test fixture, not a product.** It proves the
   mechanism and nothing about whether anyone would author a real one.
 
+**A reviewer did push back, on the item this section did not list.** Recorded at
+Revision 5, because a section inviting challenge is worth nothing if the
+challenge is then filed somewhere the decision-maker will not read it.
+
+Two independent reviewers (`security-reviewer`, `architecture-authority`)
+returned `request-changes` on **OD-2**, which §16 records as RESOLVED. Neither
+disputes the feature; both dispute the *scope* and the control that was accepted
+in exchange for it. Three grounds, none of which this record engaged when OD-2
+was put:
+
+1. **The precedent PP-FR-1 cites as its model is the codified statement of the
+   rule it departs from.** `requirements.md` PP-FR-1 asks for a scope test "on
+   the model of `test_kernel_boundary.py:129-140`" asserting `roster.root` is
+   *not* `SCOPE_GLOBAL_ONLY`. That test reads: *"A project-local
+   `.agents/cadre.yaml` is untrusted input — checking out a repository must
+   never be able to redirect which binary runs. The field is therefore
+   global-scope-only, and that is a security property of the boundary, not a
+   preference."* And a roster is the more consequential of the two redirects,
+   not the lesser: `bin_path` chooses which binary runs; `roster.root` chooses
+   the role prose handed to an agent as its instructions.
+2. **The `routing_overlay.py` precedent is inverted rather than analogous.**
+   That overlay's guarantees — fail-closed, narrowing-only, `human_gate` and
+   `reviewers` immutable — are all *relative to a base file*
+   (`routing_overlay.py:56-63`; the merge happens at `select_agents.py:212`).
+   PP-FR-1 lets the same trust tier choose the base. A checkout that today
+   cannot strip a `human_gate` from a route could instead supply a base that
+   never had one, and the overlay validator would confirm nothing was narrowed.
+   What the two mechanisms share is a discovery walk, not a safety model.
+3. **The departure is from the whole settings registry, not from three
+   siblings.** §16 and `requirements.md` describe it as departing from three
+   path/executable settings. Exactly **one** FieldSpec in `settings.py` is
+   project-scoped — `gitlab.supports_work_item_hierarchy` (`:533-540`), a
+   tri-state boolean. Every path, every executable, every store home is
+   `SCOPE_GLOBAL_ONLY`.
+
+A fourth ground is new information rather than a re-reading, and is registered
+separately as **OD-10**: the compensating control accepted in exchange for
+project scope does not exist on the second dispatch surface.
+
+**This record does not reverse OD-2 and cannot.** The disposition is the Product
+Owner's, it was made deliberately, and being argued against is not the same as
+being wrong. What Revision 5 does is put the argument in front of the decision
+rather than behind it — see **OD-12** on whether the evidence base has changed
+enough that the surrounding approval needs restating too.
+
 ## 12. Success criteria (observable)
 
 1. `cadre select --roster <fixture>` emits a plan validating against
    `roster/orchestration/selection.schema.json`, naming only fixture roles.
+
+   **Amended at Revision 5: the fixture's routes must declare `quality_gates`,
+   and this criterion must be exercised with lifecycle contracts resolvable.**
+   As written for four revisions it was satisfiable by a fixture that never
+   reaches `_gate_agents()` — which is where the only known blocker for a
+   foreign roster lives (`requirements.md` PP-FR-6 category A). A criterion that
+   passes green while the seam is broken for every roster that uses the
+   lifecycle is the same defect this record diagnoses in the golden corpus at
+   §12.6 and `requirements.md` PP-NFR-1, reproduced in the fixture built to
+   detect it.
 2. A roster package missing `catalog.yaml` or `routing.yaml` fails with a message
    naming the missing file — verified by a test that asserts the failure, not
    just the success.
@@ -385,6 +487,29 @@ supersedes that document rather than editing it.
    violation is this repository's most frequently rediscovered failure mode
    (`docs/proposals/durable-knowledge-capture-2026-08.md`), so non-vacuity is a
    criterion, not a nicety.
+
+   **Two amendments at Revision 5.** First, plant the violation in
+   `mcp/dispatch_core.py` as well — that module was absent from the platform
+   list through five revisions (`requirements.md` PP-FR-1), so it is the one
+   place a guard is most likely to be silently out of scope, and a self-vacuity
+   guard detects an *empty* module list but never an *incomplete* one. Second,
+   plant a category-B violation too, not only a category-A one: category B is
+   the phase's real body and §2's non-vacuity list exercised neither it nor the
+   second entry point.
+
+   **And the criterion as written will be satisfiable in letter while §4
+   outcome 4 is unmet in substance.** `_select_workflow()`
+   (`build_dispatch_plan.py:129-265`) hardcodes Cadre route ids at `:150`,
+   `:154`, `:156`, `:158-159`, `:177`, `:181`, `:183`, `:185-196` and risk ids
+   at `:152` and `:263` — the last of these *inside* the stage
+   `requirements.md` PP-FR-3 describes as roster-driven. PP-FR-6's forbidden-token
+   rule covers role ids, phase names, and `roster/`-relative paths; route ids
+   and risk ids are on neither list. So a planted *role id* fails the guard
+   correctly while a dozen Cadre identifiers remain in the function that assigns
+   every plan's workflow. Recorded here rather than scoped as work — see
+   `requirements.md` G-8, and note the substantive consequence it carries: a
+   foreign roster cannot reach `rollback`, `production-release`, or
+   `support-escalation`, which are the three workflows bound to human gates.
 6. `cadre generate-plugin --output plugin --check` reports no drift, and
    `git status --porcelain` shows no change under `provider/roles/` or
    `roster/catalog.yaml`. **Changes under `plugin/` are expected and are
@@ -405,14 +530,52 @@ supersedes that document rather than editing it.
 | ID | Decision | Owner | Status |
 | --- | --- | --- | --- |
 | **OD-1** | Bring the parked `governance-as-product-2026-08` proposal forward, against the 2026-08-09 deferral? | Product Owner (`@deagy`) | **RESOLVED** — yes, by the G1 approval itself (§16). |
-| **OD-2** | `roster.root` trust scope. | Product Owner | **RESOLVED** — project-local, overlay-style (§16). |
+| **OD-2** | `roster.root` trust scope. | Product Owner | **RESOLVED** — project-local, overlay-style (§16). **Reopening requested at Revision 5** by two independent reviewers, on three grounds this record did not engage when the decision was put (§11) plus one new fact (OD-10). The disposition stands until the Product Owner says otherwise; the request is recorded, not granted. |
 | **OD-3** | `provider.json`'s `"id": "cadre"` names the *roster*; `README.md` names the repository. If the platform is a distinct thing, one of them needs a new name. | Product Owner | **OPEN**, non-blocking. Recording is enough; renaming is out of scope (§6). |
 | **OD-4** | Where does `roster/knowledge-store/AGENT.md` live? It is a *roster role definition* (`roster/catalog.yaml:596-597`) sitting inside what this work declares platform. | Engineering Lead | **OPEN**, non-blocking. The seam works either way; a tidiness call. |
 | **OD-5** | Extend `provider.json` with roster-side keys, or add a sibling `roster.json` the kernel never reads? | System Architect | **RESOLVED** — sibling manifest (§16). |
 | **OD-6** | Does the mirror boundary guard apply to `roster/context-store/` too? | Engineering Lead | **OPEN**, non-blocking. |
 | **OD-7** | *New, raised by OD-2's answer.* Surfacing the resolved roster id + digest in the dispatch plan adds an emitted field, forcing `selection.schema.json` 6 → 7. Accept the bump, or surface the identity outside the plan? | System Architect | **OPEN — blocking for G2.** See §16. |
-| **OD-9** | *New at Revision 4.* Removing the hardcoded `["code-reviewer"]` gate-reviewer default (`build_dispatch_plan.py:107`) **changes every lifecycle-aware Cadre plan's `support` list** — no gate contract declares `review_agents`, so it fires for all of them — and the golden corpus cannot see it (`test_selection_golden_corpus.py:135` patches lifecycle contracts to `None`). Move the default into roster-declared data (recommended: Cadre's plans stay byte-identical), accept the output change and re-baseline, or leave `:107` alone and narrow PP-FR-6? | Product Owner + Engineering Lead | **OPEN — blocking for G2.** Option 2 alters published dispatch output. |
-| ~~**OD-8**~~ | ~~Does a foreign roster need a route → workflow mapping, or the `workflow` enum opened?~~ | System Architect | **WITHDRAWN at Revision 3 — the premise was wrong.** Raised one revision earlier on a misreading of `_select_workflow()`: its final stage (`build_dispatch_plan.py:255-265`) does **not** branch on Cadre route ids. It reads each matched route's own declared `workflow_shape` from `routing.yaml` — a four-value field the roster supplies (`routing.schema.json:193-201`) — so a fixture roster whose routes declare it reaches `new-service` / `infrastructure-change` / `pipeline-change` today, with no code change and no enum bump. Kept struck through so a reader of Revision 2 finds out what happened to it. |
+| **OD-9** | *New at Revision 4, **re-scoped at Revision 5**.* Removing the hardcoded `["code-reviewer"]` gate-reviewer default (`build_dispatch_plan.py:107`) **changes every lifecycle-aware Cadre plan's `support` list** — no gate contract declares `review_agents`, so it fires for all of them — and the golden corpus cannot see it (`test_selection_golden_corpus.py:135` patches lifecycle contracts to `None`). **Two viable options, not three:** move the default into roster-declared data (recommended: Cadre's plans stay byte-identical), or accept the output change and re-baseline. See the correction below. | Product Owner + Engineering Lead | **OPEN — blocking for G2.** Option 2 alters published dispatch output *and* removes the only review agent any lifecycle-aware plan carries. |
+| **OD-10** | *New at Revision 5.* **OD-2's compensating control does not exist on the second dispatch surface.** PP-FR-1b places the resolved roster's id and digest *in the dispatch plan*; `cadre mcp-dispatch-server` emits no dispatch plan, so a project-local redirect is silent there. It is not merely unimplemented: `mcp/dispatch_server.py:48` calls `settings.disable_project_tier_cwd_fallback()` **deliberately** (the server is long-lived and project-agnostic; its cwd is not the project any given call concerns) and `:63` loads routing at **import time**, before any call knows its project. Does the roster redirect apply to that surface at all? If yes, a deliberate prior design decision must be reversed or scoped. If no, OD-2's control must be documented as covering `cadre select` only — which weakens the case project scope was accepted on. | System Architect | **OPEN — blocking for G2.** |
+| **OD-11** | *New at Revision 5.* **`roster.json` has no compatibility window.** `provider.json` carries `kernel_compatibility`, checked at load against the consuming kernel with an actionable error (`kernel/agentic_sdlc/__init__.py:208-220`). PP-FR-2's key set has no equivalent, so a manifest authored against a different selector loads silently wrong rather than failing by name — the same class of failure PP-NFR-3b argues the schema bump exists to prevent. §9's disposition table answers the parked proposal's condition 1 with "**No — deliberately not**"; `roster.json` must then meet that condition itself, and inherits none of `provider.json`'s answers. Add a `platform_compatibility` range, or accept unversioned coupling? | System Architect | **OPEN, blocking G2** — it fixes the schema, and a schema shipped without it cannot gain one compatibly. |
+| **OD-12** | *New at Revision 5.* **Does the G1 approval extend to this revision?** It was granted against Revision 1. Revision 4 rewrote §2's problem statement (PP-FR-4's premise was half false), Revision 5 narrowed it again, and Revisions 4–5 raised OD-9, OD-10 and OD-11 — three blocking decisions the Product Owner did not have at approval time. This record has asserted through four revisions that its corrections are immaterial to the approval. **That is a materiality judgment, and `roster/workflows/product-intake.md` reserves it to the human Product Owner, not to the authoring session assessing its own corrected work.** | Product Owner | **OPEN.** §16's approval stands as recorded; this asks whether it should be restated against Revision 5. |
+| **OD-13** | *New at Revision 5.* **How is G2's second authority discharged?** G2 requires `product_owner` **and** `engineering_lead` (`kernel/contracts/lifecycle-gates.json:5`); `.github/CODEOWNERS` names one human. OD-9 is assigned to that same pair, so it cannot be formally closed until this is answered either — the obstacle is upstream of two other blockers rather than beside them. Options: a documented exception on the `docs/migration/monorepo-migration.md` precedent (*"a required-review setting with nobody to satisfy it blocks releases without adding a reviewer"*), a second named Engineering Lead authority, or recorded acceptance of single-authority satisfaction with rationale. | Product Owner | **OPEN — blocking for G2 structurally**, not merely procedurally. |
+| ~~**OD-8**~~ | ~~Does a foreign roster need a route → workflow mapping, or the `workflow` enum opened?~~ | System Architect | **WITHDRAWN at Revision 3 — the premise was wrong.** Raised one revision earlier on a misreading of `_select_workflow()`: its final stage (`build_dispatch_plan.py:254-265`) does **not** branch on Cadre route ids. It reads each matched route's own declared `workflow_shape` from `routing.yaml` — a four-value field the roster supplies (`routing.schema.json:193-201`) — so a fixture roster whose routes declare it reaches `new-service` / `infrastructure-change` / `pipeline-change` today, with no code change and no enum bump. Kept struck through so a reader of Revision 2 finds out what happened to it. |
+
+**OD-9's third option is withdrawn, and the reason is a fact rather than a
+preference.** Revisions 4 and 5 both framed this decision as being about output
+churn — whether Cadre's `support` lists may lose an entry. That is the lesser
+half. One hop past the line those revisions already cited,
+`build_dispatch_plan.py:547-551` validates every selected agent against the
+catalog:
+
+```python
+raise ValueError(f"Routing selected an unknown agent: {agent}")
+```
+
+A foreign roster has no `code-reviewer`. So for any roster whose routes declare
+`quality_gates`, with lifecycle contracts resolvable, the selector **raises and
+emits no plan at all** — which is §4 outcome 1, the headline deliverable of this
+entire record. Option 3 ("leave `:107` alone and narrow PP-FR-6") therefore does
+not trade a boundary violation for tidiness; **it ships the feature broken for
+its primary use case.** It must not be offered as a choice.
+
+The same fact re-weights option 2. `_gate_agents()` returns exactly
+`["code-reviewer"]` and nothing else, because no gate declares `author_agents`
+either — so "accept the change" means every lifecycle-aware plan loses the only
+review agent it carries. If that is the Product Owner's intent it should be its
+own decision with its own rationale, not a consequence absorbed by a
+boundary-guard cleanup. `security-reviewer` asks to co-sign option 2 for that
+reason.
+
+**Recording how this was missed, because the shape recurs.** The defect was
+found by following one call from a line the record had already cited correctly,
+four revisions running. §0's discipline — execute what is executable — would not
+have caught it: `cadre select` against Cadre's own roster succeeds, and the
+failure only appears against a roster that does not exist yet. What catches it
+is asking what a cited line's *callee* does, which is the same one-hop trace
+Revision 4 identified as the fix for `:18`/`:24` and then did not generalise.
 
 ## 14. Knowledge retrieval status
 
@@ -498,7 +661,18 @@ sequencing correct — it makes the baseline reviewable, which is a weaker claim
 Per that workflow, objective conflicts return to G1 rather than proceeding.
 
 **G2 is not approved.** It requires `product_owner` **and** `engineering_lead`
-(`kernel/contracts/lifecycle-gates.json`), and OD-7 is blocking for it.
+(`kernel/contracts/lifecycle-gates.json`), and **five decisions now block it:
+OD-7, OD-9, OD-10, OD-11, and OD-13.** OD-13 is the one to answer first among
+those, because it is not a decision *about* the work — it is the question of who
+can close the other four, and it also gates OD-9's joint authority.
+
+**And answer OD-2 before any of them.** It is upstream of three: if `roster.root`
+narrows to global scope, PP-FR-1b loses its purpose (an explicit `--roster` flag
+is visible in the invocation, so there is no silent redirect left to compensate
+for), PP-NFR-3b's schema bump loses its cause, **OD-7 ceases to exist rather
+than being decided**, and OD-10 dissolves with it — there is no project-tier
+redirect for the MCP surface to fail to surface. That is the single largest
+simplification available to this work, and it is one decision.
 
 ## 16. Decisions taken
 
@@ -550,3 +724,46 @@ unknown property while truthfully reporting the version it handles. The bump is
 therefore not cosmetic — it is what converts a silent rejection into an error
 naming the real cause. **Blocking for G2**, because it changes a published
 contract and that is not the authoring session's call.
+
+**Revision 5 narrows OD-7 to one half of what it asked.** It was put as two
+questions: accept the bump, *or* surface the identity outside the plan. The
+second half is foreclosed by rules already in this tree, and a reviewer traced
+each:
+
+- The 5 → 6 bump answered this exact question on identical facts
+  (`build_dispatch_plan.py:758-774`, `selection.schema.json:38`), and
+  `RUNBOOK.md`'s "optional and not emitted by default" carve-out fails here for
+  the same reason it failed there — the population the field exists for sees it
+  unconditionally.
+- `provenance` is **excluded** from the fingerprint's hashed payload
+  (`build_dispatch_plan.py:829-844`). Putting roster identity there would make
+  OD-2's compensating control un-tamper-evident while appearing to satisfy it.
+- stderr is not captured by selection telemetry, which records the plan.
+
+So what remains genuinely open is not *where* the field goes but **whether to
+authorise a change to a published, vendored contract and announce it** — to
+`CHANGELOG.md`, and to the pinned copies in the wheel's `cadre_cli/_vendor/` and
+`plugin/suite/`. That is a smaller question than OD-7 has been carrying, and a
+real one. It also disappears entirely if OD-2 narrows (§15).
+
+---
+
+**Revision 5 — what the review changed here, and what it did not.**
+
+Recorded so a later reader can tell which parts of this section are the Product
+Owner's and which are a reviewer's.
+
+**Unchanged, and not reopened by this record:** the G1 approval itself, OD-2's
+disposition, and OD-5's. All three remain exactly as the Product Owner made
+them. A review returning `request-changes` on a decision does not unmake it, and
+no agent in this run held authority to.
+
+**Added:** OD-10 through OD-13, the OD-9 option-set correction, and §11's record
+of the pushback against OD-2. All are inputs to decisions, not decisions.
+
+**Worth one line on process, since G-6 records that nothing here is
+machine-checkable.** `.github/CODEOWNERS` already requires `@deagy`'s GitHub
+review before this branch can merge. That approval *is* machine-checkable, in a
+way transcribed prose is not, and it costs nothing extra because the review has
+to happen anyway. Cross-referencing it from this section once given would be
+stronger evidence than anything currently offered — see `requirements.md` G-6.
