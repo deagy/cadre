@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Verified routing_overlay.py: a project-local overlay may only widen (add), never narrow, a base route's keywords/paths -- confirming the record's claim that routing.yaml is a shipped consumer base ruleset with real downstream blast radius. Directly useful guidance for future edits to routing.yaml paths.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "knowledge-store-steward",
+    "decided_at": "2026-08-12T16:54:49.607Z"
+  }
+]

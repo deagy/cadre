@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Durable test-design lesson, not tied to code that can move: a differential test comparing an engine to an oracle can pass with the engine disabled when only one verdict direction is exercised. Cited test_glob_containment.py resolves in the current tree. Human decision, recorded because knowledge-store-steward staged this record and cannot disposition its own proposal.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "daniel.eagy@gmail.com",
+    "decided_at": "2026-08-12T17:42:42.095Z"
+  }
+]

@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Verified test_roster_boundary.py's TestNoCadreRoleIdsInPlatformCode docstring directly corroborates the record: the guard originally scoped to build_dispatch_plan.py passed 12/12 with a hole, found only by planting the defect in mcp/dispatch_core.py. Role ids are now read from the catalog rather than hand-listed, matching the record's recommended practice. Accurate, durable, and the fix is already shipped.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "knowledge-store-steward",
+    "decided_at": "2026-08-12T16:54:50.410Z"
+  }
+]

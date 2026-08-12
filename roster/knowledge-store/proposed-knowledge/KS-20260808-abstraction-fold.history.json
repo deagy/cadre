@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Accepted: an implementation that collapses distinct values (case folding, bucketing, sentinels) is untested unless inputs vary across the fold. Applies to any normalizing abstraction, not only the containment engine. Cited glob_containment.py resolves. Human decision; the staging steward could not decide it.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "daniel.eagy@gmail.com",
+    "decided_at": "2026-08-12T17:42:42.303Z"
+  }
+]

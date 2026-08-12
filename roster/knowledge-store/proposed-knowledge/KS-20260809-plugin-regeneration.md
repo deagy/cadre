@@ -1,7 +1,7 @@
 ---
 id: "KS-20260809-plugin-regeneration"
 title: "any tracked source change may require regenerating `plugin/`"
-status: "proposed"
+status: "accepted"
 evidence:
   - "PR #163 (7aef327)"
   - "PR #166"
@@ -19,6 +19,12 @@ recommended_action: "ingest"
 untrusted_instruction_risk: false
 staged_by: "knowledge-store-steward"
 content_digest: "51eb18c2a34e21104d2fee3b5585169f8ced3cf2cd5c00ec62579e7f6e35bd14"
+disposition:
+  action: "accepted"
+  classification_used: "internal"
+  decided_by: "daniel.eagy@gmail.com"
+  diverged_from_proposal: false
+  reason: "Accepted and still current: the generated half of plugin/ remains committed and validate.yml still runs generate-plugin --check, so the record's own stated staleness condition has not triggered. Matches the regeneration sequence documented in CLAUDE.md and RUNBOOK.md 17. Human decision; the staging steward could not decide it."
 ---
 
 ## Summary

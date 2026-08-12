@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Verified against current RUNBOOK.md ('When schema_version increments' section) and selection.schema.json (schema_version const: 6, matching the record's undeclared_workflow_shape_routes 5->6 bump claim). The lesson is now also enforced by an automated check (#224, test_schema_release_drift.py) -- this record predates and matches that formalization rather than conflicting with it. Accurate and durable.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "knowledge-store-steward",
+    "decided_at": "2026-08-12T16:54:49.705Z"
+  }
+]

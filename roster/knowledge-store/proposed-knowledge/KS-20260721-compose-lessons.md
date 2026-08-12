@@ -1,7 +1,7 @@
 ---
 id: "KS-20260721-compose-lessons"
 title: "Compose Runtime Lessons"
-status: "proposed"
+status: "rejected"
 evidence:
   - "local compose troubleshooting experience"
   - "technology-standards.md reference to PostgreSQL and Podman Compose"
@@ -17,6 +17,12 @@ recommended_action: "ingest"
 untrusted_instruction_risk: false
 staged_by: "knowledge-store-steward"
 content_digest: "3fd21ac8a4a16c8d5bbdaa8da2c92720f70e172fc2a85a922b0f0dd17d3e977f"
+disposition:
+  action: "rejected"
+  classification_used: "internal"
+  decided_by: "daniel.eagy@gmail.com"
+  diverged_from_proposal: false
+  reason: "Rejected as redundant, not as wrong. This content is already retrievable: it is a 98% match to the chunk ingested under source deagy/cadre on 2026-08-01. Accepting it would place a near-identical copy under proposed-knowledge, and dispatch plans now query both sources, so every matching retrieval would return the same compose lesson twice and spend two of an agent's five result slots on it. Reject at the staged stage is the cheap correction; delete-ingested afterwards would require a named authorized human. Human decision; the staging steward could not decide it."
 ---
 
 ## Summary

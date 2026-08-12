@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Accepted: a universal claim cannot be established by sampling, and inverting that produces false accusations rather than missed findings. Generalizes beyond the exclude_paths check it came from. Both cited files (routing_health.py, glob_containment.py) resolve. Human decision; the staging steward could not decide it.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "daniel.eagy@gmail.com",
+    "decided_at": "2026-08-12T17:42:42.199Z"
+  }
+]

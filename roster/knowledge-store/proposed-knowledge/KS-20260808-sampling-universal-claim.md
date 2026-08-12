@@ -1,7 +1,7 @@
 ---
 id: "KS-20260808-sampling-universal-claim"
 title: "sampling cannot establish a universal claim"
-status: "proposed"
+status: "accepted"
 evidence:
   - "roster/orchestration/src/routing_health.py"
   - "roster/orchestration/src/glob_containment.py"
@@ -18,6 +18,12 @@ recommended_action: "ingest"
 untrusted_instruction_risk: false
 staged_by: "knowledge-store-steward"
 content_digest: "e3c19604b74866645efb8354c018b7469c4b763857f2be6d622c08e6007d6232"
+disposition:
+  action: "accepted"
+  classification_used: "internal"
+  decided_by: "daniel.eagy@gmail.com"
+  diverged_from_proposal: false
+  reason: "Accepted: a universal claim cannot be established by sampling, and inverting that produces false accusations rather than missed findings. Generalizes beyond the exclude_paths check it came from. Both cited files (routing_health.py, glob_containment.py) resolve. Human decision; the staging steward could not decide it."
 ---
 
 ## Summary

@@ -1,7 +1,7 @@
 ---
 id: "KS-20260808-abstraction-fold"
 title: "test an abstraction at the boundary it folds"
-status: "proposed"
+status: "accepted"
 evidence:
   - "roster/orchestration/src/glob_containment.py"
   - "PR #163"
@@ -17,6 +17,12 @@ recommended_action: "ingest"
 untrusted_instruction_risk: false
 staged_by: "knowledge-store-steward"
 content_digest: "0d43776baaa96640a330e6d3c504cfd515aad5b54e7d270d06bd1f2ec8a1d59d"
+disposition:
+  action: "accepted"
+  classification_used: "internal"
+  decided_by: "daniel.eagy@gmail.com"
+  diverged_from_proposal: false
+  reason: "Accepted: an implementation that collapses distinct values (case folding, bucketing, sentinels) is untested unless inputs vary across the fold. Applies to any normalizing abstraction, not only the containment engine. Cited glob_containment.py resolves. Human decision; the staging steward could not decide it."
 ---
 
 ## Summary

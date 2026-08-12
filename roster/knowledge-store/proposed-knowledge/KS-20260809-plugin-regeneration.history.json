@@ -1,0 +1,11 @@
+[
+  {
+    "sequence": 1,
+    "action": "accepted",
+    "reason": "Accepted and still current: the generated half of plugin/ remains committed and validate.yml still runs generate-plugin --check, so the record's own stated staleness condition has not triggered. Matches the regeneration sequence documented in CLAUDE.md and RUNBOOK.md 17. Human decision; the staging steward could not decide it.",
+    "classification_used": "internal",
+    "diverged_from_proposal": false,
+    "decided_by": "daniel.eagy@gmail.com",
+    "decided_at": "2026-08-12T17:42:42.500Z"
+  }
+]
