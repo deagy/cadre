@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/roster.schema.json",
+  "title": "Roster package manifest (roster.json)",
+  "description": "Declares a roster package: where its catalog, routing configuration, role definitions, and shared policy live. Consumed only by the selector (PP-FR-2). The Agentic SDLC kernel never reads this file -- that is the point of it being a sibling of provider.json rather than an extension of it (OD-5), because provider.json's key set is closed in two independent implementations, one of them the kernel this work is constrained not to touch.\n\nEvery declared path resolves relative to the directory holding this manifest and must not escape it; containment is enforced in roster_manifest.py, not here, because JSON Schema cannot express it.",
+  "$comment": "OD-11 (2026-08-11) declined a `platform_compatibility` window in favour of `schema_version` alone, accepting that a manifest written against different selector semantics fails however its differences happen to present rather than by name. The mitigation adopted with that decision is a requirement rather than a nicety: the loader MUST reject an unrecognised `schema_version` instead of ignoring it, which turns the most likely mismatch into an error naming the manifest. See roster_manifest.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "version",
+    "catalog",
+    "routing",
+    "role_root",
+    "shared_policy_root"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "description": "Manifest format version. The loader rejects any other value by name rather than ignoring it -- with no compatibility window (OD-11), this is the only signal a mismatched manifest gets."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "Stable roster identifier. Lowercase kebab-case. Distinct from provider.json's `id`, which names the provider bundle; a roster and a provider may share a name but are not the same thing (OD-3 records that this repository's own naming does not yet distinguish them)."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$",
+      "description": "Semantic version of the roster's content."
+    },
+    "catalog": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Relative path to the role catalog. YAML -- note this genuinely differs from `routing`, which is JSON. The two formats are stated explicitly because a roster package carrying one of each behind similar-looking filenames is exactly the trap G-12 recorded."
+    },
+    "routing": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Relative path to the routing configuration. JSON. Named routing.json since the G-12 disposition (2026-08-11); it was previously routing.yaml, which was JSON content behind a YAML extension and cost the first foreign roster author a JSONDecodeError naming nothing."
+    },
+    "role_root": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Relative path under which each catalog entry's `definition` resolves. `.` when definitions are catalog-relative."
+    },
+    "shared_policy_root": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Relative path to the roster's shared policy directory (operating principles, autonomy, technology standards). Roster-owned content; the platform modules under roster/shared/src/ are a separate concern and are not declared here."
+    },
+    "paired_provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "description": "Optional binding to a sibling provider.json describing the same bundle. Checked only when a provider.json is actually present alongside this manifest. Optional rather than required because a fixture roster (PP-FR-3) has no provider bundle and a required key would exclude one.",
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

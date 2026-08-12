@@ -1407,6 +1407,14 @@ def generate_suite_copy(
         elif relative in role_paths or relative in {
             "roster/catalog.yaml",
             "roster/catalog.schema.json",
+            # PP-FR-2. Like PROVIDER_BUNDLE at :101, this is a CLOSED allowlist
+            # rather than a directory walk, so an unlisted roster-root file is
+            # silently skipped -- and a packaged suite whose roster.json is
+            # missing is not a valid roster package, failing in the installed
+            # plugin and nowhere in CI. The requirements baseline recorded that
+            # trap for provider/; this is the same trap one directory over, and
+            # it fired the moment roster.json existed.
+            "roster/roster.json",
             "roster/catalog-order.txt",
             "roster/context-pack-order.txt",
             "roster/_catalog_header.yaml.tmpl",

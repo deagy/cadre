@@ -60,6 +60,8 @@ DEFAULT_CATALOG = DEFAULT_ROSTER_ROOT / "catalog.yaml"
 DEFAULT_ROUTING = DEFAULT_ROSTER_ROOT / "orchestration" / "routing.json"
 DEFAULT_CATALOG_SCHEMA = DEFAULT_ROSTER_ROOT / "catalog.schema.json"
 DEFAULT_ROUTING_SCHEMA = DEFAULT_ROSTER_ROOT / "orchestration" / "routing.schema.json"
+DEFAULT_ROSTER_MANIFEST = DEFAULT_ROSTER_ROOT / "roster.json"
+DEFAULT_ROSTER_SCHEMA = DEFAULT_ROSTER_ROOT / "orchestration" / "roster.schema.json"
 
 # Matches routing.py::parse_keyed_entries's own id-line character class
 # exactly, so the two line-oriented parsers can't silently diverge.
@@ -279,6 +281,8 @@ def run(
     catalog_schema_path: Path = DEFAULT_CATALOG_SCHEMA,
     routing_schema_path: Path = DEFAULT_ROUTING_SCHEMA,
     agents_root: Path | None = None,
+    roster_manifest_path: Path = DEFAULT_ROSTER_MANIFEST,
+    roster_schema_path: Path = DEFAULT_ROSTER_SCHEMA,
 ) -> list[str]:
     """Return a deterministic, ordered list of finding strings. Empty means
     both files are schema-valid. A structurally-invalid file (malformed
@@ -290,6 +294,23 @@ def run(
     routing_schema = json.loads(routing_schema_path.read_text(encoding="utf-8"))
 
     findings: list[str] = []
+
+    # PP-FR-2's third instance/schema pair. Until Revision 5 this module was
+    # described as needing "no new validation machinery"; it hardwires exactly
+    # two pairs, so a third document genuinely needs new arguments and a new
+    # call. Absent manifest is not a finding: a roster package predating the
+    # manifest is the selector's error to raise by name, not this validator's.
+    if roster_manifest_path.is_file():
+        roster_schema = json.loads(roster_schema_path.read_text(encoding="utf-8"))
+        try:
+            roster_manifest = json.loads(roster_manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            findings.append(f"{roster_manifest_path}: invalid JSON: {error}")
+        else:
+            findings.extend(
+                f"{roster_manifest_path}: {message}"
+                for message in _schema_errors(roster_manifest, roster_schema)
+            )
 
     catalog_text = catalog_path.read_text(encoding="utf-8")
     try:
@@ -330,6 +351,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--routing", type=Path, default=DEFAULT_ROUTING)
     parser.add_argument("--catalog-schema", type=Path, default=DEFAULT_CATALOG_SCHEMA)
     parser.add_argument("--routing-schema", type=Path, default=DEFAULT_ROUTING_SCHEMA)
+    parser.add_argument("--roster-manifest", type=Path, default=DEFAULT_ROSTER_MANIFEST)
+    parser.add_argument("--roster-schema", type=Path, default=DEFAULT_ROSTER_SCHEMA)
     parser.add_argument(
         "--agents-root",
         type=Path,
@@ -338,12 +361,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    findings = run(args.catalog, args.routing, args.catalog_schema, args.routing_schema, args.agents_root)
+    findings = run(
+        args.catalog,
+        args.routing,
+        args.catalog_schema,
+        args.routing_schema,
+        args.agents_root,
+        args.roster_manifest,
+        args.roster_schema,
+    )
     if findings:
         for finding in findings:
             print(finding, file=sys.stderr)
         return 1
-    print(f"schema validation passed: {args.catalog} and {args.routing} are schema-valid")
+    # Names every document actually checked. A success line that under-reports
+    # its own scope is how a validator quietly stops covering something.
+    validated = [str(args.catalog), str(args.routing)]
+    if args.roster_manifest.is_file():
+        validated.append(str(args.roster_manifest))
+    print(f"schema validation passed: {', '.join(validated)} are schema-valid")
     return 0
 
 

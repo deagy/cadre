@@ -13,15 +13,45 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-ORCHESTRATION_ROOT = Path(__file__).resolve().parent.parent
-ROSTER_ROOT = ORCHESTRATION_ROOT.parent
-REPOSITORY_ROOT = ROSTER_ROOT.parent
+# PLATFORM ANCHORS. Every constant below is derived from this file's own
+# location and NONE of them may be routed through `roster.root` (PP-FR-1).
+#
+# Read this before changing any of the four: `REPOSITORY_ROOT` and
+# `_SHARED_SRC_DIR` used to be derived from `ROSTER_ROOT`, which is the
+# constant the resolver now drives. Leaving them in that form while `:17`
+# became resolver-driven would have redirected both silently -- and
+# `_SHARED_SRC_DIR` is the `sys.path` bootstrap for `settings`,
+# `routing_overlay`, `text_embedding` and `content_protection`, so redirecting
+# it would let a resolved roster supply the platform's own settings resolver.
+# It is also circular: `settings` IS the resolver, and it lives under this
+# directory, so it cannot be imported in order to compute its own location.
+# `roster/orchestration/test/test_roster_boundary.py` asserts all of this.
+_PLATFORM_ORCHESTRATION_ROOT = Path(__file__).resolve().parent.parent
+_PLATFORM_ROSTER_ROOT = _PLATFORM_ORCHESTRATION_ROOT.parent
+
+# Keeps its platform meaning -- schemas and orchestration policy live beside
+# this file regardless of which roster is selected. Deliberately NOT
+# resolver-driven: `routing` now comes from the manifest, and routing this
+# through `roster.root` would force every foreign roster to reproduce Cadre's
+# internal `<root>/orchestration/` layout, which is what PP-FR-2 exists to
+# avoid.
+ORCHESTRATION_ROOT = _PLATFORM_ORCHESTRATION_ROOT
+
+# The DEFAULT roster root. Kept as a module constant because existing
+# callers and tests read it; the resolved-per-invocation value comes from
+# resolve_roster_root() below, never from this.
+ROSTER_ROOT = _PLATFORM_ROSTER_ROOT
+
+# "Which tree is being changed", not "which roster describes the roles". A
+# roster redirect that moved this would make a plan describe work that is not
+# the work in front of the user.
+REPOSITORY_ROOT = _PLATFORM_ROSTER_ROOT.parent
 
 # Not relying on agentic_sdlc_contracts' own sys.path append (transitively
 # reached via build_dispatch_plan below) for this -- appended directly so
 # the `from settings import SettingsError` import below is correct even if
 # that transitive chain is ever reordered.
-_SHARED_SRC_DIR = ROSTER_ROOT / "shared" / "src"
+_SHARED_SRC_DIR = _PLATFORM_ROSTER_ROOT / "shared" / "src"
 if str(_SHARED_SRC_DIR) not in sys.path:
     sys.path.append(str(_SHARED_SRC_DIR))
 
@@ -34,7 +64,28 @@ from selection_telemetry import (  # noqa: E402
     is_enabled as telemetry_is_enabled,
     record_selection,
 )
-from settings import SettingsError  # noqa: E402
+from roster_manifest import (  # noqa: E402
+    RosterManifestError,
+    default_roster_root,
+    load_roster_manifest,
+)
+from settings import SettingsError, resolve_setting  # noqa: E402
+
+
+def resolve_roster_root(cli_roster: str | None = None) -> Path:
+    """The one value the resolver drives (PP-FR-1).
+
+    Precedence: an explicit `--roster` wins, then `CADRE_ROSTER_ROOT` or
+    user-global config via `roster.root`, then this checkout's own roster.
+    `roster.root` is SCOPE_GLOBAL_ONLY (OD-2 as reversed), so a project-local
+    `.agents/cadre.yaml` cannot reach it.
+    """
+    if cli_roster:
+        return Path(cli_roster).expanduser().resolve()
+    configured = resolve_setting("roster.root")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return default_roster_root()
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -46,6 +97,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--root",
         help="Target repository root (defaults to the caller's working directory)",
+    )
+    parser.add_argument(
+        "--roster",
+        help=(
+            "Path to a roster package (a directory containing roster.json). "
+            "Defaults to CADRE_ROSTER_ROOT or user-global roster.root, then to "
+            "this installation's own roster. Explicit rather than project-local "
+            "on purpose: a redirect is visible in the invocation (OD-2)."
+        ),
     )
     parser.add_argument("--files", action="append", help="Changed path or comma-separated paths; repeatable")
     parser.add_argument("--base", help="Git base ref used with <base>...HEAD")
@@ -200,8 +260,16 @@ def main(argv: list[str] | None = None) -> int:
         else discover_changed_files(options.base, repository_root)
     )
     source = options.source or resolve_knowledge_source(repository_root)
-    catalog_path = ROSTER_ROOT / "catalog.yaml"
-    routing_path = ORCHESTRATION_ROOT / "routing.json"
+    # PP-FR-1/PP-FR-2: catalog and routing come from the resolved roster's
+    # manifest, not from a path literal. A roster package that cannot be read
+    # fails by name here rather than degrading to the built-in roster (intent
+    # §7 C3/C4).
+    try:
+        manifest = load_roster_manifest(resolve_roster_root(getattr(options, "roster", None)))
+    except RosterManifestError as error:
+        raise SystemExit(f"roster package is unusable: {error}") from error
+    catalog_path = manifest.catalog
+    routing_path = manifest.routing
     # A project-local `.agents/orchestration/routing-overlay.json` is merged
     # into the base ruleset before selection, so the configuration the
     # selector dispatches against is the same effective configuration the

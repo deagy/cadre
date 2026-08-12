@@ -27,6 +27,11 @@ CLASSIFICATIONS = set(CLASSIFICATION_ORDER)
 CLASSIFICATION_RANK = {name: index for index, name in enumerate(CLASSIFICATION_ORDER)}
 MAXIMUM_KNOWLEDGE_TOP = 20
 KNOWLEDGE_STORE_ROOT = Path(__file__).resolve().parents[2] / "knowledge-store"
+# The DEFAULT roster root. Context-pack definitions below resolve against the
+# roster the selector actually chose, which is threaded in rather than read
+# from here; this stays as the fallback for direct callers.
+# NOTE the line above: KNOWLEDGE_STORE_ROOT is platform-anchored and must NOT
+# follow this constant -- test_knowledge_store_anchor.py asserts it (PP-FR-5).
 ROSTER_ROOT = Path(__file__).resolve().parents[2]
 STANDALONE_REASON = "Agentic SDLC executable not found; team dispatch is unaffected."
 # Cross-references the Agentic SDLC kernel's own mutation-gate taxonomy
