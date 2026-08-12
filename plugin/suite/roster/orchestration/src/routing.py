@@ -113,6 +113,17 @@ def _keyword_regex(keyword: str) -> Pattern[str]:
     return re.compile(rf"(?<![a-z0-9-]){escaped}(?![a-z0-9-])", re.IGNORECASE)
 
 
+@functools.lru_cache(maxsize=_PATTERN_CACHE_SIZE)
+def _keyword_tokens(keyword: str) -> tuple[str, ...]:
+    """`keyword`'s whitespace-separated literal tokens, lowercased.
+
+    Used by `_keyword_matches` as a compile-avoidance gate. Memoized for the
+    same reason `_keyword_regex` is: keyed on the keyword, which is bounded by
+    the ruleset.
+    """
+    return tuple(keyword.lower().split())
+
+
 def _keyword_matches(text: str, keyword: str) -> bool:
     """Case-insensitive whole-word match: `keyword` must not be embedded in a
     longer token, for the boundary characters this checks. A hyphen is
@@ -131,7 +142,37 @@ def _keyword_matches(text: str, keyword: str) -> bool:
     that one keyword (see `test_bootstrap_sdlc_keyword_matches_embedded_in_a_longer_token`
     in `roster/orchestration/test/test_selector.py`), not a general property
     of whole-word matching — do not assume it for other keywords.
+
+    **Compile-avoidance gate.** `_keyword_regex` is memoized, but a cold
+    process still pays to build every pattern it touches, and the boundary
+    lookarounds make each one expensive: compiling all 870 of this ruleset's
+    keyword matchers costs ~100ms, which was 95% of a one-shot `cadre select`'s
+    selection time (the 349 globs are ~5ms together). So before compiling,
+    check a *necessary* condition with plain substring tests: every
+    whitespace-separated token of the keyword must appear in the text. A
+    single space in a keyword compiles to `\\s+`, which still requires each
+    literal token to be present, so a keyword failing this test cannot match
+    and its regex is never built. On real tasks this admits ~3.6 of 870
+    keywords, taking cold selection from ~100ms to ~6ms.
+
+    The gate never decides a match -- `_keyword_regex` remains the sole
+    authority on whether one occurred. It can only skip work that would have
+    returned False, so it cannot change this function's result. (Verified
+    directly: zero disagreements across the golden corpus's 175 tasks x 870
+    keywords, and `test_selection_cost.py` re-checks the equivalence.)
+
+    `text` is lowercased here rather than assumed lowercase. Every current
+    caller already passes lowercased text, but the pattern carries
+    `re.IGNORECASE`, so a mixed-case caller would match through the regex
+    while failing a case-sensitive substring gate -- a silently wrong answer
+    for the one function whose whole job is deciding matches. The repeated
+    `.lower()` is O(len(text)) per keyword; task text is a task description,
+    and the measured total above already includes it.
     """
+    lowered = text.lower()
+    for token in _keyword_tokens(keyword):
+        if token not in lowered:
+            return False
     return _keyword_regex(keyword).search(text) is not None
 
 
