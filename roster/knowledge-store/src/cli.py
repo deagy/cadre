@@ -31,12 +31,16 @@ from staged_store import (
     export_records,
     get_history,
     get_record,
+    import_authorizations,
     install_schema,
     list_records,
     put_generated_record,
+    put_history,
     put_record,
     put_record_text,
+    record_import_authorization,
     serialize_record,
+    validate_history,
 )
 
 
@@ -422,6 +426,11 @@ def _show_staged(db: Any, record_id: str) -> dict[str, Any]:
         "body": body,
         "text": serialize_record(frontmatter, body),
         "disposition_history": get_history(db, record_id),
+        # Empty for every record staged here through `propose`. Non-empty only
+        # for one this store admitted already-dispositioned, where the
+        # decision's own `decided_by` says who decided and this says who
+        # authorized letting that decision in.
+        "import_authorizations": import_authorizations(db, record_id),
     }
 
 
@@ -458,7 +467,19 @@ def _import_staged(db: Any, directory: str, authorized_by: str | None = None) ->
 
     Like every other actor field in this store, `--authorized-by` is a
     caller-asserted string authenticated by nobody (see `SECURITY.md`). It
-    makes the act deliberate and attributable, not verified.
+    makes the act deliberate and attributable, not verified -- and attributable
+    means recorded, so it is persisted per admitted record
+    (`staged_record_imports`, readable via `show-staged`) rather than only
+    echoed back to whoever typed it.
+
+    **Histories come with the records.** `export-staged` writes each record's
+    disposition history to a `<id>.history.json` sidecar, because frontmatter
+    cannot hold a list of decisions. Importing the `.md` files alone therefore
+    used to complete the round trip the docstring above claims while dropping
+    every earlier decision -- `export-staged --check` immediately after an
+    import reported `history_drift` for every record that had one. Each
+    sidecar is read, validated against the record it sits beside, and restored
+    through `put_history`.
     """
     root = Path(directory)
     if not root.is_dir():
@@ -491,9 +512,15 @@ def _import_staged(db: Any, directory: str, authorized_by: str | None = None) ->
                     "store at all. Nothing in the batch was imported."
                 )
             dispositioned.append(frontmatter["id"])
-        parsed.append((path, frontmatter, body))
+        history = _load_exported_history(path, frontmatter, db)
+        parsed.append((path, frontmatter, body, history))
 
-    if dispositioned and not authorized_by:
+    # Whitespace is not a name: the two sibling authorization gates in this
+    # store (`staged_store.delete_record`, `ingested_deletion.delete_ingested`)
+    # both strip before testing, and a gate that "   " satisfies records a
+    # blank as the accountable human.
+    authorizer = (authorized_by or "").strip()
+    if dispositioned and not authorizer:
         listed = ", ".join(sorted(dispositioned)[:5])
         more = "" if len(dispositioned) <= 5 else f" (and {len(dispositioned) - 5} more)"
         raise ValueError(
@@ -503,15 +530,96 @@ def _import_staged(db: Any, directory: str, authorized_by: str | None = None) ->
             "A batch of purely 'proposed' records needs no authorization. Nothing was imported."
         )
 
-    imported = [put_record(db, frontmatter, body) for _, frontmatter, body in parsed]
-    result: dict[str, Any] = {"status": "imported", "count": len(imported), "ids": sorted(imported)}
+    imported = []
+    restored = 0
+    for _, frontmatter, body, history in parsed:
+        record_id = put_record(db, frontmatter, body)
+        imported.append(record_id)
+        if history:
+            restored += put_history(db, record_id, history)
+        if frontmatter.get("disposition"):
+            # Written after the record, so an authorization row never describes
+            # an admission that failed. `authorizer` is non-empty here: the gate
+            # above refuses this whole batch otherwise.
+            record_import_authorization(
+                db,
+                record_id,
+                content_digest=frontmatter["content_digest"],
+                status_at_import=frontmatter["status"],
+                authorized_by=authorizer,
+                directory=str(root),
+            )
+    result: dict[str, Any] = {
+        "status": "imported",
+        "count": len(imported),
+        "ids": sorted(imported),
+        # Rows written, not sidecars read: a sidecar whose history the store
+        # already holds is a no-op, so 0 here after a re-import means "nothing
+        # to restore", not "nothing was restored".
+        "disposition_history_rows_restored": restored,
+    }
     if dispositioned:
         # Echoed back so the operator sees what their authorization actually
         # covered, rather than a count that hides which records were decided
-        # elsewhere.
+        # elsewhere. Also persisted per record -- see this function's docstring.
         result["dispositioned"] = sorted(dispositioned)
-        result["authorized_by"] = authorized_by
+        result["authorized_by"] = authorizer
+        result["authorization_recorded"] = True
     return result
+
+
+def _load_exported_history(
+    path: Path, frontmatter: dict[str, Any], db: Any
+) -> list[dict[str, Any]]:
+    """The `<id>.history.json` sidecar beside a record file, validated, or `[]`.
+
+    Validation happens here, in the batch's pre-write pass, so a malformed or
+    contradictory sidecar refuses the import before any record is written --
+    `put_history` re-checks, but reaching its check mid-batch would already
+    have written earlier records.
+
+    An absent sidecar is not an error: two records in the committed snapshot
+    are dispositioned with no history at all, from before that table existed.
+    But an absent sidecar does not license contradicting history the store
+    *does* hold, so the record is validated against that instead. Otherwise
+    importing a hand-amended `.md` over a dispositioned record would leave it
+    disagreeing with its own retained audit trail -- amending a disposition is
+    `disposition-staged`'s job, which appends rather than overwrites.
+    """
+    sidecar = path.with_name(f"{frontmatter['id']}.history.json")
+    if sidecar.is_file():
+        try:
+            history = json.loads(sidecar.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                f"{sidecar.name}: not valid JSON ({error}). This file is a record's disposition "
+                "history as written by export-staged; nothing in the batch was imported."
+            ) from error
+        findings = validate_history(frontmatter, history)
+        if findings:
+            raise ValueError(f"{sidecar.name}: " + "; ".join(findings) + ". Nothing was imported.")
+        for entry in history:
+            if entry["decided_by"] == frontmatter.get("staged_by"):
+                raise ValueError(
+                    f"{sidecar.name}: {entry['decided_by']!r} both staged this record and "
+                    f"dispositioned it at history entry {entry['sequence']}. Importing cannot "
+                    "launder a self-approval through a history sidecar any more than through a "
+                    "record's own disposition. Nothing in the batch was imported."
+                )
+        return history
+    retained = get_history(db, frontmatter["id"])
+    if retained:
+        findings = validate_history(frontmatter, retained)
+        if findings:
+            raise ValueError(
+                f"{path.name}: this store already holds a disposition history for "
+                f"{frontmatter['id']!r} that the record being imported contradicts -- "
+                + "; ".join(findings)
+                + ". Export this store to see what it holds (the export writes the history "
+                "beside each record), or use disposition-staged to amend a disposition, which "
+                "appends to that history instead of contradicting it. Nothing was imported."
+            )
+    return []
 
 
 def _export_staged(db: Any, output: str, status: str | None) -> dict[str, Any]:
@@ -662,7 +770,11 @@ def _enforce_staged_source_scope(tier: str, sources: Any) -> None:
     all, so the error points at the same remedy `_enforce_staging_scope` does.
 
     `--source` remains free-form everywhere else; this reserves exactly one
-    name, and only at the tier where the store is shared.
+    name, and only at the tier where the store is shared. Every gated verb
+    that takes a source at this tier calls it -- `search`/`context` and
+    `ingest` (read and write), plus `delete-ingested` and `deletion-evidence`,
+    which is where a partial wiring would have hurt most: the destructive verb
+    is the one you least want reaching another project's rows.
 
     `--all-sources` still reaches it, and that is deliberate rather than a
     gap: that flag's whole meaning at this tier is "explicitly opt into
@@ -708,9 +820,17 @@ def _enforce_ingested_deletion_scope(tier: str, options: dict[str, Any]) -> None
     content is exactly the setting where a steward deleting by conversation
     or message id, without also naming the source, is most likely to be
     correcting the wrong project's content by mistake.
+
+    The reserved staged-source name is refused here too, and this is the verb
+    where that matters most: it is the destructive one. Rows sitting under
+    `proposed-knowledge` in the shared store belong to whichever project
+    ingested them before that name was reserved, so deleting them from here is
+    reaching into another project's corpus -- the same reasoning as on the read
+    side, with a worse outcome.
     """
     if tier != TIER_GLOBAL_FALLBACK:
         return
+    _enforce_staged_source_scope(tier, options.get("source"))
     if not options.get("source"):
         raise ValueError(
             "A project scope is required to delete ingested content from the shared global "
@@ -731,11 +851,18 @@ def _enforce_evidence_scope(tier: str, options: dict[str, Any]) -> None:
 
     Project-local and explicit-`--config` tiers are already isolated by
     database, so no new requirement is imposed on them.
+
+    The reserved staged-source name is refused here for the same reason it is
+    on every other scoped path at this tier: evidence rows under that name in
+    the shared store describe another project's deletions. `--all-sources`
+    still reaches them, unchanged -- that flag is the explicit cross-project
+    opt-in.
     """
     if tier != TIER_GLOBAL_FALLBACK:
         return
     source = options.get("source")
     all_sources = options.get("all_sources")
+    _enforce_staged_source_scope(tier, source)
     if source and all_sources:
         raise ValueError(
             "Ambiguous scope: pass either --source <project-identifier> or "

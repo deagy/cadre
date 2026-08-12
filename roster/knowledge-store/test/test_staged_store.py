@@ -270,5 +270,109 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(staged_store.export_records(db), {})
 
 
+class HistoryRestoreTests(unittest.TestCase):
+    """`put_history`: the import-side half of the exported history sidecar."""
+
+    def _accepted_record(self) -> tuple[sqlite3.Connection, dict, list[dict]]:
+        db = _open_memory_store()
+        frontmatter, body = staged_records.parse_record(
+            (RECORDS / "accepted-with-disposition.md").read_text(encoding="utf-8")
+        )
+        staged_store.put_record(db, frontmatter, body)
+        history = [
+            dict(
+                sequence=1,
+                decided_at="2026-08-01T00:00:00.000Z",
+                **frontmatter["disposition"],
+            )
+        ]
+        return db, frontmatter, history
+
+    def test_a_restored_history_reads_back_exactly(self) -> None:
+        db, frontmatter, history = self._accepted_record()
+        self.assertEqual(1, staged_store.put_history(db, frontmatter["id"], history))
+        self.assertEqual(history, staged_store.get_history(db, frontmatter["id"]))
+        # Idempotent, because it is append-only rather than replace-on-import.
+        self.assertEqual(0, staged_store.put_history(db, frontmatter["id"], history))
+
+    def test_history_for_an_unknown_record_is_refused(self) -> None:
+        db, frontmatter, history = self._accepted_record()
+        with self.assertRaises(staged_store.StagedRecordError) as caught:
+            staged_store.put_history(db, "KS-20260101-nope", history)
+        self.assertIn("KS-20260101-nope", str(caught.exception))
+
+    def test_an_unknown_key_in_an_entry_is_refused_not_dropped(self) -> None:
+        # A surplus key means a newer export format or a hand-edit. Storing the
+        # entry minus the key would silently discard whatever it meant.
+        db, frontmatter, history = self._accepted_record()
+        tampered = [dict(history[0], decided_via="a field this contract has never had")]
+        findings = staged_store.validate_history(frontmatter, tampered)
+        self.assertTrue(any("unknown key" in finding for finding in findings))
+        with self.assertRaises(staged_store.StagedRecordError):
+            staged_store.put_history(db, frontmatter["id"], tampered)
+        self.assertEqual([], staged_store.get_history(db, frontmatter["id"]))
+
+    def test_history_without_a_disposition_is_refused(self) -> None:
+        db = _open_memory_store()
+        frontmatter, body = staged_records.parse_record(
+            (RECORDS / "proposed-minimal.md").read_text(encoding="utf-8")
+        )
+        staged_store.put_record(db, frontmatter, body)
+        history = [
+            dict(
+                sequence=1,
+                action="accepted",
+                reason="a decision the record does not carry",
+                classification_used="internal",
+                diverged_from_proposal=False,
+                decided_by="a-steward",
+                decided_at="2026-08-01T00:00:00.000Z",
+            )
+        ]
+        with self.assertRaises(staged_store.StagedRecordError) as caught:
+            staged_store.put_history(db, frontmatter["id"], history)
+        self.assertIn("no disposition", str(caught.exception))
+
+    def test_an_import_authorization_is_readable_after_it_is_written(self) -> None:
+        db, frontmatter, _ = self._accepted_record()
+        self.assertEqual([], staged_store.import_authorizations(db))
+        staged_store.record_import_authorization(
+            db,
+            frontmatter["id"],
+            content_digest=frontmatter["content_digest"],
+            status_at_import=frontmatter["status"],
+            authorized_by="operator@example.invalid",
+            directory="/tmp/corpus",
+        )
+        rows = staged_store.import_authorizations(db, frontmatter["id"])
+        self.assertEqual(1, len(rows))
+        self.assertEqual("operator@example.invalid", rows[0]["authorized_by"])
+        self.assertEqual(rows, staged_store.import_authorizations(db))
+
+    def test_an_authorization_outlives_the_record_it_describes(self) -> None:
+        # No foreign key, deliberately -- the same property
+        # `staged_record_deletions` has. Evidence that vanished with its
+        # subject would make an admission indistinguishable from never
+        # having happened.
+        db, frontmatter, _ = self._accepted_record()
+        staged_store.record_import_authorization(
+            db,
+            frontmatter["id"],
+            content_digest=frontmatter["content_digest"],
+            status_at_import=frontmatter["status"],
+            authorized_by="operator@example.invalid",
+            directory="/tmp/corpus",
+        )
+        staged_store.delete_record(
+            db,
+            frontmatter["id"],
+            reason="withdrawn after import",
+            deleted_by="a-steward",
+            authorized_by="the repository owner",
+        )
+        self.assertIsNone(staged_store.get_record(db, frontmatter["id"]))
+        self.assertEqual(1, len(staged_store.import_authorizations(db, frontmatter["id"])))
+
+
 if __name__ == "__main__":
     unittest.main()

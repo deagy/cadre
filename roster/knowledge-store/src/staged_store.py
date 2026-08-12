@@ -30,6 +30,7 @@ from typing import Any
 
 from staged_records import (
     DELIMITER,
+    DISPOSITION_ACTIONS,
     REQUIRED_KEYS,
     RecordFormatError,
     parse_record,
@@ -61,6 +62,15 @@ CREATE TABLE IF NOT EXISTS staged_record_dispositions (
   decided_by TEXT NOT NULL,
   decided_at TEXT NOT NULL,
   PRIMARY KEY (record_id, sequence)
+);
+CREATE TABLE IF NOT EXISTS staged_record_imports (
+  record_id TEXT NOT NULL,
+  content_digest TEXT NOT NULL,
+  status_at_import TEXT NOT NULL,
+  authorized_by TEXT NOT NULL,
+  directory TEXT NOT NULL,
+  imported_at TEXT NOT NULL,
+  PRIMARY KEY (record_id, imported_at)
 );
 CREATE TABLE IF NOT EXISTS staged_record_deletions (
   record_id TEXT NOT NULL,
@@ -383,6 +393,225 @@ def get_history(db: sqlite3.Connection, record_id: str) -> list[dict[str, Any]]:
     return _history_rows(db, record_id)
 
 
+#: The exact shape `get_history` returns and `_export_staged` writes to a
+#: `<id>.history.json` sidecar. `put_history` accepts nothing else: an entry
+#: carrying an unknown key is either a newer export format or a hand-edit, and
+#: both should fail loudly rather than be stored with the surplus dropped.
+HISTORY_KEYS: tuple[str, ...] = (
+    "sequence",
+    "action",
+    "reason",
+    "classification_used",
+    "diverged_from_proposal",
+    "decided_by",
+    "decided_at",
+)
+
+
+def validate_history(frontmatter: dict[str, Any], history: Any) -> list[str]:
+    """Findings against one record's exported disposition history, or `[]`.
+
+    Separate from `put_history` so a batch importer can validate every
+    record's history *before* writing any of them -- the same
+    validate-then-write discipline `put_record` follows, for the same reason:
+    a half-restored audit trail is worse than a refused import, because
+    nothing about it looks refused.
+
+    The last entry must agree with the record's own `disposition`, and the
+    record's `status` must equal that entry's action. This is not redundancy
+    for its own sake: `disposition_record` produces exactly that agreement
+    (frontmatter carries the current decision, history carries all of them),
+    so a sidecar that disagrees describes a state this store cannot have
+    produced -- a stale sidecar left beside an amended record, or an edited
+    one. Two records in the committed snapshot are dispositioned with *no*
+    sidecar at all, from before this table existed, so an absent history is
+    not itself a finding; only a present-and-contradictory one is.
+    """
+    findings: list[str] = []
+    if not isinstance(history, list) or not history:
+        return [f"disposition history must be a non-empty list, got {type(history).__name__}"]
+    for index, entry in enumerate(history):
+        position = f"history entry {index + 1}"
+        if not isinstance(entry, dict):
+            findings.append(f"{position} must be a mapping, got {type(entry).__name__}")
+            continue
+        missing = [key for key in HISTORY_KEYS if key not in entry]
+        if missing:
+            findings.append(f"{position} is missing {', '.join(missing)}")
+        unknown = [key for key in entry if key not in HISTORY_KEYS]
+        if unknown:
+            findings.append(f"{position} carries unknown key(s) {', '.join(sorted(unknown))}")
+        if entry.get("sequence") != index + 1:
+            findings.append(
+                f"{position} has sequence {entry.get('sequence')!r}; history must be ordered "
+                "and numbered from 1 with no gaps"
+            )
+        action = entry.get("action")
+        if action not in DISPOSITION_ACTIONS:
+            findings.append(
+                f"{position} action must be one of {', '.join(DISPOSITION_ACTIONS)}; got {action!r}"
+            )
+        if not isinstance(entry.get("diverged_from_proposal"), bool):
+            findings.append(f"{position} diverged_from_proposal must be true or false")
+        for key in ("reason", "classification_used", "decided_by", "decided_at"):
+            value = entry.get(key)
+            if not isinstance(value, str) or not value.strip():
+                findings.append(f"{position} {key} must be a non-empty string")
+    if findings:
+        return findings
+
+    last = history[-1]
+    disposition = frontmatter.get("disposition")
+    if not isinstance(disposition, dict):
+        return [
+            "the record carries no disposition, but its history records "
+            f"{len(history)} decision(s) -- a record nobody has decided cannot have a "
+            "disposition history"
+        ]
+    disagreements = [
+        key
+        for key in ("action", "reason", "classification_used", "diverged_from_proposal", "decided_by")
+        if last.get(key) != disposition.get(key)
+    ]
+    if disagreements:
+        findings.append(
+            f"the last history entry disagrees with the record's own disposition on "
+            f"{', '.join(disagreements)}; the newest history entry is that disposition"
+        )
+    if frontmatter.get("status") != last.get("action"):
+        findings.append(
+            f"the record's status {frontmatter.get('status')!r} disagrees with its newest "
+            f"history entry's action {last.get('action')!r}"
+        )
+    return findings
+
+
+def put_history(db: sqlite3.Connection, record_id: str, history: list[dict[str, Any]]) -> int:
+    """Restore a record's disposition history, returning how many rows were written.
+
+    The other half of `export_records`. Export writes each record's history to
+    a `<id>.history.json` sidecar because the frontmatter dialect is one level
+    deep and cannot hold a list of mappings; without this, importing that
+    export read the `.md` files and silently dropped every sidecar, so a
+    store moved between machines arrived with its records intact and its audit
+    trail gone -- and arrived looking complete.
+
+    Append-only, never destructive: this inserts rows and never deletes or
+    rewrites one. Re-importing the same export is therefore a no-op (identical
+    history already present -> 0 rows written), and an import whose sidecar
+    *contradicts* history already in the store is refused rather than
+    reconciled. Silently replacing rows here would make this function the one
+    way to erase a disposition without leaving evidence, which is precisely
+    what `delete_record`'s evidence table exists to prevent.
+    """
+    loaded = get_record(db, record_id)
+    if loaded is None:
+        raise StagedRecordError(f"No staged record with id {record_id!r} in this store.")
+    frontmatter, _ = loaded
+    findings = validate_history(frontmatter, history)
+    if findings:
+        raise StagedRecordError(
+            f"disposition history for {record_id!r} does not satisfy the contract: "
+            + "; ".join(findings),
+            findings,
+        )
+    existing = _history_rows(db, record_id)
+    if existing:
+        if existing == history:
+            return 0
+        raise StagedRecordError(
+            f"record {record_id!r} already has a disposition history in this store that differs "
+            "from the one being imported. Refused rather than replaced: this store's history is "
+            "append-only, and overwriting it would erase a decision with no evidence left behind. "
+            "Reconcile the two deliberately -- export this store first to see what it holds."
+        )
+    with db:
+        db.executemany(
+            "INSERT INTO staged_record_dispositions (record_id, sequence, action, reason, "
+            "classification_used, diverged_from_proposal, decided_by, decided_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    record_id,
+                    entry["sequence"],
+                    entry["action"],
+                    entry["reason"],
+                    entry["classification_used"],
+                    1 if entry["diverged_from_proposal"] else 0,
+                    entry["decided_by"],
+                    entry["decided_at"],
+                )
+                for entry in history
+            ],
+        )
+    return len(history)
+
+
+def record_import_authorization(
+    db: sqlite3.Connection,
+    record_id: str,
+    *,
+    content_digest: str,
+    status_at_import: str,
+    authorized_by: str,
+    directory: str,
+) -> None:
+    """Persist who authorized admitting one already-dispositioned record.
+
+    `import-staged --authorized-by` is the only route by which a decision this
+    store never watched being made can still enter it, and the argument's whole
+    justification is that it "names the human accountable for admitting" that
+    decision. Echoing the name into the command's JSON output does not do
+    that: the process exits and the accountability goes with it, leaving a
+    record whose disposition has an attributable decider and an unattributable
+    admission. This is where the name survives.
+
+    Written only for records that actually required authorization -- a batch of
+    purely `proposed` records grants nobody anything and stays ceremony-free,
+    matching the scope of the gate in `cli._import_staged`.
+
+    Carries no foreign key to `staged_records`, for the same reason
+    `staged_record_deletions` carries none: this outlives the row it describes,
+    so a record deleted afterwards does not take the evidence of its admission
+    with it.
+
+    `INSERT OR REPLACE` can only collide on `(record_id, imported_at)` -- the
+    same record admitted twice within the same millisecond, where the replaced
+    row and its replacement are identical in every column. Two genuinely
+    separate imports get two rows.
+    """
+    with db:
+        db.execute(
+            "INSERT OR REPLACE INTO staged_record_imports (record_id, content_digest, "
+            "status_at_import, authorized_by, directory, imported_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (record_id, content_digest, status_at_import, authorized_by, directory, _now()),
+        )
+
+
+def import_authorizations(
+    db: sqlite3.Connection, record_id: str | None = None
+) -> list[dict[str, Any]]:
+    """Every authorized import of a dispositioned record, oldest first.
+
+    A read path exists because evidence nobody can read is not evidence.
+    `show-staged` surfaces this beside the record's disposition history, which
+    is where the question is actually asked: this decision was made
+    elsewhere -- who let it in here?
+    """
+    if record_id is None:
+        rows = db.execute(
+            "SELECT record_id, content_digest, status_at_import, authorized_by, directory, "
+            "imported_at FROM staged_record_imports ORDER BY imported_at, record_id"
+        ).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT record_id, content_digest, status_at_import, authorized_by, directory, "
+            "imported_at FROM staged_record_imports WHERE record_id = ? ORDER BY imported_at",
+            (record_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def disposition_record(
     db: sqlite3.Connection,
     record_id: str,
@@ -568,6 +797,7 @@ def delete_record(
 
 __all__ = [
     "SCHEMA",
+    "HISTORY_KEYS",
     "StagedRecordError",
     "RecordFormatError",
     "install_schema",
@@ -581,6 +811,10 @@ __all__ = [
     "export_records",
     "disposition_record",
     "get_history",
+    "put_history",
+    "validate_history",
+    "record_import_authorization",
+    "import_authorizations",
     "delete_record",
     "deletion_evidence",
 ]
