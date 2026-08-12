@@ -45,6 +45,14 @@ evidence/
 .agents/knowledge-store/config.json
 .agents/knowledge-store/data/
 
+# Same for the sibling context store. Its entries are agent-written working
+# material with no steward gate in front of them, so a committed database
+# would publish unreviewed content -- the failure mode its TTL design exists
+# to prevent. roster/context-store/.gitignore covers only the in-repo
+# roster/context-store/data/, not a project-local store rooted here.
+.agents/context-store/config.json
+.agents/context-store/data/
+
 # Local Claude Code settings (not portable across contributors).
 .claude/settings.local.json
 
