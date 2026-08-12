@@ -115,6 +115,14 @@ packages = ["cadre_cli"]
 "roster/context-packs" = "cadre_cli/_vendor/roster/context-packs"
 "roster/context-pack-order.txt" = "cadre_cli/_vendor/roster/context-pack-order.txt"
 
+# The roster package manifest. This is the THIRD closed allowlist governing
+# "which files ship" -- after generate_global_plugin.py's PROVIDER_BUNDLE and
+# its separate roster-root list -- and each had to be found on its own.
+# Omitting this one ships a wheel whose selector cannot import at all, because
+# routing_overlay resolves the default routing path through the manifest at
+# import time and fails closed when it is absent.
+"roster/roster.json" = "cadre_cli/_vendor/roster/roster.json"
+
 "roster/knowledge-store/AGENT.md" = "cadre_cli/_vendor/roster/knowledge-store/AGENT.md"
 "roster/knowledge-store/README.md" = "cadre_cli/_vendor/roster/knowledge-store/README.md"
 "roster/knowledge-store/SECURITY.md" = "cadre_cli/_vendor/roster/knowledge-store/SECURITY.md"
@@ -127,6 +135,7 @@ packages = ["cadre_cli"]
 "roster/orchestration/handoff-contracts.md" = "cadre_cli/_vendor/roster/orchestration/handoff-contracts.md"
 "roster/orchestration/knowledge-retrieval-policy.yaml" = "cadre_cli/_vendor/roster/orchestration/knowledge-retrieval-policy.yaml"
 "roster/orchestration/review-response-template.md" = "cadre_cli/_vendor/roster/orchestration/review-response-template.md"
+"roster/orchestration/roster.schema.json" = "cadre_cli/_vendor/roster/orchestration/roster.schema.json"
 "roster/orchestration/routing.json" = "cadre_cli/_vendor/roster/orchestration/routing.json"
 "roster/orchestration/selection.schema.json" = "cadre_cli/_vendor/roster/orchestration/selection.schema.json"
 "roster/orchestration/task-brief-template.md" = "cadre_cli/_vendor/roster/orchestration/task-brief-template.md"
