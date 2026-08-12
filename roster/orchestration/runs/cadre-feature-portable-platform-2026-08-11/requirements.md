@@ -1220,6 +1220,27 @@ churn as a consequence so it is not later misread as a determinism regression.
   the same trust-the-shape failure PP-NFR-4 exists to prevent everywhere else.
   Out of scope here and correctly so; worth filing.
 
+- **G-12: `routing.yaml` is JSON, and its extension says otherwise.**
+  `routing_overlay.py:502` parses the base routing file with
+  `json.loads(base_text)`. Cadre's own file is JSON-formatted, so nothing has
+  ever noticed. **Found by the Phase 0 spike on the first run of the first
+  foreign roster this repository has had** — a fixture authored as real YAML,
+  which is the obvious reading of a file named `routing.yaml`, died with
+  `json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)`,
+  naming neither the file nor the format nor the requirement.
+
+  This is **A3 made concrete** (*"every assumption the reference roster happens
+  to satisfy is currently invisible"*), and it was not reachable by reading:
+  six revisions of these records cite `routing.yaml` constantly, PP-FR-2
+  specifies a `routing` path in `roster.json`, and PP-FR-3 requires a fixture
+  with "its own `routing.yaml`". None of it noticed the format.
+
+  Not fixed here — parse YAML, rename the file, or fail with a message naming
+  the format are three different answers with different packaging blast radii.
+  **PP-FR-2 must state the required format explicitly** whichever is chosen, and
+  PP-FR-3's fixture must be authored in it. See
+  `phase-0-and-d-evidence.md`.
+
 - **G-11: `_gate_agents()` reads two contract keys that have never existed.**
   `build_dispatch_plan.py:107` calls `.get("author_agents", [])` and
   `.get("review_agents", <default>)` against `kernel/contracts/lifecycle-gates.json`,

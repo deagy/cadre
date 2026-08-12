@@ -172,10 +172,17 @@ Revision 6 puts each in exactly one phase.
 
 ## 1. Phases
 
-### Phase D — Knowledge-store regression pin (PP-FR-5). **Do this first.**
+### Phase D — Knowledge-store regression pin (PP-FR-5). **LANDED 2026-08-11.**
 
 Moved from last to first at Revision 6. The content is unchanged and is
 described in full below under its original heading; what changed is *when*.
+
+**Delivered:** `roster/orchestration/test/test_knowledge_store_anchor.py`,
+7 tests, suite 1228 → 1235. Two planted defects confirmed it fails naming the
+real cause, and the second is the one that mattered — it creates the
+`CADRE_ROSTER_ROOT` reader that does not exist yet, so the forward pin is proved
+non-vacuous against the future state it guards rather than the present one.
+Evidence at `phase-0-and-d-evidence.md`.
 
 It depends on nothing, changes no behaviour, and asserts that
 `build_dispatch_plan.py:29` stays `Path(__file__)`-derived. The live risk it
@@ -186,9 +193,28 @@ difference between a regression test and a post-mortem.
 
 Zero risk, zero decisions, always safe to stop.
 
-### Phase 0 — Falsification spike (NEW at Revision 6). **Not shipped code.**
+### Phase 0 — Falsification spike (NEW at Revision 6). **RUN 2026-08-11, discarded.**
 
 **Files:** none in the tree. A disposable script or branch, deleted afterwards.
+
+**Outcome — the seam is real, with one known blocker in front of it.** A foreign
+roster sharing no id, phase or keyword with Cadre's produced a schema-valid plan
+naming only its own roles (`workflow='new-service'`, from its own declared
+`workflow_shape`, zero Cadre leakage). With the kernel resolvable the same task
+raised `ValueError: Routing selected an unknown agent: code-reviewer` —
+**OD-9's premise observed rather than reasoned.** Both surfaces confirmed to
+resolve independently.
+
+**And one finding nobody had: `routing.yaml` is JSON** (`routing_overlay.py:502`
+parses it with `json.loads`). A fixture written as actual YAML died on the first
+run with a `JSONDecodeError` naming nothing useful. Filed as **G-12**; it
+belongs in Phase A or B, ahead of authoring the real fixture. Full evidence at
+`phase-0-and-d-evidence.md`.
+
+**What this cost, against what Phase B was scheduled to cost.** The answer above
+arrived with no manifest, no schema, no FieldSpec, no constant rewrite and no
+regeneration — which is the entire argument Revision 6 made for adding this
+phase, now tested.
 
 Monkeypatch or env-redirect the four resolution sites — `select_agents.ROSTER_ROOT`,
 `build_dispatch_plan.ROSTER_ROOT`, `mcp/dispatch_core.CATALOG_PATH`,
