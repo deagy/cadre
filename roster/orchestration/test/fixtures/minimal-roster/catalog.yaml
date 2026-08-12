@@ -1,0 +1,23 @@
+version: 1
+agents:
+  widget-smith:
+    definition: forge/widget-smith/AGENT.md
+    phase: forge
+    capability: document_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  widget-inspector:
+    definition: assay/widget-inspector/AGENT.md
+    phase: assay
+    capability: reviewer
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  widget-scribe:
+    definition: chronicle/widget-scribe/AGENT.md
+    phase: chronicle
+    capability: document_author
+    model: haiku
+    codex_model: gpt-5.6-terra
+    reasoning_effort: low

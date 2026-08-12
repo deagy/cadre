@@ -176,6 +176,22 @@ def _validate_record(role_id: str, record: dict[str, str], source: str) -> None:
         raise RoleMetadataError(f"role {role_id!r} ({source}): knowledge_focus must be a non-empty string")
 
 
+# Directories whose AGENT.md files describe some *other* roster and must never
+# enter this one's inventory. Added when PP-FR-3's fixture roster landed under
+# `orchestration/test/fixtures/` and repo-wide role discovery immediately
+# claimed its three roles as Cadre's own -- role discovery had no notion of
+# "roles that are not ours", because until a second roster existed there were
+# none. A real role under a test-fixtures directory would be misfiled anyway,
+# so the rule costs nothing it should not cost.
+NON_ROSTER_DIRECTORY_PARTS = ("test", "fixtures")
+
+
+def is_role_definition(path: Path, agents_root: Path) -> bool:
+    """True when an AGENT.md belongs to *this* roster's inventory."""
+    parts = path.relative_to(agents_root).parts
+    return not any(part in NON_ROSTER_DIRECTORY_PARTS for part in parts)
+
+
 def load_order(order_path: Path) -> list[str]:
     return parse_order_file(order_path.read_text(encoding="utf-8"))
 
@@ -198,6 +214,8 @@ def build_role_model(
 
     discovered: dict[str, str] = {}
     for path in sorted(agents_root.rglob("AGENT.md")):
+        if not is_role_definition(path, agents_root):
+            continue
         relative = path.relative_to(agents_root).as_posix()
         text = path.read_text(encoding="utf-8")
         if not is_migrated(text):

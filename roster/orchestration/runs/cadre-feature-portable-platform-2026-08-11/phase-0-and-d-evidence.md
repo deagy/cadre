@@ -252,3 +252,53 @@ Cadre's own output is unchanged: `support` still carries `code-reviewer` on
 lifecycle-aware plans, the golden corpus is unedited, and the ~15
 `test_selector.py` assertions did not move — which is what OD-9 option 1 was
 chosen to guarantee.
+
+---
+
+## Phase B′ — the fixture roster, committed (PP-FR-3)
+
+`roster/orchestration/test/fixtures/minimal-roster/` and
+`test_roster_package.py`, 13 tests. Suite 1263 → 1276.
+
+The Phase 0 spike's throwaway roster made permanent. Seven acceptance cases
+(a)–(g), plus two the requirements named without scheduling: role definitions
+must actually resolve, and the fixture must be provably foreign.
+
+**"Authored fresh, not subset from Cadre's" is asserted, not promised.**
+`test_fixture_shares_nothing_with_cadre` checks role ids, routing keywords and
+route ids are all disjoint. Verified: zero overlap in each. A copy would satisfy
+every assumption Cadre happens to satisfy, and the spike already demonstrated
+that is not hypothetical — the first foreign roster this repository ever had hit
+an undeclared format assumption on its first run (G-12).
+
+### Non-vacuity (PP-NFR-4)
+
+Four defects planted against the fixture, each reverted:
+
+| Plant | Caught by |
+| --- | --- |
+| strip `quality_gates` from every route | `test_the_fixture_declares_quality_gates` |
+| strip `workflow_shape` | case (d) |
+| rename a fixture role to `code-reviewer` | cases (a) and (d) |
+| break `role_root` | `test_role_definitions_resolve_and_exist` |
+
+**The first plant is the one that matters.** Without a route declaring
+`quality_gates`, case (e) silently degrades into case (a): it still passes, it
+still reports the seam is real, and it no longer reaches `_gate_agents()` —
+where the only blocker a foreign roster ever had lives. The self-vacuity guard
+exists so that degradation is a failure rather than a quieter green.
+
+### A collision the plan predicted and the requirements did not
+
+Adding the fixture broke eight tests and `generate-role-metadata` immediately:
+repo-wide `AGENT.md` discovery claimed the fixture's three roles as Cadre's own.
+`delivery-sequencer` flagged exactly this risk during review — *"a new
+fixtures/minimal-roster/ tree under test/ should be confirmed not to trip any
+repo-wide inventory assumption"* — and it was right.
+
+The cause is the shape everything else in this work has had: **role discovery had
+no notion of "roles that are not ours", because until a second roster existed
+there were none.** Fixed with one predicate, `is_role_definition()`, defined in
+`generate_role_metadata.py` and imported by `test_repository_health.py` rather
+than duplicated — two copies would let the generator and its guard drift into
+disagreeing about what a role is.

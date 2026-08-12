@@ -17,6 +17,15 @@ from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+
+# One rule, not two. Role discovery must skip AGENT.md files belonging to some
+# other roster -- PP-FR-3's fixture under orchestration/test/fixtures/ -- and
+# duplicating the predicate here would let the generator and this guard drift
+# into disagreeing about what a role is.
+_SRC = ROOT / "orchestration" / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+from generate_role_metadata import is_role_definition  # noqa: E402
 REPOSITORY_ROOT = ROOT.parent
 
 # Single source of truth for this repository's current role count. Cross-
@@ -127,6 +136,7 @@ class RepositoryHealthTests(unittest.TestCase):
         agent_files = {
             str(path.relative_to(ROOT)).replace("\\", "/")
             for path in ROOT.rglob("AGENT.md")
+            if is_role_definition(path, ROOT)
         }
         self.assertEqual(set(catalog_agents.values()), agent_files)
         for relative_path in catalog_agents.values():
@@ -145,7 +155,10 @@ class RepositoryHealthTests(unittest.TestCase):
                 metadata[current_agent][key] = value.strip()
 
         self.assertEqual(EXPECTED_ROLE_COUNT, len(metadata))
-        self.assertEqual(EXPECTED_ROLE_COUNT, len(list(ROOT.rglob("AGENT.md"))))
+        self.assertEqual(
+            EXPECTED_ROLE_COUNT,
+            len([p for p in ROOT.rglob("AGENT.md") if is_role_definition(p, ROOT)]),
+        )
         allowed = {"read_only", "document_author", "code_author", "test_author", "environment_operator"}
         for agent_id, values in metadata.items():
             with self.subTest(agent=agent_id):
