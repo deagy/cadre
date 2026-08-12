@@ -233,6 +233,7 @@ def summarize(path: Path) -> dict[str, Any]:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        prog="cadre selection-telemetry",
         description="Summarize accumulated cadre select telemetry (opt-in, local; see module docstring).",
         allow_abbrev=False,
     )

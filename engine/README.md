@@ -22,8 +22,16 @@ project-overlay bootstrapping (`init`/`detect`).
 ```sh
 cd engine
 uv sync
-uv run pytest
+uv run python -m pytest
 ```
+
+`python -m pytest` rather than `uv run pytest`: the latter needs pytest's
+console-entry-point script present in `.venv/bin`, and a venv can end up with
+the package importable but that script missing — `uv sync` reports success and
+`uv run pytest` then fails with `Failed to spawn: pytest`, which reads as a
+missing dependency rather than a damaged venv. The module form runs from the
+import alone. (If you hit that state, `uv sync --reinstall` restores the
+script.)
 
 No `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` is required to run the tests — they
 use a deterministic `FakeModelClient`. Set

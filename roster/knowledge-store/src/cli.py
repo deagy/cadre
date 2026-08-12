@@ -41,7 +41,7 @@ from staged_store import (
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="cli.py", description="Local agent knowledge store")
+    parser = argparse.ArgumentParser(prog="cadre knowledge", description="Local agent knowledge store")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     def add_config(command: argparse.ArgumentParser) -> None:

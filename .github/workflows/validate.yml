@@ -74,9 +74,9 @@ jobs:
             echo "path=.github/requirements-validation.lock" >> "$GITHUB_OUTPUT"
           fi
       - run: pip install --no-cache-dir --require-hashes -r ${{ steps.lockfile.outputs.path }}
-      - run: python -B -m unittest discover -s roster/orchestration/test -p "test_*.py"
-      - run: python -B -m unittest discover -s roster/knowledge-store/test -p "test_*.py"
-      - run: python -B -m unittest discover -s roster/shared/test -p "test_*.py"
+      - run: python -B -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
+      - run: python -B -m unittest discover -b -s roster/knowledge-store/test -p "test_*.py"
+      - run: python -B -m unittest discover -b -s roster/shared/test -p "test_*.py"
       - run: ./bin/cadre help
       - run: ./bin/cadre select --task "CI wrapper smoke test" --files README.md --classification internal --task-id CI-SMOKE-1 >/dev/null
       - run: python roster/orchestration/src/schema_validate.py
@@ -106,7 +106,7 @@ jobs:
           cache: pip
           cache-dependency-path: kernel/requirements-validation.txt
       - run: pip install --no-cache-dir -r kernel/requirements-validation.txt
-      - run: python -B -m unittest discover -s kernel/test -p "test_*.py"
+      - run: python -B -m unittest discover -b -s kernel/test -p "test_*.py"
       - run: ./bin/agentic-sdlc --version
       - name: Install the packaged distribution (pip/pipx install path)
         run: pip install --no-cache-dir ./kernel
@@ -155,7 +155,7 @@ jobs:
       # byte-identical copies under plugins/lifecycle{,-github,-gitlab}/tools/,
       # each with its own test module and a duplication-health test holding
       # them in sync.
-      - run: python3 -m unittest discover -s plugin/tools -p "test_*.py" -v
+      - run: python3 -m unittest discover -b -s plugin/tools -p "test_*.py" -v
 
   cadre-pip-package:
     name: cadre pip/pipx distribution

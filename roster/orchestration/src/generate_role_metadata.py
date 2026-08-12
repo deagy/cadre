@@ -446,7 +446,10 @@ def _validate_routing_content(text: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[2] if __doc__ else None)
+    parser = argparse.ArgumentParser(
+        prog="cadre generate-role-metadata",
+        description=__doc__.splitlines()[2] if __doc__ else None,
+    )
     parser.add_argument("--agents-root", type=Path, default=DEFAULT_ROSTER_ROOT)
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG)
     parser.add_argument("--routing", type=Path, default=DEFAULT_ROUTING)

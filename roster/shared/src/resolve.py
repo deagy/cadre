@@ -342,7 +342,8 @@ def resolve_shared_config(filename: str, start: Path | None = None) -> Any:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="resolve.py", description="Resolve an effective roster/shared/ config for the current project"
+        prog="cadre resolve-shared",
+        description="Resolve an effective roster/shared/ config for the current project",
     )
     parser.add_argument("filename", help="Shared default filename, e.g. agent-autonomy.yaml")
     parser.add_argument("--project", type=Path, help="Directory to resolve overlays from (default: cwd)")

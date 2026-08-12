@@ -22,6 +22,7 @@ Validate deterministically without changing the working tree:
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -170,14 +171,40 @@ def existing_generated_files() -> set[Path]:
     return set(AUTHORITY_ROOT.glob("*/AGENT.md"))
 
 
+def build_parser() -> argparse.ArgumentParser:
+    """Parse argv properly rather than scanning it for `--check`.
+
+    The scan this replaces treated *every* argv it did not recognise as "no
+    flags given", which routed it to the write path: `--help` regenerated the
+    eight files instead of printing help, and -- the reason this matters
+    beyond tidiness -- so did a typo. A CI step running `--chek` would
+    silently rewrite the tree and exit 0, reporting success while masking
+    exactly the drift the check exists to catch. argparse rejects an unknown
+    flag instead of guessing.
+    """
+    parser = argparse.ArgumentParser(
+        prog="cadre generate-authority-aides",
+        description="Regenerate roster/authority/*-aide/AGENT.md from aides.yaml and the shared template.",
+        allow_abbrev=False,
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Report whether the generated files are current without writing anything (exit 1 if stale).",
+    )
+    return parser
+
+
 def main() -> int:
+    args = build_parser().parse_args()
+
     aides = load_aides(DATA_PATH)
     validate_gates_against_kernel_contract(aides)
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
     rendered = generate(aides, template)
     orphaned = existing_generated_files() - set(rendered)
 
-    if "--check" in sys.argv[1:]:
+    if args.check:
         stale = [
             str(path.relative_to(REPOSITORY_ROOT))
             for path, content in rendered.items()

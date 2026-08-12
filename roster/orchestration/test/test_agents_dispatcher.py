@@ -149,7 +149,13 @@ class MainTests(unittest.TestCase):
             env={**os.environ, "NO_COLOR": "1"},
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("usage: select_agents.py", result.stdout)
+        # The marker used to be "usage: select_agents.py" -- argparse's default
+        # prog, i.e. the implementation filename leaking into user-facing help.
+        # That is now set to the public name, so this asserts the same thing
+        # (select_agents.py, and only it, produced this output) without pinning
+        # the leak as expected behaviour. test_cli_surface.py covers naming for
+        # every subcommand; this stays a dispatcher test.
+        self.assertIn("usage: cadre select", result.stdout)
 
 
 class SdlcDispatchTests(unittest.TestCase):

@@ -20,6 +20,7 @@ fails with a clear install pointer if it isn't.
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -518,7 +519,25 @@ def build_server():
     return server
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    # Parsed before build_server() so `--help` answers without constructing a
+    # server or requiring the optional `mcp` dependency. Without this the
+    # process took no argv at all: `cadre mcp-dispatch-server --help` silently
+    # started the stdio server and sat waiting on stdin, which reads as a hang
+    # rather than as help.
+    parser = argparse.ArgumentParser(
+        prog="cadre mcp-dispatch-server",
+        description=(
+            "Run the Codex MCP dispatch server on stdio, exposing "
+            "dispatch_secure_cloud_role to a running Codex CLI session. Takes no "
+            "options: the transport is stdio only, and the server is started by an "
+            "MCP client rather than run interactively. Requires the optional `mcp` "
+            "package (see requirements-mcp.txt)."
+        ),
+        allow_abbrev=False,
+    )
+    parser.parse_args(argv)
+
     server = build_server()
     server.run(transport="stdio")
     return 0

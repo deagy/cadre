@@ -56,6 +56,7 @@ if str(_SHARED_SRC_DIR) not in sys.path:
     sys.path.append(str(_SHARED_SRC_DIR))
 
 from build_dispatch_plan import build_dispatch_plan  # noqa: E402
+from plan_text_format import format_plan_text  # noqa: E402
 from route_near_miss import find_near_misses, format_near_misses_text  # noqa: E402
 from routing import load_catalog, validate_routing_config  # noqa: E402
 from routing_overlay import RoutingOverlayError, resolve_effective_routing  # noqa: E402
@@ -90,6 +91,7 @@ def resolve_roster_root(cli_roster: str | None = None) -> Path:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        prog="cadre select",
         description="Emit a deterministic local agent dispatch plan.",
         allow_abbrev=False,
     )
@@ -113,7 +115,21 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--classification", help="Authorized knowledge classification")
     parser.add_argument("--source", help="Optional knowledge-store source filter")
     parser.add_argument("--top", help="Maximum knowledge results per agent", default="5")
-    parser.add_argument("--output", help="Write the JSON plan to this path")
+    parser.add_argument("--output", help="Write the plan to this path, in the --format chosen")
+    parser.add_argument(
+        "--format",
+        choices=("json", "text"),
+        default="json",
+        help=(
+            "Output shape. `json` (default) is the machine-readable plan every "
+            "downstream tool consumes and is unchanged byte-for-byte. `text` "
+            "renders the same plan decision-first for a human, and is derived "
+            "purely from it -- selection never varies by format. The default "
+            "does not switch on whether stdout is a terminal, deliberately: a "
+            "plan that changed shape by context would undercut the "
+            "reproducibility the rest of this command is built on"
+        ),
+    )
     parser.add_argument(
         "--require-sdlc",
         action="store_true",
@@ -311,7 +327,10 @@ def main(argv: list[str] | None = None) -> int:
             telemetry_path=options.telemetry_path,
             include_task=include_task_enabled(options.record_telemetry_include_task),
         )
-    serialized = f"{json.dumps(plan, indent=2, ensure_ascii=False)}\n"
+    if options.format == "text":
+        serialized = format_plan_text(plan)
+    else:
+        serialized = f"{json.dumps(plan, indent=2, ensure_ascii=False)}\n"
     if options.output:
         output_path = Path(options.output).resolve()
         output_path.parent.mkdir(parents=True, exist_ok=True)
