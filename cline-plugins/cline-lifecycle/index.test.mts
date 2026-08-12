@@ -13,6 +13,9 @@ import {
   buildPublishGateStatusArgs,
   buildCreateGateIssuesGitlabArgs,
   buildCreateGithubGateIssuesArgs,
+  buildPublishReviewerNudgeArgs,
+  buildLinkIntentFromGithubIssueArgs,
+  buildLinkRequirementsFromGithubIssueArgs,
   buildRequestGateReviewersGitlabArgs,
   buildRequestGateReviewersGithubArgs,
 } from "./index.ts";
@@ -82,7 +85,12 @@ const GITLAB_TOOL_NAMES = [
   "sdlc_link_requirements_from_gitlab_issue",
 ];
 
-const GITHUB_TOOL_NAMES = ["sdlc_approve_from_github", "sdlc_approve_from_github_pr"];
+const GITHUB_TOOL_NAMES = [
+  "sdlc_approve_from_github",
+  "sdlc_approve_from_github_pr",
+  "sdlc_link_intent_from_github_issue",
+  "sdlc_link_requirements_from_github_issue",
+];
 
 // These 10 wrap kernel subcommands not present in every agentic-sdlc release
 // within this repository's declared kernel_compatibility range -- see
@@ -105,7 +113,7 @@ const UNSHIPPED_KERNEL_TOOL_NAMES = [
 ];
 
 describe("cadre-lifecycle plugin", () => {
-  it("declares the tools and rules capabilities and registers exactly the 5 forge-agnostic sdlc tools plus the 6 forge-specific approval/link tools and the 10 gate-issues/status/reviewer tools", async () => {
+  it("declares the tools and rules capabilities and registers exactly the 5 forge-agnostic sdlc tools plus the 8 forge-specific approval/link tools and the 10 gate-issues/status/reviewer tools", async () => {
     expect(plugin.manifest.capabilities).toEqual(["tools", "rules"]);
 
     const tools = await registerTools(REPO_ROOT);
@@ -157,6 +165,12 @@ describe("cadre-lifecycle plugin", () => {
     );
     expect(findTool(tools, "sdlc_approve_from_github_pr").description).toMatch(
       /bin\/cadre sdlc approve-from-github-pr/,
+    );
+    expect(findTool(tools, "sdlc_link_intent_from_github_issue").description).toMatch(
+      /bin\/cadre sdlc link-intent-from-github-issue/,
+    );
+    expect(findTool(tools, "sdlc_link_requirements_from_github_issue").description).toMatch(
+      /bin\/cadre sdlc link-requirements-from-github-issue/,
     );
     expect(findTool(tools, "sdlc_list_gate_issues_gitlab").description).toMatch(
       /bin\/cadre sdlc list-gate-issues/,
@@ -500,6 +514,141 @@ describe("cadre-lifecycle plugin", () => {
       expect(withEmpty).not.toContain("--gates");
       expect(withAbsent).not.toContain("--gates");
     });
+
+    // The four consequential opt-in flags below are the ones this plugin
+    // previously had no way to pass at all. `--reconcile-assignees` is the
+    // one that mattered most in practice: the kernel reports assignee drift
+    // and changes nothing by default, and gitlab-gate-tracking's SKILL.md
+    // makes re-running with the flag the human-authorized remediation, so a
+    // Cline session could see the drift but never correct it. These assert
+    // both directions -- present when set, and (critically, for flags whose
+    // whole point is that they are not the default) absent when omitted.
+
+    it("buildCreateGateIssuesGitlabArgs emits the four opt-in flags only when explicitly set", () => {
+      const withFlags = buildCreateGateIssuesGitlabArgs(
+        {
+          taskId: "t1",
+          projectPath: "group/project",
+          asBot: "bot",
+          linkType: "relates_to",
+          includeScope: true,
+          reconcileAssignees: true,
+          breakLock: true,
+        },
+        "/root",
+      );
+      expect(withFlags).toContain("--link-type");
+      expect(withFlags[withFlags.indexOf("--link-type") + 1]).toBe("relates_to");
+      expect(withFlags).toContain("--include-scope");
+      expect(withFlags).toContain("--reconcile-assignees");
+      expect(withFlags).toContain("--break-lock");
+
+      const withoutFlags = buildCreateGateIssuesGitlabArgs(
+        { taskId: "t1", projectPath: "group/project", asBot: "bot" },
+        "/root",
+      );
+      expect(withoutFlags).not.toContain("--link-type");
+      expect(withoutFlags).not.toContain("--include-scope");
+      expect(withoutFlags).not.toContain("--reconcile-assignees");
+      expect(withoutFlags).not.toContain("--break-lock");
+    });
+
+    it("buildCreateGithubGateIssuesArgs emits its three opt-in flags only when explicitly set, and has no --link-type", () => {
+      const withFlags = buildCreateGithubGateIssuesArgs(
+        {
+          taskId: "t1",
+          repo: "owner/repo",
+          asBot: "bot",
+          includeScope: true,
+          reconcileAssignees: true,
+          breakLock: true,
+        },
+        "/root",
+      );
+      expect(withFlags).toContain("--include-scope");
+      expect(withFlags).toContain("--reconcile-assignees");
+      expect(withFlags).toContain("--break-lock");
+      // The kernel's GitHub variant has no --link-type; the GitLab-only
+      // field must not leak across into this builder.
+      expect(withFlags).not.toContain("--link-type");
+
+      const withoutFlags = buildCreateGithubGateIssuesArgs(
+        { taskId: "t1", repo: "owner/repo", asBot: "bot" },
+        "/root",
+      );
+      expect(withoutFlags).not.toContain("--include-scope");
+      expect(withoutFlags).not.toContain("--reconcile-assignees");
+      expect(withoutFlags).not.toContain("--break-lock");
+    });
+
+    it("buildPublishGateStatusArgs emits --break-lock on both forge branches only when set", () => {
+      const gitlab = buildPublishGateStatusArgs(
+        { forge: "gitlab", taskId: "t1", projectPath: "group/project", mrIid: 7, asBot: "bot", breakLock: true },
+        "/root",
+      );
+      const github = buildPublishGateStatusArgs(
+        { forge: "github", taskId: "t1", repo: "owner/repo", pr: 9, asBot: "bot", breakLock: true },
+        "/root",
+      );
+      expect(gitlab).toContain("--break-lock");
+      expect(github).toContain("--break-lock");
+
+      const gitlabWithout = buildPublishGateStatusArgs(
+        { forge: "gitlab", taskId: "t1", projectPath: "group/project", mrIid: 7, asBot: "bot" },
+        "/root",
+      );
+      expect(gitlabWithout).not.toContain("--break-lock");
+    });
+
+    it("buildPublishReviewerNudgeArgs emits --break-lock only when set", () => {
+      const withFlag = buildPublishReviewerNudgeArgs(
+        { taskId: "t1", repo: "owner/repo", pr: 9, asBot: "bot", breakLock: true },
+        "/root",
+      );
+      const withoutFlag = buildPublishReviewerNudgeArgs(
+        { taskId: "t1", repo: "owner/repo", pr: 9, asBot: "bot" },
+        "/root",
+      );
+      expect(withFlag).toContain("--break-lock");
+      expect(withoutFlag).not.toContain("--break-lock");
+    });
+
+    // The GitHub link-source pair takes --issue-number where the GitLab pair
+    // takes --issue-iid. Asserting the exact argv catches a copy-paste of the
+    // GitLab builder, which would fail only at runtime against a real kernel.
+
+    it("buildLinkIntentFromGithubIssueArgs emits --repo/--issue-number, not --project-path/--issue-iid", () => {
+      const args = buildLinkIntentFromGithubIssueArgs(
+        { taskId: "t1", role: "product_owner", repo: "owner/repo", issueNumber: 42 },
+        "/root",
+      );
+      expect(args).toEqual([
+        "sdlc",
+        "link-intent-from-github-issue",
+        "--root",
+        "/root",
+        "--task-id",
+        "t1",
+        "--role",
+        "product_owner",
+        "--repo",
+        "owner/repo",
+        "--issue-number",
+        "42",
+      ]);
+      expect(args).not.toContain("--issue-iid");
+      expect(args).not.toContain("--project-path");
+    });
+
+    it("buildLinkRequirementsFromGithubIssueArgs targets its own subcommand, not the intent one", () => {
+      const args = buildLinkRequirementsFromGithubIssueArgs(
+        { taskId: "t1", role: "product_owner", repo: "owner/repo", issueNumber: 42 },
+        "/root",
+      );
+      expect(args[1]).toBe("link-requirements-from-github-issue");
+      expect(args).toContain("--issue-number");
+      expect(args).not.toContain("--issue-iid");
+    });
   });
 
   describe("real bin/cadre sdlc subprocess calls", () => {
@@ -652,6 +801,43 @@ describe("cadre-lifecycle plugin", () => {
       )) as Record<string, unknown>;
       expect(typeof result.error).toBe("string");
       expect(result.status).not.toBe("approved");
+    });
+
+    // GitHub counterparts of the two link-source-gitlab tests above. These
+    // also confirm the subcommands resolve at all: they were left unmirrored
+    // until now because the kernel this plugin was first developed against
+    // did not ship them, so an "invalid choice" argparse failure here would
+    // mean the kernel_compatibility floor is wrong, not just that the task
+    // is missing.
+
+    it("sdlc_link_intent_from_github_issue returns a structured error for a nonexistent task", async () => {
+      const tools = await registerTools(REPO_ROOT);
+      const result = (await findTool(tools, "sdlc_link_intent_from_github_issue").execute(
+        {
+          taskId: "cline-lifecycle-test-nonexistent-task",
+          role: "product_owner",
+          repo: "cline-lifecycle-test/repo",
+          issueNumber: 1,
+        },
+        {} as never,
+      )) as Record<string, unknown>;
+      expect(typeof result.error).toBe("string");
+      expect(result.error as string).not.toMatch(/invalid choice/);
+    });
+
+    it("sdlc_link_requirements_from_github_issue returns a structured error for a nonexistent task", async () => {
+      const tools = await registerTools(REPO_ROOT);
+      const result = (await findTool(tools, "sdlc_link_requirements_from_github_issue").execute(
+        {
+          taskId: "cline-lifecycle-test-nonexistent-task",
+          role: "product_owner",
+          repo: "cline-lifecycle-test/repo",
+          issueNumber: 1,
+        },
+        {} as never,
+      )) as Record<string, unknown>;
+      expect(typeof result.error).toBe("string");
+      expect(result.error as string).not.toMatch(/invalid choice/);
     });
 
     describe("kernel subcommands not shipped by every agentic-sdlc release in range", () => {

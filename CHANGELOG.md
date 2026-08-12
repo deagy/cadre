@@ -27,6 +27,52 @@ check and reporting "nothing to do". See
 
 ### Added
 
+- **The Cline lifecycle plugin now reaches full parity with the Claude Code /
+  Codex lifecycle skill surface, at the flag level and not just the subcommand
+  level.** `cline-plugins/cline-lifecycle` mirrored every kernel subcommand the
+  packaged `lifecycle-gitlab`/`-github` skills drive except one pair, but
+  several of its tools wrapped the right subcommand while silently dropping
+  opt-in flags those same `SKILL.md` files document. That is the same gap in a
+  less visible form: a Cline session cannot fall back to running the CLI by
+  hand the way a Claude Code / Codex session reading the `SKILL.md` can, and
+  the tool schemas are `.strict()`, so an unlisted flag is not merely
+  undocumented but unreachable.
+
+  Two new tools, `sdlc_link_intent_from_github_issue` and
+  `sdlc_link_requirements_from_github_issue`, mirror
+  `link-source-issue-github` — the last unmirrored forge-specific skill. They
+  were originally left out because the stale kernel this plugin was first
+  developed against did not ship `link-intent-from-github-issue`/
+  `link-requirements-from-github-issue`; `provider.json`'s
+  `kernel_compatibility.minimum` now sits past that release and both are
+  live-verified, so the GitHub and GitLab link-source pairs are symmetric. The
+  GitHub pair takes `issueNumber` where the GitLab pair takes `issueIid`,
+  mirroring the forges' own naming rather than normalizing it.
+
+  Four previously unreachable flags are now exposed, all defaulting to off as
+  the kernel does. The one that mattered most in practice is
+  **`reconcileAssignees`** on both `create_*_gate_issues` tools: when a gate
+  issue's forge assignee drifts from `authorities.json`, the kernel reports it
+  and changes nothing, and `gitlab-gate-tracking`'s `SKILL.md` makes re-running
+  with `--reconcile-assignees` the human-authorized remediation ("only re-run
+  with `--reconcile-assignees` if they explicitly say yes; never pass that flag
+  proactively"). A Cline session could see the drift but never correct it. Also
+  added: **`includeScope`** (both create-gate-issues tools — puts a sanitized
+  scope line on a real forge issue), **`linkType: "relates_to"`**
+  (`sdlc_create_gate_issues_gitlab` only; the kernel's GitHub variant has no
+  equivalent), and **`breakLock`** on all four commands that take it
+  (`sdlc_create_gate_issues_gitlab`, `sdlc_create_github_gate_issues`,
+  `sdlc_publish_gate_status`, `sdlc_publish_reviewer_nudge`).
+
+  Three flags remain deliberately unexposed, now stated as a rule rather than
+  left as an accident: every `--i-know-this-is-mocked` (a test-harness
+  interlock — exposing it would hand a model a way to make a mocked run look
+  real), `sdlc init --force` (the kernel documents it as a no-op reserved for
+  future use; the `--force` the onboarding skills reference belongs to
+  `bin/cadre init`, a different command), and `sdlc init --extension` (no
+  lifecycle `SKILL.md` drives it, so adding it would exceed the parity standard
+  rather than reach it).
+
 - **`cadre select --roster <path>`**, and the `roster.root` setting behind it
   (`CADRE_ROSTER_ROOT`, or `roster.root` in user-global config). Runs selection
   against a **roster package the binary did not ship with**: its own catalog,

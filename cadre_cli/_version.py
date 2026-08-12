@@ -6,4 +6,4 @@ from the packaged Claude/Codex plugin's own version -- this file versions
 only the pip distribution channel added by this task.
 """
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"

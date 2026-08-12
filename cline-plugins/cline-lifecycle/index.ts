@@ -61,6 +61,30 @@ const CADRE_BIN = path.resolve(PLUGIN_DIR, "..", "..", "bin", "cadre");
 // `bin/cadre sdlc status`, i.e. exactly what `sdlc_status` above already
 // calls, so there is nothing new to wrap.
 //
+// `link-source-issue-github` was previously the one other unmirrored skill:
+// its two subcommands (`link-intent-from-github-issue`,
+// `link-requirements-from-github-issue`) were, like the 10 listed below,
+// missing from the stale kernel this plugin was first developed against, so
+// they were left out rather than shipped unverified. `provider.json` now pins
+// `kernel_compatibility.minimum` past that, both are live-verified, and
+// `sdlc_link_intent_from_github_issue`/`sdlc_link_requirements_from_github_issue`
+// close it -- the GitHub and GitLab link-source pairs are now symmetric.
+//
+// Flag coverage is deliberately total per subcommand, not a convenient
+// subset: a flag a skill documents but a tool omits is the same gap in a
+// less visible form, since a Cline session cannot fall back to a hand-run
+// CLI the way a Claude Code / Codex session reading the SKILL.md can. The two
+// exceptions, both on `sdlc init`: `--force`, which the kernel itself
+// documents as "reserved for future use; in this release init never
+// overwrites existing wrapper or managed overlay files, with or without
+// --force" (a no-op, and the `--force` the onboarding SKILL.md files
+// reference is `bin/cadre init`'s, a different command), and `--extension`,
+// which no lifecycle SKILL.md drives -- adding it would exceed Claude/Codex
+// parity rather than reach it. Every `--i-know-this-is-mocked` is likewise
+// omitted: it is a test-harness interlock, required only when
+// AGENTIC_SDLC_TEST_ISSUE_CREATE_FILE is set, and exposing it to a model
+// would hand it a way to make a mocked run look real.
+//
 // Several of the tool calls below (everything from sdlc_list_gate_issues_gitlab
 // through sdlc_publish_reviewer_nudge) wrap kernel subcommands
 // (`create-gate-issues`, `list-gate-issues`, `create-github-gate-issues`,
@@ -187,6 +211,16 @@ const GitlabIssueLinkInput = z
   })
   .strict();
 
+const GithubIssueLinkInput = z
+  .object({
+    root: RootInput.optional(),
+    taskId: z.string().min(1).describe("Task ID the link applies to (required)."),
+    role: z.string().min(1).describe("Authority role recording the link (required)."),
+    repo: z.string().min(1).describe("GitHub repository, owner/name form (required)."),
+    issueNumber: z.number().int().positive().describe("Issue number (required)."),
+  })
+  .strict();
+
 const SdlcApproveFromGithubInput = z
   .object({
     root: RootInput.optional(),
@@ -231,6 +265,42 @@ const GatesFilterInput = z
   .optional()
   .describe('Optional gate subset, e.g. ["G3","G9"]; omit for all eligible gates.');
 
+// Shared by both create-gate-issues variants. The kernel's default for
+// assignee drift is report-only: it tells you the forge's assignee no longer
+// matches authorities.json and changes nothing. Passing this overwrites the
+// forge's assignee to match. gitlab-gate-tracking's/create-github-gate-issues'
+// SKILL.md both make this an explicitly human-authorized remediation step
+// ("only re-run with --reconcile-assignees if they explicitly say yes; never
+// pass that flag proactively"), so the same rule binds a Cline session.
+const ReconcileAssigneesInput = z
+  .boolean()
+  .optional()
+  .describe(
+    "Overwrite the forge's issue assignee to match authorities.json when the kernel reports drift. " +
+      "Default (omitted) is report-only. Only ever pass true after the human has seen the reported " +
+      "drift and explicitly asked for it to be corrected -- never proactively.",
+  );
+
+const IncludeScopeInput = z
+  .boolean()
+  .optional()
+  .describe(
+    "Add a sanitized scope line to each gate issue's description (kernel default: off). The scope " +
+      "text lands on a real forge issue, so leave it off for anything whose task scope should not be " +
+      "externally visible.",
+  );
+
+// `--break-lock` overrides a *held* ledger lock, which normally means another
+// run is in flight against the same task. Every kernel command that takes it
+// treats it as a deliberate operator override, not a retry knob.
+const BreakLockInput = z
+  .boolean()
+  .optional()
+  .describe(
+    "Override a held ledger lock file. A held lock usually means a concurrent run is in flight -- " +
+      "only pass true when the human has confirmed no other run is active and the lock is stale.",
+  );
+
 const GateIssuesListInput = z
   .object({
     root: RootInput.optional(),
@@ -250,6 +320,18 @@ const SdlcCreateGateIssuesGitlabInput = z
       .optional()
       .describe("Must exactly match the task's recorded classification, if set -- no default."),
     gates: GatesFilterInput,
+    // GitLab-only: the kernel's GitHub variant has no --link-type equivalent.
+    linkType: z
+      .literal("relates_to")
+      .optional()
+      .describe(
+        "Opt-in: also record the gate/approval issue relationship through the GitLab Issue Links API. " +
+          "Fails closed (the kernel's exit 2) if that API is unavailable. 'relates_to' is the only value " +
+          "the kernel accepts.",
+      ),
+    includeScope: IncludeScopeInput,
+    reconcileAssignees: ReconcileAssigneesInput,
+    breakLock: BreakLockInput,
     apply: z
       .boolean()
       .optional()
@@ -274,6 +356,9 @@ const SdlcCreateGithubGateIssuesInput = z
       .optional()
       .describe("Must exactly match the task's recorded classification, if set -- no default."),
     gates: GatesFilterInput,
+    includeScope: IncludeScopeInput,
+    reconcileAssignees: ReconcileAssigneesInput,
+    breakLock: BreakLockInput,
     allowPublicRepo: z
       .boolean()
       .optional()
@@ -304,6 +389,7 @@ const SdlcPublishGateStatusInput = z.discriminatedUnion("forge", [
         .min(1)
         .optional()
         .describe("Must exactly match the task's recorded classification, if set -- no default."),
+      breakLock: BreakLockInput,
       apply: z
         .boolean()
         .optional()
@@ -323,6 +409,7 @@ const SdlcPublishGateStatusInput = z.discriminatedUnion("forge", [
         .min(1)
         .optional()
         .describe("Must exactly match the task's recorded classification, if set -- no default."),
+      breakLock: BreakLockInput,
       apply: z
         .boolean()
         .optional()
@@ -391,6 +478,7 @@ const SdlcPublishReviewerNudgeInput = z
       .optional()
       .describe("Must exactly match the task's recorded classification, if set -- no default."),
     gates: GatesFilterInput,
+    breakLock: BreakLockInput,
     apply: z
       .boolean()
       .optional()
@@ -406,6 +494,7 @@ type SdlcDecideInputShape = z.infer<typeof SdlcDecideInput>;
 type SdlcApproveFromGitlabInputShape = z.infer<typeof SdlcApproveFromGitlabInput>;
 type SdlcApproveFromGitlabMrInputShape = z.infer<typeof SdlcApproveFromGitlabMrInput>;
 type GitlabIssueLinkInputShape = z.infer<typeof GitlabIssueLinkInput>;
+type GithubIssueLinkInputShape = z.infer<typeof GithubIssueLinkInput>;
 type SdlcApproveFromGithubInputShape = z.infer<typeof SdlcApproveFromGithubInput>;
 type SdlcApproveFromGithubPrInputShape = z.infer<typeof SdlcApproveFromGithubPrInput>;
 type GateIssuesListInputShape = z.infer<typeof GateIssuesListInput>;
@@ -563,6 +652,43 @@ function buildLinkRequirementsFromGitlabIssueArgs(input: GitlabIssueLinkInputSha
   ];
 }
 
+// The GitHub link-source-issue pair takes `--issue-number` where the GitLab
+// pair takes `--issue-iid` -- the forges' own naming, mirrored rather than
+// normalized, so a flag in a kernel error message maps back to a tool field.
+function buildLinkIntentFromGithubIssueArgs(input: GithubIssueLinkInputShape, rootPath: string): string[] {
+  return [
+    "sdlc",
+    "link-intent-from-github-issue",
+    "--root",
+    input.root ?? rootPath,
+    "--task-id",
+    input.taskId,
+    "--role",
+    input.role,
+    "--repo",
+    input.repo,
+    "--issue-number",
+    String(input.issueNumber),
+  ];
+}
+
+function buildLinkRequirementsFromGithubIssueArgs(input: GithubIssueLinkInputShape, rootPath: string): string[] {
+  return [
+    "sdlc",
+    "link-requirements-from-github-issue",
+    "--root",
+    input.root ?? rootPath,
+    "--task-id",
+    input.taskId,
+    "--role",
+    input.role,
+    "--repo",
+    input.repo,
+    "--issue-number",
+    String(input.issueNumber),
+  ];
+}
+
 function buildApproveFromGithubArgs(input: SdlcApproveFromGithubInputShape, rootPath: string): string[] {
   const args = [
     "sdlc",
@@ -631,6 +757,10 @@ function buildCreateGateIssuesGitlabArgs(input: SdlcCreateGateIssuesGitlabInputS
   ];
   if (input.allowClassification) args.push("--allow-classification", input.allowClassification);
   if (input.gates?.length) args.push("--gates", input.gates.join(","));
+  if (input.linkType) args.push("--link-type", input.linkType);
+  if (input.includeScope) args.push("--include-scope");
+  if (input.reconcileAssignees) args.push("--reconcile-assignees");
+  if (input.breakLock) args.push("--break-lock");
   if (input.apply) args.push("--apply");
   if (input.planDigest) args.push("--plan-digest", input.planDigest);
   return args;
@@ -655,6 +785,9 @@ function buildCreateGithubGateIssuesArgs(input: SdlcCreateGithubGateIssuesInputS
   ];
   if (input.allowClassification) args.push("--allow-classification", input.allowClassification);
   if (input.gates?.length) args.push("--gates", input.gates.join(","));
+  if (input.includeScope) args.push("--include-scope");
+  if (input.reconcileAssignees) args.push("--reconcile-assignees");
+  if (input.breakLock) args.push("--break-lock");
   if (input.allowPublicRepo) args.push("--allow-public-repo");
   if (input.apply) args.push("--apply");
   if (input.planDigest) args.push("--plan-digest", input.planDigest);
@@ -674,6 +807,7 @@ function buildPublishGateStatusArgs(input: SdlcPublishGateStatusInputShape, root
   }
   args.push("--as-bot", input.asBot);
   if (input.allowClassification) args.push("--allow-classification", input.allowClassification);
+  if (input.breakLock) args.push("--break-lock");
   if (input.apply) args.push("--apply");
   return args;
 }
@@ -745,6 +879,7 @@ function buildPublishReviewerNudgeArgs(input: SdlcPublishReviewerNudgeInputShape
   ];
   if (input.allowClassification) args.push("--allow-classification", input.allowClassification);
   if (input.gates?.length) args.push("--gates", input.gates.join(","));
+  if (input.breakLock) args.push("--break-lock");
   if (input.apply) args.push("--apply");
   return args;
 }
@@ -849,6 +984,7 @@ export type {
   SdlcApproveFromGitlabInputShape,
   SdlcApproveFromGitlabMrInputShape,
   GitlabIssueLinkInputShape,
+  GithubIssueLinkInputShape,
   SdlcApproveFromGithubInputShape,
   SdlcApproveFromGithubPrInputShape,
   GateIssuesListInputShape,
@@ -873,6 +1009,9 @@ export {
   buildPublishGateStatusArgs,
   buildCreateGateIssuesGitlabArgs,
   buildCreateGithubGateIssuesArgs,
+  buildPublishReviewerNudgeArgs,
+  buildLinkIntentFromGithubIssueArgs,
+  buildLinkRequirementsFromGithubIssueArgs,
   buildRequestGateReviewersGitlabArgs,
   buildRequestGateReviewersGithubArgs,
   runCadreSdlcAllowingReportExitCodes,
@@ -1068,6 +1207,41 @@ const setup = (api: SetupApi, ctx: SetupContext) => {
         const input = GitlabIssueLinkInput.parse(rawInput);
         const root = requireRootPath(input.root);
         return runCadreSdlc(buildLinkRequirementsFromGitlabIssueArgs(input, root), root);
+      },
+    }),
+  );
+
+  api.registerTool(
+    createTool({
+      name: "sdlc_link_intent_from_github_issue",
+      description:
+        "Record a real GitHub issue as the recorded source for a task's G1 (Intent) gate, via " +
+        "`bin/cadre sdlc link-intent-from-github-issue` -- the same command link-source-issue-github's " +
+        "Step 4 documents for Claude Code / Codex. Only ever applies to G1: records a source, not an " +
+        "approval -- for a GitHub PR approval use sdlc_approve_from_github/sdlc_approve_from_github_pr.",
+      inputSchema: z.toJSONSchema(GithubIssueLinkInput),
+      execute: async (rawInput: unknown): Promise<Record<string, unknown> | SdlcToolError> => {
+        const input = GithubIssueLinkInput.parse(rawInput);
+        const root = requireRootPath(input.root);
+        return runCadreSdlc(buildLinkIntentFromGithubIssueArgs(input, root), root);
+      },
+    }),
+  );
+
+  api.registerTool(
+    createTool({
+      name: "sdlc_link_requirements_from_github_issue",
+      description:
+        "Record a real GitHub issue as the recorded source for a task's G2 (Requirements Baseline) " +
+        "gate, via `bin/cadre sdlc link-requirements-from-github-issue` -- the same command " +
+        "link-source-issue-github's Step 4 documents for Claude Code / Codex. Only ever applies to G2: " +
+        "records a source, not an approval -- for a GitHub PR approval use " +
+        "sdlc_approve_from_github/sdlc_approve_from_github_pr.",
+      inputSchema: z.toJSONSchema(GithubIssueLinkInput),
+      execute: async (rawInput: unknown): Promise<Record<string, unknown> | SdlcToolError> => {
+        const input = GithubIssueLinkInput.parse(rawInput);
+        const root = requireRootPath(input.root);
+        return runCadreSdlc(buildLinkRequirementsFromGithubIssueArgs(input, root), root);
       },
     }),
   );
