@@ -659,9 +659,15 @@ function resolveProviderAndModel(
   let providerId = overrides.providerId ?? presetProvider ?? env("CLINE_AGENTS_PROVIDER_ID");
   let modelId = overrides.modelId ?? presetModel ?? tierModel ?? env("CLINE_AGENTS_MODEL_DEFAULT");
 
-  // Last resort, and only as a pair -- see module comment above on why a
-  // half-configured operator env must not partially inherit.
-  if (!providerId && !modelId && inheritedModel) {
+  // ATOMIC-PAIR INVARIANT: inherited fallback applies only when BOTH fields are
+  // undefined through all higher-precedence sources. This prevents the defect of
+  // pairing an inherited modelId against a separately-configured providerId (or
+  // vice versa), which could silently route to a mismatched vendor. A
+  // half-configured operator env (one var set, not the other) must fail closed
+  // exactly as before, naming the missing var -- it does not partially inherit.
+  // See module comment above for why this matters.
+  const bothUnresolvedThroughHigherPrecedence = !providerId && !modelId;
+  if (bothUnresolvedThroughHigherPrecedence && inheritedModel) {
     providerId = inheritedModel.providerId;
     modelId = inheritedModel.modelId;
   }
@@ -3405,8 +3411,9 @@ const setup = (api: SetupApi, ctx: SetupContext) => {
         // a second copy of the precedence chain: a listing that disagrees
         // with what would actually run is the inspect-vs-use mismatch this
         // whole change exists to remove.
+        const inheritedModel = parentModelInfo(toolCtx);
         const agents = readAgentDefinitions(baseCwd).map((a) => {
-          const resolved = resolveProviderAndModel({}, a, parentModelInfo(toolCtx));
+          const resolved = resolveProviderAndModel({}, a, inheritedModel);
           return {
             name: a.name,
             description: a.description,
