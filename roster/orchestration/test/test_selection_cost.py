@@ -58,6 +58,17 @@ CATALOG = load_catalog(AGENTS_ROOT / "catalog.yaml")
 # per-call recompilation this guards: that regime compiled ~1,220.
 MAX_COMPILES_PER_WARM_SELECTION = 200
 
+# Compiles permitted during one selection in a *cold* process, where nothing is
+# cached yet. This is the budget the `_keyword_matches` compile-avoidance gate
+# defends: without it a cold selection builds every keyword matcher it touches
+# (~1,220 patterns, ~100ms, 95% of it keywords); with it, only the handful of
+# keywords whose literal tokens actually occur in the task. Real number on the
+# sample case is ~40 (the globs, which are cheap and mostly unavoidable, plus a
+# few surviving keywords). 400 is generous enough to absorb ruleset growth and
+# a differently-shaped task while still failing on a return of compile-
+# everything behaviour.
+MAX_COMPILES_PER_COLD_SELECTION = 400
+
 
 def _sample_case() -> dict[str, Any]:
     """Reuse the golden corpus's first fixture rather than inventing a task.
@@ -193,6 +204,113 @@ class SelectionCompilationCostTest(unittest.TestCase):
             "per-call regex construction returning to the matching path (see this "
             "module's docstring). Fix the recompilation rather than raising the "
             "budget -- it is sized to ignore ordinary growth.",
+        )
+
+
+class KeywordGateTest(unittest.TestCase):
+    """The compile-avoidance gate in `_keyword_matches` must change nothing.
+
+    It skips building a keyword's regex when a necessary condition fails. If
+    that condition were ever *not* necessary, the gate would start deciding
+    matches -- returning False for a keyword the regex would have matched, and
+    silently changing which routes fire. These tests are what makes the gate
+    safe to keep.
+    """
+
+    def _all_keywords(self) -> list[str]:
+        keywords: set[str] = set()
+
+        def walk(node: Any) -> None:
+            if isinstance(node, dict):
+                for key, value in node.items():
+                    if key == "keywords" and isinstance(value, list):
+                        keywords.update(value)
+                    elif key == "keyword_groups" and isinstance(value, list):
+                        for group in value:
+                            keywords.update(group or [])
+                    else:
+                        walk(value)
+            elif isinstance(node, list):
+                for item in node:
+                    walk(item)
+
+        walk(CONFIG)
+        return sorted(keywords)
+
+    def test_gate_agrees_with_the_regex_on_every_corpus_task(self) -> None:
+        """Full cross-product equivalence against the unguarded implementation."""
+        keywords = self._all_keywords()
+        self.assertGreater(len(keywords), 100, "ruleset keywords failed to load")
+
+        cases = json.loads(FIXTURES_PATH.read_text(encoding="utf-8"))["cases"]
+        tasks = [case["task"] for case in cases]
+
+        disagreements: list[str] = []
+        for task in tasks:
+            for keyword in keywords:
+                gated = routing._keyword_matches(task, keyword)
+                # The regex alone, with no gate -- the pre-gate behaviour.
+                ungated = routing._keyword_regex(keyword).search(task) is not None
+                if gated != ungated:
+                    disagreements.append(f"{keyword!r} vs {task!r}: gate={gated} regex={ungated}")
+
+        self.assertEqual(
+            [],
+            disagreements[:10],
+            f"{len(disagreements)} keyword/task pair(s) where the compile-avoidance "
+            "gate disagrees with the regex. The gate must only skip work that "
+            "would have returned False.",
+        )
+
+    def test_gate_is_case_insensitive_like_the_pattern(self) -> None:
+        """A mixed-case caller must not be silently rejected.
+
+        The pattern carries re.IGNORECASE, so a case-sensitive gate would fail
+        a keyword the regex matches. Every current caller lowercases first,
+        which is exactly why this would go unnoticed.
+        """
+        self.assertTrue(routing._keyword_matches("Rotate the SIGNING keys", "signing"))
+        self.assertTrue(routing._keyword_matches("TERRAFORM module", "terraform"))
+
+    def test_multi_word_keywords_still_require_adjacency(self) -> None:
+        """The gate checks presence; the regex still decides order/adjacency.
+
+        Both tokens present but not adjacent must NOT match -- otherwise the
+        gate would have become the decision-maker.
+        """
+        self.assertTrue(routing._keyword_matches("an abstraction layer", "abstraction layer"))
+        self.assertFalse(
+            routing._keyword_matches("the layer sits above every abstraction", "abstraction layer")
+        )
+
+    @unittest.skipUnless(hasattr(re, "_compile"), "re._compile unavailable on this interpreter")
+    def test_cold_selection_stays_under_the_compile_budget(self) -> None:
+        """The cold path is the one the gate exists for."""
+        real_compile = re._compile
+        calls = 0
+
+        def counting_compile(*args: Any, **kwargs: Any) -> Any:
+            nonlocal calls
+            calls += 1
+            return real_compile(*args, **kwargs)
+
+        # A genuinely cold process: both memo caches empty and re's own cache
+        # purged, so every compile that happens is counted.
+        re.purge()
+        routing.glob_to_regex.cache_clear()
+        routing._keyword_regex.cache_clear()
+        routing._keyword_tokens.cache_clear()
+
+        with mock.patch.object(re, "_compile", counting_compile):
+            _run_selection()
+
+        self.assertLessEqual(
+            calls,
+            MAX_COMPILES_PER_COLD_SELECTION,
+            f"a cold selection compiled {calls} regexes, over the "
+            f"{MAX_COMPILES_PER_COLD_SELECTION} budget. The compile-avoidance gate in "
+            "routing._keyword_matches is no longer filtering -- check that it still "
+            "runs before _keyword_regex, not after.",
         )
 
 
