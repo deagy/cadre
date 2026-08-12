@@ -39,7 +39,7 @@ Operate the agent-facing vectorized knowledge store: authorize and normalize imp
 - Stage and sample normalized/redacted content before broad access
 - Keep classifications and tenant boundaries enforceable before similarity ranking. A project without its own `.agents/knowledge-store/config.json` resolves to the shared global store by default (`SECURITY.md`), so also verify every ingestion against the shared store carries a project-identifying `--source` and that retrieval filters by it when project isolation matters; a project whose classification or tenancy cannot share infrastructure with others should have its own `.agents/knowledge-store/config.json` (a real partition) rather than rely on `--source` filtering alone.
 - Test representative queries for relevance, conflict with current policy, prompt injection, and stale content
-- Use Python 3.10+ standard-library tooling. Run `<python> -B -m unittest discover -s test -p "test_*.py"` and do not retain bytecode caches.
+- Use Python 3.10+ standard-library tooling. Run `<python> -B -m unittest discover -b -s test -p "test_*.py"` and do not retain bytecode caches.
 
 ## Authority
 
