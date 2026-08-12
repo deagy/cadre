@@ -258,7 +258,7 @@ resolved_standards_2026_07_26:
     follow-up decisions for the Engineering Lead during implementation.
   gate_rigor_note: >
     An independent compliance review of this resolution noted that roster/orchestration/
-    routing.yaml's own routing rules (governance-planning, compliance, sensitive-data,
+    routing.json's own routing rules (governance-planning, compliance, sensitive-data,
     secrets-identity, supply-chain) would ordinarily route decisions touching compliance
     scope, secrets platforms, and artifact signing/registry through independent
     compliance-reviewer/security-reviewer sign-off and a G4/G5/G7 gate record, separate

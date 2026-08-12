@@ -2,10 +2,10 @@
 
 # Routing doctrine: when a base route may claim a generic path glob
 
-`roster/orchestration/routing.yaml` ships as the **base ruleset** to every
+`roster/orchestration/routing.json` ships as the **base ruleset** to every
 consuming project. `routing_overlay.py` lets a consumer *widen* a base route
 (add paths, keywords, team members) but never narrow one — see
-`roster/RUNBOOK.md`'s "Customize routing.yaml with a project-local overlay"
+`roster/RUNBOOK.md`'s "Customize routing.json with a project-local overlay"
 section for the full per-construct merge rule. That non-narrowing property is
 real and matters, but it is not, by itself, the test for whether a route may
 claim a generic filename glob (`**/go.mod`, `**/pyproject.toml`, and similar).
@@ -15,7 +15,7 @@ incomplete restatement of this rule — see that issue and the
 
 ## The rule as it was stated, and why it was wrong
 
-Earlier `routing.yaml` history (`#195`, `#196`, `#197`) rejected claiming root
+Earlier `routing.json` history (`#195`, `#196`, `#197`) rejected claiming root
 `pyproject.toml` on the reasoning that "a generic file present in arbitrary
 downstream projects is unclaimable in the base ruleset because
 `routing_overlay.py` can widen but never narrow." Read literally, that rule

@@ -34,7 +34,7 @@ To change something, edit the source and regenerate:
 | --- | --- |
 | a role's authority or policy | `roster/<phase>/<role>/AGENT.md` |
 | which roles exist, or their model tier | `roster/catalog.yaml` |
-| routing and dispatch rules | `roster/orchestration/routing.yaml` |
+| routing and dispatch rules | `roster/orchestration/routing.json` |
 | a skill | `.agents/skills/<name>/SKILL.md` |
 | shared policy embedded into every role | `roster/shared/` |
 | the provider profile or its kernel window | `provider/` |

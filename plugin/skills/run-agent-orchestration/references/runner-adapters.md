@@ -679,7 +679,7 @@ working mechanism:
 
 `cadre select` deterministically emits a `teams` array in its plan (see
 [team-recipes.md](team-recipes.md) for the named recipes and
-`roster/orchestration/routing.yaml`'s `team_recipes` for the trigger rules).
+`roster/orchestration/routing.json`'s `team_recipes` for the trigger rules).
 Every team entry carries `communication_mode: "peer"` and
 `fallback: "orchestrator-relayed"` — this is not a choice made per dispatch,
 it's a fixed statement of what's actually possible:

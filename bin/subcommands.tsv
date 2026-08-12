@@ -4,7 +4,7 @@ knowledge	roster/knowledge-store/src/cli.py	Vectorized knowledge store CLI (know
 context	roster/context-store/src/cli.py	Agent context store: park working material outside an agent's context window and get it back by handle (context-store/src/cli.py)
 generate-plugin	roster/orchestration/src/generate_global_plugin.py	Regenerate a deagy/cadre-lifecycle checkout (generate_global_plugin.py; requires --output)
 generate-authority-aides	roster/orchestration/src/generate_authority_aides.py	Regenerate roster/authority/*-aide AGENT.md files (generate_authority_aides.py)
-generate-role-metadata	roster/orchestration/src/generate_role_metadata.py	Regenerate roster/catalog.yaml and routing.yaml knowledge_focus from role metadata (generate_role_metadata.py)
+generate-role-metadata	roster/orchestration/src/generate_role_metadata.py	Regenerate roster/catalog.yaml and routing.json knowledge_focus from role metadata (generate_role_metadata.py)
 bootstrap-codex	roster/orchestration/src/sync_codex_agents.py	Safely install namespaced Codex role wrappers
 resolve-shared	roster/shared/src/resolve.py	Resolve effective shared config for the current project (resolve.py)
 mcp-dispatch-server	roster/orchestration/mcp/dispatch_server.py	Run the Codex MCP dispatch server (stdio; requires the mcp package)

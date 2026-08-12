@@ -37,14 +37,14 @@ separate from mutation-oriented human gates; it does not execute agents,
 approve gates, or retrieve knowledge.
 
 `cadre select` works standalone by default, using only this suite's own
-`catalog.yaml` and `routing.yaml`, and optionally enriches its plan when the
+`catalog.yaml` and `routing.json`, and optionally enriches its plan when the
 standalone Agentic SDLC executable is also available. See
 [`RUNBOOK.md` §2 "Select agents locally"](RUNBOOK.md#select-agents-locally)
 for the standalone-vs-integrated behavior, `lifecycle_tracking.status`, and
 `--require-sdlc`.
 
 The plan additionally emits a deterministic `teams` array (from
-`orchestration/routing.yaml`'s `team_recipes`) and each role in `catalog.yaml`
+`orchestration/routing.json`'s `team_recipes`) and each role in `catalog.yaml`
 may declare a `model` tier (`haiku`/`sonnet`/`opus`) propagated into the
 generated wrappers — see `RUNBOOK.md` "Select the agent" and the
 `run-agent-orchestration` skill's `references/team-recipes.md` and

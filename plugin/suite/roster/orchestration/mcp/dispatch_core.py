@@ -51,9 +51,41 @@ if str(_SHARED_SRC_ROOT) not in sys.path:
     sys.path.append(str(_SHARED_SRC_ROOT))
 
 from routing import parse_catalog_entries  # noqa: E402  (sys.path set above, matching test_selector.py's convention)
+from roster_manifest import default_roster_root, load_roster_manifest  # noqa: E402
 import settings  # noqa: E402  (sys.path set above)
 
-CATALOG_PATH = REPOSITORY_ROOT / "roster" / "catalog.yaml"
+
+def _resolve_roster_root() -> Path:
+    """Same precedence as select_agents.resolve_roster_root, minus the CLI flag.
+
+    Not imported from select_agents: that module is an argparse entry point
+    which pulls in the whole dispatch-plan builder, and this one stays
+    import-light on purpose so it is testable without `mcp` installed.
+    """
+    configured = settings.resolve_setting("roster.root")
+    return Path(configured).expanduser().resolve() if configured else default_roster_root()
+
+# PP-FR-6 category B, and PP-FR-1's second selection entry point. This module
+# resolves the catalog entirely independently of select_agents.py -- `cadre
+# mcp-dispatch-server` is a shipped dispatch surface (bin/subcommands.tsv), and
+# before this it kept serving Cadre's roles while `--roster` redirected the
+# selector, two surfaces silently disagreeing about which roles exist.
+#
+# Resolved once at import, which is correct here rather than a compromise:
+# roster.root is SCOPE_GLOBAL_ONLY (OD-2 as reversed), so there is no per-call
+# project tier for it to vary with -- and this server deliberately disables the
+# project-tier cwd fallback anyway (dispatch_server.py, and see OD-10, withdrawn
+# for exactly this reason).
+# Fails closed rather than falling back to Cadre's directory layout. An earlier
+# draft caught the error here and degraded to a hardcoded path, and
+# test_roster_boundary.py rejected it -- correctly: intent SS7 C4 requires a
+# roster package missing a required file to fail naming the file, never to
+# degrade to the built-in roster. A broken manifest on the default roster is a
+# broken installation, and a dispatch surface that silently guesses a layout is
+# worse than one that refuses to start.
+_MANIFEST = load_roster_manifest(_resolve_roster_root())
+CATALOG_PATH = _MANIFEST.catalog
+ROUTING_PATH = _MANIFEST.routing
 PLUGIN_CODEX_AGENTS_ROOT = REPOSITORY_ROOT / "plugins" / "cadre" / "codex-agents"
 RUNNER_CAPABILITIES_PATH = REPOSITORY_ROOT / "roster" / "runner-capabilities.json"
 
@@ -1274,7 +1306,7 @@ class ConcurrencyLimiter:
         """Blocking variant used only by team dispatch: waits for a free
         slot in the same shared pool `try_acquire()` guards, instead of
         failing immediately. A team of N members can exceed
-        MAX_CONCURRENT_CHILDREN by design (e.g. routing.yaml's
+        MAX_CONCURRENT_CHILDREN by design (e.g. routing.json's
         `competing-hypotheses-debugging` team recipe allows up to 4
         instances against a default cap of 3) -- immediate denial would make
         dispatching any such team larger than the global cap unusable.
@@ -2356,7 +2388,7 @@ def dispatch_team(
 ) -> dict[str, Any]:
     """Dispatch every member of `members` (each `{"role_id": str, "brief": str}`,
     duplicates of the same role_id allowed -- e.g. several debugging-engineer
-    instances pursuing distinct hypotheses, matching routing.yaml's
+    instances pursuing distinct hypotheses, matching routing.json's
     `competing-hypotheses-debugging` team recipe shape) and return only once
     every member has reached a terminal state (dispatched, denied,
     unavailable). `runner` applies to every member identically -- a team

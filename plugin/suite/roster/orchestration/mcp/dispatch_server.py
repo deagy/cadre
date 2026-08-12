@@ -47,7 +47,7 @@ settings.disable_interactive()
 # and are unaffected. See settings.disable_project_tier_cwd_fallback().
 settings.disable_project_tier_cwd_fallback()
 
-# dispatch_team_recipe below needs routing.yaml/catalog.yaml loading and the
+# dispatch_team_recipe below needs routing.json/catalog.yaml loading and the
 # recipe-expansion helper, both of which live in src/ alongside dispatch_core's
 # own SRC_ROOT. dispatch_core.py deliberately never imports these (it stays
 # import-light so it's testable without `mcp`); this module already depends
@@ -60,7 +60,10 @@ if str(_SRC_DIR) not in sys.path:
 from routing import load_routing  # noqa: E402
 from team_recipe_dryrun import expand_recipe_to_members  # noqa: E402
 
-_ROUTING_CONFIG = load_routing(core.REPOSITORY_ROOT / "roster" / "orchestration" / "routing.yaml")
+# PP-FR-6 category B. Paired with dispatch_core.CATALOG_PATH: both halves of
+# this surface must resolve against the same roster, or the server dispatches
+# roles from one roster using another's routing rules.
+_ROUTING_CONFIG = load_routing(core.ROUTING_PATH)
 
 MCP_INSTALL_MESSAGE = (
     "The 'mcp' package is required to run the agents MCP dispatch "
@@ -280,7 +283,7 @@ def build_server():
         runner: str = "codex",
         wait: bool = True,
     ) -> dict[str, Any]:
-        """Expand a `routing.yaml` team_recipes[] entry into concrete members
+        """Expand a `routing.json` team_recipes[] entry into concrete members
         and dispatch them as a team (see dispatch_team above) -- for when
         the calling session already has a real `cadre select` plan and
         wants to dispatch one of its `teams[]` entries without hand-building

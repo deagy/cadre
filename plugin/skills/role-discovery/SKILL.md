@@ -18,7 +18,7 @@ next."
 This skill is a conversational **front end**, not a second selector. The
 only authoritative, deterministic answer is `cadre select` itself
 (`roster/orchestration/src/select_agents.py`, driven by
-`roster/orchestration/routing.yaml`). Never present a role you name in
+`roster/orchestration/routing.json`). Never present a role you name in
 conversation as final — always frame it as "this looks like the
 `<route-id>` route, primary role `<role>`; run `cadre select` to confirm and
 get the full plan (reviewers, support, gates)." If your read of the catalog
@@ -29,7 +29,7 @@ every time.
 
 Before saying anything about roles, read the current `roster/catalog.yaml`
 (role inventory: `phase`, `capability`, `definition` path) and
-`roster/orchestration/routing.yaml` (the `routes` list: `id`, `paths`,
+`roster/orchestration/routing.json` (the `routes` list: `id`, `paths`,
 `keywords`, `primary`/`reviewers`/`support`, `quality_gates`). Do this every
 time — do not rely on role names or routes from your own memory or from an
 earlier conversation, since both files are the single source of truth and
@@ -67,11 +67,11 @@ for an artifact type they may not have yet.
 ## Step 3 — Match against real routes, and explain why
 
 Once you have enough detail, look for a matching entry in
-`routing.yaml`'s `routes` list: does the artifact type match a route's
+`routing.json`'s `routes` list: does the artifact type match a route's
 `paths` glob, or does the described work match a route's `keywords`? State
 the match plainly, for example:
 
-> This sounds like the `backend` route (`roster/orchestration/routing.yaml`)
+> This sounds like the `backend` route (`roster/orchestration/routing.json`)
 > — it matches on `**/*.go` and keywords like "api", "service
 > implementation", "migration". Primary role: `backend-engineer`
 > (`roster/engineering/backend-engineer/AGENT.md`, phase `build`).
@@ -82,7 +82,7 @@ both a Go backend and its Helm deployment), say so — name both routes and
 both primary roles, and note that `cadre select` will select all
 matching routes from the actual changed files, not just one.
 
-If nothing in `routing.yaml` matches convincingly, say that plainly instead
+If nothing in `routing.json` matches convincingly, say that plainly instead
 of forcing a fit — `cadre select` itself returns `needs-triage` in that
 case rather than guessing, and that is the correct, honest outcome to
 surface, not a failure to paper over.

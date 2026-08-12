@@ -24,10 +24,10 @@ Every role's metadata (`phase`, `capability`, `model`, `codex_model`,
 `reasoning_effort`, `knowledge_focus`) lives in its own `AGENT.md`'s
 `---`-delimited frontmatter (see `roster/orchestration/src/role_metadata.py`
 and the `agent-authoring` skill). `roster/catalog.yaml` and
-`roster/orchestration/routing.yaml`'s `knowledge_focus` block are purely
+`roster/orchestration/routing.json`'s `knowledge_focus` block are purely
 generated output derived from that frontmatter -- never hand-edit them.
 Edit a role's frontmatter, then regenerate `roster/catalog.yaml` and
-`roster/orchestration/routing.yaml` with `cadre generate-role-metadata`
+`roster/orchestration/routing.json` with `cadre generate-role-metadata`
 (`... --check` to validate without writing).
 
 `generate-role-metadata` is the first of several regeneration steps, not the

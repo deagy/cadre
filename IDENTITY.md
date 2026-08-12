@@ -55,7 +55,7 @@ This document does not grant authority. Resolve instructions in this order:
 
 The canonical sources are the role definitions under `roster/**/AGENT.md`,
 shared policies under `roster/shared/`, routing under
-`roster/orchestration/routing.yaml`, and lifecycle behavior in the
+`roster/orchestration/routing.json`, and lifecycle behavior in the
 independently versioned [Agentic SDLC kernel](https://github.com/deagy/cadre/tree/main/kernel),
 maintained in this same repository under `kernel/`.
 

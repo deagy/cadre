@@ -27,11 +27,16 @@ CLASSIFICATIONS = set(CLASSIFICATION_ORDER)
 CLASSIFICATION_RANK = {name: index for index, name in enumerate(CLASSIFICATION_ORDER)}
 MAXIMUM_KNOWLEDGE_TOP = 20
 KNOWLEDGE_STORE_ROOT = Path(__file__).resolve().parents[2] / "knowledge-store"
+# The DEFAULT roster root. Context-pack definitions below resolve against the
+# roster the selector actually chose, which is threaded in rather than read
+# from here; this stays as the fallback for direct callers.
+# NOTE the line above: KNOWLEDGE_STORE_ROOT is platform-anchored and must NOT
+# follow this constant -- test_knowledge_store_anchor.py asserts it (PP-FR-5).
 ROSTER_ROOT = Path(__file__).resolve().parents[2]
 STANDALONE_REASON = "Agentic SDLC executable not found; team dispatch is unaffected."
 # Cross-references the Agentic SDLC kernel's own mutation-gate taxonomy
 # (contracts/mutation-gates.json) rather than parallel-defining it here.
-# Cadre's own ids are kept as-is (routing.yaml and existing consumers
+# Cadre's own ids are kept as-is (routing.json and existing consumers
 # already depend on them) -- this is an explicit, additive pointer to
 # the kernel's authoritative id, not a rename. `None` where cadre has no
 # kernel mutation-gate counterpart. Module-level (not a local in
@@ -87,7 +92,27 @@ def _gate_sequence(
     return [gate_id for gate_id in sequence if gate_id not in ignored_set], sorted(ignored_set, key=gate_ids.index)
 
 
-def _gate_agents(configured: list[str], ignored: list[str], gates: list[dict[str, Any]] | None) -> list[str]:
+def _gate_agents(
+    configured: list[str],
+    ignored: list[str],
+    gates: list[dict[str, Any]] | None,
+    default_review_agents: list[str] | None = None,
+) -> list[str]:
+    """Agents contributed by the configured lifecycle gates.
+
+    `default_review_agents` comes from the roster's `default_gate_review_agents`
+    (OD-9). It is emphatically NOT a fallback in the usual sense: no gate in any
+    version of `kernel/contracts/lifecycle-gates.json` has ever declared
+    `review_agents` -- or `author_agents` -- so before OD-9 the hardcoded
+    `["code-reviewer"]` fired for every configured gate on every lifecycle-aware
+    plan. A `.get(key, default)` against a contract that never declares `key` is
+    an unconditional hardcode wearing a fallback's clothes (G-11).
+
+    Making it roster-supplied is what lets a foreign roster produce a plan at
+    all: `_validate_agents` raises `Routing selected an unknown agent` for any
+    id absent from the catalog, so a roster with no `code-reviewer` role and any
+    route declaring `quality_gates` emitted nothing whatsoever.
+    """
     if gates is None or not configured:
         return []
     gate_ids = _gate_order(gates)
@@ -104,7 +129,10 @@ def _gate_agents(configured: list[str], ignored: list[str], gates: list[dict[str
         agent
         for gate_id in sequence
         if gate_id not in ignored_set
-        for agent in [*contracts[gate_id].get("author_agents", []), *contracts[gate_id].get("review_agents", ["code-reviewer"])]
+        for agent in [
+            *contracts[gate_id].get("author_agents", []),
+            *contracts[gate_id].get("review_agents", list(default_review_agents or [])),
+        ]
     )
 
 
@@ -160,7 +188,7 @@ def _select_workflow(
     ):
         return "knowledge-ingestion"
     # "debugging" and "agent-suite-governance"/"orchestration" share paths
-    # by design (roster/catalog.yaml, roster/**/AGENT.md, routing.yaml,
+    # by design (roster/catalog.yaml, roster/**/AGENT.md, routing.json,
     # etc. -- editing a role or routing rule is simultaneously "roster
     # self-maintenance" and something the debugging route's broad
     # agent-tune-up paths also cover), so path overlap alone cannot decide
@@ -199,7 +227,7 @@ def _select_workflow(
     # conditions are not expressible as a per-route constant and stay here.
     #
     # What follows is the delivery-shape fallback, and it reads each matched
-    # route's own declared `workflow_shape` (routing.yaml; see
+    # route's own declared `workflow_shape` (routing.json; see
     # routing.schema.json for the field's definition and the four permitted
     # values). Until #210 this stage instead tested a hardcoded id set,
     # {"frontend", "backend", "infrastructure", "pipeline"}, so every route
@@ -238,7 +266,7 @@ def _select_workflow(
     # KUBERNETES_OPERATOR_EXECUTION_GOLDEN_1, whose golden expectation moved
     # from infrastructure-change to new-service in #210 -- so the remaining
     # 84 will first appear in a real dispatch, not in a test diff. Recount
-    # with the enumeration above if the shape assignments in routing.yaml
+    # with the enumeration above if the shape assignments in routing.json
     # change rather than trusting these numbers.
     #
     # Both checks stay ahead of the architecture-change risk check for the
@@ -268,7 +296,7 @@ def _select_workflow(
 def _undeclared_workflow_shape_routes(matched_routes: list[dict[str, Any]]) -> list[str]:
     """Name every matched route that declared no `workflow_shape` at all.
 
-    #210 gave every route in this repository's own `routing.yaml` an explicit
+    #210 gave every route in this repository's own `routing.json` an explicit
     `workflow_shape`, and `test_selector.py::WorkflowShapeDeclarationTests`
     keeps it that way. That guarantee stopped at the overlay boundary (#214).
     `routing.schema.json` leaves the field optional on purpose so an overlay
@@ -323,8 +351,8 @@ def _build_human_gates(risks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         "destructive-action": "An authorized human must approve the exact destructive action and recovery plan.",
         "accountable-human-escalation": "An accountable human owner or approval group must make the requested decision.",
         "privileged-identity-change": "An authorized human must approve privileged identity, credential, or break-glass changes.",
-        "halt-authority-determination": "An accountable human must confirm or lift a halt-authority stop determination before affected work resumes.",
-        "architecture-boundary-violation": "An authorized human must approve any infrastructure boundary crossing architecture-authority found missing a required element.",
+        "halt-authority-determination": "An accountable human must confirm or lift the halt determination before affected work resumes.",
+        "architecture-boundary-violation": "An authorized human must approve any infrastructure boundary crossing that architecture review found missing a required element.",
         "classification-and-marking": "An authorized human must approve an artifact's classification/marking before it may leave the environment.",
         "retention-deletion-execution": "An authorized human must confirm the retention/deletion obligation and scope before execution.",
     }
@@ -670,7 +698,14 @@ def build_dispatch_plan(
     ]
     if _matches_change_intake(config, input_data["task"]):
         configured_gate_ids.extend(change_intake.get("quality_gates", []))
-    support.extend(_gate_agents(configured_gate_ids, config.get("ignored_gates", []), gates))
+    support.extend(
+        _gate_agents(
+            configured_gate_ids,
+            config.get("ignored_gates", []),
+            gates,
+            config.get("default_gate_review_agents", []),
+        )
+    )
 
     groups = {
         "primary": _ordered(primary, catalog),

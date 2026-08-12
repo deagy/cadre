@@ -937,7 +937,7 @@ def role_wrapper_inputs(agent_id: str, metadata: dict[str, Any]) -> dict[str, An
     shared_content = "\n\n".join(shared_sections)
     # A migrated role's AGENT.md carries `---`-delimited frontmatter
     # ahead of its prose body (see role_metadata.py); that frontmatter
-    # is generated-file bookkeeping for catalog.yaml/routing.yaml, not
+    # is generated-file bookkeeping for catalog.yaml/routing.json, not
     # role instructions, so it must never be embedded into the wrapper.
     role_body = strip_frontmatter((AGENTS_ROOT / definition).read_text(encoding="utf-8")).strip()
     description = f"Secure cloud agent suite role for the {phase} phase ({agent_id})."
@@ -1011,7 +1011,7 @@ def codex_wrapper_contents(catalog: dict[str, dict[str, Any]]) -> dict[str, str]
 
     Returns content rather than writing, so generate_role_metadata.py can fold
     these into the same rendered-content map it uses for catalog.yaml and
-    routing.yaml and get --check for free.
+    routing.json and get --check for free.
     """
     contents: dict[str, str] = {}
     for agent_id, metadata in sorted(catalog.items()):
@@ -1407,6 +1407,14 @@ def generate_suite_copy(
         elif relative in role_paths or relative in {
             "roster/catalog.yaml",
             "roster/catalog.schema.json",
+            # PP-FR-2. Like PROVIDER_BUNDLE at :101, this is a CLOSED allowlist
+            # rather than a directory walk, so an unlisted roster-root file is
+            # silently skipped -- and a packaged suite whose roster.json is
+            # missing is not a valid roster package, failing in the installed
+            # plugin and nowhere in CI. The requirements baseline recorded that
+            # trap for provider/; this is the same trap one directory over, and
+            # it fired the moment roster.json existed.
+            "roster/roster.json",
             "roster/catalog-order.txt",
             "roster/context-pack-order.txt",
             "roster/_catalog_header.yaml.tmpl",

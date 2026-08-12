@@ -55,7 +55,7 @@ regexes = [
   '''glpat-SUPER-SECRET-LEAKED-''',
 ]
 
-# `generic-api-key` fires on routing.yaml's `secrets-identity` route, where an
+# `generic-api-key` fires on routing.json's `secrets-identity` route, where an
 # agent-id array puts a long hyphenated role id immediately after the literal
 # word `secrets`:
 #
@@ -63,7 +63,7 @@ regexes = [
 #
 # The rule's keyword proximity heuristic reads `secrets-identity-engineer` as
 # the assignment keyword and the role id after it as the assigned value. There
-# is no credential here -- both tokens are catalog role ids, and routing.yaml
+# is no credential here -- both tokens are catalog role ids, and routing.json
 # has never held a secret of any kind. This recurs by construction: every
 # future role id routed alongside `secrets-identity-engineer` reproduces it.
 #
@@ -82,9 +82,9 @@ regexes = [
 #     config edit each time -- while excluding the mixed-case/underscore/
 #     base64/hex shapes real credentials take.
 #   - `paths` names both copies of the one file exhibiting this construct, not
-#     a directory: `plugin/suite/roster/orchestration/routing.yaml` is the
-#     generated mirror of `roster/orchestration/routing.yaml` and always
-#     carries the identical line. routing.yaml is NOT blanket-exempted -- every
+#     a directory: `plugin/suite/roster/orchestration/routing.json` is the
+#     generated mirror of `roster/orchestration/routing.json` and always
+#     carries the identical line. routing.json is NOT blanket-exempted -- every
 #     other rule still applies to it in full, and `generic-api-key` itself
 #     still applies to every line of it that is not this exact construct.
 [[allowlists]]

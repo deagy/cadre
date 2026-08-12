@@ -29,7 +29,7 @@ from route_near_miss import (  # noqa: E402
     format_near_misses_text,
 )
 
-CONFIG = load_routing(ROOT / "routing.yaml")
+CONFIG = load_routing(ROOT / "routing.json")
 CATALOG = load_catalog(AGENTS_ROOT / "catalog.yaml")
 SELECTOR = ROOT / "src" / "select_agents.py"
 
@@ -129,7 +129,7 @@ class ExplainRouteNearMissTests(unittest.TestCase):
 
     def test_real_routing_yaml_run_does_not_crash_and_is_json_serializable(self) -> None:
         # Grounding check against the real repository configuration: as of
-        # this writing no route in routing.yaml declares keyword_groups, so
+        # this writing no route in routing.json declares keyword_groups, so
         # this legitimately returns no near misses for any task -- see
         # route_near_miss.py's module docstring. The assertion here is only
         # that the real config doesn't crash the mechanism and stays

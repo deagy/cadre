@@ -147,7 +147,7 @@ class PathSubstitutionTests(unittest.TestCase):
     def test_routing_yaml_boilerplate_across_a_line_break_is_rewritten(self) -> None:
         body = self._body(
             "some-role",
-            "noted that roster/orchestration/\n    routing.yaml's own routing rules matter.",
+            "noted that roster/orchestration/\n    routing.json's own routing rules matter.",
         )
         converted = p._convert_agent_body("some-role", body)
         self.assertIn("this project's routing configuration's own routing rules", converted)

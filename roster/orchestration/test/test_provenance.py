@@ -40,7 +40,7 @@ except ImportError:
     JSONSCHEMA_AVAILABLE = False
 
 CATALOG_PATH = AGENTS_ROOT / "catalog.yaml"
-ROUTING_PATH = ROOT / "routing.yaml"
+ROUTING_PATH = ROOT / "routing.json"
 SCHEMA_PATH = ROOT / "selection.schema.json"
 CONFIG = load_routing(ROUTING_PATH)
 CATALOG = load_catalog(CATALOG_PATH)
@@ -117,7 +117,7 @@ class ContentHashBindingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             work = Path(temporary_directory)
             catalog_copy = work / "catalog.yaml"
-            routing_copy = work / "routing.yaml"
+            routing_copy = work / "routing.json"
             catalog_copy.write_bytes(CATALOG_PATH.read_bytes())
             routing_copy.write_bytes(ROUTING_PATH.read_bytes())
 
@@ -181,7 +181,7 @@ class GitIdentityTests(unittest.TestCase):
             work = Path(temporary_directory)
             (work / "orchestration").mkdir()
             catalog_copy = work / "catalog.yaml"
-            routing_copy = work / "orchestration" / "routing.yaml"
+            routing_copy = work / "orchestration" / "routing.json"
             catalog_copy.write_bytes(CATALOG_PATH.read_bytes())
             routing_copy.write_bytes(ROUTING_PATH.read_bytes())
             _git_init(work)
@@ -196,14 +196,14 @@ class GitIdentityTests(unittest.TestCase):
                 )
 
             self.assertEqual(head, plan["provenance"]["git_commit_sha"])
-            self.assertIn("orchestration/routing.yaml", plan["provenance"]["git_dirty_paths"])
+            self.assertIn("orchestration/routing.json", plan["provenance"]["git_dirty_paths"])
             self.assertNotIn("catalog.yaml", plan["provenance"]["git_dirty_paths"])
 
     def test_clean_tree_records_empty_dirty_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             work = Path(temporary_directory)
             catalog_copy = work / "catalog.yaml"
-            routing_copy = work / "routing.yaml"
+            routing_copy = work / "routing.json"
             catalog_copy.write_bytes(CATALOG_PATH.read_bytes())
             routing_copy.write_bytes(ROUTING_PATH.read_bytes())
             _git_init(work)
@@ -227,7 +227,7 @@ class GitIdentityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             work = Path(temporary_directory)
             catalog_copy = work / "catalog.yaml"
-            routing_copy = work / "routing.yaml"
+            routing_copy = work / "routing.json"
             catalog_copy.write_bytes(CATALOG_PATH.read_bytes())
             routing_copy.write_bytes(ROUTING_PATH.read_bytes())
             # tempfile.mkdtemp() output is not inside a git working tree in

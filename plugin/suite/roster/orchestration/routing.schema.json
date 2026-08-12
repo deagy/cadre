@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/schemas/cadre-routing.schema.json",
-  "title": "Cadre routing configuration (roster/orchestration/routing.yaml)",
-  "description": "Full documented shape of routing.yaml (JSON syntax despite the .yaml extension, per routing.py::load_routing's json.load) per requirements SV-FR-7..24. Covers version/ignored_gates/change_intake/routes/risk_rules/cross_stack/team_recipes/knowledge_focus type, enum, and required-field shape. Deliberately does NOT duplicate: (a) routing_health.py's cross-file reachability/orphan/dangling-reference checks (SV-FR-16/19/22's requires_route note) -- this schema checks reference *shape* (list-of-strings) only; (b) semantic G\\d+ gate-id validity against the live agentic-sdlc gate list -- only string shape is checked here (SV-FR-11/17, AS-3). One cross-field numeric consistency check (cross_stack.minimum_matches <= len(route_ids), and the analogous team_recipes fixed-variant checks, SV-FR-20/SV-FR-22) is NOT expressed here because JSON Schema has no clean way to compare an integer property's value against another property's array length; that check is implemented separately in roster/orchestration/src/schema_validate.py's supplementary Python checks, alongside duplicate-id detection per array (SV-FR-12).",
+  "title": "Cadre routing configuration (roster/orchestration/routing.json)",
+  "description": "Full documented shape of routing.json (JSON syntax despite the .yaml extension, per routing.py::load_routing's json.load) per requirements SV-FR-7..24. Covers version/ignored_gates/change_intake/routes/risk_rules/cross_stack/team_recipes/knowledge_focus type, enum, and required-field shape. Deliberately does NOT duplicate: (a) routing_health.py's cross-file reachability/orphan/dangling-reference checks (SV-FR-16/19/22's requires_route note) -- this schema checks reference *shape* (list-of-strings) only; (b) semantic G\\d+ gate-id validity against the live agentic-sdlc gate list -- only string shape is checked here (SV-FR-11/17, AS-3). One cross-field numeric consistency check (cross_stack.minimum_matches <= len(route_ids), and the analogous team_recipes fixed-variant checks, SV-FR-20/SV-FR-22) is NOT expressed here because JSON Schema has no clean way to compare an integer property's value against another property's array length; that check is implemented separately in roster/orchestration/src/schema_validate.py's supplementary Python checks, alongside duplicate-id detection per array (SV-FR-12).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -84,17 +84,36 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "version", "definition"],
+        "required": [
+          "id",
+          "version",
+          "definition"
+        ],
         "properties": {
-          "id": { "$ref": "#/$defs/nonempty" },
-          "version": { "type": "integer", "minimum": 1 },
-          "definition": { "$ref": "#/$defs/nonempty" },
-          "paths": { "$ref": "#/$defs/stringArray" },
-          "exclude_paths": { "$ref": "#/$defs/stringArray" },
-          "keywords": { "$ref": "#/$defs/nonemptyStringArray" },
+          "id": {
+            "$ref": "#/$defs/nonempty"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "definition": {
+            "$ref": "#/$defs/nonempty"
+          },
+          "paths": {
+            "$ref": "#/$defs/stringArray"
+          },
+          "exclude_paths": {
+            "$ref": "#/$defs/stringArray"
+          },
+          "keywords": {
+            "$ref": "#/$defs/nonemptyStringArray"
+          },
           "keyword_groups": {
             "type": "array",
-            "items": { "$ref": "#/$defs/nonemptyStringArray" }
+            "items": {
+              "$ref": "#/$defs/nonemptyStringArray"
+            }
           }
         }
       }
@@ -108,6 +127,14 @@
         "type": "string",
         "minLength": 1
       }
+    },
+    "default_gate_review_agents": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Reviewer agent ids injected into `support` for each configured lifecycle gate that declares no `review_agents` of its own. Roster-supplied (OD-9, 2026-08-11): this used to be a hardcoded [\"code-reviewer\"] literal in build_dispatch_plan.py, which made a foreign roster's plan raise `Routing selected an unknown agent` because no gate contract has ever declared review_agents OR author_agents -- so the 'fallback' fired unconditionally for every gate on every lifecycle-aware plan. Omit or leave empty to inject nothing, which is what a roster without a general-purpose reviewer should do."
     }
   },
   "$defs": {
@@ -191,7 +218,7 @@
         "support": true,
         "quality_gates": true,
         "workflow_shape": {
-          "description": "The delivery shape this route contributes to build_dispatch_plan._select_workflow()'s final stage (#210), naming the kind of artifact the route's roles deliver: 'infrastructure-change' for declarative platform, host, cluster, or network infrastructure; 'pipeline-change' for CI/CD and release-delivery definitions; 'new-service' for application, service, library, or product code; 'unclassified' for a route that claims no delivery shape at all -- advisory, assessment, review, governance, support, documentation, and evidence routes, and routes whose shape is already decided by one of _select_workflow()'s earlier precedence conditions (rollback, production-release, support-escalation, runtime-assurance, knowledge-ingestion, debugging, agent-suite-maintenance, product-intake), which depend on route combinations and keyword evidence a per-route constant cannot express. Optional in this schema so a project-local routing overlay that predates the field still validates -- such a route contributes no shape, exactly as every route did before #210 -- but every route in this repository's own routing.yaml must declare it, which test_selector.py::WorkflowShapeDeclarationTests enforces. Never derived from the primary role's catalog phase: phase is a capability and authority grouping, and several build-phase routes (opentofu-module-execution, gitlab-ci-execution) deliver infrastructure or pipeline artifacts rather than services.",
+          "description": "The delivery shape this route contributes to build_dispatch_plan._select_workflow()'s final stage (#210), naming the kind of artifact the route's roles deliver: 'infrastructure-change' for declarative platform, host, cluster, or network infrastructure; 'pipeline-change' for CI/CD and release-delivery definitions; 'new-service' for application, service, library, or product code; 'unclassified' for a route that claims no delivery shape at all -- advisory, assessment, review, governance, support, documentation, and evidence routes, and routes whose shape is already decided by one of _select_workflow()'s earlier precedence conditions (rollback, production-release, support-escalation, runtime-assurance, knowledge-ingestion, debugging, agent-suite-maintenance, product-intake), which depend on route combinations and keyword evidence a per-route constant cannot express. Optional in this schema so a project-local routing overlay that predates the field still validates -- such a route contributes no shape, exactly as every route did before #210 -- but every route in this repository's own routing.json must declare it, which test_selector.py::WorkflowShapeDeclarationTests enforces. Never derived from the primary role's catalog phase: phase is a capability and authority grouping, and several build-phase routes (opentofu-module-execution, gitlab-ci-execution) deliver infrastructure or pipeline artifacts rather than services.",
           "enum": [
             "new-service",
             "infrastructure-change",

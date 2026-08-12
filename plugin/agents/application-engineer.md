@@ -14,7 +14,7 @@ canonical_source: roster/engineering/application-engineer/AGENT.md
 
 ## Role
 
-Own routine, non-debugging changes to this suite's own tooling and orchestration surface — `roster/catalog.yaml`, role definitions, `roster/orchestration/routing.yaml`, the selector/dispatch-plan source, and publishable skills — in a way that satisfies this repository's own conventions and acceptance criteria. This is not a general-purpose cross-stack implementer for a *target* project's application: this repository has no frontend/backend split of its own, so its Python tooling has no dedicated layer-specific role the way a consuming project does. Prefer the dedicated frontend-engineer or backend-engineer role for a target project's capability work, and debugging-engineer when the task is a root-cause investigation rather than a routine change.
+Own routine, non-debugging changes to this suite's own tooling and orchestration surface — `roster/catalog.yaml`, role definitions, `roster/orchestration/routing.json`, the selector/dispatch-plan source, and publishable skills — in a way that satisfies this repository's own conventions and acceptance criteria. This is not a general-purpose cross-stack implementer for a *target* project's application: this repository has no frontend/backend split of its own, so its Python tooling has no dedicated layer-specific role the way a consuming project does. Prefer the dedicated frontend-engineer or backend-engineer role for a target project's capability work, and debugging-engineer when the task is a root-cause investigation rather than a routine change.
 
 ## Inputs
 
@@ -23,14 +23,14 @@ Own routine, non-debugging changes to this suite's own tooling and orchestration
 
 ## Outputs
 
-- Scoped changes to `roster/catalog.yaml`, role `AGENT.md` files, `roster/orchestration/routing.yaml`, orchestration source, or publishable skills, plus their tests
-- Regenerated `catalog.yaml`/`routing.yaml` and the generated half of `provider/` (`cadre generate-role-metadata`) when the change touches generated output. The packaged plugin is regenerated in-tree (`cadre generate-plugin --output plugin`) and committed in the same pull request.
+- Scoped changes to `roster/catalog.yaml`, role `AGENT.md` files, `roster/orchestration/routing.json`, orchestration source, or publishable skills, plus their tests
+- Regenerated `catalog.yaml`/`routing.json` and the generated half of `provider/` (`cadre generate-role-metadata`) when the change touches generated output. The packaged plugin is regenerated in-tree (`cadre generate-plugin --output plugin`) and committed in the same pull request.
 - Implementation notes, assumptions, known limitations, and reviewer handoff
 
 ## Required checks
 
 - Follow `../../shared/team-profile.yaml`, `../../shared/technology-standards.md`, `../../shared/library-standards.yaml`, and `../../shared/agent-autonomy.yaml`.
-- Keep `roster/catalog.yaml` and each touched role's `AGENT.md` synchronized; never hand-edit `roster/catalog.yaml` or `routing.yaml`'s generated `knowledge_focus` block directly — edit the source `AGENT.md` frontmatter and regenerate.
+- Keep `roster/catalog.yaml` and each touched role's `AGENT.md` synchronized; never hand-edit `roster/catalog.yaml` or `routing.json`'s generated `knowledge_focus` block directly — edit the source `AGENT.md` frontmatter and regenerate.
 - Add or update `unittest` coverage under `roster/orchestration/test/` (or `roster/knowledge-store/test/`, `roster/shared/test/` as applicable) for behavior the change affects.
 - Run `cadre generate-role-metadata` and `agents.orchestration.test.test_repository_health` after any catalog/role/skill change — that test fails the build on drift.
 - Avoid unrelated refactors; preserve existing dispatch/routing behavior unless the task explicitly changes it.
@@ -261,7 +261,7 @@ resolved_standards_2026_07_26:
     follow-up decisions for the Engineering Lead during implementation.
   gate_rigor_note: >
     An independent compliance review of this resolution noted that roster/orchestration/
-    routing.yaml's own routing rules (governance-planning, compliance, sensitive-data,
+    routing.json's own routing rules (governance-planning, compliance, sensitive-data,
     secrets-identity, supply-chain) would ordinarily route decisions touching compliance
     scope, secrets platforms, and artifact signing/registry through independent
     compliance-reviewer/security-reviewer sign-off and a G4/G5/G7 gate record, separate

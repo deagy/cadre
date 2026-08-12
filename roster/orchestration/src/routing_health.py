@@ -1,20 +1,20 @@
-"""Routing-coverage/orphan linter for catalog.yaml <-> routing.yaml.
+"""Routing-coverage/orphan linter for catalog.yaml <-> routing.json.
 
 Verifies two directions of consistency between this repository's own
-`roster/catalog.yaml` role catalog and `roster/orchestration/routing.yaml`:
+`roster/catalog.yaml` role catalog and `roster/orchestration/routing.json`:
 
-- Every catalog agent ID is reachable from at least one of routing.yaml's
+- Every catalog agent ID is reachable from at least one of routing.json's
   `routes`, `risk_rules`, `team_recipes`, `change_intake.agents`, or
   `cross_stack.support` entries (an "orphan" catalog agent otherwise).
-- Every agent ID referenced from those routing.yaml structures actually
+- Every agent ID referenced from those routing.json structures actually
   exists as a catalog.yaml key (a "dangling" reference otherwise).
 
-It also checks one property internal to routing.yaml: that no rule's
+It also checks one property internal to routing.json: that no rule's
 `exclude_paths` fully shadows one of its own `paths` globs (issue #162).
 A shadowed glob is dead weight -- the rule keeps its `reviewers` and any
 `human_gate` but matches on keywords alone, losing path coverage silently.
 
-This module is pure static analysis: it never mutates routing.yaml or
+This module is pure static analysis: it never mutates routing.json or
 catalog.yaml, and it reuses routing.py's existing `load_routing`/
 `load_catalog`/`parse_catalog_entries` loaders rather than re-parsing either
 file with a second implementation.
@@ -31,12 +31,12 @@ from glob_containment import CONTAINED, contains
 from routing import load_catalog, load_routing
 
 DEFAULT_CATALOG = Path(__file__).resolve().parents[2] / "catalog.yaml"
-DEFAULT_ROUTING = Path(__file__).resolve().parents[1] / "routing.yaml"
+DEFAULT_ROUTING = Path(__file__).resolve().parents[1] / "routing.json"
 
 
 def _iter_references(config: dict[str, Any]) -> Iterator[tuple[str, str]]:
     """Yield (structural_location, referenced_agent_id) for every
-    primary/reviewers/support/members/role/agents reference in routing.yaml.
+    primary/reviewers/support/members/role/agents reference in routing.json.
 
     `structural_location` names the exact field and index the reference came
     from (e.g. `routes[6] (id="orchestration").reviewers[0]`), matching the
@@ -116,7 +116,7 @@ def check_exclude_path_reachability(config: dict[str, Any]) -> list[str]:
 def check_routing_coverage(config: dict[str, Any], catalog_agent_ids: list[str]) -> list[str]:
     """Return a deterministic, sorted-where-applicable list of finding strings.
 
-    Empty list means routing.yaml and catalog.yaml are fully consistent:
+    Empty list means routing.json and catalog.yaml are fully consistent:
     every catalog agent is reachable, and every reference resolves to a
     catalog agent.
     """
@@ -129,7 +129,7 @@ def check_routing_coverage(config: dict[str, Any], catalog_agent_ids: list[str])
     for agent_id in sorted(catalog_ids - reachable_ids):
         findings.append(
             f'catalog agent "{agent_id}" is not referenced as primary/reviewers/support in any '
-            "routing.yaml route, risk_rule, team_recipe, change_intake.agents, or "
+            "routing.json route, risk_rule, team_recipe, change_intake.agents, or "
             "cross_stack.support entry"
         )
 

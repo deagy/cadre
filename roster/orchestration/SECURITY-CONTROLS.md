@@ -453,7 +453,7 @@ support is additive, verified by
 and the full pre-existing single-role suite passing unmodified.
 
 **`dispatch_team_recipe` (in `dispatch_server.py`) is a convenience wrapper,
-not a new control surface.** It expands a `routing.yaml` `team_recipes[]`
+not a new control surface.** It expands a `routing.json` `team_recipes[]`
 entry into concrete `{role_id, brief}` members
 (`expand_recipe_to_members()` in `roster/orchestration/src/team_recipe_dryrun.py`)
 and then calls `dispatch_team()` exactly as a caller who built the members
@@ -514,7 +514,7 @@ on a refused expansion.
   separate team-scoped cap -- but via a new `acquire(timeout=...)` method
   that blocks until a slot frees (or the dispatch timeout elapses), rather
   than `try_acquire()`'s immediate denial. This is deliberate: a team can
-  exceed `MAX_CONCURRENT_CHILDREN` by design (`routing.yaml`'s
+  exceed `MAX_CONCURRENT_CHILDREN` by design (`routing.json`'s
   `competing-hypotheses-debugging` recipe allows up to 4 instances against a
   default cap of 3), and immediate denial would make dispatching any such
   team larger than the global cap unusable. `try_acquire()` itself is

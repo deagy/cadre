@@ -225,6 +225,66 @@ class SdlcDispatchTests(unittest.TestCase):
         self.assertTrue(captured["args"][2].endswith("provider.json"))
         self.assertEqual(captured["args"][3:], ["plan", "--foo"])
 
+    # -- PP-FR-4: provider suppression ----------------------------------
+
+    def _argv_for(self, rest: list[str]) -> list[str]:
+        captured: dict[str, list[str]] = {}
+
+        def fake_run(args, **_kwargs):
+            captured["args"] = args
+            return subprocess.CompletedProcess(args, 0)
+
+        with mock.patch.dict(os.environ, {"AGENTIC_SDLC_BIN": "/fake/agentic-sdlc"}):
+            with mock.patch.object(agents_cli.subprocess, "run", side_effect=fake_run):
+                agents_cli.dispatch_sdlc(rest)
+        return captured["args"]
+
+    def test_with_no_flag_the_argument_vector_is_unchanged(self) -> None:
+        """PP-FR-4 acceptance (b). The default path must not move."""
+        args = self._argv_for(["plan", "--foo"])
+        self.assertEqual(args[0], "/fake/agentic-sdlc")
+        self.assertEqual(args[1], "--provider")
+        self.assertTrue(args[2].endswith("provider.json"))
+        self.assertEqual(args[3:], ["plan", "--foo"])
+
+    def test_a_caller_supplied_provider_suppresses_the_injected_one(self) -> None:
+        """PP-FR-4 acceptance (a), at the argv level.
+
+        Before this, `cadre sdlc --provider <other> provider list` failed with
+        `duplicates profile ids: ['generic']` -- the foreign manifest loaded
+        correctly and was then rejected for colliding with a bundle the caller
+        never asked for.
+        """
+        args = self._argv_for(["--provider", "/other/provider.json", "provider", "list"])
+        self.assertEqual(args, [
+            "/fake/agentic-sdlc", "--provider", "/other/provider.json", "provider", "list",
+        ])
+        self.assertEqual(1, args.count("--provider"), "Cadre's bundle was injected alongside")
+
+    def test_the_equals_form_is_recognised_too(self) -> None:
+        args = self._argv_for(["--provider=/other/provider.json", "provider", "list"])
+        self.assertEqual(1, args.count("--provider"))
+        self.assertIn("/other/provider.json", args)
+
+    def test_repeated_providers_keep_the_callers_order(self) -> None:
+        """The kernel's --provider is action="append", so order is precedence."""
+        args = self._argv_for(["--provider", "A", "--provider", "B", "list"])
+        self.assertEqual(args[1:], ["--provider", "A", "--provider", "B", "list"])
+
+    def test_no_default_provider_suppresses_without_a_replacement(self) -> None:
+        args = self._argv_for(["--no-default-provider", "provider", "list"])
+        self.assertEqual(args, ["/fake/agentic-sdlc", "provider", "list"])
+        self.assertNotIn("--provider", args, "the flag itself must not be forwarded")
+
+    def test_malformed_argv_is_forwarded_untouched(self) -> None:
+        """The kernel reports it, in the kernel's wording, about the command the
+        caller actually invoked. A usage block for a wrapper parser they never
+        called would be a second and more confusing error."""
+        args = self._argv_for(["decide", "--note", "--provider"])
+        self.assertEqual(args[1], "--provider")
+        self.assertTrue(args[2].endswith("provider.json"))
+        self.assertEqual(args[3:], ["decide", "--note", "--provider"])
+
     def test_relays_the_delegate_exit_code(self) -> None:
         def fake_run(args, **_kwargs):
             return subprocess.CompletedProcess(args, 7)

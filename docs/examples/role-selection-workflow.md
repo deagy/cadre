@@ -34,7 +34,7 @@ Before dispatching, review:
 2. **Model assignments**: Are the model tiers appropriate? (e.g., `opus` for architecture, `sonnet` for implementation)
 3. **Routing rationale**: Does the reasoning match the task?
 
-If the plan needs adjustment, modify `roster/orchestration/routing.yaml` or the task description and re-run selection.
+If the plan needs adjustment, modify `roster/orchestration/routing.json` or the task description and re-run selection.
 
 ## Step 4: Dispatch Agents
 

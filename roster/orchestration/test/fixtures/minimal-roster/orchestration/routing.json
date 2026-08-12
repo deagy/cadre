@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "change_intake": {
+    "keywords": [
+      "forge",
+      "temper",
+      "anneal"
+    ],
+    "agents": [
+      "widget-scribe"
+    ],
+    "quality_gates": [
+      "G1"
+    ]
+  },
+  "routes": [
+    {
+      "id": "sprocket-forging",
+      "workflow_shape": "new-service",
+      "paths": [
+        "sprockets/**"
+      ],
+      "keywords": [
+        "sprocket",
+        "flange",
+        "gudgeon"
+      ],
+      "primary": [
+        "widget-smith"
+      ],
+      "reviewers": [
+        "widget-inspector"
+      ],
+      "quality_gates": [
+        "G5"
+      ]
+    },
+    {
+      "id": "flange-chronicle",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "chronicle/**"
+      ],
+      "keywords": [
+        "chronicle",
+        "tally"
+      ],
+      "primary": [
+        "widget-scribe"
+      ]
+    }
+  ],
+  "risk_rules": [
+    {
+      "id": "brittle-alloy",
+      "keywords": [
+        "brittle",
+        "alloy"
+      ],
+      "paths": [
+        "**/alloy/**"
+      ],
+      "reviewers": [
+        "widget-inspector"
+      ],
+      "quality_gates": [
+        "G5"
+      ]
+    }
+  ],
+  "cross_stack": {
+    "route_ids": [
+      "sprocket-forging",
+      "flange-chronicle"
+    ],
+    "minimum_matches": 2,
+    "support": [
+      "widget-scribe"
+    ]
+  },
+  "team_recipes": [],
+  "knowledge_focus": {
+    "widget-smith": "prior forging tolerances and alloy failures",
+    "widget-inspector": "prior inspection rejections and their causes",
+    "widget-scribe": "prior chronicle conventions"
+  }
+}

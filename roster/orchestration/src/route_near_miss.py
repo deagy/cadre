@@ -33,7 +33,7 @@ group sits at 0-of-N or N-of-N, is omitted entirely -- 0-of-N is irrelevant
 noise and N-of-N would mean the route actually matched (a contradiction for
 a route reaching this module at all).
 
-As of this writing no entry under `routes:` in `routing.yaml` declares
+As of this writing no entry under `routes:` in `routing.json` declares
 `keyword_groups` (only `risk_rules:` entries do), so a real invocation
 against the current file may legitimately report no near misses for any
 task -- that is a correct, honest answer, not a bug in this module; the
@@ -49,7 +49,7 @@ not agent judgment (`CLAUDE.md`), and a prior review explicitly rejected
 numeric confidence/score/weight/ranking on a match under any name (see the
 same requirements.md, §6, "Out of scope").
 
-This module only reads `routing.yaml` data already loaded by the caller and
+This module only reads `routing.json` data already loaded by the caller and
 never mutates it, never retrieves knowledge, and never dispatches anything.
 """
 
@@ -87,7 +87,7 @@ def find_near_misses(
     config: dict[str, Any], task_text: str, matched_route_ids: set[str]
 ) -> list[dict[str, Any]]:
     """Near-miss explanations for every route in `config["routes"]` that is
-    NOT in `matched_route_ids`, in `routing.yaml` declaration order.
+    NOT in `matched_route_ids`, in `routing.json` declaration order.
 
     Routes below `explain_route_near_miss`'s relevance threshold are omitted
     from the result entirely rather than included with an empty reasoning
@@ -112,7 +112,7 @@ def format_near_misses_text(near_misses: list[dict[str, Any]]) -> str:
         return (
             "--explain: no near-miss routes for this task -- no unmatched route had a "
             "partially satisfied keyword_groups entry (see route_near_miss.py's relevance "
-            "threshold; most routes in the current routing.yaml use plain keywords/paths, "
+            "threshold; most routes in the current routing.json use plain keywords/paths, "
             "which have no partial-match state to report).\n"
         )
     lines = ["--explain: near-miss routes (did not match, but came close)", ""]

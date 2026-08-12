@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dry-run visualizer for `roster/orchestration/routing.yaml`'s `team_recipes[]`.
+"""Dry-run visualizer for `roster/orchestration/routing.json`'s `team_recipes[]`.
 
 A recipe author/debugger currently has no way to see, for a hypothetical or
 real task, WHY a given team recipe did or didn't trigger without reading
@@ -13,7 +13,7 @@ Two input modes, matching this repository's existing dry-run conventions:
 
 - Task mode (`--task`, plus `--files`/`--base`/`--root`): the same inputs
   `cadre select` takes. Routes/risks are matched for real against
-  `routing.yaml`, and `build_dispatch_plan()` is called to obtain the exact
+  `routing.json`, and `build_dispatch_plan()` is called to obtain the exact
   `matched_routes` and selected-agent set a real dispatch would produce --
   this reuses the authoritative selection logic rather than reimplementing
   it, so the two can never silently diverge.
@@ -32,7 +32,7 @@ module deliberately mirrors that function's exact condition order and
 short-circuit semantics (see `explain_fixed_recipe`/`explain_dynamic_recipe`
 below) so the dry-run answer can never disagree with a real dispatch.
 
-This module never mutates routing.yaml, catalog.yaml, or any run artifact,
+This module never mutates routing.json, catalog.yaml, or any run artifact,
 and it never retrieves knowledge, invokes agents, or dispatches anything --
 it only explains what a hypothetical or real signal set would produce.
 
@@ -48,7 +48,7 @@ Run:
 
 Exits 0 when the dry-run runs to completion (regardless of which recipes
 fired), non-zero only on an input/usage error (e.g. an unknown `--recipe`
-id, or a `--matched-routes`/`--selected-agents` value routing.yaml doesn't
+id, or a `--matched-routes`/`--selected-agents` value routing.json doesn't
 recognize).
 """
 
@@ -63,7 +63,7 @@ from typing import Any
 ORCHESTRATION_ROOT = Path(__file__).resolve().parent.parent
 AGENTS_ROOT = ORCHESTRATION_ROOT.parent
 REPOSITORY_ROOT = AGENTS_ROOT.parent
-DEFAULT_ROUTING = ORCHESTRATION_ROOT / "routing.yaml"
+DEFAULT_ROUTING = ORCHESTRATION_ROOT / "routing.json"
 DEFAULT_CATALOG = AGENTS_ROOT / "catalog.yaml"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -390,12 +390,12 @@ def _format_text(explanations: list[dict[str, Any]]) -> str:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Explain, for every (or one) team_recipes[] entry in routing.yaml, whether it "
+            "Explain, for every (or one) team_recipes[] entry in routing.json, whether it "
             "would fire and exactly why/why not."
         ),
         allow_abbrev=False,
     )
-    parser.add_argument("--routing", type=Path, default=DEFAULT_ROUTING, help="Path to routing.yaml")
+    parser.add_argument("--routing", type=Path, default=DEFAULT_ROUTING, help="Path to routing.json")
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG, help="Path to catalog.yaml")
     parser.add_argument("--recipe", help="Only explain this team recipe id")
     parser.add_argument("--format", choices=["text", "json"], default="text")

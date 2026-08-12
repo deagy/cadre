@@ -4,7 +4,7 @@ Covers `roster/orchestration/src/team_recipe_dryrun.py`: a fixed recipe that
 fires (enough matched routes and selected members), one that doesn't (too
 few matched routes), a dynamic recipe that fires (role selected, required
 route matched, a keyword hits), one that doesn't (no keyword hits), and a
-run against the real current `routing.yaml` proving the tool doesn't crash
+run against the real current `routing.json` proving the tool doesn't crash
 and produces a `fires: bool` verdict with reasoning for every real recipe.
 """
 
@@ -29,7 +29,7 @@ from team_recipe_dryrun import (  # noqa: E402
     main,
 )
 
-CONFIG = load_routing(ROOT / "routing.yaml")
+CONFIG = load_routing(ROOT / "routing.json")
 CATALOG = load_catalog(AGENTS_ROOT / "catalog.yaml")
 
 FIXED_RECIPE = next(recipe for recipe in CONFIG["team_recipes"] if recipe["type"] == "fixed")
@@ -342,7 +342,7 @@ class RecipeIdFilterTests(unittest.TestCase):
 
 class RealRoutingConfigurationTests(unittest.TestCase):
     """Regression guard: every real team_recipes[] entry in this repository's
-    own routing.yaml must produce a sensible, non-crashing explanation."""
+    own routing.json must produce a sensible, non-crashing explanation."""
 
     def test_every_real_recipe_produces_a_verdict_with_reasoning(self) -> None:
         explanations = explain_recipes(CONFIG, set(), set(), "")
@@ -372,7 +372,7 @@ class RealRoutingConfigurationTests(unittest.TestCase):
         exit_code = main(
             [
                 "--routing",
-                str(ROOT / "routing.yaml"),
+                str(ROOT / "routing.json"),
                 "--catalog",
                 str(AGENTS_ROOT / "catalog.yaml"),
                 "--matched-routes",
@@ -428,7 +428,7 @@ class RealRoutingConfigurationTests(unittest.TestCase):
         exit_code = main(
             [
                 "--routing",
-                str(ROOT / "routing.yaml"),
+                str(ROOT / "routing.json"),
                 "--catalog",
                 str(AGENTS_ROOT / "catalog.yaml"),
                 "--task",
@@ -443,14 +443,14 @@ class RealRoutingConfigurationTests(unittest.TestCase):
 
     def test_cli_main_requires_a_mode(self) -> None:
         with self.assertRaises(ValueError):
-            main(["--routing", str(ROOT / "routing.yaml"), "--catalog", str(AGENTS_ROOT / "catalog.yaml")])
+            main(["--routing", str(ROOT / "routing.json"), "--catalog", str(AGENTS_ROOT / "catalog.yaml")])
 
     def test_cli_main_rejects_files_combined_with_synthetic_mode(self) -> None:
         with self.assertRaises(ValueError):
             main(
                 [
                     "--routing",
-                    str(ROOT / "routing.yaml"),
+                    str(ROOT / "routing.json"),
                     "--catalog",
                     str(AGENTS_ROOT / "catalog.yaml"),
                     "--matched-routes",

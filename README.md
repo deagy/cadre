@@ -300,7 +300,7 @@ back to a real checkout (the `plugin/` directory named by `--output` for
 real checkout, never an installed site-packages copy. `cadre
 generate-role-metadata` is a partial case: `--check` works fully from a
 pip/pipx install (it only verifies the installed package's own bundled
-`roster/catalog.yaml`/`roster/orchestration/routing.yaml` are internally
+`roster/catalog.yaml`/`roster/orchestration/routing.json` are internally
 current), but its default write mode requires a checkout for the same
 reason as `generate-plugin` — otherwise it would silently regenerate the
 installed package's own vendored copy under site-packages rather than a

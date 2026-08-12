@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "id": "widget-works",
+  "version": "0.1.0",
+  "catalog": "catalog.yaml",
+  "routing": "orchestration/routing.json",
+  "role_root": ".",
+  "shared_policy_root": "forge"
+}

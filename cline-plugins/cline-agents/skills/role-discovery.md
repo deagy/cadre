@@ -68,7 +68,7 @@ for an artifact type they may not have yet.
 ## Step 3 — Match against real routes, and explain why
 
 Once you have enough detail, look for a matching entry in
-`routing.yaml`'s `routes` list: does the artifact type match a route's
+`routing.json`'s `routes` list: does the artifact type match a route's
 `paths` glob, or does the described work match a route's `keywords`? State
 the match plainly, for example:
 
@@ -83,7 +83,7 @@ both a Go backend and its Helm deployment), say so — name both routes and
 both primary roles, and note that `cadre select` will select all
 matching routes from the actual changed files, not just one.
 
-If nothing in `routing.yaml` matches convincingly, say that plainly instead
+If nothing in `routing.json` matches convincingly, say that plainly instead
 of forcing a fit — `cadre select` itself returns `needs-triage` in that
 case rather than guessing, and that is the correct, honest outcome to
 surface, not a failure to paper over.

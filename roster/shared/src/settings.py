@@ -694,6 +694,33 @@ FIELDS: dict[str, FieldSpec] = {
         required=False,
         default_static=None,
     ),
+    # Global-only for the same reason as its three siblings above, and the
+    # reason is strongest here: this setting selects the role *prose* an agent
+    # is handed as its operating instructions. A project-local
+    # `.agents/cadre.yaml` arrives with `git clone`, so allowing it to redirect
+    # the roster would let a cloned repository choose what its own reviewers are
+    # told to do.
+    #
+    # OD-2 (2026-08-11) first resolved this to project tier with the redirect
+    # made *visible* in the dispatch plan, and was then reversed to global-only
+    # by the Product Owner. The deciding argument was reversibility rather than
+    # threat severity: global-only can become project-local later as an additive
+    # change, while the reverse takes away a capability people have built on.
+    # Per-invocation redirection is `cadre select --roster <path>`, which is
+    # explicit in the invocation, in shell history, and in CI logs.
+    #
+    # default_computed, not default_static=None: unlike the three siblings there
+    # is no downstream "not configured" fallback to degrade into, and a null
+    # default would push the checkout-relative computation back out to every
+    # call site -- which is the duplication PP-FR-1 exists to delete.
+    "roster.root": FieldSpec(
+        key="roster.root",
+        env_var="CADRE_ROSTER_ROOT",
+        scope=SCOPE_GLOBAL_ONLY,
+        kind="path",
+        required=False,
+        default_computed=lambda: str(Path(__file__).resolve().parents[2]),
+    ),
 }
 
 

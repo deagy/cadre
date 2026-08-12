@@ -1,9 +1,9 @@
-"""Routing-coverage/orphan checks between catalog.yaml and routing.yaml.
+"""Routing-coverage/orphan checks between catalog.yaml and routing.json.
 
 Verifies that every roster/catalog.yaml agent is reachable from
-roster/orchestration/routing.yaml (routes, risk_rules, team_recipes,
+roster/orchestration/routing.json (routes, risk_rules, team_recipes,
 change_intake.agents, or cross_stack.support), and that every agent ID
-referenced from those routing.yaml structures actually exists in
+referenced from those routing.json structures actually exists in
 catalog.yaml, and that no routing rule's `exclude_paths` fully shadows one of
 its own `paths` globs (issue #162). See roster/orchestration/src/
 routing_health.py for the implementation; it reuses routing.py's
@@ -29,7 +29,7 @@ from routing import load_catalog, load_routing  # noqa: E402
 from routing_health import check_exclude_path_reachability, check_routing_coverage, run  # noqa: E402
 
 CATALOG_PATH = REPOSITORY_ROOT / "roster" / "catalog.yaml"
-ROUTING_PATH = REPOSITORY_ROOT / "roster" / "orchestration" / "routing.yaml"
+ROUTING_PATH = REPOSITORY_ROOT / "roster" / "orchestration" / "routing.json"
 
 
 class RoutingCoverageTests(unittest.TestCase):
@@ -97,7 +97,7 @@ class RoutingCoverageTests(unittest.TestCase):
                 route.setdefault("reviewers", []).append("nonexistent-bogus-agent")
                 break
         else:  # pragma: no cover - guards fixture assumption
-            self.fail('routing.yaml no longer has an "orchestration" route to attach the fixture to')
+            self.fail('routing.json no longer has an "orchestration" route to attach the fixture to')
 
         findings = check_routing_coverage(config, catalog_agent_ids)
 
@@ -121,7 +121,7 @@ class RoutingCoverageTests(unittest.TestCase):
                 route.setdefault("primary", []).append("nonexistent-bogus-agent")
                 break
         else:  # pragma: no cover - guards fixture assumption
-            self.fail('routing.yaml no longer has an "orchestration" route to attach the fixture to')
+            self.fail('routing.json no longer has an "orchestration" route to attach the fixture to')
 
         findings = check_routing_coverage(config, catalog_agent_ids)
 
@@ -145,7 +145,7 @@ class RoutingCoverageTests(unittest.TestCase):
                 route.setdefault("support", []).append("nonexistent-bogus-agent")
                 break
         else:  # pragma: no cover - guards fixture assumption
-            self.fail('routing.yaml no longer has an "orchestration" route to attach the fixture to')
+            self.fail('routing.json no longer has an "orchestration" route to attach the fixture to')
 
         findings = check_routing_coverage(config, catalog_agent_ids)
 
@@ -250,7 +250,7 @@ class RoutingCoverageTests(unittest.TestCase):
                 target_recipe = recipe
                 break
         else:  # pragma: no cover - guards fixture assumption
-            self.fail("routing.yaml no longer has a team_recipe with a 'role' field to attach the fixture to")
+            self.fail("routing.json no longer has a team_recipe with a 'role' field to attach the fixture to")
 
         findings = check_routing_coverage(config, catalog_agent_ids)
 
@@ -299,7 +299,7 @@ class RoutingCoverageTests(unittest.TestCase):
 
     def test_removing_an_agent_from_every_reference_list_produces_an_orphan_finding(self) -> None:
         """End-to-end fixture: drop "technical-writer" from every reference
-        list in a routing.yaml copy (it is heavily referenced today), then
+        list in a routing.json copy (it is heavily referenced today), then
         confirm it is reported as an orphan and nothing else regresses.
         """
         config = copy.deepcopy(load_routing(ROUTING_PATH))
@@ -329,7 +329,7 @@ class RoutingCoverageTests(unittest.TestCase):
 
         self.assertEqual(
             ['catalog agent "technical-writer" is not referenced as primary/reviewers/support '
-             "in any routing.yaml route, risk_rule, team_recipe, change_intake.agents, or "
+             "in any routing.json route, risk_rule, team_recipe, change_intake.agents, or "
              "cross_stack.support entry"],
             findings,
         )
@@ -338,7 +338,7 @@ class RoutingCoverageTests(unittest.TestCase):
         script = ROOT / "src" / "routing_health.py"
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
-            broken_routing = temporary / "routing.yaml"
+            broken_routing = temporary / "routing.json"
             config = json.loads(ROUTING_PATH.read_text(encoding="utf-8"))
             for route in config["routes"]:
                 if route["id"] == "orchestration":
@@ -513,7 +513,7 @@ class ExcludePathReachabilityTests(unittest.TestCase):
     # -- ordinary non-findings --------------------------------------------
 
     def test_a_partial_carve_out_is_not_reported(self) -> None:
-        """The shape routing.yaml actually ships: a broad glob minus a subtree."""
+        """The shape routing.json actually ships: a broad glob minus a subtree."""
         self.assertEqual(
             [],
             self._findings(
@@ -566,7 +566,7 @@ class ExcludePathReachabilityTests(unittest.TestCase):
 
     def test_findings_are_reported_through_the_top_level_run(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
-            broken = Path(temporary_directory) / "routing.yaml"
+            broken = Path(temporary_directory) / "routing.json"
             config = json.loads(ROUTING_PATH.read_text(encoding="utf-8"))
             for route in config["routes"]:
                 if route["id"] == "architecture-design":
@@ -579,7 +579,7 @@ class ExcludePathReachabilityTests(unittest.TestCase):
     def test_run_reports_coverage_findings_alongside_shadowing_findings(self) -> None:
         """`run()` concatenates both lists; neither may shadow the other."""
         with tempfile.TemporaryDirectory() as temporary_directory:
-            broken = Path(temporary_directory) / "routing.yaml"
+            broken = Path(temporary_directory) / "routing.json"
             config = json.loads(ROUTING_PATH.read_text(encoding="utf-8"))
             for route in config["routes"]:
                 if route["id"] == "architecture-design":

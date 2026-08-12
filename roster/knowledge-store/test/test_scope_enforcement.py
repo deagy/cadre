@@ -147,7 +147,7 @@ class ScopeEnforcementTests(unittest.TestCase):
         # routing overlay before dispatch (#202) rather than reading the base
         # file directly. REPO_ROOT has no overlay, so this is the base config.
         config, _overlay = select_agents.resolve_effective_routing(
-            select_agents.ORCHESTRATION_ROOT / "routing.yaml", start=REPO_ROOT
+            select_agents.ORCHESTRATION_ROOT / "routing.json", start=REPO_ROOT
         )
         select_agents.validate_routing_config(config)
         plan = build_dispatch_plan.build_dispatch_plan(

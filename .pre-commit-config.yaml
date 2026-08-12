@@ -24,7 +24,7 @@ repos:
   - repo: local
     hooks:
       - id: catalog-schema-validate
-        name: Validate catalog.yaml and routing.yaml schemas
+        name: Validate catalog.yaml and routing.json schemas
         entry: python3 roster/orchestration/src/schema_validate.py
         language: python
         pass_filenames: false

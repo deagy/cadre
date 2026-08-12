@@ -17,7 +17,7 @@ flowchart LR
     Approve --> Apply["Deploy + Verify"]
 ```
 
-Gate set cross-checked against `routing.yaml`'s `infrastructure` route (`G3, G4, G5, G6, G7, G8`) and `roster/authority/aides.yaml`.
+Gate set cross-checked against `routing.json`'s `infrastructure` route (`G3, G4, G5, G6, G7, G8`) and `roster/authority/aides.yaml`.
 
 1. Classify scope, environment, affected data, blast radius, architecture impact, and required approvals.
 2. If architecture or trust boundaries change, require cloud architect and threat modeler review before implementation.
