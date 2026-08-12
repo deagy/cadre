@@ -15,6 +15,20 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.22.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.22.0) - 2026-08-12
+
+### Added
+
+- **The `cline-lifecycle` plugin now reaches full parity with the Claude Code / Codex lifecycle skill surface, at the flag level and not just the subcommand level.** Two new tools, `sdlc_link_intent_from_github_issue` and `sdlc_link_requirements_from_github_issue`, mirror `link-source-issue-github` — the last unmirrored forge-specific skill, now reachable because `provider.json`'s `kernel_compatibility.minimum` (0.13.2) sits past the kernel release that introduced the two underlying subcommands. Five previously unreachable flags are also exposed across the four apply-gate tools, all defaulting to off as the kernel does: `reconcileAssignees` (`sdlc_create_gate_issues_gitlab`, `sdlc_create_github_gate_issues` — the human-authorized remediation for forge assignee drift; a Cline session could previously see the drift reported but never correct it), `includeScope` (same two tools), `linkType: "relates_to"` (`sdlc_create_gate_issues_gitlab` only), and `breakLock` (all four apply-gate tools). A tool's `.strict()` input schema makes an undocumented flag not just unreachable in practice but rejected outright, so this closes a real capability gap, not just a documentation one.
+
+### Changed
+
+- **Dispatched retrieval now scopes to both knowledge sources.** `cadre knowledge ingest-accepted` writes steward-accepted findings to a dedicated `proposed-knowledge` source, but a generated dispatch plan previously scoped retrieval to the repository's own source alone, so no dispatched agent ever named the other one. `--source` is now repeatable on `cadre knowledge search`/`context`, and an emitted plan carries one `--source` entry per source rather than falling back to `--all-sources`.
+
+- **Cline agent dispatch (`cline-agents`) now falls back to the parent session's own active model** when neither a per-call override, an operator environment variable, nor a preset pin resolves `providerId`/`modelId`. This is not a shipped default choosing a vendor on the operator's behalf — it inherits whatever model the operator's already-running Cline session is actively using, read from the most recent assistant message carrying `modelInfo`. Applied only when neither field resolved through a more specific signal, preserving the existing atomic-pair behavior: a half-configured operator environment still fails closed.
+
+- **A knowledge proposal can no longer approve itself.** `cadre knowledge propose --from-finding -` is now usable by any dispatched agent directly, not only by orchestration consolidation — but a caller-asserted `status: accepted` alongside a hand-written `disposition` previously let a record staged by an ordinary role become retrievable without a steward ever touching it. Staging now enforces `decided_by != staged_by`, and `cadre knowledge ingest-accepted` is the only path that makes an accepted finding retrievable.
+
 ## [0.21.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.21.0) - 2026-08-12
 
 ### Added
