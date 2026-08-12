@@ -1,11 +1,13 @@
 # Requirements Baseline — A roster-neutral platform
 
 **Requirements ID:** `REQ-CADRE-PORTABLE-PLATFORM`
-**Revision:** 6
+**Revision:** 7
 **Status:** draft — **G1 approved 2026-08-11 against Revision 1; awaiting G2.**
-**Five decisions block G2: OD-7, OD-9, OD-10, OD-11, OD-13** — and OD-2, marked
-RESOLVED, has a reopening request against it that is upstream of three of them
-(`product-intent.md` §11, §15).
+**No open decision blocks G2 any more.** All five that did were closed or
+withdrawn by the Product Owner on 2026-08-12 (`product-intent.md` §17). **OD-2
+was reversed**: `roster.root` is `SCOPE_GLOBAL_ONLY`, which retracts PP-FR-1b and
+PP-NFR-3b and withdraws OD-7 and OD-10 outright. OD-12 (whether G1 extends to
+this revision) is open and non-blocking.
 **Revision note:** Revision 2 folded in the Product Owner's OD-2 and OD-5
 dispositions (`product-intent.md` §16), which resolve PP-FR-1's scope and
 PP-FR-2's manifest shape, and **retracted PP-NFR-3** — OD-2's answer forces a
@@ -364,48 +366,43 @@ separates a guard from a comment, and in this case it is also the difference
 between shipping the feature and shipping the vulnerability. *Verifier:*
 `test_roster_package.py`.
 
-**Scope: project-local, on the overlay pattern** (OD-2, resolved 2026-08-11 —
-`product-intent.md` §16). This is a deliberate departure from the three sibling
-path/executable settings, all of which are `SCOPE_GLOBAL_ONLY`, so the departure
-is justified rather than assumed: `agentic_sdlc.bin_path` (`settings.py:665-672`),
-`knowledge_store.home` (`:673-680`), and `context_store.home` (`:690-697`). The
-comment at `:681-689` states the objection verbatim — a project-local
-`.agents/cadre.yaml` *"arrives with `git clone` and is editable by anyone who can
-open a pull request"* — and choosing a roster is strictly more powerful than
-choosing a database path, because it selects the role prose an agent is handed.
+**Scope: `SCOPE_GLOBAL_ONLY`** (OD-2, **reversed** 2026-08-12 —
+`product-intent.md` §17). `roster.root` behaves exactly like its three sibling
+path/executable settings: `agentic_sdlc.bin_path` (`settings.py:665-672`),
+`knowledge_store.home` (`:673-680`), and `context_store.home` (`:690-697`). Env
+var or user-global config only; a project-local `.agents/cadre.yaml` cannot set
+it. Per-invocation redirection is `cadre select --roster <path>`.
 
-The objection is answered by **visibility, not prohibition** (PP-FR-1b), on the
-precedent of `roster/orchestration/src/routing_overlay.py`, which already permits
-a project-local `.agents/orchestration/routing-overlay.json` under fail-closed
-narrowing restrictions with `human_gate`/`reviewers` immutable.
-
-**PP-FR-1b — the resolved roster is legible in the plan.**
-Whenever the roster resolves to anything other than the default, the dispatch
-plan carries the resolved roster's `id` and a digest of its manifest. A
-redirected roster must be visible to a human reading the plan rather than
-silent. Digest computation should reuse the kernel's `fingerprint()` shape
-(key-sorted, whitespace-free JSON sha256, `sha256:<hex>`) for consistency with
-`provider_bindings`, ported rather than imported (PP-FR-6 / `test_kernel_boundary.py`).
-*This forces PP-NFR-3b.* *Acceptance:* a plan generated against the fixture
-roster names it; a plan against the default carries **no roster-identity
-field**.
-
-"Unchanged" is scoped to that field alone, and the scoping is not pedantry.
-Revision 2 wrote "a plan against the default is unchanged" while PP-NFR-5 states
-that PP-NFR-3b's 6 → 7 bump changes **every** plan's `schema_version` and
-`dispatch_fingerprint`, default roster included. Read against the whole plan the
-two acceptance criteria could not both pass, and a reader could have satisfied
-either one by breaking the other. *Verifier:* `test_roster_package.py`.
+**This reverses Revisions 2–6, which specified project tier.** The comment at
+`:681-689` states the objection those revisions were answering — a project-local
+file *"arrives with `git clone` and is editable by anyone who can open a pull
+request"* — and choosing a roster is strictly more powerful than choosing a
+database path, because it selects the role prose an agent is handed. Revisions
+2–6 answered it with visibility (PP-FR-1b). The Product Owner instead removed
+the exposure, on the ground that global-only → project-local is an additive
+change later while the reverse takes away a capability people have built on.
 
 *Acceptance:* `cadre select --roster <path>` loads catalog, routing, and role
-definitions from `<path>`; a project-local `.agents/cadre.yaml` may set
-`roster.root`; with neither set, behaviour is byte-identical to today (pinned by
-the existing golden corpus, `fixtures/selection_golden_corpus.json`, which must
-not be edited — see PP-NFR-1). *Verifier:* `test_selector.py`, plus a scope test
-on the model of `test_kernel_boundary.py:129-140` asserting the field is **not**
-`SCOPE_GLOBAL_ONLY` — the inverse of that precedent, and worth pinning precisely
-because it departs from three siblings and would otherwise look like an
-oversight to a later reader.
+definitions from `<path>`; `CADRE_ROSTER_ROOT` or user-global config sets the
+default; with neither set, behaviour is byte-identical to today (pinned by the
+golden corpus, `fixtures/selection_golden_corpus.json`, which must not be
+edited — see PP-NFR-1). *Verifier:* `test_selector.py`, plus a scope test on the
+model of `test_kernel_boundary.py:129-140` asserting the field **is**
+`SCOPE_GLOBAL_ONLY` — the same assertion as that precedent rather than its
+inverse, which is what Revisions 2–6 asked for.
+
+**~~PP-FR-1b — the resolved roster is legible in the plan.~~ RETRACTED at
+Revision 7.** It required the dispatch plan to carry the resolved roster's `id`
+and manifest digest whenever the roster was not the default. Its entire purpose
+was to make a *silent* redirect visible, and OD-2's reversal removes the silence:
+`--roster <path>` is explicit in the invocation, in shell history, and in CI
+logs, and a global config file is the operator's own.
+
+Retained struck through rather than deleted, so a reader of Revisions 2–6 finds
+out what happened to it. Two consequences follow and are recorded at their own
+requirements: **PP-NFR-3b is retracted with it** (no new emitted field, so
+nothing forces a schema bump), and the kernel `fingerprint()` port this
+requirement called for is no longer needed at all.
 
 **PP-FR-2 — A roster package is declared by a sibling `roster.json`.**
 Resolved at OD-5 (2026-08-11). Chosen because it requires **zero** change to
@@ -468,14 +465,28 @@ third-party contract"* — as **"No, deliberately not."** `roster.json` must the
 satisfy that condition itself, inheriting none of `provider.json`'s answers. A
 schema shipped without a compatibility window cannot gain one compatibly later.
 
-Recommended shape, registered as **OD-11** rather than adopted here:
+**OD-11 — RESOLVED at Revision 7: no window. `schema_version` only.**
+(`product-intent.md` §17.) The proposal below is **not adopted**:
 
 ```json
 "platform_compatibility": {"minimum": "<semver>", "maximum_exclusive": "<semver>"}
 ```
 
-checked as `load_provider()` checks its own, against a `SELECTOR_VERSION`
-constant bumped whenever roster-manifest-consuming behaviour changes.
+The cost is accepted rather than overlooked, and is restated here so nobody
+reopens it as an oversight: a `roster.json` authored against different selector
+semantics will fail however its differences happen to present rather than by
+name, and a window cannot be added later without a breaking change to a shipped
+schema.
+
+**One mitigation is adopted with the decision, and it is a requirement, not a
+suggestion: the loader must REJECT an unrecognised `schema_version` rather than
+ignoring it.** `schema_version` versions the document rather than the platform
+behaviour it depends on, so this does not recover what a window would have
+given. What it does recover is the most common case — a manifest written for a
+different generation of the format — turning it from silent misbehaviour into an
+error naming the manifest. *Acceptance:* a `roster.json` carrying an unknown
+`schema_version` is rejected by name; a test asserts it, and asserts the failure
+rather than only the success.
 
 **A second, smaller gap: nothing binds `roster.json` to its sibling
 `provider.json`.** They describe one bundle with two ids and two versions, and
@@ -706,7 +717,7 @@ violations in three distinct categories, only one of which is a defect.
 
 | Category | Examples | Disposition |
 | --- | --- | --- |
-| **A. Cadre role ids in resolution logic** | `build_dispatch_plan.py:107` `["code-reviewer"]` | **Forbidden.** Real defect, and larger than "boundary hygiene" — see OD-9 and the category-A note below. |
+| **A. Cadre role ids in resolution logic** | `build_dispatch_plan.py:107` `["code-reviewer"]` | **Forbidden.** Real defect, and a functional prerequisite rather than hygiene. **Fix resolved at OD-9 (Revision 7): the default moves to a `default_gate_review_agents` key in `routing.yaml`.** See below. |
 | **B. Roster-package filenames in path resolution** | `select_agents.py:203`, `:204`; `routing_overlay.py:97`, `:102`; `mcp/dispatch_core.py:56`; `mcp/dispatch_server.py:63` — **six sites, enumerated exhaustively** | **Forbidden**, and PP-FR-2 already prescribes the fix: these paths come from `roster.json`, not from string literals. |
 | **C. Paths in user-facing message text** | `routing.py:154,198,209,212,279`; `knowledge-store/src/{staged_records.py:141,147, finding_record.py:139}` | **Permitted, explicitly.** A diagnostic naming the file a user must edit is not a resolution path. The guard must exempt them by *rule* — see the rule sketch below — not by an ad-hoc file allowlist, which is how a guard stops meaning anything. |
 
@@ -779,6 +790,45 @@ lifecycle contracts resolvable, **the selector raises and emits no plan** — PP
 own acceptance criterion. So PP-FR-6 category A is not boundary hygiene that can
 be deferred or narrowed; it is a **functional prerequisite** for PP-FR-1 and
 PP-FR-3. OD-9's option 3 is withdrawn on this basis (`product-intent.md` §13).
+
+**OD-9 — RESOLVED at Revision 7: option 1, via `routing.yaml`.**
+(`product-intent.md` §17.) `_gate_agents()` takes its fallback from a new
+top-level `default_gate_review_agents` key rather than a Python literal:
+
+```yaml
+# roster/orchestration/routing.yaml
+default_gate_review_agents: ["code-reviewer"]
+```
+
+```python
+# build_dispatch_plan.py:107
+*contracts[gate_id].get("review_agents", default_review_agents)
+```
+
+threaded from the loaded routing config at the `:673` call site. Cadre's own
+`routing.yaml` declares the same literal the Python default held, so **Cadre's
+plans stay byte-identical** and the ~15 `test_selector.py` assertions that pin
+`code-reviewer` in `support` do not move. A foreign roster that omits the key
+gets `[]` — no injected reviewer, and no `ValueError` from `:547-551`.
+
+**Not provider-profile `gate_bindings`**, which was the live alternative inside
+option 1. That mechanism exists and the kernel already models it
+(`kernel/agentic_sdlc/__init__.py:1643-1646`, `:1761-1771`), but it binds gates
+to *approval authority* — a different axis from dispatch reviewer selection —
+and using it would place roster-side dispatch defaults inside a kernel-owned
+concept, in a change whose constraint is to leave that boundary alone.
+
+**One observation from that alternative survives it, and is worth filing
+separately.** `_gate_agents()` reads `author_agents` and `review_agents` from a
+contract that has never declared either, in any version. Both are dead paths
+wearing the costume of fallbacks — which is exactly how the category-A defect
+stayed invisible for five revisions. Retiring them is a change against the
+kernel contract, not this one. Recorded as **G-11**.
+
+**Consequence for PP-NFR-1:** `routing.yaml` is mirrored into `plugin/suite/` by
+the same prefix copy as the schemas, so this adds one modified file to the
+expected diff. That is item 5 in the list below, and it is the reason that list
+exists at all.
 
 **Why it fires universally, and why no existing detector sees it.**
 `build_dispatch_plan.py:107` defaults a gate's reviewers to `["code-reviewer"]`
@@ -862,22 +912,24 @@ made checkable rather than asserted.
      and not avoidable: `generate_global_plugin.py:1426` copies
      `roster/orchestration/` into `suite/` by prefix, which is why
      `routing.schema.json` and `selection.schema.json` are already there.
-  3. **`plugin/suite/roster/orchestration/selection.schema.json` — modified**,
-     by PP-NFR-3b's 6 → 7 bump, through that same prefix copy. Revision 4 cited
-     the copy as the reason the file is already there and then omitted it from
-     the list.
+  3. ~~`plugin/suite/roster/orchestration/selection.schema.json` — modified.~~
+     **Removed at Revision 7.** PP-NFR-3b is retracted, so there is no bump and
+     the file does not change. Struck rather than deleted because Revision 4
+     omitted it, Revision 5 added it back, and a reader tracking this list
+     deserves to see it leave for a reason rather than vanish.
   4. `plugin/suite/` mirrors of every platform source file this work edits —
      `select_agents.py`, `build_dispatch_plan.py`, `settings.py`,
      **`schema_validate.py`** (PP-FR-2 needs new arguments there; see below),
      `mcp/dispatch_core.py`, `mcp/dispatch_server.py`, and `bin/`. `suite/` is a
      **copy** of that source; editing the source *is* editing `plugin/`.
-  5. **`plugin/suite/roster/orchestration/routing.yaml` — modified, under OD-9
-     option 1 only.** Added at Revision 6. If the gate-reviewer default moves
-     into roster-declared data, `routing.yaml` gains a
-     `default_gate_review_agents` key — and `routing.yaml` is carried into
-     `suite/` by the same `:1426` prefix copy as the schemas. Under option 2 it
-     does not change. A fifth mirrored file, in a list whose previous four
-     revisions each claimed to be the complete one.
+  5. **`plugin/suite/roster/orchestration/routing.yaml` — modified.** Added at
+     Revision 6 as conditional; **confirmed at Revision 7**, since OD-9 resolved
+     to option 1. `routing.yaml` gains `default_gate_review_agents` and is
+     carried into `suite/` by the same `:1426` prefix copy as the schemas.
+
+     Note the net effect on this list across two revisions: item 3 left and
+     item 5 arrived, so the count is unchanged and the contents are not. That is
+     the whole argument for item 6.
   6. Nothing else. In particular: no change to any generated subagent wrapper,
      `skills/`, `agent-catalog.json`, `provider/roles/`, or any plugin manifest.
 
@@ -968,22 +1020,25 @@ Invalidated by OD-2's disposition, which requires the resolved roster to surface
 in the plan (PP-FR-1b). Retained struck through rather than deleted, so a reader
 of Revision 1 finds out what happened to it.
 
-**PP-NFR-3b — `selection.schema.json` bumps 6 → 7, and the bump is proved
-meaningful.** The schema is closed (`additionalProperties: false`, `:6`) and
-**vendored away from its producer** into both the wheel (`pyproject.toml`'s
-`cadre_cli/_vendor/` force-include) and `plugin/`. A pinned consumer copy
-therefore rejects a plan carrying an unknown property *while the plan truthfully
-reports the `schema_version` that copy claims to handle* — a silent failure
-naming the wrong cause. The bump converts that into an error naming the real one.
-`RUNBOOK.md`'s "When `schema_version` increments" rule governs; the "optional and
-not emitted by default" carve-out **does not apply**, for the same reason it did
-not apply at 5 → 6 (`selection.schema.json:38`): the consumer this field exists
-for sees it unconditionally.
-*Acceptance:* the emitted `schema_version` and the schema's `const` both read
-`7`; **a plan from this branch is confirmed to fail the previous v6 schema**,
-proving the bump is meaningful rather than cosmetic. Every `dispatch_fingerprint`
-changes as a consequence — expected, documented in `CHANGELOG.md`, and not a
-determinism regression (PP-NFR-5 governs same-version reproducibility only).
+**~~PP-NFR-3b — `selection.schema.json` bumps 6 → 7.~~ RETRACTED at Revision 7.**
+It existed only because PP-FR-1b added an emitted field, and PP-FR-1b is
+retracted by OD-2's reversal. No new property is emitted, so the schema stays at
+`const: 6`, no vendored consumer copy needs updating, and OD-7 — which asked
+whether to authorise that contract change — is **withdrawn rather than decided**
+(`product-intent.md` §13, §17).
+
+The reasoning it carried is still correct and worth keeping for the next time
+this comes up: the schema is closed (`additionalProperties: false`, `:6`) and
+vendored away from its producer into both the wheel and `plugin/`, so a pinned
+consumer copy rejects a plan carrying an unknown property *while the plan
+truthfully reports the version that copy claims to handle* — a silent failure
+naming the wrong cause. Any future emitted field faces the same bump for the
+same reason. This work simply no longer adds one.
+
+**Consequence for PP-NFR-5, which shrinks:** without the bump, no plan's
+`schema_version` or `dispatch_fingerprint` changes at all. The churn PP-NFR-5
+was written to authorise does not occur, and its same-version reproducibility
+requirement stands on its own.
 
 **PP-NFR-4 — Every new guard is proved non-vacuous.** For each of PP-FR-2,
 PP-FR-3(c), and PP-FR-6: plant the defect, confirm the check **fails** with a
@@ -1019,7 +1074,7 @@ branch's diff and the failing output be attached to the pull request. Phase D
 changes no behaviour, so this run is the only thing distinguishing it from two
 assertions that have always passed.
 
-**PP-NFR-5 — Determinism preserved; fingerprint churn expected.** Revision 1
+**PP-NFR-5 — Determinism preserved. ~~Fingerprint churn expected.~~ No churn, as of Revision 7** — PP-NFR-3b's retraction removes the bump that would have caused it, so every default-roster plan keeps today's `schema_version` and `dispatch_fingerprint` byte for byte. What follows is retained because the same-version reproducibility requirement is unaffected and is the part that matters. Revision 1
 required `dispatch_fingerprint` to be *identical before and after* for a default-
 roster task. **That is now false and is corrected here.**
 `build_dispatch_plan.py:840` fingerprints the whole dispatch dict minus
@@ -1156,6 +1211,17 @@ churn as a consequence so it is not later misread as a determinism regression.
   the same trust-the-shape failure PP-NFR-4 exists to prevent everywhere else.
   Out of scope here and correctly so; worth filing.
 
+- **G-11: `_gate_agents()` reads two contract keys that have never existed.**
+  `build_dispatch_plan.py:107` calls `.get("author_agents", [])` and
+  `.get("review_agents", <default>)` against `kernel/contracts/lifecycle-gates.json`,
+  which declares neither, in any version. Both are dead paths wearing the costume
+  of fallbacks — and that costume is precisely why the category-A defect survived
+  five revisions of review: a `.get(key, default)` against a contract that never
+  declares `key` is not a fallback, it is an unconditional hardcode. OD-9 fixes
+  the `review_agents` side by making the default roster-declared; the reads
+  themselves should be retired against the kernel contract, which is a different
+  change with a different owner. Filed at Revision 7.
+
 - **G-10: `docs/proposals/` has no supersession pointer and no index.**
   `test_repository_health.py:2154` makes those records point-in-time and never
   revised, so cite-and-supersede is the conforming handling and this work did it
@@ -1239,34 +1305,32 @@ should come from a mapping in `roster.json` or from opening a published schema
 enum. `_select_workflow()` already answers it from roster-declared
 `workflow_shape`. Nothing was blocked and there was nothing to decide.
 
-**Three further blockers, all raised at Revision 6** and registered in
-`product-intent.md` §13:
+**All blockers cleared on 2026-08-12** (`product-intent.md` §17). For the record,
+since five revisions of this baseline were organised around them:
 
-- **OD-10** — OD-2's compensating control does not exist on the MCP dispatch
-  surface, which emits no plan and deliberately disables project-tier
-  resolution. System Architect.
-- **OD-11** — `roster.json` has no compatibility window, and a schema shipped
-  without one cannot gain one compatibly. System Architect.
-- **OD-13** — G2's second authority. Structurally upstream of OD-9, which is
-  assigned to the same pair, so it gates the gate *and* one of the gate's
-  prerequisites.
+| Was blocking | Outcome |
+| --- | --- |
+| **OD-7** — `selection.schema.json` 6 → 7 | **Withdrawn.** PP-FR-1b retracted, so no field, so no bump, so no question. |
+| **OD-9** — the `["code-reviewer"]` default | **Resolved** — option 1 via a `routing.yaml` key. Cadre's output stays byte-identical. |
+| **OD-10** — OD-2's control absent on the MCP surface | **Withdrawn.** No project-tier redirect exists for it to miss. The independent-resolution observation stands and still binds PP-FR-6. |
+| **OD-11** — `roster.json` compatibility window | **Resolved** — no window, with unknown-`schema_version` rejection adopted as the mitigation. |
+| **OD-13** — G2's second authority | **Resolved** — both roles assigned to `@deagy`, recorded. The kernel permits it; only author-versus-approver separation is enforced, and every author here is an agent. |
 
-**Answer OD-2 before any of them.** It is not on the blocking list — it is
-recorded RESOLVED — but two reviewers have asked to reopen it, and it is
-upstream of three blockers rather than beside them. If `roster.root` narrows to
-global scope: PP-FR-1b loses its purpose, PP-NFR-3b loses its cause, **OD-7
-ceases to exist rather than being decided**, OD-10 dissolves, and PP-FR-1's
-unpriced MCP restructuring disappears. One decision removes roughly half the
-open surface of this baseline. See `product-intent.md` §11 for the three grounds
-and §15 for the consequence chain.
+**Four of the five were closed by one decision.** OD-2's reversal to
+`SCOPE_GLOBAL_ONLY` withdrew OD-7 and OD-10 outright and shrank Phase A by
+removing the identity field, the schema bump, and the MCP restructuring. That is
+worth noting against how this baseline had been reasoning: it treated the five
+as five, and priced OD-2 as a settled input rather than the largest lever on the
+list.
 
-Non-blocking: OD-3, OD-4, OD-6, OD-12 (though OD-12 asks whether the approval
-this baseline rests on still covers it, which is non-blocking only in the sense
-that nothing stops the question being asked late).
+**Still open, and non-blocking:** OD-3 (naming), OD-4 (`knowledge-store/AGENT.md`
+location), and **OD-12** — whether G1, granted against intent Revision 1,
+extends to this baseline. OD-12 got *sharper* at Revision 7 rather than
+softer: the Product Owner has now reversed one of their own recorded
+dispositions, which changes the approval's evidence base more than any of the
+factual corrections that raised the question.
 
-**Resolved and folded in at Revision 2:** OD-1 (proceed), OD-2 (project-local,
-overlay-style — with a reopening request against it as of Revision 6),
-OD-5 (sibling manifest).
+OD-6 was closed as "yes" at Revision 6.
 
 Per `roster/workflows/product-intake.md`, objective conflicts return to G1 rather
 than proceeding. Nothing here is approved by its presence in this file.

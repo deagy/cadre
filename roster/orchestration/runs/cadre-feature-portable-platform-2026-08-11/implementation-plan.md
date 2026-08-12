@@ -1,13 +1,14 @@
 # Implementation Plan — A roster-neutral platform
 
 **Plan ID:** `PLAN-CADRE-PORTABLE-PLATFORM`
-**Revision:** 6
-**Status:** draft — **not scheduled.** G1 approved 2026-08-11 against intent
-Revision 1; blocked on **OD-7, OD-9, OD-10, OD-11, OD-13**, and G2. Two phases
-(**D** and **0**) are gated on nothing and can start today.
+**Revision:** 7
+**Status:** draft — **schedulable.** G1 approved 2026-08-11 against intent
+Revision 1. **No open decision blocks any phase**: all five were closed or
+withdrawn on 2026-08-12 (`product-intent.md` §17). G2 remains unapproved, and
+OD-12 is open and non-blocking.
 **Date:** 2026-08-11
-**Implements:** `REQ-CADRE-PORTABLE-PLATFORM` (`requirements.md`, **Revision 6**)
-**Decomposes:** `INTENT-CADRE-PORTABLE-PLATFORM` (`product-intent.md`, **Revision 5**)
+**Implements:** `REQ-CADRE-PORTABLE-PLATFORM` (`requirements.md`, **Revision 7**)
+**Decomposes:** `INTENT-CADRE-PORTABLE-PLATFORM` (`product-intent.md`, **Revision 6**)
 **Revision note:** Revision 2 folded in the OD-2/OD-5 dispositions while still
 citing `requirements.md` Revision 1 — a stale pin that would have landed a
 reader on the retracted PP-NFR-3. Revision 3 fixed the pin and tracked that
@@ -64,6 +65,25 @@ Also corrected: §2's `plugin/` diff, for the **sixth** time — it gains a fift
 mirrored file under OD-9 option 1. Revision 6 stops correcting that list and
 demotes it to a hint (`requirements.md` PP-NFR-1).
 
+**Revision 7 records the Product Owner's dispositions of 2026-08-12 and shrinks
+the plan accordingly.** Nothing is added; three things are removed.
+
+- **OD-2 reversed to `SCOPE_GLOBAL_ONLY`.** Phase A loses the roster-identity
+  field, the `selection.schema.json` bump, and the MCP restructuring — three
+  items it had been carrying, two of them gated. **OD-7 and OD-10 are withdrawn
+  rather than decided**, their subjects removed.
+- **OD-9 resolved: a `default_gate_review_agents` key in `routing.yaml`.**
+  Phase C′-2 is unblocked and is now a specified change rather than a pending
+  decision. Cadre's plans stay byte-identical, so the ~15 `test_selector.py`
+  assertions do not move.
+- **OD-11 resolved: no compatibility window**, with unknown-`schema_version`
+  rejection adopted as the mitigation — a small addition to Phase A.
+- **OD-13 resolved**, so nothing procedural gates G2 either.
+
+**Every phase is now schedulable.** The gating matrix at §3.1 is kept, with its
+rows resolved, because the shape of what depended on what is the most reusable
+thing this plan produced.
+
 ---
 
 ## 0. Read this first
@@ -72,18 +92,20 @@ Three decisions that gated this plan at Revision 1 were taken by the Product
 Owner on 2026-08-11 (`product-intent.md` §16):
 
 - **OD-1 — resolved.** The 2026-08-09 deferral is reversed; this proceeds.
-- **OD-2 — resolved.** `roster.root` is **project-local, overlay-style**, on the
-  `routing_overlay.py` precedent, *conditional on the resolved roster's id and
-  digest surfacing in the dispatch plan* (PP-FR-1b). The visibility is the
-  control that made project-local acceptable — it is not an optional extra to be
-  dropped if Phase A runs long.
+- **OD-2 — resolved, then REVERSED on 2026-08-12.** It was project-local,
+  overlay-style, conditional on roster identity surfacing in the plan
+  (PP-FR-1b). It is now **`SCOPE_GLOBAL_ONLY`**, like every other path setting,
+  with `--roster <path>` as the sole per-invocation redirect. The visibility
+  control is retracted along with the exposure it answered. See
+  `product-intent.md` §17.
 - **OD-5 — resolved.** A **sibling `roster.json`** the kernel never reads.
 
-**One new blocker was created by OD-2's answer.** Surfacing roster identity in
-the plan is a new emitted field, forcing `selection.schema.json` 6 → 7
-(PP-NFR-3b). That is a change to a published, vendored contract, it is **OD-7**,
-and it blocks G2. Phases A–B can be built and reviewed before it is settled;
-they must not be merged with a bumped schema until it is.
+**~~One new blocker was created by OD-2's answer.~~ WITHDRAWN at Revision 7.**
+Surfacing roster identity would have added an emitted field, forcing
+`selection.schema.json` 6 → 7 (PP-NFR-3b) — a change to a published, vendored
+contract, raised as **OD-7**. OD-2's reversal removes the field, so there is no
+bump and no decision. **Phase A no longer builds anything behind a gate**, which
+is the single largest change Revision 7 makes to this plan.
 
 **Revision 3 raised a second blocker (OD-8) and Revision 4 withdrew it.** It
 claimed `_select_workflow()` classifies by Cadre route id, so a foreign roster
@@ -100,31 +122,21 @@ to preserve Cadre's output by moving the default into roster data, accept the
 change, or narrow PP-FR-6 is a Product Owner / Engineering Lead call. Phase C
 must not start before it is answered.
 
-**Revision 6 adds three blockers and withdraws one option.**
+**Revision 6 added three blockers and withdrew one option. Revision 7 closes all
+of them** (`product-intent.md` §17):
 
-- **OD-9's option 3 is withdrawn.** `build_dispatch_plan.py:547-551` raises
-  `ValueError: Routing selected an unknown agent` for any agent absent from the
-  catalog. A foreign roster has no `code-reviewer`, so leaving `:107` alone
-  means any roster whose routes declare `quality_gates` **emits no plan at
-  all** — PP-FR-1's own acceptance. Option 3 does not accept a documented wart;
-  it ships the feature broken for its primary use case. Two options remain, and
-  option 1 has an unresolved fork inside it about *where* the default lives
-  (`requirements.md` §7).
-- **OD-10 (blocking).** OD-2's compensating control does not exist on
-  `cadre mcp-dispatch-server`, which emits no dispatch plan and deliberately
-  disables project-tier resolution (`mcp/dispatch_server.py:48`, `:63`).
-- **OD-11 (blocking).** `roster.json` has no compatibility window; a schema
-  shipped without one cannot gain one compatibly.
-- **OD-13 (blocking, and structurally first).** G2 needs two authorities in a
-  one-maintainer repository — and OD-9 is assigned to the same pair, so OD-13
-  gates both the gate and one of its prerequisites.
+| | Outcome |
+| --- | --- |
+| **OD-9** | **Resolved — option 1 via `routing.yaml`.** A `default_gate_review_agents` key; Cadre declares `["code-reviewer"]` so its plans stay byte-identical, and a foreign roster omitting it gets `[]` rather than a `ValueError` from `:547-551`. Option 3 stays withdrawn: leaving `:107` alone makes a foreign roster with lifecycle gates emit no plan at all. |
+| **OD-10** | **Withdrawn.** With `roster.root` global-only there is no project-tier redirect for `cadre mcp-dispatch-server` to fail to surface, and no reason to convert its import-time resolution to per-call. The *observation* stands — the two surfaces resolve independently — and still binds PP-FR-6. |
+| **OD-11** | **Resolved — no compatibility window**, `schema_version` only, with one requirement attached: the loader must **reject** an unrecognised `schema_version` rather than ignore it. |
+| **OD-13** | **Resolved** — both authority roles assigned to `@deagy` and recorded as such. The kernel permits it (`__init__.py:1948-1963` checks each role has an assignee, never that two roles differ); only author-versus-approver separation is enforced, and every author here is an agent. |
 
-**And OD-2, marked RESOLVED, is the one to answer before any of them.** Two
-reviewers have asked to reopen it (`product-intent.md` §11). It is not on the
-blocking list, but it is upstream of three that are: **narrow `roster.root` to
-global scope and PP-FR-1b, PP-NFR-3b, OD-7 and OD-10 all cease to exist**, along
-with an unpriced MCP restructuring in Phase A. That is roughly half this plan's
-open surface, removed by one decision rather than four.
+**Four of the five blockers were closed by one decision.** OD-2's reversal
+withdrew OD-7 and OD-10 outright and removed three items from Phase A. Worth
+noting against how this plan had been reasoning: it treated the blockers as five
+independent gates and priced OD-2 as a settled input rather than the largest
+lever on the list.
 
 G2 itself remains unapproved and requires `product_owner` **and**
 `engineering_lead`.
@@ -210,24 +222,28 @@ Revisions 1–5 intended and their ordering prevented.
 
 **Files:**
 - `roster/shared/src/settings.py` — new `roster.root` FieldSpec after
-  `context_store.home` (`:690-697`), at **project tier**, per OD-2, with
-  **`default_computed`** (the `agentic_sdlc.bin_path` form at `:665-672`), not
-  `default_static=None`. It will be the only path-like setting in the file that
-  is not `SCOPE_GLOBAL_ONLY`, so write a comment saying *why*. **Follow
-  `context_store.home`'s comment at `:681-689`** — it is the only one of the
-  three siblings that carries its reasoning (`agentic_sdlc.bin_path` and
-  `knowledge_store.home` have none), and it is the one whose objection this
-  setting has to answer. Point it at PP-FR-1b: the redirect is permitted because
-  it is made visible, not because the objection stopped applying.
+  `context_store.home` (`:690-697`), **`SCOPE_GLOBAL_ONLY`** per OD-2 as
+  reversed, with **`default_computed`** (the `agentic_sdlc.bin_path` form at
+  `:665-672`), not `default_static=None`. `default_static=None` yields no default
+  and pushes the checkout-relative computation back out to every call site,
+  which is the duplication PP-FR-1 exists to delete.
+
+  **Revisions 2–6 specified project tier plus a comment justifying the
+  exception. Neither is needed now.** The field is unremarkable: same scope as
+  its three siblings, no departure to explain, no `context_store.home`-style
+  objection to answer. If you find yourself writing a comment about why this
+  setting's scope is unusual, you are working from a stale revision.
 - New `roster/orchestration/roster.schema.json` + a `roster.json` at
   `provider/roster.json`. Validated by the existing
   `roster/orchestration/src/schema_validate.py` and its pre-commit hook — no new
   validation machinery. **Also add `"roster.json"` to `PROVIDER_BUNDLE`**
   (`generate_global_plugin.py:101`) — see §2, and PP-FR-2 for why this is the
   side of the PP-NFR-1 collision that gives.
-- Roster identity in the plan (PP-FR-1b) + `selection.schema.json` 6 → 7
-  (PP-NFR-3b). **Gated on OD-7.** Build it behind the decision; do not merge the
-  bump until OD-7 is answered.
+- ~~Roster identity in the plan (PP-FR-1b) + `selection.schema.json` 6 → 7
+  (PP-NFR-3b), gated on OD-7.~~ **Removed at Revision 7.** OD-2's reversal
+  retracts both requirements and withdraws OD-7. No field is emitted, the schema
+  stays at `const: 6`, no `dispatch_fingerprint` changes, and **nothing in this
+  phase is built behind a pending decision.**
 - `roster/orchestration/src/select_agents.py` — `:17` (`ROSTER_ROOT`) becomes a
   resolver call; `:203` (`catalog_path`) and `:204` (`routing_path`) take their
   paths **from `roster.json`**, not from `ORCHESTRATION_ROOT / "routing.yaml"`;
@@ -247,16 +263,22 @@ Revisions 1–5 intended and their ordering prevented.
   are one edit, and they belong with the guard that enforces them. The finding
   that they exist stands; only the phase changed.
 
-  **Note before scheduling them anywhere: under project-tier scope this is not a
-  two-line change.** `mcp/dispatch_server.py:48` deliberately calls
+  **Revisions 5–6 warned that under project-tier scope this was not a two-line
+  change** — `mcp/dispatch_server.py:48` deliberately calls
   `settings.disable_project_tier_cwd_fallback()` and `:63` loads routing at
-  import time, so a project-tier `roster.root` requires converting import-time
-  resolution to per-call resolution with an explicit `start=`. Under global-only
-  scope the module needs no restructuring at all. See OD-2, OD-10, and
-  `requirements.md` PP-FR-1.
+  import time, so a project-tier value would have required converting
+  import-time resolution to per-call with an explicit `start=`. **OD-2's
+  reversal removes that work entirely.** A global-only setting resolves once at
+  import, which is exactly what the module already does. Both lines still change
+  in C′-1 as category-B path fixes; neither needs restructuring.
 - `roster/orchestration/src/schema_validate.py` — `:329-332` hardwires two
   instance/schema pairs; `roster.json` needs a third. Small, but it is a fourth
   file mirrored into `plugin/suite/` (see §2).
+- **The roster-manifest loader must reject an unrecognised `schema_version`**
+  rather than ignoring it (OD-11's adopted mitigation, `requirements.md`
+  PP-FR-2). OD-11 declined a `platform_compatibility` window, so this is the
+  only signal a mismatched manifest gets — it must fail by name, and the test
+  must assert the failure rather than only the success.
 
 **Two constants must not follow the roster root, and the default outcome is that
 they do.** Read the code before writing any of it:
@@ -372,13 +394,17 @@ here from Phase A.** See `requirements.md` PP-FR-6 for the corrected table and
 the AST-sink rule that must generate the categories rather than restating them
 in prose a fourth time.
 
-**Split, because the two halves have different blockers:**
+**Still split, though the blocker is gone** — the halves have different risk
+profiles and C′-2 is the only step that touches selection output:
 
-- **C′-1 — ungated.** The six category-B path fixes, the boundary test with its
+- **C′-1.** The six category-B path fixes, the boundary test with its
   self-vacuity guard, the PP-FR-1 assertions on `:18`/`:24`, and the
-  lifecycle-aware detector. None of this waits on OD-9.
-- **C′-2 — hard-blocked on OD-9.** The `["code-reviewer"]` default, plus the
-  ~15 existing `test_selector.py` assertions it moves.
+  lifecycle-aware detector.
+- **C′-2 — unblocked at Revision 7, and now a specified change.** OD-9 resolved
+  to option 1, so this is a `default_gate_review_agents` key in `routing.yaml`
+  threaded into `_gate_agents()`, **not** a pending choice. Cadre's plans stay
+  byte-identical, so the ~15 `test_selector.py` assertions are a *confirmation*
+  step rather than a migration.
 
 **Files:** new `roster/orchestration/test/test_roster_boundary.py`, a new
 lifecycle-aware selection test (see below), **and** the six category-B path
@@ -407,7 +433,26 @@ cannot make every check pass over an empty set. Add the PP-FR-1 assertions that
   `:547-551` validates every selected agent against the catalog and raises
   `ValueError: Routing selected an unknown agent`. A foreign roster has no
   `code-reviewer`, so this is not "Cadre's lists change" — it is **PP-FR-1 does
-  not work**. Blocked on OD-9, and OD-9 now has two options, not three.
+  not work**.
+
+  **Revision 7 — the fix, resolved at OD-9 (`product-intent.md` §17):**
+
+  ```yaml
+  # roster/orchestration/routing.yaml
+  default_gate_review_agents: ["code-reviewer"]
+  ```
+
+  ```python
+  # build_dispatch_plan.py:107
+  *contracts[gate_id].get("review_agents", default_review_agents)
+  ```
+
+  threaded from the loaded routing config at the `:673` call site. Cadre's own
+  `routing.yaml` declares the literal the Python default held, so Cadre's output
+  is unchanged; a foreign roster omitting the key gets `[]`. **Not** provider
+  profile `gate_bindings` — that binds gates to approval authority, a different
+  axis, and would put roster-side dispatch defaults inside a kernel-owned
+  concept. Adds `routing.yaml` to §2's `plugin/suite/` mirror list.
 - **B — six, and this is the phase's real body.** Hardcoded `catalog.yaml` /
   `routing.yaml` / `roster/`-relative paths in `select_agents.py:203`, `:204`,
   `routing_overlay.py:97`, `:102`, `mcp/dispatch_core.py:56`,
@@ -620,9 +665,11 @@ previous revision — including Revision 4, whose stated purpose was to fix it:*
    `generate_global_plugin.py:1426` copies `roster/orchestration/` into `suite/`
    **by prefix**, not by allowlist, which is why `routing.schema.json` and
    `selection.schema.json` are already there.
-3. **`plugin/suite/roster/orchestration/selection.schema.json` — modified**, by
-   the 6 → 7 bump, through that same prefix copy. Revision 4 cited the copy as
-   the reason the file is already present, in the sentence before omitting it.
+3. ~~`plugin/suite/roster/orchestration/selection.schema.json` — modified by the
+   6 → 7 bump.~~ **Removed at Revision 7** — PP-NFR-3b is retracted, so there is
+   no bump. Replaced in the list by
+   `plugin/suite/roster/orchestration/routing.yaml`, **modified** by OD-9's
+   `default_gate_review_agents` key through the same prefix copy.
 4. `plugin/suite/` mirrors of `select_agents.py`, `build_dispatch_plan.py`,
    `settings.py`, `schema_validate.py`, `mcp/dispatch_core.py`,
    `mcp/dispatch_server.py`, and `bin/`. `suite/` is a copy of that source —
@@ -706,37 +753,33 @@ the phase, and a reader of Revision 5 should be able to see what happened to it.
 | D | Knowledge store roster-independent in fact, not just in principle | Yes |
 | E | Kernel reachable with a foreign bundle | Complete |
 
-### 3.1 Decision gating
+### 3.1 Decision gating — all resolved at Revision 7
 
-Which phases can proceed before each open decision, and which would have to be
-**redone** if it goes a particular way. Added at Revision 6 — Revisions 1–5
-recorded blockers without recording what they blocked.
+Kept with its rows answered rather than deleted, because the shape of what
+depended on what is the most reusable thing this plan produced. Every cell that
+read *gated* now reads *proceed*.
 
-| Phase | OD-2 (scope; RESOLVED, reopening requested) | OD-7 (schema 6 → 7) | OD-9 (options 1–2) | OD-10 (MCP control) | OD-11 (compat window) |
-| --- | --- | --- | --- | --- | --- |
-| **D** | proceed | proceed | proceed | proceed | proceed |
-| **0** | proceed — the spike redirects ad hoc, not via the setting | proceed | proceed, and it *informs* OD-9 by observation | proceed, and it *informs* OD-10 | proceed |
-| **A′** core | proceed; **redone** if scope narrows (simpler FieldSpec, no visibility plumbing, no MCP restructuring) | proceed | proceed | proceed | **gated** — the schema is finalised here |
-| **A′** identity + bump | **gated**; **ceases to exist** if scope narrows | **gated** — must not merge | proceed | proceed | proceed |
-| **B′** | proceed | proceed | proceed | proceed | gated on A′ |
-| **C′-1** | proceed | proceed | proceed | proceed | proceed |
-| **C′-2** | proceed | proceed | **hard-gated** | proceed | proceed |
-| **C′** MCP redirect parity | **ceases to exist** if scope narrows | proceed | proceed | **hard-gated** | proceed |
-| **E** | proceed | proceed | proceed | proceed | proceed |
+| Phase | Gating at Revision 6 | Now |
+| --- | --- | --- |
+| **D**, **0** | proceed | proceed — unchanged, and still the two to start with |
+| **A′** core | proceed; redone if OD-2 narrowed | **proceed.** OD-2 narrowed, so the simpler form is the one being built: no visibility plumbing, no MCP restructuring. Gains one item — unknown-`schema_version` rejection (OD-11) |
+| **A′** identity + bump | gated on OD-7; ceases to exist if OD-2 narrows | **ceased to exist.** Removed from the phase |
+| **B′** | proceed | proceed |
+| **C′-1** | proceed | proceed |
+| **C′-2** | hard-gated on OD-9 | **proceed** — OD-9 resolved to option 1, so this is a specified change |
+| **C′** MCP redirect parity | hard-gated on OD-10; ceases to exist if OD-2 narrows | **ceased to exist.** The two `mcp/*` lines still change in C′-1 as category-B fixes; nothing else is owed |
+| **E** | proceed | proceed, and still last |
 
-**If OD-2 narrows to global-only**, four things stop existing rather than being
-decided: **PP-FR-1b** (an explicit `--roster` flag is visible in the invocation,
-so there is no silent redirect to compensate for), **PP-NFR-3b** (no new emitted
-field, so no bump), **OD-7** (no field, no question), and **OD-10** (no
-project-tier redirect for the MCP surface to fail to surface). Phase A′ also
-loses its unpriced MCP restructuring. This is the single largest simplification
-available to this plan, and it is one answer rather than four.
+**What that table records, read as a whole: one decision closed four rows.**
+OD-2's reversal removed two phases' worth of gated work outright and simplified
+a third. The matrix was built at Revision 6 to show what was blocked; its more
+useful reading turned out to be which single answer unblocked the most, and the
+plan did not have that view of itself until the matrix existed.
 
-**Critical path**, current disposition: `D → 0 → A′ core → B′ → C′-1`, with
-OD-9 → C′-2 and OD-7 → the A′ merge hanging off the end in parallel. **D, E, and
-the 15-assertion inventory are off the critical path entirely** and are limited
-by attention, not dependencies — the inventory in particular should be produced
-while waiting on OD-9, because it is what OD-9 should be decided against.
+**Critical path, updated:** `D → 0 → A′ → B′ → C′-1 → C′-2`, with nothing
+hanging off it waiting on a human. **E, and the ~15-assertion confirmation, are
+off the path entirely** — the latter is now a check that Cadre's output did not
+move, not an input to a decision, since OD-9 chose the option that preserves it.
 
 ## 4. What this plan does not do
 
@@ -755,14 +798,21 @@ while waiting on OD-9, because it is what OD-9 should be decided against.
   supersession pointer). All are real, all are adjacent, all deserve their own
   change.
 - No G1 or G2 approval. `@deagy` decides both.
-- No resolution of **OD-9**. Whether Cadre's `support` lists may lose
-  `code-reviewer` is a Product Owner / Engineering Lead decision, not an
-  implementation detail to be settled by whoever reaches Phase C first. **Nor of
-  the fork inside option 1** — whether the default belongs in `routing.yaml` or
-  in provider-profile `gate_bindings` — which touches the kernel-ownership
-  boundary and is recorded unresolved at `requirements.md` §7.
-- **No resolution of OD-10, OD-11, OD-12, or OD-13**, all raised at Revision 6.
-- **No reversal of OD-2.** Two reviewers asked to reopen it and the request is
-  recorded (`product-intent.md` §11). The disposition is the Product Owner's and
-  stands until they say otherwise; being argued against is not the same as being
-  wrong, and this plan holds no authority to decide either way.
+- ~~No resolution of **OD-9**.~~ **Resolved 2026-08-12** — option 1 via a
+  `routing.yaml` key, with the fork inside it settled against provider-profile
+  `gate_bindings` (`product-intent.md` §17). The reasoning stands and is worth
+  keeping: whether Cadre's `support` lists may lose `code-reviewer` was never an
+  implementation detail for whoever reached Phase C first, and the option chosen
+  is the one under which they do not.
+- ~~No resolution of OD-10, OD-11, OD-12, or OD-13.~~ **OD-10, OD-11 and OD-13
+  were closed on 2026-08-12** (`product-intent.md` §17). **OD-12 remains open**
+  and this plan does not touch it: whether G1 extends to the current revision is
+  the Product Owner's judgment, and it got sharper rather than softer once they
+  reversed one of their own dispositions.
+- ~~No reversal of OD-2.~~ **Reversed by the Product Owner on 2026-08-12**, to
+  `SCOPE_GLOBAL_ONLY`. This plan recorded the reopening request and held no
+  authority to decide it; the decision was made where it belonged.
+- **No fix for G-11** (`_gate_agents()` reads two contract keys the kernel has
+  never declared). OD-9 makes the `review_agents` default roster-supplied, which
+  is this work's business; retiring the dead reads is a change against the
+  kernel contract and is not.
