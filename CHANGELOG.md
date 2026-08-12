@@ -27,11 +27,60 @@ check and reporting "nothing to do". See
 
 ### Added
 
+- **`cadre select --roster <path>`**, and the `roster.root` setting behind it
+  (`CADRE_ROSTER_ROOT`, or `roster.root` in user-global config). Runs selection
+  against a **roster package the binary did not ship with**: its own catalog,
+  routing rules, and role definitions. With neither set, selection is unchanged
+  — the 175-case golden corpus is untouched and default plans are byte-identical.
+
+  `roster.root` is **global-scope-only**, like `agentic_sdlc.bin_path`,
+  `knowledge_store.home` and `context_store.home`. A project-local
+  `.agents/cadre.yaml` cannot redirect it: that file arrives with `git clone`,
+  and this setting selects the role prose an agent is handed as its operating
+  instructions. Per-invocation redirection is the explicit `--roster` flag,
+  which is visible in shell history and CI logs.
+
+- **`roster.json`**, a roster-package manifest, with
+  `roster/orchestration/roster.schema.json` alongside it. Declares
+  `schema_version`, `id`, `version`, `catalog`, `routing`, `role_root` and
+  `shared_policy_root`. Every declared path resolves relative to the manifest
+  and is rejected if it escapes.
+
+  **The two data files are in different formats and the manifest says so:
+  `catalog` is YAML, `routing` is JSON.** That asymmetry predates this work and
+  used to be invisible behind two `.yaml` extensions.
+
+  There is deliberately **no compatibility window** — `schema_version` alone,
+  with the loader **rejecting** an unrecognised value rather than ignoring it,
+  since that is the only signal a mismatched manifest gets.
+
+- **`default_gate_review_agents`** in `routing.json`. Reviewer ids injected into
+  a plan's `support` for each configured lifecycle gate that declares no
+  `review_agents`. Cadre declares `["code-reviewer"]`, so its own plans are
+  unchanged; a roster omitting the key injects nothing.
+
+  This replaces a hardcoded `["code-reviewer"]` in the selector. **No gate
+  contract has ever declared `review_agents`**, so that "fallback" fired
+  unconditionally for every gate on every lifecycle-aware plan — which meant a
+  roster without a `code-reviewer` role got `Routing selected an unknown agent`
+  and no plan at all.
+
+- **`cadre sdlc --no-default-provider`**, to run the kernel with no provider
+  bundle injected. See the `cadre sdlc` note under Changed for the commoner case.
+
 - **`cadre init --set [REGION:]PATH=VALUE`**, repeatable, overrides one field without an answer file and records the `field_decisions` entry the answer schema requires. The region (`stack`, `libraries`, `autonomy`, `platform`) is derived by looking the path up in the shipped defaults rather than taken from the caller — that is what keeps the `stack`/`governance` category honest, since that label drives `--print-answers` redaction. Unknown paths fail closed; a path ambiguous across regions (`policy_version`, which exists in both `library-standards.yaml` and `agent-autonomy.yaml`) requires a `REGION:` qualifier. Mapping values are refused, because a mapping does not override the named leaf — it grafts leaves below it that no shipped default defines. `--set` wins over `--answers` and `--stack`, and is mutually exclusive with `--interactive`.
 
 - A `--stack` preset no longer needs an answer file: on a defaults run the RG-A `field_decisions` a preset implies are synthesized. Safe because `load_stack_preset` structurally forbids a preset from touching governance. A hand-authored `--answers` file still fails closed on a missing decision.
 
 ### Changed
+
+- **`cadre sdlc` no longer injects Cadre's provider bundle when the caller
+  supplies their own `--provider`.** Previously it always injected, so
+  `cadre sdlc --provider <other>/provider.json provider list` failed with
+  `provider <id> duplicates profile ids: ['generic']` — the foreign manifest
+  loaded correctly and was then rejected for colliding with a bundle the caller
+  never asked for. With no `--provider`, the argument vector passed to the
+  kernel is byte-identical to before.
 
 - **`roster/orchestration/routing.yaml` is renamed to `routing.json`.** The file
   has always been JSON — `routing_overlay.py` parses it with `json.loads`, and
