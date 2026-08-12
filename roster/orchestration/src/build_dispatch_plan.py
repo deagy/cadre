@@ -92,7 +92,27 @@ def _gate_sequence(
     return [gate_id for gate_id in sequence if gate_id not in ignored_set], sorted(ignored_set, key=gate_ids.index)
 
 
-def _gate_agents(configured: list[str], ignored: list[str], gates: list[dict[str, Any]] | None) -> list[str]:
+def _gate_agents(
+    configured: list[str],
+    ignored: list[str],
+    gates: list[dict[str, Any]] | None,
+    default_review_agents: list[str] | None = None,
+) -> list[str]:
+    """Agents contributed by the configured lifecycle gates.
+
+    `default_review_agents` comes from the roster's `default_gate_review_agents`
+    (OD-9). It is emphatically NOT a fallback in the usual sense: no gate in any
+    version of `kernel/contracts/lifecycle-gates.json` has ever declared
+    `review_agents` -- or `author_agents` -- so before OD-9 the hardcoded
+    `["code-reviewer"]` fired for every configured gate on every lifecycle-aware
+    plan. A `.get(key, default)` against a contract that never declares `key` is
+    an unconditional hardcode wearing a fallback's clothes (G-11).
+
+    Making it roster-supplied is what lets a foreign roster produce a plan at
+    all: `_validate_agents` raises `Routing selected an unknown agent` for any
+    id absent from the catalog, so a roster with no `code-reviewer` role and any
+    route declaring `quality_gates` emitted nothing whatsoever.
+    """
     if gates is None or not configured:
         return []
     gate_ids = _gate_order(gates)
@@ -109,7 +129,10 @@ def _gate_agents(configured: list[str], ignored: list[str], gates: list[dict[str
         agent
         for gate_id in sequence
         if gate_id not in ignored_set
-        for agent in [*contracts[gate_id].get("author_agents", []), *contracts[gate_id].get("review_agents", ["code-reviewer"])]
+        for agent in [
+            *contracts[gate_id].get("author_agents", []),
+            *contracts[gate_id].get("review_agents", list(default_review_agents or [])),
+        ]
     )
 
 
@@ -328,8 +351,8 @@ def _build_human_gates(risks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         "destructive-action": "An authorized human must approve the exact destructive action and recovery plan.",
         "accountable-human-escalation": "An accountable human owner or approval group must make the requested decision.",
         "privileged-identity-change": "An authorized human must approve privileged identity, credential, or break-glass changes.",
-        "halt-authority-determination": "An accountable human must confirm or lift a halt-authority stop determination before affected work resumes.",
-        "architecture-boundary-violation": "An authorized human must approve any infrastructure boundary crossing architecture-authority found missing a required element.",
+        "halt-authority-determination": "An accountable human must confirm or lift the halt determination before affected work resumes.",
+        "architecture-boundary-violation": "An authorized human must approve any infrastructure boundary crossing that architecture review found missing a required element.",
         "classification-and-marking": "An authorized human must approve an artifact's classification/marking before it may leave the environment.",
         "retention-deletion-execution": "An authorized human must confirm the retention/deletion obligation and scope before execution.",
     }
@@ -675,7 +698,14 @@ def build_dispatch_plan(
     ]
     if _matches_change_intake(config, input_data["task"]):
         configured_gate_ids.extend(change_intake.get("quality_gates", []))
-    support.extend(_gate_agents(configured_gate_ids, config.get("ignored_gates", []), gates))
+    support.extend(
+        _gate_agents(
+            configured_gate_ids,
+            config.get("ignored_gates", []),
+            gates,
+            config.get("default_gate_review_agents", []),
+        )
+    )
 
     groups = {
         "primary": _ordered(primary, catalog),

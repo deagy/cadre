@@ -60,7 +60,10 @@ if str(_SRC_DIR) not in sys.path:
 from routing import load_routing  # noqa: E402
 from team_recipe_dryrun import expand_recipe_to_members  # noqa: E402
 
-_ROUTING_CONFIG = load_routing(core.REPOSITORY_ROOT / "roster" / "orchestration" / "routing.json")
+# PP-FR-6 category B. Paired with dispatch_core.CATALOG_PATH: both halves of
+# this surface must resolve against the same roster, or the server dispatches
+# roles from one roster using another's routing rules.
+_ROUTING_CONFIG = load_routing(core.ROUTING_PATH)
 
 MCP_INSTALL_MESSAGE = (
     "The 'mcp' package is required to run the agents MCP dispatch "

@@ -174,3 +174,81 @@ Ran 7 tests — OK
   (`routing_overlay.py:502`). A foreign roster written as YAML fails with a
   `JSONDecodeError` naming nothing useful. Design call with packaging blast
   radius; see Result 3.
+
+---
+
+## Phase C′-1 and C′-2 — non-vacuity evidence (PP-NFR-4)
+
+New guard: `roster/orchestration/test/test_roster_boundary.py`, 14 tests.
+Orchestration suite 1249 → 1263. Golden corpus untouched.
+
+**Five defects planted, each reverted. The first run is the interesting one.**
+
+| Plant | Result on first attempt |
+| --- | --- |
+| Cadre role id in `mcp/dispatch_core.py` | **PASSED — guard had a hole** |
+| `catalog.yaml` literal in `routing.py` | failed correctly |
+| `["code-reviewer"]` restored to `build_dispatch_plan.py` | failed correctly |
+| `_SHARED_SRC_DIR` follows `ROSTER_ROOT` | failed correctly |
+| `mcp/*` dropped from the platform list | failed correctly |
+
+**The guard passed 12 of 12 tests with category A scoped to one module.** The
+first draft asserted it only against `build_dispatch_plan.py` — where the known
+defect lived — so a role id planted in `mcp/dispatch_core.py` went straight
+through. That module is the one five revisions of the requirements baseline
+forgot existed.
+
+This is the "non-vacuous but incomplete" failure the guard's own self-vacuity
+section warns about, committed inside the file that warns about it. Fault
+injection is the only thing that found it: every test passed, the coverage was
+wrong.
+
+Fixed by checking category A across **all** platform modules, with role ids read
+from `catalog.yaml` rather than hand-listed — so adding a role extends the check
+and nobody has to remember to.
+
+### Two further corrections the plants forced
+
+**Substring matching produced a false positive.** The gate id
+`halt-authority-determination` contains the role id `halt-authority` and has
+nothing to do with it. A guard that cries wolf teaches its next reader to loosen
+it rather than fix the code, so role ids now match as whole kebab-case tokens.
+Filenames still match as substrings, which is correct for them.
+
+**Two genuine violations surfaced once the false positive cleared.**
+`build_dispatch_plan.py:354-355` emitted human-gate descriptions naming
+`halt-authority` and `architecture-authority` — Cadre role names in text that
+ships in every plan, including a foreign roster's. Fixed rather than exempted:
+the descriptions instruct a human what to do, and the role attribution added
+nothing.
+
+### The fail-closed correction
+
+An earlier draft of `mcp/dispatch_core.py` and `routing_overlay.py` caught a
+manifest error at import and fell back to Cadre's hardcoded layout. **The guard
+rejected it, and the rejection was right** — intent §7 C4 forbids degrading to
+the built-in roster, and a fallback reproducing Cadre's directory layout is that
+degradation wearing a robustness costume. Both now fail closed.
+
+## The seam, end to end
+
+```console
+$ ./bin/cadre select --roster <fixture> --task "Forge a new sprocket flange assembly" …
+status    : ready
+workflow  : new-service
+lifecycle : integrated
+primary   : ['widget-smith']
+reviewers : ['widget-inspector']
+support   : ['widget-scribe']
+LEAKED    : none
+```
+
+A foreign roster, with lifecycle contracts resolvable and a route declaring
+`quality_gates`, now produces a valid plan naming only its own roles. Before
+C′-2 the same command raised `ValueError: Routing selected an unknown agent:
+code-reviewer`. **This is PP-FR-1's headline deliverable, met.**
+
+Cadre's own output is unchanged: `support` still carries `code-reviewer` on
+lifecycle-aware plans, the golden corpus is unedited, and the ~15
+`test_selector.py` assertions did not move — which is what OD-9 option 1 was
+chosen to guarantee.

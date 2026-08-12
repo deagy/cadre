@@ -1,262 +1,642 @@
 {
   "version": 1,
   "ignored_gates": [],
+  "default_gate_review_agents": [
+    "code-reviewer"
+  ],
   "change_intake": {
-    "keywords": ["implement", "create", "new feature", "new service", "add feature", "build", "change", "update", "modify", "refactor", "fix", "repair", "remove", "delete", "migrate", "introduce", "enhance", "extend", "replace", "upgrade", "rework", "refine", "refinement"],
-    "agents": ["product-intent-agent", "requirements-agent"],
-    "quality_gates": ["G1", "G2"]
+    "keywords": [
+      "implement",
+      "create",
+      "new feature",
+      "new service",
+      "add feature",
+      "build",
+      "change",
+      "update",
+      "modify",
+      "refactor",
+      "fix",
+      "repair",
+      "remove",
+      "delete",
+      "migrate",
+      "introduce",
+      "enhance",
+      "extend",
+      "replace",
+      "upgrade",
+      "rework",
+      "refine",
+      "refinement"
+    ],
+    "agents": [
+      "product-intent-agent",
+      "requirements-agent"
+    ],
+    "quality_gates": [
+      "G1",
+      "G2"
+    ]
   },
   "routes": [
     {
       "id": "product-intent",
       "workflow_shape": "unclassified",
-      "paths": ["product/intent/**", "docs/product-intent/**"],
-      "keywords": ["product intent", "mission objective", "intent capture"],
-      "primary": ["product-intent-agent"],
-      "support": ["requirements-agent"],
-      "quality_gates": ["G1"]
+      "paths": [
+        "product/intent/**",
+        "docs/product-intent/**"
+      ],
+      "keywords": [
+        "product intent",
+        "mission objective",
+        "intent capture"
+      ],
+      "primary": [
+        "product-intent-agent"
+      ],
+      "support": [
+        "requirements-agent"
+      ],
+      "quality_gates": [
+        "G1"
+      ]
     },
     {
       "id": "requirements-baseline",
       "workflow_shape": "unclassified",
-      "paths": ["product/requirements/**", "docs/requirements-baseline/**"],
-      "keywords": ["requirements decomposition", "requirements traceability", "test obligations"],
-      "primary": ["requirements-agent"],
-      "reviewers": ["test-engineer"],
-      "quality_gates": ["G1", "G2"]
+      "paths": [
+        "product/requirements/**",
+        "docs/requirements-baseline/**"
+      ],
+      "keywords": [
+        "requirements decomposition",
+        "requirements traceability",
+        "test obligations"
+      ],
+      "primary": [
+        "requirements-agent"
+      ],
+      "reviewers": [
+        "test-engineer"
+      ],
+      "quality_gates": [
+        "G1",
+        "G2"
+      ]
     },
     {
       "id": "delivery-sequencing",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["dependency map", "dependency mapping", "critical path", "sequencing", "sequence the work", "delivery order", "what blocks what"],
-      "primary": ["delivery-sequencer"],
-      "support": ["assumption-register", "cost-capacity-planner"]
+      "keywords": [
+        "dependency map",
+        "dependency mapping",
+        "critical path",
+        "sequencing",
+        "sequence the work",
+        "delivery order",
+        "what blocks what"
+      ],
+      "primary": [
+        "delivery-sequencer"
+      ],
+      "support": [
+        "assumption-register",
+        "cost-capacity-planner"
+      ]
     },
     {
       "id": "premortem",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["premortem", "pre-mortem", "assume this failed"],
-      "primary": ["premortem"]
+      "keywords": [
+        "premortem",
+        "pre-mortem",
+        "assume this failed"
+      ],
+      "primary": [
+        "premortem"
+      ]
     },
     {
       "id": "assumption-register",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["assumption register", "record an assumption", "track assumptions"],
-      "primary": ["assumption-register"]
+      "keywords": [
+        "assumption register",
+        "record an assumption",
+        "track assumptions"
+      ],
+      "primary": [
+        "assumption-register"
+      ]
     },
     {
       "id": "scope-boundary-check",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["scope boundary check", "build boundary", "future-state capability", "in scope or out of scope"],
-      "primary": ["scope-boundary"]
+      "keywords": [
+        "scope boundary check",
+        "build boundary",
+        "future-state capability",
+        "in scope or out of scope"
+      ],
+      "primary": [
+        "scope-boundary"
+      ]
     },
     {
       "id": "approval-routing",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["approval routing", "who must approve", "authority matrix lookup"],
-      "primary": ["approval-router"]
+      "keywords": [
+        "approval routing",
+        "who must approve",
+        "authority matrix lookup"
+      ],
+      "primary": [
+        "approval-router"
+      ]
     },
     {
       "id": "halt-determination",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["halt determination", "stop the line", "emergency stop", "system halt"],
-      "primary": ["halt-authority"]
+      "keywords": [
+        "halt determination",
+        "stop the line",
+        "emergency stop",
+        "system halt"
+      ],
+      "primary": [
+        "halt-authority"
+      ]
     },
     {
       "id": "doctrine-conformance-check",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["doctrine conformance", "doctrinal language", "doctrine check"],
-      "primary": ["doctrine-conformance"]
+      "keywords": [
+        "doctrine conformance",
+        "doctrinal language",
+        "doctrine check"
+      ],
+      "primary": [
+        "doctrine-conformance"
+      ]
     },
     {
       "id": "architecture-authority-review",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["abstraction layer", "infrastructure boundary violation", "architecture authority review"],
-      "primary": ["architecture-authority"]
+      "keywords": [
+        "abstraction layer",
+        "infrastructure boundary violation",
+        "architecture authority review"
+      ],
+      "primary": [
+        "architecture-authority"
+      ]
     },
     {
       "id": "phase-gate-check",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["phase gate", "phase exit criteria", "phase transition"],
-      "primary": ["phase-gate"],
-      "reviewers": ["compliance-reviewer"]
+      "keywords": [
+        "phase gate",
+        "phase exit criteria",
+        "phase transition"
+      ],
+      "primary": [
+        "phase-gate"
+      ],
+      "reviewers": [
+        "compliance-reviewer"
+      ]
     },
     {
       "id": "first-principles-challenge",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["first principles challenge", "first-principles challenge", "challenge this constraint"],
-      "primary": ["first-principles-challenger"]
+      "keywords": [
+        "first principles challenge",
+        "first-principles challenge",
+        "challenge this constraint"
+      ],
+      "primary": [
+        "first-principles-challenger"
+      ]
     },
     {
       "id": "subtraction-review",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["subtraction review", "what comes out", "argue for removal"],
-      "primary": ["subtraction-agent"]
+      "keywords": [
+        "subtraction review",
+        "what comes out",
+        "argue for removal"
+      ],
+      "primary": [
+        "subtraction-agent"
+      ]
     },
     {
       "id": "falsification-test",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["falsification test", "disproving test", "falsify this claim"],
-      "primary": ["falsification-agent"]
+      "keywords": [
+        "falsification test",
+        "disproving test",
+        "falsify this claim"
+      ],
+      "primary": [
+        "falsification-agent"
+      ]
     },
     {
       "id": "red-team-assessment",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["red team assessment", "red team", "adversarial assessment"],
-      "primary": ["red-team"],
-      "reviewers": ["security-reviewer"]
+      "keywords": [
+        "red team assessment",
+        "red team",
+        "adversarial assessment"
+      ],
+      "primary": [
+        "red-team"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ]
     },
     {
       "id": "deployment-realism-review",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["deployment realism", "operate this at scale", "pilot readiness review"],
-      "primary": ["deployment-realist"]
+      "keywords": [
+        "deployment realism",
+        "operate this at scale",
+        "pilot readiness review"
+      ],
+      "primary": [
+        "deployment-realist"
+      ]
     },
     {
       "id": "classification-and-marking",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["classification and marking", "data classification gate", "artifact leaving the environment"],
-      "primary": ["classification-and-marking-gate"]
+      "keywords": [
+        "classification and marking",
+        "data classification gate",
+        "artifact leaving the environment"
+      ],
+      "primary": [
+        "classification-and-marking-gate"
+      ]
     },
     {
       "id": "claim-conformance-check",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["claim conformance", "external claim review", "floor script review"],
-      "primary": ["claim-conformance"],
-      "reviewers": ["compliance-reviewer"]
+      "keywords": [
+        "claim conformance",
+        "external claim review",
+        "floor script review"
+      ],
+      "primary": [
+        "claim-conformance"
+      ],
+      "reviewers": [
+        "compliance-reviewer"
+      ]
     },
     {
       "id": "vendor-register-review",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["vendor register", "tooling register", "vendor and tooling assessment"],
-      "primary": ["vendor-register-steward"]
+      "keywords": [
+        "vendor register",
+        "tooling register",
+        "vendor and tooling assessment"
+      ],
+      "primary": [
+        "vendor-register-steward"
+      ]
     },
     {
       "id": "retention-deletion-execution",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["retention and deletion", "execute data deletion", "retention obligation"],
-      "primary": ["retention-and-deletion-executor"]
+      "keywords": [
+        "retention and deletion",
+        "execute data deletion",
+        "retention obligation"
+      ],
+      "primary": [
+        "retention-and-deletion-executor"
+      ]
     },
     {
       "id": "agent-performance-evaluation",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["agent performance evaluation", "evaluate agent output", "agent feedback loop"],
-      "primary": ["agent-performance-evaluator"]
+      "keywords": [
+        "agent performance evaluation",
+        "evaluate agent output",
+        "agent feedback loop"
+      ],
+      "primary": [
+        "agent-performance-evaluator"
+      ]
     },
     {
       "id": "agent-version-provenance",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["agent version control", "agent definition provenance", "which version of the agent"],
-      "primary": ["agent-version-control"]
+      "keywords": [
+        "agent version control",
+        "agent definition provenance",
+        "which version of the agent"
+      ],
+      "primary": [
+        "agent-version-control"
+      ]
     },
     {
       "id": "ip-provenance-determination",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["ip provenance", "intellectual property provenance", "ip determination"],
-      "primary": ["ip-provenance-agent"]
+      "keywords": [
+        "ip provenance",
+        "intellectual property provenance",
+        "ip determination"
+      ],
+      "primary": [
+        "ip-provenance-agent"
+      ]
     },
     {
       "id": "decision-record-capture",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["decision record", "capture decision provenance", "record this decision"],
-      "primary": ["decision-record"]
+      "keywords": [
+        "decision record",
+        "capture decision provenance",
+        "record this decision"
+      ],
+      "primary": [
+        "decision-record"
+      ]
     },
     {
       "id": "governance-planning",
       "workflow_shape": "unclassified",
-      "paths": ["governance/impact/**", "governance/accreditation/**"],
-      "keywords": ["governance impact", "data jurisdiction", "accreditation plan"],
-      "primary": ["governance-planner"],
-      "reviewers": ["compliance-reviewer"],
-      "support": ["evidence-curator"],
-      "quality_gates": ["G4", "G7"]
+      "paths": [
+        "governance/impact/**",
+        "governance/accreditation/**"
+      ],
+      "keywords": [
+        "governance impact",
+        "data jurisdiction",
+        "accreditation plan"
+      ],
+      "primary": [
+        "governance-planner"
+      ],
+      "reviewers": [
+        "compliance-reviewer"
+      ],
+      "support": [
+        "evidence-curator"
+      ],
+      "quality_gates": [
+        "G4",
+        "G7"
+      ]
     },
     {
       "id": "data-governance",
       "workflow_shape": "unclassified",
-      "paths": ["governance/data/**", "data-governance/**", "platform/data/**"],
-      "keywords": ["non-egress", "derived output", "data residency", "data lineage requirements"],
-      "primary": ["data-governance-engineer"],
-      "reviewers": ["security-reviewer", "compliance-reviewer"],
-      "quality_gates": ["G4", "G5", "G7"]
+      "paths": [
+        "governance/data/**",
+        "data-governance/**",
+        "platform/data/**"
+      ],
+      "keywords": [
+        "non-egress",
+        "derived output",
+        "data residency",
+        "data lineage requirements"
+      ],
+      "primary": [
+        "data-governance-engineer"
+      ],
+      "reviewers": [
+        "security-reviewer",
+        "compliance-reviewer"
+      ],
+      "quality_gates": [
+        "G4",
+        "G5",
+        "G7"
+      ]
     },
     {
       "id": "cryptographic-assurance",
       "workflow_shape": "unclassified",
-      "paths": ["security/crypto-assurance/**", "crypto-assurance/**", "platform/crypto/**"],
-      "keywords": ["crypto agility", "algorithm posture", "pqc", "qkms", "qkd", "qrng", "downgrade risk"],
-      "primary": ["cryptographic-assurance-engineer"],
-      "reviewers": ["security-reviewer"],
-      "support": ["secrets-identity-engineer", "threat-modeler"],
-      "quality_gates": ["G5", "G7"]
+      "paths": [
+        "security/crypto-assurance/**",
+        "crypto-assurance/**",
+        "platform/crypto/**"
+      ],
+      "keywords": [
+        "crypto agility",
+        "algorithm posture",
+        "pqc",
+        "qkms",
+        "qkd",
+        "qrng",
+        "downgrade risk"
+      ],
+      "primary": [
+        "cryptographic-assurance-engineer"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ],
+      "support": [
+        "secrets-identity-engineer",
+        "threat-modeler"
+      ],
+      "quality_gates": [
+        "G5",
+        "G7"
+      ]
     },
     {
       "id": "quantum-timing-assurance",
       "workflow_shape": "unclassified",
-      "paths": ["security/quantum-timing/**", "quantum-timing/**", "platform/quantum/**", "platform/timing/**"],
-      "keywords": ["entanglement fidelity", "timing stratum", "timing strata", "physical trust threshold", "physical measurement validity", "qkd", "quantum key distribution"],
-      "primary": ["quantum-timing-assurance-engineer"],
-      "reviewers": ["cryptographic-assurance-engineer"],
-      "support": ["threat-modeler"],
-      "quality_gates": ["G5", "G7"]
+      "paths": [
+        "security/quantum-timing/**",
+        "quantum-timing/**",
+        "platform/quantum/**",
+        "platform/timing/**"
+      ],
+      "keywords": [
+        "entanglement fidelity",
+        "timing stratum",
+        "timing strata",
+        "physical trust threshold",
+        "physical measurement validity",
+        "qkd",
+        "quantum key distribution"
+      ],
+      "primary": [
+        "quantum-timing-assurance-engineer"
+      ],
+      "reviewers": [
+        "cryptographic-assurance-engineer"
+      ],
+      "support": [
+        "threat-modeler"
+      ],
+      "quality_gates": [
+        "G5",
+        "G7"
+      ]
     },
     {
       "id": "runtime-assurance",
       "workflow_shape": "unclassified",
-      "paths": ["runtime-assurance/**", "assurance/runtime/**"],
-      "keywords": ["runtime conformance", "runtime assurance", "deployed behavior conformance", "production runtime observation", "observe production runtime"],
-      "primary": ["observability-sre"],
-      "reviewers": ["security-reviewer", "compliance-reviewer"],
-      "support": ["support-triage-agent"],
-      "quality_gates": ["G10"]
+      "paths": [
+        "runtime-assurance/**",
+        "assurance/runtime/**"
+      ],
+      "keywords": [
+        "runtime conformance",
+        "runtime assurance",
+        "deployed behavior conformance",
+        "production runtime observation",
+        "observe production runtime"
+      ],
+      "primary": [
+        "observability-sre"
+      ],
+      "reviewers": [
+        "security-reviewer",
+        "compliance-reviewer"
+      ],
+      "support": [
+        "support-triage-agent"
+      ],
+      "quality_gates": [
+        "G10"
+      ]
     },
     {
       "id": "decommission",
       "workflow_shape": "unclassified",
-      "paths": ["decommission/**", "runbooks/decommission/**"],
-      "keywords": ["decommission", "retire service", "service retirement", "sunset service", "tear down service"],
-      "primary": ["decommission-engineer"],
-      "reviewers": ["security-reviewer", "compliance-reviewer"],
-      "quality_gates": ["G10"]
+      "paths": [
+        "decommission/**",
+        "runbooks/decommission/**"
+      ],
+      "keywords": [
+        "decommission",
+        "retire service",
+        "service retirement",
+        "sunset service",
+        "tear down service"
+      ],
+      "primary": [
+        "decommission-engineer"
+      ],
+      "reviewers": [
+        "security-reviewer",
+        "compliance-reviewer"
+      ],
+      "quality_gates": [
+        "G10"
+      ]
     },
     {
       "id": "agent-suite-governance",
       "workflow_shape": "unclassified",
-      "paths": ["roster/catalog.yaml", "roster/**/AGENT.md", "roster/workflows/**", "roster/shared/**", "roster/orchestration/routing.json", "roster/orchestration/selection.schema.json", "roster/orchestration/handoff-contracts.md", "roster/orchestration/task-brief-template.md", "roster/orchestration/src/**", "roster/orchestration/test/**", ".agents/skills/**", "provider/**", "packaging/**", "cadre_cli/__init__.py", "cadre_cli/_version.py", "README.md", "AGENTS.md"],
-      "keywords": ["review project", "review repository", "repo structure", "repository structure", "project structure", "agent suite", "agents skills structure", "agents, skills, structure", "review agents", "audit agents", "audit publishable skills", "publishable skills", "skill packaging", "workflow mapping", "orchestration quality", "catalog integrity", "routing coverage", "governance review"],
-      "primary": ["application-engineer", "debugging-engineer"],
-      "reviewers": ["test-engineer", "code-reviewer"],
-      "support": ["technical-writer"]
+      "paths": [
+        "roster/catalog.yaml",
+        "roster/**/AGENT.md",
+        "roster/workflows/**",
+        "roster/shared/**",
+        "roster/orchestration/routing.json",
+        "roster/orchestration/selection.schema.json",
+        "roster/orchestration/handoff-contracts.md",
+        "roster/orchestration/task-brief-template.md",
+        "roster/orchestration/src/**",
+        "roster/orchestration/test/**",
+        ".agents/skills/**",
+        "provider/**",
+        "packaging/**",
+        "cadre_cli/__init__.py",
+        "cadre_cli/_version.py",
+        "README.md",
+        "AGENTS.md"
+      ],
+      "keywords": [
+        "review project",
+        "review repository",
+        "repo structure",
+        "repository structure",
+        "project structure",
+        "agent suite",
+        "agents skills structure",
+        "agents, skills, structure",
+        "review agents",
+        "audit agents",
+        "audit publishable skills",
+        "publishable skills",
+        "skill packaging",
+        "workflow mapping",
+        "orchestration quality",
+        "catalog integrity",
+        "routing coverage",
+        "governance review"
+      ],
+      "primary": [
+        "application-engineer",
+        "debugging-engineer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ],
+      "support": [
+        "technical-writer"
+      ]
     },
     {
       "id": "orchestration",
       "workflow_shape": "unclassified",
-      "paths": ["roster/orchestration/routing.json", "roster/orchestration/selection.schema.json", "roster/orchestration/src/**", "roster/orchestration/test/**", ".agents/skills/run-agent-orchestration/**"],
-      "keywords": ["agent orchestration", "agent selector", "agent routing", "dispatch plan"],
-      "primary": ["application-engineer"],
-      "reviewers": ["test-engineer", "code-reviewer"]
+      "paths": [
+        "roster/orchestration/routing.json",
+        "roster/orchestration/selection.schema.json",
+        "roster/orchestration/src/**",
+        "roster/orchestration/test/**",
+        ".agents/skills/run-agent-orchestration/**"
+      ],
+      "keywords": [
+        "agent orchestration",
+        "agent selector",
+        "agent routing",
+        "dispatch plan"
+      ],
+      "primary": [
+        "application-engineer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ]
     },
     {
       "id": "frontend",
@@ -335,31 +715,125 @@
     {
       "id": "visual-system",
       "workflow_shape": "unclassified",
-      "paths": ["design-system/**", "design-tokens/**", "**/tokens.json", "**/*.tokens.json", "**/*.stories.tsx", "**/theme/**"],
-      "keywords": ["design system", "design token", "design tokens", "component library", "visual design", "visual system", "style guide", "typography scale", "color palette"],
-      "primary": ["visual-designer"],
-      "reviewers": ["accessibility-reviewer"],
-      "support": ["interaction-designer", "frontend-engineer"],
-      "quality_gates": ["G3", "G5"]
+      "paths": [
+        "design-system/**",
+        "design-tokens/**",
+        "**/tokens.json",
+        "**/*.tokens.json",
+        "**/*.stories.tsx",
+        "**/theme/**"
+      ],
+      "keywords": [
+        "design system",
+        "design token",
+        "design tokens",
+        "component library",
+        "visual design",
+        "visual system",
+        "style guide",
+        "typography scale",
+        "color palette"
+      ],
+      "primary": [
+        "visual-designer"
+      ],
+      "reviewers": [
+        "accessibility-reviewer"
+      ],
+      "support": [
+        "interaction-designer",
+        "frontend-engineer"
+      ],
+      "quality_gates": [
+        "G3",
+        "G5"
+      ]
     },
     {
       "id": "ai-feature",
       "workflow_shape": "new-service",
-      "paths": ["**/prompts/**", "**/evals/**", "**/*.prompt", "**/*.prompt.*", "**/model/**/*.yaml"],
-      "keywords": ["llm", "large language model", "prompt", "prompt engineering", "model selection", "eval", "evals", "eval harness", "fine-tune", "fine-tuning", "inference", "embedding model", "agentic feature", "retrieval augmented generation"],
-      "primary": ["ai-engineer"],
-      "reviewers": ["security-reviewer", "code-reviewer", "test-engineer"],
-      "support": ["data-governance-engineer", "cost-capacity-planner"],
-      "quality_gates": ["G3", "G4", "G5", "G6", "G7"]
+      "paths": [
+        "**/prompts/**",
+        "**/evals/**",
+        "**/*.prompt",
+        "**/*.prompt.*",
+        "**/model/**/*.yaml"
+      ],
+      "keywords": [
+        "llm",
+        "large language model",
+        "prompt",
+        "prompt engineering",
+        "model selection",
+        "eval",
+        "evals",
+        "eval harness",
+        "fine-tune",
+        "fine-tuning",
+        "inference",
+        "embedding model",
+        "agentic feature",
+        "retrieval augmented generation"
+      ],
+      "primary": [
+        "ai-engineer"
+      ],
+      "reviewers": [
+        "security-reviewer",
+        "code-reviewer",
+        "test-engineer"
+      ],
+      "support": [
+        "data-governance-engineer",
+        "cost-capacity-planner"
+      ],
+      "quality_gates": [
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "G7"
+      ]
     },
     {
       "id": "backend",
       "workflow_shape": "new-service",
-      "paths": ["backend/**", "services/**", "api/**", "**/*.go", "**/*.sql", "**/migrations/**"],
-      "keywords": ["backend", "api", "service implementation", "datastore", "schema", "migration", "golang", "python", "postgres", "postgresql", "pgx", "database"],
-      "primary": ["backend-engineer"],
-      "reviewers": ["test-engineer", "code-reviewer"],
-      "quality_gates": ["G3", "G4", "G5", "G6", "G7"]
+      "paths": [
+        "backend/**",
+        "services/**",
+        "api/**",
+        "**/*.go",
+        "**/*.sql",
+        "**/migrations/**"
+      ],
+      "keywords": [
+        "backend",
+        "api",
+        "service implementation",
+        "datastore",
+        "schema",
+        "migration",
+        "golang",
+        "python",
+        "postgres",
+        "postgresql",
+        "pgx",
+        "database"
+      ],
+      "primary": [
+        "backend-engineer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ],
+      "quality_gates": [
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "G7"
+      ]
     },
     {
       "id": "infrastructure",
@@ -517,188 +991,670 @@
     {
       "id": "testing",
       "workflow_shape": "unclassified",
-      "paths": ["features/**", "**/*.feature", "**/*_test.go", "**/*.test.mjs", "**/*.test.ts", "**/*.spec.ts", "test/**", "tests/**"],
-      "keywords": ["gherkin", "godog", "integration test", "regression test", "test coverage"],
-      "primary": ["test-engineer"],
-      "reviewers": ["code-reviewer"],
-      "quality_gates": ["G6"]
+      "paths": [
+        "features/**",
+        "**/*.feature",
+        "**/*_test.go",
+        "**/*.test.mjs",
+        "**/*.test.ts",
+        "**/*.spec.ts",
+        "test/**",
+        "tests/**"
+      ],
+      "keywords": [
+        "gherkin",
+        "godog",
+        "integration test",
+        "regression test",
+        "test coverage"
+      ],
+      "primary": [
+        "test-engineer"
+      ],
+      "reviewers": [
+        "code-reviewer"
+      ],
+      "quality_gates": [
+        "G6"
+      ]
     },
     {
       "id": "code-review-request",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["review this pull request", "review this pr", "review this merge request", "code review", "pr review", "review these changes", "review my changes", "peer review this code"],
-      "primary": ["code-reviewer"],
-      "support": ["security-reviewer"]
+      "keywords": [
+        "review this pull request",
+        "review this pr",
+        "review this merge request",
+        "code review",
+        "pr review",
+        "review these changes",
+        "review my changes",
+        "peer review this code"
+      ],
+      "primary": [
+        "code-reviewer"
+      ],
+      "support": [
+        "security-reviewer"
+      ]
     },
     {
       "id": "debugging",
       "workflow_shape": "unclassified",
-      "paths": ["debug/**", "diagnostics/**", "repro/**", "roster/catalog.yaml", "roster/**/AGENT.md", ".agents/skills/agent-authoring/**", "**/fixtures/bugs/**", "**/regression/**"],
-      "keywords": ["debug", "debugging", "bug", "root cause", "reproduce", "reproduction", "failing test", "failing command", "stack trace", "crash", "panic", "race condition", "flaky test", "test failure", "runtime failure", "tooling failure", "tune agent", "agent tune-up", "inspect agents", "agent issue", "agent definition", "agent prompt", "role defect", "routing issue", "selector regression", "misroute", "dispatch bug"],
-      "primary": ["debugging-engineer"],
-      "reviewers": ["test-engineer", "code-reviewer"]
+      "paths": [
+        "debug/**",
+        "diagnostics/**",
+        "repro/**",
+        "roster/catalog.yaml",
+        "roster/**/AGENT.md",
+        ".agents/skills/agent-authoring/**",
+        "**/fixtures/bugs/**",
+        "**/regression/**"
+      ],
+      "keywords": [
+        "debug",
+        "debugging",
+        "bug",
+        "root cause",
+        "reproduce",
+        "reproduction",
+        "failing test",
+        "failing command",
+        "stack trace",
+        "crash",
+        "panic",
+        "race condition",
+        "flaky test",
+        "test failure",
+        "runtime failure",
+        "tooling failure",
+        "tune agent",
+        "agent tune-up",
+        "inspect agents",
+        "agent issue",
+        "agent definition",
+        "agent prompt",
+        "role defect",
+        "routing issue",
+        "selector regression",
+        "misroute",
+        "dispatch bug"
+      ],
+      "primary": [
+        "debugging-engineer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ]
     },
     {
       "id": "black-box-testing",
       "workflow_shape": "unclassified",
-      "paths": ["**/black-box/**", "**/blackbox/**", "**/e2e/**", "**/playwright/**", "**/postman/**", "**/*.feature"],
-      "keywords": ["black-box", "black box", "external behavior", "public api test", "opaque system", "end-to-end test", "e2e"],
-      "primary": ["black-box-tester"],
-      "reviewers": ["test-engineer", "code-reviewer"]
+      "paths": [
+        "**/black-box/**",
+        "**/blackbox/**",
+        "**/e2e/**",
+        "**/playwright/**",
+        "**/postman/**",
+        "**/*.feature"
+      ],
+      "keywords": [
+        "black-box",
+        "black box",
+        "external behavior",
+        "public api test",
+        "opaque system",
+        "end-to-end test",
+        "e2e"
+      ],
+      "primary": [
+        "black-box-tester"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ]
     },
     {
       "id": "end-user-testing",
       "workflow_shape": "unclassified",
-      "paths": ["**/uat/**", "**/user-acceptance/**", "**/personas/**", "**/journeys/**", "**/usability/**"],
-      "keywords": ["uat", "user acceptance", "end-user", "end user", "persona", "user journey", "usability", "user readiness"],
-      "primary": ["end-user-tester"],
-      "reviewers": ["technical-writer"],
-      "support": ["support-triage-agent"],
-      "quality_gates": ["G6"]
+      "paths": [
+        "**/uat/**",
+        "**/user-acceptance/**",
+        "**/personas/**",
+        "**/journeys/**",
+        "**/usability/**"
+      ],
+      "keywords": [
+        "uat",
+        "user acceptance",
+        "end-user",
+        "end user",
+        "persona",
+        "user journey",
+        "usability",
+        "user readiness"
+      ],
+      "primary": [
+        "end-user-tester"
+      ],
+      "reviewers": [
+        "technical-writer"
+      ],
+      "support": [
+        "support-triage-agent"
+      ],
+      "quality_gates": [
+        "G6"
+      ]
     },
     {
       "id": "performance-testing",
       "workflow_shape": "unclassified",
-      "paths": ["**/load-test/**", "**/performance-test/**", "**/perf/**", "**/benchmarks/**"],
-      "keywords": ["load test", "performance test", "stress test", "benchmark", "throughput", "latency slo", "capacity validation"],
-      "primary": ["performance-testing-engineer"],
-      "reviewers": ["infrastructure-reviewer"],
-      "support": ["cost-capacity-planner"],
-      "quality_gates": ["G6"]
+      "paths": [
+        "**/load-test/**",
+        "**/performance-test/**",
+        "**/perf/**",
+        "**/benchmarks/**"
+      ],
+      "keywords": [
+        "load test",
+        "performance test",
+        "stress test",
+        "benchmark",
+        "throughput",
+        "latency slo",
+        "capacity validation"
+      ],
+      "primary": [
+        "performance-testing-engineer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "cost-capacity-planner"
+      ],
+      "quality_gates": [
+        "G6"
+      ]
     },
     {
       "id": "chaos-resilience",
       "workflow_shape": "unclassified",
-      "paths": ["**/chaos/**", "**/resilience-test/**", "**/game-day/**", "**/fault-injection/**"],
-      "keywords": ["chaos engineering", "fault injection", "resilience test", "failure injection", "disaster recovery test", "game day", "rto validation", "rpo validation"],
-      "primary": ["chaos-resilience-engineer"],
-      "reviewers": ["infrastructure-reviewer"],
-      "support": ["cloud-architect", "observability-sre"],
-      "quality_gates": ["G6"]
+      "paths": [
+        "**/chaos/**",
+        "**/resilience-test/**",
+        "**/game-day/**",
+        "**/fault-injection/**"
+      ],
+      "keywords": [
+        "chaos engineering",
+        "fault injection",
+        "resilience test",
+        "failure injection",
+        "disaster recovery test",
+        "game day",
+        "rto validation",
+        "rpo validation"
+      ],
+      "primary": [
+        "chaos-resilience-engineer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "cloud-architect",
+        "observability-sre"
+      ],
+      "quality_gates": [
+        "G6"
+      ]
     },
     {
       "id": "support",
       "workflow_shape": "unclassified",
-      "paths": ["support/**", "docs/support/**", "**/runbooks/support/**", "**/incidents/**", "**/tickets/**"],
-      "keywords": ["support", "triage", "user report", "customer report", "incident ticket", "reproduction steps", "workaround"],
-      "primary": ["support-triage-agent"],
-      "reviewers": ["technical-writer"],
-      "support": ["escalation-manager"]
+      "paths": [
+        "support/**",
+        "docs/support/**",
+        "**/runbooks/support/**",
+        "**/incidents/**",
+        "**/tickets/**"
+      ],
+      "keywords": [
+        "support",
+        "triage",
+        "user report",
+        "customer report",
+        "incident ticket",
+        "reproduction steps",
+        "workaround"
+      ],
+      "primary": [
+        "support-triage-agent"
+      ],
+      "reviewers": [
+        "technical-writer"
+      ],
+      "support": [
+        "escalation-manager"
+      ]
     },
     {
       "id": "incident-response",
       "workflow_shape": "unclassified",
-      "paths": ["incidents/**", "postmortems/**", "**/runbooks/incident/**", "**/incident-response/**"],
-      "keywords": ["incident", "outage", "sev1", "sev2", "major incident", "postmortem", "rollback coordination", "war room"],
-      "primary": ["incident-commander"],
-      "reviewers": ["technical-writer"],
-      "support": ["support-triage-agent", "escalation-manager", "observability-sre"]
+      "paths": [
+        "incidents/**",
+        "postmortems/**",
+        "**/runbooks/incident/**",
+        "**/incident-response/**"
+      ],
+      "keywords": [
+        "incident",
+        "outage",
+        "sev1",
+        "sev2",
+        "major incident",
+        "postmortem",
+        "rollback coordination",
+        "war room"
+      ],
+      "primary": [
+        "incident-commander"
+      ],
+      "reviewers": [
+        "technical-writer"
+      ],
+      "support": [
+        "support-triage-agent",
+        "escalation-manager",
+        "observability-sre"
+      ]
     },
     {
       "id": "rollback",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["roll back", "revert the release", "back out the release"],
-      "keyword_groups": [["rollback", "roll forward", "revert", "undo", "downgrade", "restore", "redeploy", "back out", "previous version", "prior build", "previous artifact", "last known-good"], ["release", "deployment", "deploy", "production", "rollout", "artifact"]],
-      "primary": ["release-engineer"],
-      "reviewers": ["deployment-realist"],
-      "support": ["observability-sre", "evidence-curator"]
+      "keywords": [
+        "roll back",
+        "revert the release",
+        "back out the release"
+      ],
+      "keyword_groups": [
+        [
+          "rollback",
+          "roll forward",
+          "revert",
+          "undo",
+          "downgrade",
+          "restore",
+          "redeploy",
+          "back out",
+          "previous version",
+          "prior build",
+          "previous artifact",
+          "last known-good"
+        ],
+        [
+          "release",
+          "deployment",
+          "deploy",
+          "production",
+          "rollout",
+          "artifact"
+        ]
+      ],
+      "primary": [
+        "release-engineer"
+      ],
+      "reviewers": [
+        "deployment-realist"
+      ],
+      "support": [
+        "observability-sre",
+        "evidence-curator"
+      ]
     },
     {
       "id": "observability",
       "workflow_shape": "unclassified",
-      "paths": ["observability/**", "monitoring/**", "dashboards/**", "alerts/**", "prometheus/**", "grafana/**", "telemetry/**", "**/runbooks/operations/**"],
-      "keywords": ["observability", "slo", "sli", "error budget", "alert", "dashboard", "metrics", "traces", "logs", "monitoring"],
-      "primary": ["observability-sre"],
-      "reviewers": ["technical-writer"],
-      "support": ["support-triage-agent"],
-      "quality_gates": ["G10"]
+      "paths": [
+        "observability/**",
+        "monitoring/**",
+        "dashboards/**",
+        "alerts/**",
+        "prometheus/**",
+        "grafana/**",
+        "telemetry/**",
+        "**/runbooks/operations/**"
+      ],
+      "keywords": [
+        "observability",
+        "slo",
+        "sli",
+        "error budget",
+        "alert",
+        "dashboard",
+        "metrics",
+        "traces",
+        "logs",
+        "monitoring"
+      ],
+      "primary": [
+        "observability-sre"
+      ],
+      "reviewers": [
+        "technical-writer"
+      ],
+      "support": [
+        "support-triage-agent"
+      ],
+      "quality_gates": [
+        "G10"
+      ]
     },
     {
       "id": "secrets-identity",
       "workflow_shape": "unclassified",
-      "paths": ["secrets/**", "identity/**", "rbac/**", "iam/**", "oidc/**", "workload-identity/**", "**/serviceaccount*.yaml", "**/rolebinding*.yaml"],
-      "keywords": ["secret", "credential", "key rotation", "workload identity", "rbac", "oidc", "service account", "access review", "gitlab variable"],
-      "primary": ["secrets-identity-engineer"],
-      "reviewers": ["security-reviewer", "compliance-reviewer"]
+      "paths": [
+        "secrets/**",
+        "identity/**",
+        "rbac/**",
+        "iam/**",
+        "oidc/**",
+        "workload-identity/**",
+        "**/serviceaccount*.yaml",
+        "**/rolebinding*.yaml"
+      ],
+      "keywords": [
+        "secret",
+        "credential",
+        "key rotation",
+        "workload identity",
+        "rbac",
+        "oidc",
+        "service account",
+        "access review",
+        "gitlab variable"
+      ],
+      "primary": [
+        "secrets-identity-engineer"
+      ],
+      "reviewers": [
+        "security-reviewer",
+        "compliance-reviewer"
+      ]
     },
     {
       "id": "database-reliability",
       "workflow_shape": "unclassified",
-      "paths": ["db/**", "database/**", "postgres/**", "**/migrations/**", "**/*.sql", "backup/**", "restore/**"],
-      "keywords": ["postgresql ha", "pitr", "backup", "restore", "migration safety", "schema change", "data retention", "vacuum", "index", "lock"],
-      "primary": ["database-reliability-engineer"],
-      "reviewers": ["backend-engineer", "infrastructure-reviewer"]
+      "paths": [
+        "db/**",
+        "database/**",
+        "postgres/**",
+        "**/migrations/**",
+        "**/*.sql",
+        "backup/**",
+        "restore/**"
+      ],
+      "keywords": [
+        "postgresql ha",
+        "pitr",
+        "backup",
+        "restore",
+        "migration safety",
+        "schema change",
+        "data retention",
+        "vacuum",
+        "index",
+        "lock"
+      ],
+      "primary": [
+        "database-reliability-engineer"
+      ],
+      "reviewers": [
+        "backend-engineer",
+        "infrastructure-reviewer"
+      ]
     },
     {
       "id": "policy-as-code",
       "workflow_shape": "unclassified",
-      "paths": ["policy/**", "policies/**", "opa/**", "kyverno/**", "gatekeeper/**", "conftest/**", "admission/**"],
-      "keywords": ["policy as code", "admission", "opa", "kyverno", "gatekeeper", "conftest", "network policy", "restricted security context"],
-      "primary": ["policy-as-code-engineer"],
-      "reviewers": ["security-reviewer", "infrastructure-reviewer"]
+      "paths": [
+        "policy/**",
+        "policies/**",
+        "opa/**",
+        "kyverno/**",
+        "gatekeeper/**",
+        "conftest/**",
+        "admission/**"
+      ],
+      "keywords": [
+        "policy as code",
+        "admission",
+        "opa",
+        "kyverno",
+        "gatekeeper",
+        "conftest",
+        "network policy",
+        "restricted security context"
+      ],
+      "primary": [
+        "policy-as-code-engineer"
+      ],
+      "reviewers": [
+        "security-reviewer",
+        "infrastructure-reviewer"
+      ]
     },
     {
       "id": "supply-chain",
       "workflow_shape": "unclassified",
-      "paths": ["go.mod", "go.sum", "**/go.mod", "**/go.sum", "package.json", "package-lock.json", "**/package.json", "**/package-lock.json", "**/Dockerfile", "**/Containerfile", "**/sbom/**", "**/*.lock", "**/charts/Chart.yaml", "plugin/tools/test_cline_git_plugin_packaging.py"],
-      "keywords": ["dependency", "sbom", "sboms", "provenance", "signing", "cosign", "slsa", "container image", "terraform provider", "helm dependency", "license"],
-      "primary": ["supply-chain-security-reviewer"],
-      "reviewers": ["security-reviewer"],
-      "support": ["release-engineer"]
+      "paths": [
+        "go.mod",
+        "go.sum",
+        "**/go.mod",
+        "**/go.sum",
+        "package.json",
+        "package-lock.json",
+        "**/package.json",
+        "**/package-lock.json",
+        "**/Dockerfile",
+        "**/Containerfile",
+        "**/sbom/**",
+        "**/*.lock",
+        "**/charts/Chart.yaml",
+        "plugin/tools/test_cline_git_plugin_packaging.py"
+      ],
+      "keywords": [
+        "dependency",
+        "sbom",
+        "sboms",
+        "provenance",
+        "signing",
+        "cosign",
+        "slsa",
+        "container image",
+        "terraform provider",
+        "helm dependency",
+        "license"
+      ],
+      "primary": [
+        "supply-chain-security-reviewer"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ],
+      "support": [
+        "release-engineer"
+      ]
     },
     {
       "id": "packaging",
       "workflow_shape": "unclassified",
-      "paths": ["plugin/tools/**"],
-      "keywords": ["plugin packaging", "plugin manifest health", "plugin packaging tool", "packaging guard", "plugin changelog entry", "plugin install script", "plugin version bump", "port cline agents", "cline port", "bootstrap_sdlc.py", "plugin distribution packaging"],
-      "primary": ["application-engineer", "debugging-engineer"],
-      "reviewers": ["test-engineer", "code-reviewer"]
+      "paths": [
+        "plugin/tools/**"
+      ],
+      "keywords": [
+        "plugin packaging",
+        "plugin manifest health",
+        "plugin packaging tool",
+        "packaging guard",
+        "plugin changelog entry",
+        "plugin install script",
+        "plugin version bump",
+        "port cline agents",
+        "cline port",
+        "bootstrap_sdlc.py",
+        "plugin distribution packaging"
+      ],
+      "primary": [
+        "application-engineer",
+        "debugging-engineer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ]
     },
     {
       "id": "cost-capacity",
       "workflow_shape": "unclassified",
-      "paths": ["capacity/**", "cost/**", "finops/**", "sizing/**", "**/values*.yaml"],
-      "keywords": ["capacity", "sizing", "cost", "finops", "quota", "resource limits", "storage growth", "runner utilization", "headroom"],
-      "primary": ["cost-capacity-planner"],
-      "reviewers": ["infrastructure-reviewer"],
-      "support": ["observability-sre"]
+      "paths": [
+        "capacity/**",
+        "cost/**",
+        "finops/**",
+        "sizing/**",
+        "**/values*.yaml"
+      ],
+      "keywords": [
+        "capacity",
+        "sizing",
+        "cost",
+        "finops",
+        "quota",
+        "resource limits",
+        "storage growth",
+        "runner utilization",
+        "headroom"
+      ],
+      "primary": [
+        "cost-capacity-planner"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "observability-sre"
+      ]
     },
     {
       "id": "cost-operations",
       "workflow_shape": "unclassified",
       "paths": [],
-      "keywords": ["cost drift", "cost anomaly", "spend anomaly", "budget alert", "quota exhaustion", "cost overrun", "usage drift"],
-      "primary": ["finops-engineer"],
-      "reviewers": ["infrastructure-reviewer"],
-      "support": ["cost-capacity-planner", "observability-sre"]
+      "keywords": [
+        "cost drift",
+        "cost anomaly",
+        "spend anomaly",
+        "budget alert",
+        "quota exhaustion",
+        "cost overrun",
+        "usage drift"
+      ],
+      "primary": [
+        "finops-engineer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "cost-capacity-planner",
+        "observability-sre"
+      ]
     },
     {
       "id": "api-contract",
       "workflow_shape": "unclassified",
-      "paths": ["contracts/**", "**/openapi.yaml", "**/openapi.yml", "**/*.proto", "**/schema.graphql"],
-      "keywords": ["api contract", "schema contract", "api versioning", "breaking change", "contract compatibility", "openapi", "graphql schema", "proto schema", "api design", "schema design", "interface design", "endpoint design", "contract design"],
-      "primary": ["api-contract-engineer"],
-      "reviewers": ["code-reviewer"],
-      "support": ["cloud-architect", "backend-engineer", "frontend-engineer"],
-      "quality_gates": ["G3"]
+      "paths": [
+        "contracts/**",
+        "**/openapi.yaml",
+        "**/openapi.yml",
+        "**/*.proto",
+        "**/schema.graphql"
+      ],
+      "keywords": [
+        "api contract",
+        "schema contract",
+        "api versioning",
+        "breaking change",
+        "contract compatibility",
+        "openapi",
+        "graphql schema",
+        "proto schema",
+        "api design",
+        "schema design",
+        "interface design",
+        "endpoint design",
+        "contract design"
+      ],
+      "primary": [
+        "api-contract-engineer"
+      ],
+      "reviewers": [
+        "code-reviewer"
+      ],
+      "support": [
+        "cloud-architect",
+        "backend-engineer",
+        "frontend-engineer"
+      ],
+      "quality_gates": [
+        "G3"
+      ]
     },
     {
       "id": "documentation",
       "workflow_shape": "unclassified",
-      "paths": ["docs/**", "**/*.md", "**/adr/**"],
-      "keywords": ["documentation", "runbook", "adr", "architecture decision", "operator guide"],
-      "primary": ["technical-writer"],
+      "paths": [
+        "docs/**",
+        "**/*.md",
+        "**/adr/**"
+      ],
+      "keywords": [
+        "documentation",
+        "runbook",
+        "adr",
+        "architecture decision",
+        "operator guide"
+      ],
+      "primary": [
+        "technical-writer"
+      ],
       "reviewers": []
     },
     {
       "id": "gitlab-evidence",
       "workflow_shape": "unclassified",
-      "paths": ["roster/orchestration/mcp/gitlab_*.py"],
-      "keywords": ["gitlab issue", "gitlab subtask", "gitlab wiki", "review subtask"],
-      "primary": ["application-engineer"],
-      "reviewers": ["test-engineer", "code-reviewer", "security-reviewer"]
+      "paths": [
+        "roster/orchestration/mcp/gitlab_*.py"
+      ],
+      "keywords": [
+        "gitlab issue",
+        "gitlab subtask",
+        "gitlab wiki",
+        "review subtask"
+      ],
+      "primary": [
+        "application-engineer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer",
+        "security-reviewer"
+      ]
     },
     {
       "id": "architecture-diagram-execution",
@@ -1669,266 +2625,1645 @@
         "test-engineer"
       ]
     },
-    {"id":"agent-workflow-execution","workflow_shape":"new-service","paths":["agents/workflows/**","roster/workflows/**"],"keywords":["agent workflow implementation"],"primary":["agent-workflow-implementer"],"reviewers":["code-reviewer"],"support":["application-engineer"]},
-    {"id":"ai-observability-execution","workflow_shape":"unclassified","paths":["ai/observability/**"],"keywords":["ai observability implementation"],"primary":["ai-observability-implementer"],"reviewers":["code-reviewer","security-reviewer"],"support":["ai-engineer"]},
-    {"id":"ansible-automation-execution","workflow_shape":"infrastructure-change","paths":["ansible/**"],"keywords":["ansible automation implementation"],"primary":["ansible-automation-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"bare-metal-provisioning-execution","workflow_shape":"infrastructure-change","paths":["bare-metal/**"],"keywords":["bare metal provisioning implementation"],"primary":["bare-metal-provisioning-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"bgp-routing-execution","workflow_shape":"infrastructure-change","paths":["networking/bgp/**"],"keywords":["bgp routing implementation"],"primary":["bgp-routing-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"c-systems-execution","workflow_shape":"new-service","paths":["systems/c/**"],"keywords":["c systems implementation"],"primary":["c-systems-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["backend-engineer"]},
-    {"id":"cmake-build-execution","workflow_shape":"new-service","paths":["cmake/**"],"keywords":["cmake build implementation"],"primary":["cmake-build-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["backend-engineer"]},
-    {"id":"cpp-systems-execution","workflow_shape":"new-service","paths":["systems/cpp/**"],"keywords":["cpp systems implementation"],"primary":["cpp-systems-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["backend-engineer"]},
-    {"id":"device-driver-execution","workflow_shape":"new-service","paths":["drivers/**"],"keywords":["device driver implementation"],"primary":["device-driver-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["backend-engineer"]},
-    {"id":"distributed-storage-execution","workflow_shape":"infrastructure-change","paths":["storage/distributed/**"],"keywords":["distributed storage implementation"],"primary":["distributed-storage-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"ebpf-execution","workflow_shape":"new-service","paths":["ebpf/**"],"keywords":["ebpf implementation"],"primary":["ebpf-implementer"],"reviewers":["test-engineer","code-reviewer","security-reviewer"],"support":["backend-engineer"]},
-    {"id":"edge-cloud-integration-execution","workflow_shape":"infrastructure-change","paths":["edge-cloud/**"],"keywords":["edge cloud integration implementation"],"primary":["edge-cloud-integration-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"embedded-c-execution","workflow_shape":"new-service","paths":["embedded/c/**"],"keywords":["embedded c implementation"],"primary":["embedded-c-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["backend-engineer"]},
-    {"id":"embedded-linux-platform-execution","workflow_shape":"infrastructure-change","paths":["embedded/linux/**"],"keywords":["embedded linux platform implementation"],"primary":["embedded-linux-platform-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"embedding-index-execution","workflow_shape":"new-service","paths":["ai/embeddings/**"],"keywords":["embedding index implementation"],"primary":["embedding-index-implementer"],"reviewers":["test-engineer"],"support":["ai-engineer"]},
-    {"id":"eval-dataset-execution","workflow_shape":"unclassified","paths":["evals/datasets/**"],"keywords":["eval dataset implementation"],"primary":["eval-dataset-implementer"],"reviewers":["code-reviewer"],"support":["ai-engineer","test-engineer"]},
-    {"id":"firmware-execution","workflow_shape":"new-service","paths":["firmware/**"],"keywords":["firmware implementation"],"primary":["firmware-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["backend-engineer"]},
-    {"id":"gitops-delivery-execution","workflow_shape":"pipeline-change","paths":["gitops/**"],"keywords":["gitops delivery implementation"],"primary":["gitops-delivery-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"guardrail-policy-execution","workflow_shape":"new-service","paths":["policies/guardrails/**"],"keywords":["guardrail policy implementation"],"primary":["guardrail-policy-implementer"],"reviewers":["security-reviewer"],"support":["policy-as-code-engineer"]},
-    {"id":"inference-gateway-execution","workflow_shape":"new-service","paths":["ai/inference-gateway/**"],"keywords":["inference gateway implementation"],"primary":["inference-gateway-implementer"],"reviewers":["code-reviewer","security-reviewer"],"support":["ai-engineer"]},
-    {"id":"kernel-module-execution","workflow_shape":"new-service","paths":["kernel-modules/**"],"keywords":["kernel module implementation"],"primary":["kernel-module-implementer"],"reviewers":["test-engineer","code-reviewer","security-reviewer"],"support":["backend-engineer"]},
-    {"id":"kubernetes-networking-execution","workflow_shape":"infrastructure-change","paths":["kubernetes/networking/**"],"keywords":["kubernetes networking implementation"],"primary":["kubernetes-networking-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"kubernetes-operator-execution","workflow_shape":"new-service","paths":["kubernetes/operators/**"],"keywords":["kubernetes operator implementation"],"primary":["kubernetes-operator-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"linux-systems-execution","workflow_shape":"infrastructure-change","paths":["systems/linux/**"],"keywords":["linux systems implementation"],"primary":["linux-systems-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"mcp-server-execution","workflow_shape":"new-service","paths":["mcp/servers/**"],"keywords":["mcp server implementation"],"primary":["mcp-server-implementer"],"reviewers":["test-engineer","code-reviewer","security-reviewer"],"support":["ai-engineer"]},
-    {"id":"migration-test-execution","workflow_shape":"unclassified","paths":["database/migration-tests/**"],"keywords":["migration test implementation"],"primary":["migration-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer","database-reliability-engineer"]},
-    {"id":"model-routing-execution","workflow_shape":"new-service","paths":["ai/model-routing/**"],"keywords":["model routing implementation"],"primary":["model-routing-implementer"],"reviewers":["security-reviewer"],"support":["ai-engineer"]},
-    {"id":"network-config-execution","workflow_shape":"infrastructure-change","paths":["networking/config/**"],"keywords":["network config implementation"],"primary":["network-config-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"network-management-automation-execution","workflow_shape":"infrastructure-change","paths":["networking/automation/**"],"keywords":["network management automation implementation"],"primary":["network-management-automation-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"network-observability-execution","workflow_shape":"unclassified","paths":["networking/observability/**"],"keywords":["network observability implementation"],"primary":["network-observability-implementer"],"reviewers":["infrastructure-reviewer"],"support":["observability-sre"]},
-    {"id":"network-security-policy-execution","workflow_shape":"unclassified","paths":["networking/security-policy/**"],"keywords":["network security policy implementation"],"primary":["network-security-policy-implementer"],"reviewers":["security-reviewer"],"support":["policy-as-code-engineer"]},
-    {"id":"pkcs11-hsm-integration-execution","workflow_shape":"unclassified","paths":["security/pkcs11/**"],"keywords":["pkcs11 hsm integration implementation"],"primary":["pkcs11-hsm-integration-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
-    {"id":"pki-certificate-lifecycle-execution","workflow_shape":"unclassified","paths":["security/pki/**"],"keywords":["pki certificate lifecycle implementation"],"primary":["pki-certificate-lifecycle-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
-    {"id":"pqc-integration-execution","workflow_shape":"unclassified","paths":["security/pqc/**"],"keywords":["pqc integration implementation"],"primary":["pqc-integration-implementer"],"reviewers":["security-reviewer"],"support":["cryptographic-assurance-engineer"]},
-    {"id":"precision-timing-execution","workflow_shape":"infrastructure-change","paths":["timing/**"],"keywords":["precision timing implementation"],"primary":["precision-timing-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"protocol-fuzzing-execution","workflow_shape":"unclassified","paths":["fuzz/protocols/**"],"keywords":["protocol fuzzing implementation"],"primary":["protocol-fuzzing-implementer"],"reviewers":["code-reviewer","security-reviewer"],"support":["test-engineer"]},
-    {"id":"protocol-integration-execution","workflow_shape":"new-service","paths":["protocols/integration/**"],"keywords":["protocol integration implementation"],"primary":["protocol-integration-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["backend-engineer"]},
-    {"id":"qkd-qkms-integration-execution","workflow_shape":"unclassified","paths":["quantum/qkd-qkms/**"],"keywords":["qkd qkms integration implementation"],"primary":["qkd-qkms-integration-implementer"],"reviewers":["security-reviewer"],"support":["cryptographic-assurance-engineer"]},
-    {"id":"quantum-network-integration-execution","workflow_shape":"unclassified","paths":["quantum/network/**"],"keywords":["quantum network integration implementation"],"primary":["quantum-network-integration-implementer"],"reviewers":["security-reviewer","infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"rbac-manifest-execution","workflow_shape":"unclassified","paths":["security/rbac/**"],"keywords":["rbac manifest implementation"],"primary":["rbac-manifest-implementer"],"reviewers":["security-reviewer","infrastructure-reviewer"],"support":["secrets-identity-engineer"]},
-    {"id":"rtos-integration-execution","workflow_shape":"new-service","paths":["rtos/**","embedded/rtos/**","firmware/rtos/**"],"keywords":["rtos integration implementation","rtos task implementation","rtos scheduling implementation"],"primary":["rtos-integration-implementer"],"reviewers":["test-engineer","code-reviewer"],"support":["backend-engineer"]},
-    {"id":"secret-hygiene-execution","workflow_shape":"unclassified","paths":["security/secret-hygiene/**"],"keywords":["secret hygiene implementation"],"primary":["secret-hygiene-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
-    {"id":"secure-boot-execution","workflow_shape":"unclassified","paths":["security/secure-boot/**"],"keywords":["secure boot implementation"],"primary":["secure-boot-implementer"],"reviewers":["security-reviewer"],"support":["secrets-identity-engineer"]},
-    {"id":"secure-channel-integration-execution","workflow_shape":"unclassified","paths":["security/secure-channels/**"],"keywords":["secure channel integration implementation"],"primary":["secure-channel-integration-implementer"],"reviewers":["security-reviewer"],"support":["cryptographic-assurance-engineer"]},
-    {"id":"sonicos-config-execution","workflow_shape":"infrastructure-change","paths":["networking/sonicos/**"],"keywords":["sonicos config implementation"],"primary":["sonicos-config-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"starlingx-config-execution","workflow_shape":"infrastructure-change","paths":["starlingx/**"],"keywords":["starlingx config implementation"],"primary":["starlingx-config-implementer"],"reviewers":["infrastructure-reviewer"],"support":["infrastructure-provisioner"]},
-    {"id":"supply-chain-remediation-execution","workflow_shape":"unclassified","paths":["security/supply-chain-remediation/**"],"keywords":["supply chain remediation implementation"],"primary":["supply-chain-remediation-implementer"],"reviewers":["code-reviewer","supply-chain-security-reviewer"],"support":["cicd-engineer"]},
-    {"id":"go-test-execution","workflow_shape":"unclassified","paths":["tests/go/**"],"keywords":["go test implementation"],"primary":["go-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
-    {"id":"hardware-test-execution","workflow_shape":"unclassified","paths":["tests/hardware/**"],"keywords":["hardware test implementation"],"primary":["hardware-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
-    {"id":"interoperability-test-execution","workflow_shape":"unclassified","paths":["tests/interoperability/**"],"keywords":["interoperability test implementation"],"primary":["interoperability-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
-    {"id":"python-test-execution","workflow_shape":"unclassified","paths":["tests/python/**"],"keywords":["python test implementation"],"primary":["python-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
-    {"id":"typescript-test-execution","workflow_shape":"unclassified","paths":["tests/typescript/**"],"keywords":["typescript test implementation"],"primary":["typescript-test-implementer"],"reviewers":["code-reviewer"],"support":["test-engineer"]},
+    {
+      "id": "agent-workflow-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "agents/workflows/**",
+        "roster/workflows/**"
+      ],
+      "keywords": [
+        "agent workflow implementation"
+      ],
+      "primary": [
+        "agent-workflow-implementer"
+      ],
+      "reviewers": [
+        "code-reviewer"
+      ],
+      "support": [
+        "application-engineer"
+      ]
+    },
+    {
+      "id": "ai-observability-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "ai/observability/**"
+      ],
+      "keywords": [
+        "ai observability implementation"
+      ],
+      "primary": [
+        "ai-observability-implementer"
+      ],
+      "reviewers": [
+        "code-reviewer",
+        "security-reviewer"
+      ],
+      "support": [
+        "ai-engineer"
+      ]
+    },
+    {
+      "id": "ansible-automation-execution",
+      "workflow_shape": "infrastructure-change",
+      "paths": [
+        "ansible/**"
+      ],
+      "keywords": [
+        "ansible automation implementation"
+      ],
+      "primary": [
+        "ansible-automation-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "bare-metal-provisioning-execution",
+      "workflow_shape": "infrastructure-change",
+      "paths": [
+        "bare-metal/**"
+      ],
+      "keywords": [
+        "bare metal provisioning implementation"
+      ],
+      "primary": [
+        "bare-metal-provisioning-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "bgp-routing-execution",
+      "workflow_shape": "infrastructure-change",
+      "paths": [
+        "networking/bgp/**"
+      ],
+      "keywords": [
+        "bgp routing implementation"
+      ],
+      "primary": [
+        "bgp-routing-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "c-systems-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "systems/c/**"
+      ],
+      "keywords": [
+        "c systems implementation"
+      ],
+      "primary": [
+        "c-systems-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ],
+      "support": [
+        "backend-engineer"
+      ]
+    },
+    {
+      "id": "cmake-build-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "cmake/**"
+      ],
+      "keywords": [
+        "cmake build implementation"
+      ],
+      "primary": [
+        "cmake-build-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ],
+      "support": [
+        "backend-engineer"
+      ]
+    },
+    {
+      "id": "cpp-systems-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "systems/cpp/**"
+      ],
+      "keywords": [
+        "cpp systems implementation"
+      ],
+      "primary": [
+        "cpp-systems-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ],
+      "support": [
+        "backend-engineer"
+      ]
+    },
+    {
+      "id": "device-driver-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "drivers/**"
+      ],
+      "keywords": [
+        "device driver implementation"
+      ],
+      "primary": [
+        "device-driver-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ],
+      "support": [
+        "backend-engineer"
+      ]
+    },
+    {
+      "id": "distributed-storage-execution",
+      "workflow_shape": "infrastructure-change",
+      "paths": [
+        "storage/distributed/**"
+      ],
+      "keywords": [
+        "distributed storage implementation"
+      ],
+      "primary": [
+        "distributed-storage-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "ebpf-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "ebpf/**"
+      ],
+      "keywords": [
+        "ebpf implementation"
+      ],
+      "primary": [
+        "ebpf-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer",
+        "security-reviewer"
+      ],
+      "support": [
+        "backend-engineer"
+      ]
+    },
+    {
+      "id": "edge-cloud-integration-execution",
+      "workflow_shape": "infrastructure-change",
+      "paths": [
+        "edge-cloud/**"
+      ],
+      "keywords": [
+        "edge cloud integration implementation"
+      ],
+      "primary": [
+        "edge-cloud-integration-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "embedded-c-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "embedded/c/**"
+      ],
+      "keywords": [
+        "embedded c implementation"
+      ],
+      "primary": [
+        "embedded-c-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ],
+      "support": [
+        "backend-engineer"
+      ]
+    },
+    {
+      "id": "embedded-linux-platform-execution",
+      "workflow_shape": "infrastructure-change",
+      "paths": [
+        "embedded/linux/**"
+      ],
+      "keywords": [
+        "embedded linux platform implementation"
+      ],
+      "primary": [
+        "embedded-linux-platform-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "embedding-index-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "ai/embeddings/**"
+      ],
+      "keywords": [
+        "embedding index implementation"
+      ],
+      "primary": [
+        "embedding-index-implementer"
+      ],
+      "reviewers": [
+        "test-engineer"
+      ],
+      "support": [
+        "ai-engineer"
+      ]
+    },
+    {
+      "id": "eval-dataset-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "evals/datasets/**"
+      ],
+      "keywords": [
+        "eval dataset implementation"
+      ],
+      "primary": [
+        "eval-dataset-implementer"
+      ],
+      "reviewers": [
+        "code-reviewer"
+      ],
+      "support": [
+        "ai-engineer",
+        "test-engineer"
+      ]
+    },
+    {
+      "id": "firmware-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "firmware/**"
+      ],
+      "keywords": [
+        "firmware implementation"
+      ],
+      "primary": [
+        "firmware-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ],
+      "support": [
+        "backend-engineer"
+      ]
+    },
+    {
+      "id": "gitops-delivery-execution",
+      "workflow_shape": "pipeline-change",
+      "paths": [
+        "gitops/**"
+      ],
+      "keywords": [
+        "gitops delivery implementation"
+      ],
+      "primary": [
+        "gitops-delivery-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "guardrail-policy-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "policies/guardrails/**"
+      ],
+      "keywords": [
+        "guardrail policy implementation"
+      ],
+      "primary": [
+        "guardrail-policy-implementer"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ],
+      "support": [
+        "policy-as-code-engineer"
+      ]
+    },
+    {
+      "id": "inference-gateway-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "ai/inference-gateway/**"
+      ],
+      "keywords": [
+        "inference gateway implementation"
+      ],
+      "primary": [
+        "inference-gateway-implementer"
+      ],
+      "reviewers": [
+        "code-reviewer",
+        "security-reviewer"
+      ],
+      "support": [
+        "ai-engineer"
+      ]
+    },
+    {
+      "id": "kernel-module-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "kernel-modules/**"
+      ],
+      "keywords": [
+        "kernel module implementation"
+      ],
+      "primary": [
+        "kernel-module-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer",
+        "security-reviewer"
+      ],
+      "support": [
+        "backend-engineer"
+      ]
+    },
+    {
+      "id": "kubernetes-networking-execution",
+      "workflow_shape": "infrastructure-change",
+      "paths": [
+        "kubernetes/networking/**"
+      ],
+      "keywords": [
+        "kubernetes networking implementation"
+      ],
+      "primary": [
+        "kubernetes-networking-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "kubernetes-operator-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "kubernetes/operators/**"
+      ],
+      "keywords": [
+        "kubernetes operator implementation"
+      ],
+      "primary": [
+        "kubernetes-operator-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "linux-systems-execution",
+      "workflow_shape": "infrastructure-change",
+      "paths": [
+        "systems/linux/**"
+      ],
+      "keywords": [
+        "linux systems implementation"
+      ],
+      "primary": [
+        "linux-systems-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "mcp-server-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "mcp/servers/**"
+      ],
+      "keywords": [
+        "mcp server implementation"
+      ],
+      "primary": [
+        "mcp-server-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer",
+        "security-reviewer"
+      ],
+      "support": [
+        "ai-engineer"
+      ]
+    },
+    {
+      "id": "migration-test-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "database/migration-tests/**"
+      ],
+      "keywords": [
+        "migration test implementation"
+      ],
+      "primary": [
+        "migration-test-implementer"
+      ],
+      "reviewers": [
+        "code-reviewer"
+      ],
+      "support": [
+        "test-engineer",
+        "database-reliability-engineer"
+      ]
+    },
+    {
+      "id": "model-routing-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "ai/model-routing/**"
+      ],
+      "keywords": [
+        "model routing implementation"
+      ],
+      "primary": [
+        "model-routing-implementer"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ],
+      "support": [
+        "ai-engineer"
+      ]
+    },
+    {
+      "id": "network-config-execution",
+      "workflow_shape": "infrastructure-change",
+      "paths": [
+        "networking/config/**"
+      ],
+      "keywords": [
+        "network config implementation"
+      ],
+      "primary": [
+        "network-config-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "network-management-automation-execution",
+      "workflow_shape": "infrastructure-change",
+      "paths": [
+        "networking/automation/**"
+      ],
+      "keywords": [
+        "network management automation implementation"
+      ],
+      "primary": [
+        "network-management-automation-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "network-observability-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "networking/observability/**"
+      ],
+      "keywords": [
+        "network observability implementation"
+      ],
+      "primary": [
+        "network-observability-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "observability-sre"
+      ]
+    },
+    {
+      "id": "network-security-policy-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "networking/security-policy/**"
+      ],
+      "keywords": [
+        "network security policy implementation"
+      ],
+      "primary": [
+        "network-security-policy-implementer"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ],
+      "support": [
+        "policy-as-code-engineer"
+      ]
+    },
+    {
+      "id": "pkcs11-hsm-integration-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "security/pkcs11/**"
+      ],
+      "keywords": [
+        "pkcs11 hsm integration implementation"
+      ],
+      "primary": [
+        "pkcs11-hsm-integration-implementer"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ],
+      "support": [
+        "secrets-identity-engineer"
+      ]
+    },
+    {
+      "id": "pki-certificate-lifecycle-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "security/pki/**"
+      ],
+      "keywords": [
+        "pki certificate lifecycle implementation"
+      ],
+      "primary": [
+        "pki-certificate-lifecycle-implementer"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ],
+      "support": [
+        "secrets-identity-engineer"
+      ]
+    },
+    {
+      "id": "pqc-integration-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "security/pqc/**"
+      ],
+      "keywords": [
+        "pqc integration implementation"
+      ],
+      "primary": [
+        "pqc-integration-implementer"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ],
+      "support": [
+        "cryptographic-assurance-engineer"
+      ]
+    },
+    {
+      "id": "precision-timing-execution",
+      "workflow_shape": "infrastructure-change",
+      "paths": [
+        "timing/**"
+      ],
+      "keywords": [
+        "precision timing implementation"
+      ],
+      "primary": [
+        "precision-timing-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "protocol-fuzzing-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "fuzz/protocols/**"
+      ],
+      "keywords": [
+        "protocol fuzzing implementation"
+      ],
+      "primary": [
+        "protocol-fuzzing-implementer"
+      ],
+      "reviewers": [
+        "code-reviewer",
+        "security-reviewer"
+      ],
+      "support": [
+        "test-engineer"
+      ]
+    },
+    {
+      "id": "protocol-integration-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "protocols/integration/**"
+      ],
+      "keywords": [
+        "protocol integration implementation"
+      ],
+      "primary": [
+        "protocol-integration-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ],
+      "support": [
+        "backend-engineer"
+      ]
+    },
+    {
+      "id": "qkd-qkms-integration-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "quantum/qkd-qkms/**"
+      ],
+      "keywords": [
+        "qkd qkms integration implementation"
+      ],
+      "primary": [
+        "qkd-qkms-integration-implementer"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ],
+      "support": [
+        "cryptographic-assurance-engineer"
+      ]
+    },
+    {
+      "id": "quantum-network-integration-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "quantum/network/**"
+      ],
+      "keywords": [
+        "quantum network integration implementation"
+      ],
+      "primary": [
+        "quantum-network-integration-implementer"
+      ],
+      "reviewers": [
+        "security-reviewer",
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "rbac-manifest-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "security/rbac/**"
+      ],
+      "keywords": [
+        "rbac manifest implementation"
+      ],
+      "primary": [
+        "rbac-manifest-implementer"
+      ],
+      "reviewers": [
+        "security-reviewer",
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "secrets-identity-engineer"
+      ]
+    },
+    {
+      "id": "rtos-integration-execution",
+      "workflow_shape": "new-service",
+      "paths": [
+        "rtos/**",
+        "embedded/rtos/**",
+        "firmware/rtos/**"
+      ],
+      "keywords": [
+        "rtos integration implementation",
+        "rtos task implementation",
+        "rtos scheduling implementation"
+      ],
+      "primary": [
+        "rtos-integration-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ],
+      "support": [
+        "backend-engineer"
+      ]
+    },
+    {
+      "id": "secret-hygiene-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "security/secret-hygiene/**"
+      ],
+      "keywords": [
+        "secret hygiene implementation"
+      ],
+      "primary": [
+        "secret-hygiene-implementer"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ],
+      "support": [
+        "secrets-identity-engineer"
+      ]
+    },
+    {
+      "id": "secure-boot-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "security/secure-boot/**"
+      ],
+      "keywords": [
+        "secure boot implementation"
+      ],
+      "primary": [
+        "secure-boot-implementer"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ],
+      "support": [
+        "secrets-identity-engineer"
+      ]
+    },
+    {
+      "id": "secure-channel-integration-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "security/secure-channels/**"
+      ],
+      "keywords": [
+        "secure channel integration implementation"
+      ],
+      "primary": [
+        "secure-channel-integration-implementer"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ],
+      "support": [
+        "cryptographic-assurance-engineer"
+      ]
+    },
+    {
+      "id": "sonicos-config-execution",
+      "workflow_shape": "infrastructure-change",
+      "paths": [
+        "networking/sonicos/**"
+      ],
+      "keywords": [
+        "sonicos config implementation"
+      ],
+      "primary": [
+        "sonicos-config-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "starlingx-config-execution",
+      "workflow_shape": "infrastructure-change",
+      "paths": [
+        "starlingx/**"
+      ],
+      "keywords": [
+        "starlingx config implementation"
+      ],
+      "primary": [
+        "starlingx-config-implementer"
+      ],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
+      "support": [
+        "infrastructure-provisioner"
+      ]
+    },
+    {
+      "id": "supply-chain-remediation-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "security/supply-chain-remediation/**"
+      ],
+      "keywords": [
+        "supply chain remediation implementation"
+      ],
+      "primary": [
+        "supply-chain-remediation-implementer"
+      ],
+      "reviewers": [
+        "code-reviewer",
+        "supply-chain-security-reviewer"
+      ],
+      "support": [
+        "cicd-engineer"
+      ]
+    },
+    {
+      "id": "go-test-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "tests/go/**"
+      ],
+      "keywords": [
+        "go test implementation"
+      ],
+      "primary": [
+        "go-test-implementer"
+      ],
+      "reviewers": [
+        "code-reviewer"
+      ],
+      "support": [
+        "test-engineer"
+      ]
+    },
+    {
+      "id": "hardware-test-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "tests/hardware/**"
+      ],
+      "keywords": [
+        "hardware test implementation"
+      ],
+      "primary": [
+        "hardware-test-implementer"
+      ],
+      "reviewers": [
+        "code-reviewer"
+      ],
+      "support": [
+        "test-engineer"
+      ]
+    },
+    {
+      "id": "interoperability-test-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "tests/interoperability/**"
+      ],
+      "keywords": [
+        "interoperability test implementation"
+      ],
+      "primary": [
+        "interoperability-test-implementer"
+      ],
+      "reviewers": [
+        "code-reviewer"
+      ],
+      "support": [
+        "test-engineer"
+      ]
+    },
+    {
+      "id": "python-test-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "tests/python/**"
+      ],
+      "keywords": [
+        "python test implementation"
+      ],
+      "primary": [
+        "python-test-implementer"
+      ],
+      "reviewers": [
+        "code-reviewer"
+      ],
+      "support": [
+        "test-engineer"
+      ]
+    },
+    {
+      "id": "typescript-test-execution",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "tests/typescript/**"
+      ],
+      "keywords": [
+        "typescript test implementation"
+      ],
+      "primary": [
+        "typescript-test-implementer"
+      ],
+      "reviewers": [
+        "code-reviewer"
+      ],
+      "support": [
+        "test-engineer"
+      ]
+    },
     {
       "id": "knowledge-store",
       "workflow_shape": "unclassified",
-      "paths": ["roster/knowledge-store/**", "roster/shared/knowledge-use-policy.md", "roster/orchestration/knowledge-retrieval-policy.yaml"],
-      "keywords": ["knowledge store", "chat history", "embedding", "vector search", "retrieval", "rag"],
-      "keyword_groups": [
-        ["record", "capture", "import", "ingest", "curate", "archive", "preserve", "add"],
-        ["lessons learned", "operational knowledge", "agent knowledge", "knowledge base"]
+      "paths": [
+        "roster/knowledge-store/**",
+        "roster/shared/knowledge-use-policy.md",
+        "roster/orchestration/knowledge-retrieval-policy.yaml"
       ],
-      "primary": ["knowledge-store-steward"],
-      "reviewers": ["security-reviewer", "compliance-reviewer"]
+      "keywords": [
+        "knowledge store",
+        "chat history",
+        "embedding",
+        "vector search",
+        "retrieval",
+        "rag"
+      ],
+      "keyword_groups": [
+        [
+          "record",
+          "capture",
+          "import",
+          "ingest",
+          "curate",
+          "archive",
+          "preserve",
+          "add"
+        ],
+        [
+          "lessons learned",
+          "operational knowledge",
+          "agent knowledge",
+          "knowledge base"
+        ]
+      ],
+      "primary": [
+        "knowledge-store-steward"
+      ],
+      "reviewers": [
+        "security-reviewer",
+        "compliance-reviewer"
+      ]
     },
     {
       "id": "architecture-design",
       "workflow_shape": "unclassified",
-      "paths": ["**/architecture/**"],
-      "exclude_paths": ["roster/**"],
-      "keywords": ["design the architecture", "system design", "architecture proposal", "platform topology design", "failure domain design", "new service design", "component design", "service boundary design", "new system design", "greenfield architecture", "service topology design"],
-      "primary": ["cloud-architect"],
-      "reviewers": ["threat-modeler"],
-      "quality_gates": ["G3"]
+      "paths": [
+        "**/architecture/**"
+      ],
+      "exclude_paths": [
+        "roster/**"
+      ],
+      "keywords": [
+        "design the architecture",
+        "system design",
+        "architecture proposal",
+        "platform topology design",
+        "failure domain design",
+        "new service design",
+        "component design",
+        "service boundary design",
+        "new system design",
+        "greenfield architecture",
+        "service topology design"
+      ],
+      "primary": [
+        "cloud-architect"
+      ],
+      "reviewers": [
+        "threat-modeler"
+      ],
+      "quality_gates": [
+        "G3"
+      ]
     }
   ],
   "risk_rules": [
     {
       "id": "authentication-authorization",
-      "keywords": ["authentication", "authorization", "oauth", "oidc", "token", "session", "rbac", "permission"],
-      "paths": ["**/auth/**", "**/identity/**", "**/rbac/**"],
-      "support": ["threat-modeler"],
-      "reviewers": ["security-reviewer"],
-      "quality_gates": ["G5"]
+      "keywords": [
+        "authentication",
+        "authorization",
+        "oauth",
+        "oidc",
+        "token",
+        "session",
+        "rbac",
+        "permission"
+      ],
+      "paths": [
+        "**/auth/**",
+        "**/identity/**",
+        "**/rbac/**"
+      ],
+      "support": [
+        "threat-modeler"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ],
+      "quality_gates": [
+        "G5"
+      ]
     },
     {
       "id": "sensitive-data",
-      "keywords": ["pii", "personal data", "confidential", "restricted data", "secret", "credential", "private key"],
-      "paths": ["**/secrets/**"],
-      "reviewers": ["security-reviewer", "compliance-reviewer"],
-      "quality_gates": ["G4", "G5"]
+      "keywords": [
+        "pii",
+        "personal data",
+        "confidential",
+        "restricted data",
+        "secret",
+        "credential",
+        "private key"
+      ],
+      "paths": [
+        "**/secrets/**"
+      ],
+      "reviewers": [
+        "security-reviewer",
+        "compliance-reviewer"
+      ],
+      "quality_gates": [
+        "G4",
+        "G5"
+      ]
     },
     {
       "id": "database-migration",
-      "keywords": ["database migration", "schema migration", "alter table", "drop table"],
-      "paths": ["**/migrations/**", "**/*.sql"],
-      "primary": ["backend-engineer"],
-      "reviewers": ["test-engineer", "code-reviewer"],
-      "support": ["release-engineer"],
+      "keywords": [
+        "database migration",
+        "schema migration",
+        "alter table",
+        "drop table"
+      ],
+      "paths": [
+        "**/migrations/**",
+        "**/*.sql"
+      ],
+      "primary": [
+        "backend-engineer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ],
+      "support": [
+        "release-engineer"
+      ],
       "human_gate": "persistent-database-migration",
-      "quality_gates": ["G4", "G6", "G8"]
+      "quality_gates": [
+        "G4",
+        "G6",
+        "G8"
+      ]
     },
     {
       "id": "public-exposure",
-      "keywords": ["internet-facing", "public endpoint", "public exposure", "ingress", "load balancer"],
-      "paths": ["**/ingress/**"],
-      "support": ["cloud-architect", "threat-modeler"],
-      "reviewers": ["security-reviewer"],
-      "quality_gates": ["G3", "G5"]
+      "keywords": [
+        "internet-facing",
+        "public endpoint",
+        "public exposure",
+        "ingress",
+        "load balancer"
+      ],
+      "paths": [
+        "**/ingress/**"
+      ],
+      "support": [
+        "cloud-architect",
+        "threat-modeler"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ],
+      "quality_gates": [
+        "G3",
+        "G5"
+      ]
     },
     {
       "id": "architecture-change",
-      "keywords": ["architecture", "trust boundary", "new service", "new component", "platform topology", "greenfield", "threat model", "threat modeling", "attack surface", "greenfield build", "brand new service", "from scratch", "abuse case", "adversarial scenario", "attack vector"],
-      "paths": ["**/architecture/**", "**/adr/**"],
-      "exclude_paths": ["roster/**"],
-      "support": ["cloud-architect", "threat-modeler"],
-      "quality_gates": ["G3"]
+      "keywords": [
+        "architecture",
+        "trust boundary",
+        "new service",
+        "new component",
+        "platform topology",
+        "greenfield",
+        "threat model",
+        "threat modeling",
+        "attack surface",
+        "greenfield build",
+        "brand new service",
+        "from scratch",
+        "abuse case",
+        "adversarial scenario",
+        "attack vector"
+      ],
+      "paths": [
+        "**/architecture/**",
+        "**/adr/**"
+      ],
+      "exclude_paths": [
+        "roster/**"
+      ],
+      "support": [
+        "cloud-architect",
+        "threat-modeler"
+      ],
+      "quality_gates": [
+        "G3"
+      ]
     },
     {
       "id": "compliance",
-      "keywords": ["compliance", "control mapping", "audit evidence", "soc 2", "iso 27001"],
-      "paths": ["**/compliance/**", "**/controls/**"],
-      "reviewers": ["compliance-reviewer"],
-      "support": ["evidence-curator"],
-      "quality_gates": ["G4", "G7"]
+      "keywords": [
+        "compliance",
+        "control mapping",
+        "audit evidence",
+        "soc 2",
+        "iso 27001"
+      ],
+      "paths": [
+        "**/compliance/**",
+        "**/controls/**"
+      ],
+      "reviewers": [
+        "compliance-reviewer"
+      ],
+      "support": [
+        "evidence-curator"
+      ],
+      "quality_gates": [
+        "G4",
+        "G7"
+      ]
     },
     {
       "id": "halt-authority-required",
-      "keywords": ["halt determination", "stop the line", "emergency stop", "system halt"],
+      "keywords": [
+        "halt determination",
+        "stop the line",
+        "emergency stop",
+        "system halt"
+      ],
       "paths": [],
       "human_gate": "halt-authority-determination"
     },
     {
       "id": "architecture-boundary-violation-required",
-      "keywords": ["abstraction layer", "infrastructure boundary violation", "architecture authority review"],
+      "keywords": [
+        "abstraction layer",
+        "infrastructure boundary violation",
+        "architecture authority review"
+      ],
       "paths": [],
-      "reviewers": ["infrastructure-reviewer"],
+      "reviewers": [
+        "infrastructure-reviewer"
+      ],
       "human_gate": "architecture-boundary-violation"
     },
     {
       "id": "classification-marking-required",
-      "keywords": ["classification and marking", "data classification gate", "artifact leaving the environment"],
+      "keywords": [
+        "classification and marking",
+        "data classification gate",
+        "artifact leaving the environment"
+      ],
       "paths": [],
-      "reviewers": ["compliance-reviewer"],
+      "reviewers": [
+        "compliance-reviewer"
+      ],
       "human_gate": "classification-and-marking"
     },
     {
       "id": "retention-deletion-execution-required",
-      "keywords": ["retention and deletion", "execute data deletion", "retention obligation"],
+      "keywords": [
+        "retention and deletion",
+        "execute data deletion",
+        "retention obligation"
+      ],
       "paths": [],
-      "reviewers": ["security-reviewer", "compliance-reviewer"],
+      "reviewers": [
+        "security-reviewer",
+        "compliance-reviewer"
+      ],
       "human_gate": "retention-deletion-execution"
     },
     {
       "id": "production",
-      "keywords": ["deploy to production", "production deployment", "production deploy", "prod deploy", "release to production", "release to prod", "production database migration"],
+      "keywords": [
+        "deploy to production",
+        "production deployment",
+        "production deploy",
+        "prod deploy",
+        "release to production",
+        "release to prod",
+        "production database migration"
+      ],
       "keyword_groups": [
-        ["production", "prod", "live environment", "customer environment"],
-        ["deploy", "deployment", "release", "apply", "update", "change", "modify", "migrate", "rotate", "restart", "scale", "provision", "promote", "roll out", "run", "execute", "write"]
+        [
+          "production",
+          "prod",
+          "live environment",
+          "customer environment"
+        ],
+        [
+          "deploy",
+          "deployment",
+          "release",
+          "apply",
+          "update",
+          "change",
+          "modify",
+          "migrate",
+          "rotate",
+          "restart",
+          "scale",
+          "provision",
+          "promote",
+          "roll out",
+          "run",
+          "execute",
+          "write"
+        ]
       ],
       "paths": [],
-      "support": ["release-engineer"],
+      "support": [
+        "release-engineer"
+      ],
       "human_gate": "production-change",
-      "quality_gates": ["G8", "G9"]
+      "quality_gates": [
+        "G8",
+        "G9"
+      ]
     },
     {
       "id": "destructive",
-      "keywords": ["delete resource", "drop table", "drop database", "delete namespace", "terraform destroy", "terraform state rm", "terraform state remove", "truncate table", "purge data", "force replace"],
+      "keywords": [
+        "delete resource",
+        "drop table",
+        "drop database",
+        "delete namespace",
+        "terraform destroy",
+        "terraform state rm",
+        "terraform state remove",
+        "truncate table",
+        "purge data",
+        "force replace"
+      ],
       "keyword_groups": [
-        ["destroy", "delete", "drop", "wipe", "erase", "purge", "remove", "truncate", "force replace"],
-        ["resource", "database", "table", "schema", "cluster", "namespace", "volume", "bucket", "state", "data", "environment", "vm", "virtual machine", "instance", "disk", "cache", "server", "node", "pod", "deployment", "container", "queue", "topic", "secret", "key", "certificate", "config", "configuration", "network", "service", "stack"]
+        [
+          "destroy",
+          "delete",
+          "drop",
+          "wipe",
+          "erase",
+          "purge",
+          "remove",
+          "truncate",
+          "force replace"
+        ],
+        [
+          "resource",
+          "database",
+          "table",
+          "schema",
+          "cluster",
+          "namespace",
+          "volume",
+          "bucket",
+          "state",
+          "data",
+          "environment",
+          "vm",
+          "virtual machine",
+          "instance",
+          "disk",
+          "cache",
+          "server",
+          "node",
+          "pod",
+          "deployment",
+          "container",
+          "queue",
+          "topic",
+          "secret",
+          "key",
+          "certificate",
+          "config",
+          "configuration",
+          "network",
+          "service",
+          "stack"
+        ]
       ],
       "paths": [],
-      "reviewers": ["security-reviewer"],
+      "reviewers": [
+        "security-reviewer"
+      ],
       "human_gate": "destructive-action"
     },
     {
       "id": "human-escalation",
-      "keywords": ["escalate to human", "human escalation", "human support", "accountable human", "human approval", "human owner"],
+      "keywords": [
+        "escalate to human",
+        "human escalation",
+        "human support",
+        "accountable human",
+        "human approval",
+        "human owner"
+      ],
       "paths": [],
-      "support": ["escalation-manager"],
+      "support": [
+        "escalation-manager"
+      ],
       "human_gate": "accountable-human-escalation"
     },
     {
       "id": "identity-privilege",
-      "keywords": ["privileged identity", "service account", "key rotation", "production secret", "break-glass", "root credential"],
-      "paths": ["**/secrets/**", "**/identity/**", "**/rbac/**"],
-      "support": ["secrets-identity-engineer"],
-      "reviewers": ["security-reviewer"],
+      "keywords": [
+        "privileged identity",
+        "service account",
+        "key rotation",
+        "production secret",
+        "break-glass",
+        "root credential"
+      ],
+      "paths": [
+        "**/secrets/**",
+        "**/identity/**",
+        "**/rbac/**"
+      ],
+      "support": [
+        "secrets-identity-engineer"
+      ],
+      "reviewers": [
+        "security-reviewer"
+      ],
       "human_gate": "privileged-identity-change",
-      "quality_gates": ["G5"]
+      "quality_gates": [
+        "G5"
+      ]
     },
     {
       "id": "product-owner-gate-package",
-      "paths": ["governance/gate-decisions/product-owner/**"],
-      "keywords": ["product owner decision package", "product owner gate briefing", "brief the product owner", "prepare gate package for product owner"],
-      "primary": ["product-owner-aide"],
-      "quality_gates": ["G1", "G2", "G6"]
+      "paths": [
+        "governance/gate-decisions/product-owner/**"
+      ],
+      "keywords": [
+        "product owner decision package",
+        "product owner gate briefing",
+        "brief the product owner",
+        "prepare gate package for product owner"
+      ],
+      "primary": [
+        "product-owner-aide"
+      ],
+      "quality_gates": [
+        "G1",
+        "G2",
+        "G6"
+      ]
     },
     {
       "id": "engineering-lead-gate-package",
-      "paths": ["governance/gate-decisions/engineering-lead/**"],
-      "keywords": ["engineering lead decision package", "engineering lead gate briefing", "brief the engineering lead", "prepare gate package for engineering lead"],
-      "primary": ["engineering-lead-aide"],
-      "quality_gates": ["G2", "G6"]
+      "paths": [
+        "governance/gate-decisions/engineering-lead/**"
+      ],
+      "keywords": [
+        "engineering lead decision package",
+        "engineering lead gate briefing",
+        "brief the engineering lead",
+        "prepare gate package for engineering lead"
+      ],
+      "primary": [
+        "engineering-lead-aide"
+      ],
+      "quality_gates": [
+        "G2",
+        "G6"
+      ]
     },
     {
       "id": "system-architect-gate-package",
-      "paths": ["governance/gate-decisions/system-architect/**"],
-      "keywords": ["system architect decision package", "system architect gate briefing", "brief the system architect", "prepare gate package for system architect"],
-      "primary": ["system-architect-aide"],
-      "quality_gates": ["G3"]
+      "paths": [
+        "governance/gate-decisions/system-architect/**"
+      ],
+      "keywords": [
+        "system architect decision package",
+        "system architect gate briefing",
+        "brief the system architect",
+        "prepare gate package for system architect"
+      ],
+      "primary": [
+        "system-architect-aide"
+      ],
+      "quality_gates": [
+        "G3"
+      ]
     },
     {
       "id": "governance-lead-gate-package",
-      "paths": ["governance/gate-decisions/governance-lead/**"],
-      "keywords": ["governance lead decision package", "governance lead gate briefing", "brief the governance lead", "prepare gate package for governance lead"],
-      "primary": ["governance-lead-aide"],
-      "quality_gates": ["G4"]
+      "paths": [
+        "governance/gate-decisions/governance-lead/**"
+      ],
+      "keywords": [
+        "governance lead decision package",
+        "governance lead gate briefing",
+        "brief the governance lead",
+        "prepare gate package for governance lead"
+      ],
+      "primary": [
+        "governance-lead-aide"
+      ],
+      "quality_gates": [
+        "G4"
+      ]
     },
     {
       "id": "security-lead-gate-package",
-      "paths": ["governance/gate-decisions/security-lead/**"],
-      "keywords": ["security lead decision package", "security lead gate briefing", "brief the security lead", "prepare gate package for security lead"],
-      "primary": ["security-lead-aide"],
-      "quality_gates": ["G5"]
+      "paths": [
+        "governance/gate-decisions/security-lead/**"
+      ],
+      "keywords": [
+        "security lead decision package",
+        "security lead gate briefing",
+        "brief the security lead",
+        "prepare gate package for security lead"
+      ],
+      "primary": [
+        "security-lead-aide"
+      ],
+      "quality_gates": [
+        "G5"
+      ]
     },
     {
       "id": "release-owner-gate-package",
-      "paths": ["governance/gate-decisions/release-owner/**"],
-      "keywords": ["release owner decision package", "release owner gate briefing", "brief the release owner", "prepare gate package for release owner"],
-      "primary": ["release-owner-aide"],
-      "quality_gates": ["G7", "G8"]
+      "paths": [
+        "governance/gate-decisions/release-owner/**"
+      ],
+      "keywords": [
+        "release owner decision package",
+        "release owner gate briefing",
+        "brief the release owner",
+        "prepare gate package for release owner"
+      ],
+      "primary": [
+        "release-owner-aide"
+      ],
+      "quality_gates": [
+        "G7",
+        "G8"
+      ]
     },
     {
       "id": "release-authority-gate-package",
-      "paths": ["governance/gate-decisions/release-authority/**"],
-      "keywords": ["release authority decision package", "release authority gate briefing", "brief the release authority", "prepare gate package for release authority"],
-      "primary": ["release-authority-aide"],
-      "quality_gates": ["G9"]
+      "paths": [
+        "governance/gate-decisions/release-authority/**"
+      ],
+      "keywords": [
+        "release authority decision package",
+        "release authority gate briefing",
+        "brief the release authority",
+        "prepare gate package for release authority"
+      ],
+      "primary": [
+        "release-authority-aide"
+      ],
+      "quality_gates": [
+        "G9"
+      ]
     },
     {
       "id": "service-owner-gate-package",
-      "paths": ["governance/gate-decisions/service-owner/**"],
-      "keywords": ["service owner decision package", "service owner gate briefing", "brief the service owner", "prepare gate package for service owner"],
-      "primary": ["service-owner-aide"],
-      "quality_gates": ["G10"]
+      "paths": [
+        "governance/gate-decisions/service-owner/**"
+      ],
+      "keywords": [
+        "service owner decision package",
+        "service owner gate briefing",
+        "brief the service owner",
+        "prepare gate package for service owner"
+      ],
+      "primary": [
+        "service-owner-aide"
+      ],
+      "quality_gates": [
+        "G10"
+      ]
     }
   ],
   "cross_stack": {
-    "route_ids": ["frontend", "backend", "infrastructure", "pipeline"],
+    "route_ids": [
+      "frontend",
+      "backend",
+      "infrastructure",
+      "pipeline"
+    ],
     "minimum_matches": 2,
-    "support": ["frontend-engineer", "backend-engineer"]
+    "support": [
+      "frontend-engineer",
+      "backend-engineer"
+    ]
   },
   "team_recipes": [
     {
       "id": "parallel-review",
       "type": "fixed",
-      "route_ids": ["frontend", "backend", "infrastructure", "pipeline", "supply-chain"],
+      "route_ids": [
+        "frontend",
+        "backend",
+        "infrastructure",
+        "pipeline",
+        "supply-chain"
+      ],
       "minimum_matches": 2,
-      "members": ["code-reviewer", "infrastructure-reviewer", "pipeline-security-reviewer", "supply-chain-security-reviewer"],
+      "members": [
+        "code-reviewer",
+        "infrastructure-reviewer",
+        "pipeline-security-reviewer",
+        "supply-chain-security-reviewer"
+      ],
       "minimum_members_selected": 2,
       "communication_mode": "peer",
       "fallback": "orchestrator-relayed",
@@ -1937,9 +4272,19 @@
     {
       "id": "cross-stack-build",
       "type": "fixed",
-      "route_ids": ["frontend", "backend", "infrastructure", "pipeline"],
+      "route_ids": [
+        "frontend",
+        "backend",
+        "infrastructure",
+        "pipeline"
+      ],
       "minimum_matches": 2,
-      "members": ["frontend-engineer", "backend-engineer", "infrastructure-provisioner", "cicd-engineer"],
+      "members": [
+        "frontend-engineer",
+        "backend-engineer",
+        "infrastructure-provisioner",
+        "cicd-engineer"
+      ],
       "minimum_members_selected": 2,
       "communication_mode": "peer",
       "fallback": "orchestrator-relayed",
@@ -1949,35 +4294,208 @@
       "id": "competing-hypotheses-debugging",
       "type": "dynamic",
       "role": "debugging-engineer",
-      "instances": {"min": 2, "max": 4},
+      "instances": {
+        "min": 2,
+        "max": 4
+      },
       "requires_route": "debugging",
-      "keywords": ["intermittent", "flaky", "recurring", "hasn't converged", "elusive", "hard to reproduce"],
+      "keywords": [
+        "intermittent",
+        "flaky",
+        "recurring",
+        "hasn't converged",
+        "elusive",
+        "hard to reproduce"
+      ],
       "communication_mode": "peer",
       "fallback": "orchestrator-relayed",
       "description": "Multiple debugging-engineer instances pursuing distinct hypotheses for a root-cause loop that hasn't converged."
     }
   ],
   "context_packs": [
-    {"id": "toshiba-qkms-context", "version": 1, "definition": "context-packs/toshiba-qkms-context/CONTEXT.md", "keywords": ["toshiba qkms", "toshiba q-kms"]},
-    {"id": "aliro-quantum-network-context", "version": 1, "definition": "context-packs/aliro-quantum-network-context/CONTEXT.md", "keywords": ["aliro quantum", "aliro network"]},
-    {"id": "qunnect-quantum-network-context", "version": 1, "definition": "context-packs/qunnect-quantum-network-context/CONTEXT.md", "keywords": ["qunnect"]},
-    {"id": "thinkquantum-qkd-qrng-context", "version": 1, "definition": "context-packs/thinkquantum-qkd-qrng-context/CONTEXT.md", "keywords": ["thinkquantum", "qrng"]},
-    {"id": "realtime-linux-context", "version": 1, "definition": "context-packs/realtime-linux-context/CONTEXT.md", "keywords": ["real-time linux", "realtime linux", "preempt_rt"]},
-    {"id": "linux-hardening-context", "version": 1, "definition": "context-packs/linux-hardening-context/CONTEXT.md", "keywords": ["linux hardening", "hardened linux"]},
-    {"id": "container-host-os-context", "version": 1, "definition": "context-packs/container-host-os-context/CONTEXT.md", "keywords": ["container host os", "container host operating system"]},
-    {"id": "fpga-gateware-context", "version": 1, "definition": "context-packs/fpga-gateware-context/CONTEXT.md", "keywords": ["fpga", "gateware"]},
-    {"id": "sonicwall-sonicos-context", "version": 1, "definition": "context-packs/sonicwall-sonicos-context/CONTEXT.md", "keywords": ["sonicwall", "sonicos"]},
-    {"id": "quantum-network-standards-context", "version": 1, "definition": "context-packs/quantum-network-standards-context/CONTEXT.md", "keywords": ["quantum network standard", "qkd standard"]},
-    {"id": "embedded-linux-toolchain-context", "version": 1, "definition": "context-packs/embedded-linux-toolchain-context/CONTEXT.md", "keywords": ["embedded linux toolchain", "yocto toolchain", "buildroot toolchain"]},
-    {"id": "hardware-root-of-trust-context", "version": 1, "definition": "context-packs/hardware-root-of-trust-context/CONTEXT.md", "keywords": ["hardware root of trust", "root of trust"]},
-    {"id": "memory-safety-hardening-context", "version": 1, "definition": "context-packs/memory-safety-hardening-context/CONTEXT.md", "keywords": ["memory safety hardening", "memory hardening"]},
-    {"id": "yang-gnmi-network-management-context", "version": 1, "definition": "context-packs/yang-gnmi-network-management-context/CONTEXT.md", "keywords": ["yang", "gnmi"]},
-    {"id": "carrier-dataplane-context", "version": 1, "definition": "context-packs/carrier-dataplane-context/CONTEXT.md", "keywords": ["carrier dataplane", "carrier data plane"]},
-    {"id": "redfish-bmc-context", "version": 1, "definition": "context-packs/redfish-bmc-context/CONTEXT.md", "keywords": ["redfish", "bmc"]},
-    {"id": "ceph-rook-storage-context", "version": 1, "definition": "context-packs/ceph-rook-storage-context/CONTEXT.md", "keywords": ["ceph", "rook storage"]},
-    {"id": "pki-enrollment-context", "version": 1, "definition": "context-packs/pki-enrollment-context/CONTEXT.md", "keywords": ["pki enrollment", "certificate enrollment"]},
-    {"id": "secure-channel-protocols-context", "version": 1, "definition": "context-packs/secure-channel-protocols-context/CONTEXT.md", "keywords": ["secure channel", "tls protocol", "noise protocol"]},
-    {"id": "upgrade-compatibility-context", "version": 1, "definition": "context-packs/upgrade-compatibility-context/CONTEXT.md", "keywords": ["upgrade compatibility", "version skew", "upgrade regression"]}
+    {
+      "id": "toshiba-qkms-context",
+      "version": 1,
+      "definition": "context-packs/toshiba-qkms-context/CONTEXT.md",
+      "keywords": [
+        "toshiba qkms",
+        "toshiba q-kms"
+      ]
+    },
+    {
+      "id": "aliro-quantum-network-context",
+      "version": 1,
+      "definition": "context-packs/aliro-quantum-network-context/CONTEXT.md",
+      "keywords": [
+        "aliro quantum",
+        "aliro network"
+      ]
+    },
+    {
+      "id": "qunnect-quantum-network-context",
+      "version": 1,
+      "definition": "context-packs/qunnect-quantum-network-context/CONTEXT.md",
+      "keywords": [
+        "qunnect"
+      ]
+    },
+    {
+      "id": "thinkquantum-qkd-qrng-context",
+      "version": 1,
+      "definition": "context-packs/thinkquantum-qkd-qrng-context/CONTEXT.md",
+      "keywords": [
+        "thinkquantum",
+        "qrng"
+      ]
+    },
+    {
+      "id": "realtime-linux-context",
+      "version": 1,
+      "definition": "context-packs/realtime-linux-context/CONTEXT.md",
+      "keywords": [
+        "real-time linux",
+        "realtime linux",
+        "preempt_rt"
+      ]
+    },
+    {
+      "id": "linux-hardening-context",
+      "version": 1,
+      "definition": "context-packs/linux-hardening-context/CONTEXT.md",
+      "keywords": [
+        "linux hardening",
+        "hardened linux"
+      ]
+    },
+    {
+      "id": "container-host-os-context",
+      "version": 1,
+      "definition": "context-packs/container-host-os-context/CONTEXT.md",
+      "keywords": [
+        "container host os",
+        "container host operating system"
+      ]
+    },
+    {
+      "id": "fpga-gateware-context",
+      "version": 1,
+      "definition": "context-packs/fpga-gateware-context/CONTEXT.md",
+      "keywords": [
+        "fpga",
+        "gateware"
+      ]
+    },
+    {
+      "id": "sonicwall-sonicos-context",
+      "version": 1,
+      "definition": "context-packs/sonicwall-sonicos-context/CONTEXT.md",
+      "keywords": [
+        "sonicwall",
+        "sonicos"
+      ]
+    },
+    {
+      "id": "quantum-network-standards-context",
+      "version": 1,
+      "definition": "context-packs/quantum-network-standards-context/CONTEXT.md",
+      "keywords": [
+        "quantum network standard",
+        "qkd standard"
+      ]
+    },
+    {
+      "id": "embedded-linux-toolchain-context",
+      "version": 1,
+      "definition": "context-packs/embedded-linux-toolchain-context/CONTEXT.md",
+      "keywords": [
+        "embedded linux toolchain",
+        "yocto toolchain",
+        "buildroot toolchain"
+      ]
+    },
+    {
+      "id": "hardware-root-of-trust-context",
+      "version": 1,
+      "definition": "context-packs/hardware-root-of-trust-context/CONTEXT.md",
+      "keywords": [
+        "hardware root of trust",
+        "root of trust"
+      ]
+    },
+    {
+      "id": "memory-safety-hardening-context",
+      "version": 1,
+      "definition": "context-packs/memory-safety-hardening-context/CONTEXT.md",
+      "keywords": [
+        "memory safety hardening",
+        "memory hardening"
+      ]
+    },
+    {
+      "id": "yang-gnmi-network-management-context",
+      "version": 1,
+      "definition": "context-packs/yang-gnmi-network-management-context/CONTEXT.md",
+      "keywords": [
+        "yang",
+        "gnmi"
+      ]
+    },
+    {
+      "id": "carrier-dataplane-context",
+      "version": 1,
+      "definition": "context-packs/carrier-dataplane-context/CONTEXT.md",
+      "keywords": [
+        "carrier dataplane",
+        "carrier data plane"
+      ]
+    },
+    {
+      "id": "redfish-bmc-context",
+      "version": 1,
+      "definition": "context-packs/redfish-bmc-context/CONTEXT.md",
+      "keywords": [
+        "redfish",
+        "bmc"
+      ]
+    },
+    {
+      "id": "ceph-rook-storage-context",
+      "version": 1,
+      "definition": "context-packs/ceph-rook-storage-context/CONTEXT.md",
+      "keywords": [
+        "ceph",
+        "rook storage"
+      ]
+    },
+    {
+      "id": "pki-enrollment-context",
+      "version": 1,
+      "definition": "context-packs/pki-enrollment-context/CONTEXT.md",
+      "keywords": [
+        "pki enrollment",
+        "certificate enrollment"
+      ]
+    },
+    {
+      "id": "secure-channel-protocols-context",
+      "version": 1,
+      "definition": "context-packs/secure-channel-protocols-context/CONTEXT.md",
+      "keywords": [
+        "secure channel",
+        "tls protocol",
+        "noise protocol"
+      ]
+    },
+    {
+      "id": "upgrade-compatibility-context",
+      "version": 1,
+      "definition": "context-packs/upgrade-compatibility-context/CONTEXT.md",
+      "keywords": [
+        "upgrade compatibility",
+        "version skew",
+        "upgrade regression"
+      ]
+    }
   ],
   "knowledge_focus": {
     "cloud-architect": "prior architecture decisions, constraints, alternatives, failure domains, and recovery objectives",

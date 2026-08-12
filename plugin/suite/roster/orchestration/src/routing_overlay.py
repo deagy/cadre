@@ -97,9 +97,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(REPOSITORY_ROOT / "roster" / "shared" / "src"))
 
 from resolve import deep_merge, find_file_at_project_root  # noqa: E402
+from roster_manifest import default_roster_root, load_roster_manifest  # noqa: E402
 from routing import load_routing  # noqa: E402
 
-DEFAULT_ROUTING = REPOSITORY_ROOT / "roster" / "orchestration" / "routing.json"
+
+def _default_routing() -> Path:
+    """The default roster's routing config, from its manifest (PP-FR-2).
+
+    Category B under PP-FR-6: this used to be a `roster/orchestration/`-relative
+    path literal, which is a resolution path rather than a diagnostic and so is
+    forbidden to platform code. It resolves to the same file for the default
+    roster; what changes is that the *roster* now declares where its routing
+    lives instead of the platform assuming Cadre's directory layout.
+
+    Fails closed. An earlier draft fell back to the historical path literal if
+    the manifest was unreadable; test_roster_boundary.py rejected it, and the
+    rejection was right -- intent SS7 C4 forbids degrading to the built-in
+    roster, and a fallback that silently reproduces Cadre's layout is exactly
+    that degradation wearing a robustness costume.
+    """
+    return load_roster_manifest(default_roster_root()).routing
+
+
+DEFAULT_ROUTING = _default_routing()
 
 # G-2 (requirements.md SS9): the overlay's own filename/location is a
 # design-phase choice, not mandated by the requirements baseline. This
