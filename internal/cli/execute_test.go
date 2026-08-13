@@ -247,3 +247,57 @@ func TestValidStrategies(t *testing.T) {
 		}
 	}
 }
+
+func TestAPIStrategyMissingModel(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := ExecuteCmd(context.Background(), []string{
+		"--task-id", "TASK-001",
+		"--task", "Test task",
+		"--strategy", "claude",
+		"--routing", "/nonexistent/routing.json",
+	}, &stdout, &stderr)
+
+	if code != 2 {
+		t.Errorf("expected exit code 2 for missing model with API strategy, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "model") {
+		t.Errorf("stderr should mention missing model")
+	}
+}
+
+func TestAPIStrategiesRequireModel(t *testing.T) {
+	apiStrategies := []string{"claude", "openai"}
+
+	for _, strategy := range apiStrategies {
+		var stdout, stderr bytes.Buffer
+		code := ExecuteCmd(context.Background(), []string{
+			"--task-id", "TASK-001",
+			"--task", "Test",
+			"--strategy", strategy,
+			"--routing", "/nonexistent/routing.json",
+		}, &stdout, &stderr)
+
+		if code != 2 {
+			t.Errorf("strategy %q should require model flag, got exit code %d", strategy, code)
+		}
+		errMsg := stderr.String()
+		if !strings.Contains(errMsg, "model") {
+			t.Errorf("strategy %q error should mention model requirement: %s", strategy, errMsg)
+		}
+	}
+}
+
+func TestExecuteCmdTimeout(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	_ = ExecuteCmd(context.Background(), []string{
+		"--task-id", "TASK-001",
+		"--task", "Test",
+		"--timeout", "60",
+		"--routing", "/nonexistent/routing.json",
+	}, &stdout, &stderr)
+
+	// Should fail on routing, not timeout flag
+	if strings.Contains(stderr.String(), "timeout") {
+		t.Errorf("timeout should be valid, got error: %s", stderr.String())
+	}
+}

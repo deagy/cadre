@@ -33,6 +33,8 @@ func ExecuteCmd(ctx context.Context, argv []string, stdout, stderr io.Writer) in
 	var routingPath string
 	var checkMode bool
 	var execStrategy string
+	var modelID string
+	var timeout int
 
 	fs.StringVar(&taskID, "task-id", "", "Task identifier (required)")
 	fs.StringVar(&task, "task", "", "Task description (required)")
@@ -42,7 +44,9 @@ func ExecuteCmd(ctx context.Context, argv []string, stdout, stderr io.Writer) in
 	fs.StringVar(&outputPath, "output-path", "", "Write output to file instead of stdout")
 	fs.StringVar(&routingPath, "routing", "", "Path to routing.json (default: repo_root/roster/orchestration/routing.json)")
 	fs.BoolVar(&checkMode, "check", false, "Check mode: validate plan without executing agents")
-	fs.StringVar(&execStrategy, "strategy", "mock", "Execution strategy (mock, dry, subprocess)")
+	fs.StringVar(&execStrategy, "strategy", "mock", "Execution strategy (mock, dry, subprocess, claude, openai)")
+	fs.StringVar(&modelID, "model", "", "Model ID for API-based execution (e.g., claude-3-sonnet, gpt-4)")
+	fs.IntVar(&timeout, "timeout", 30, "Agent execution timeout in seconds")
 
 	if err := fs.Parse(argv); err != nil {
 		_, _ = fmt.Fprintf(stderr, "cadre execute: %v\n", err)
@@ -84,15 +88,18 @@ func ExecuteCmd(ctx context.Context, argv []string, stdout, stderr io.Writer) in
 		return 2
 	}
 
-	// Validate execution strategy
-	validStrategies := map[string]orchestration.ExecutionStrategy{
-		"mock":       orchestration.StrategyMock,
-		"dry":        orchestration.StrategyDry,
-		"subprocess": orchestration.StrategySubprocess,
+	// Validate execution strategy and check for API requirements
+	isSubprocessStrategy := execStrategy == "mock" || execStrategy == "dry" || execStrategy == "subprocess"
+	isAPIStrategy := execStrategy == "claude" || execStrategy == "openai"
+
+	if !isSubprocessStrategy && !isAPIStrategy {
+		_, _ = fmt.Fprintf(stderr, "cadre execute: invalid strategy %q (must be mock, dry, subprocess, claude, or openai)\n", execStrategy)
+		return 2
 	}
-	strategy, exists := validStrategies[execStrategy]
-	if !exists {
-		_, _ = fmt.Fprintf(stderr, "cadre execute: invalid strategy %q (must be mock, dry, or subprocess)\n", execStrategy)
+
+	// API strategies require a model ID
+	if isAPIStrategy && modelID == "" {
+		_, _ = fmt.Fprintf(stderr, "cadre execute: --model is required for %s strategy\n", execStrategy)
 		return 2
 	}
 
@@ -118,8 +125,39 @@ func ExecuteCmd(ctx context.Context, argv []string, stdout, stderr io.Writer) in
 		repoRoot = ""
 	}
 
-	// Create executor with real subprocess agent runner
-	runner := orchestration.NewSubprocessAgentRunner(repoRoot, 30*time.Second, strategy)
+	// Create executor with appropriate agent runner
+	execTimeout := time.Duration(timeout) * time.Second
+	var runner orchestration.AgentRunner
+
+	if isAPIStrategy {
+		// Create API-based runner
+		switch execStrategy {
+		case "claude":
+			provider, err := orchestration.NewClaudeProvider()
+			if err != nil {
+				_, _ = fmt.Fprintf(stderr, "cadre execute: failed to initialize Claude provider: %v\n", err)
+				return 1
+			}
+			runner = orchestration.NewAPIAgentRunner(provider, modelID, execTimeout)
+		case "openai":
+			provider, err := orchestration.NewOpenAIProvider()
+			if err != nil {
+				_, _ = fmt.Fprintf(stderr, "cadre execute: failed to initialize OpenAI provider: %v\n", err)
+				return 1
+			}
+			runner = orchestration.NewAPIAgentRunner(provider, modelID, execTimeout)
+		}
+	} else {
+		// Create subprocess-based runner
+		substrategyMap := map[string]orchestration.ExecutionStrategy{
+			"mock":       orchestration.StrategyMock,
+			"dry":        orchestration.StrategyDry,
+			"subprocess": orchestration.StrategySubprocess,
+		}
+		subStrategy := substrategyMap[execStrategy]
+		runner = orchestration.NewSubprocessAgentRunner(repoRoot, execTimeout, subStrategy)
+	}
+
 	executor := orchestration.NewExecutor(runner, 4, 0)
 	if executor == nil {
 		_, _ = fmt.Fprintf(stderr, "cadre execute: failed to create executor\n")
