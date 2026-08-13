@@ -3222,6 +3222,24 @@ class DispatchTeamTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "denied")
 
+    def test_team_runner_failure_cleans_a_nested_result_replacement(self) -> None:
+        _write_wrapper(self.layout.plugin_file("application-engineer"), sandbox_mode="read-only")
+        observed: dict = {}
+
+        def runner(_argv, *, env, **_kwargs):
+            path = Path(env[core.FINAL_HANDOFF_RESULT_ENV_VAR])
+            observed["directory"] = path.parent
+            path.unlink()
+            (path / "nested").mkdir(parents=True)
+            raise core.DispatchUnavailable("simulated member runner failure")
+
+        result = self._dispatch(
+            [{"role_id": "application-engineer", "brief": "task"}], child_runner=runner,
+        )
+
+        self.assertEqual(result["members"][0]["status"], "unavailable")
+        self.assertFalse(observed["directory"].exists(), "team member failure paths must clean the private channel")
+
 
 class AsyncDispatchTests(unittest.TestCase):
     """dispatch_secure_cloud_role(wait=False) / poll_dispatch_status(): the
@@ -4182,6 +4200,191 @@ class WriteAuditRecordBestEffortStderrFallbackTests(unittest.TestCase):
         ):
             with mock.patch.object(sys, "stderr", BrokenStderr()):
                 core._write_audit_record_best_effort(record, path=None)  # must not raise
+
+
+class AutomaticContextCaptureDispatchTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.layout = TempLayout()
+        self.addCleanup(self.layout.close)
+        _write_wrapper(self.layout.plugin_file("application-engineer"), sandbox_mode="read-only")
+
+    def _runner_result(self, *, final_handoff=None, stdout_text="ordinary child stdout") -> dict:
+        result = {
+            "pid": 1, "exit_code": 0, "timed_out": False, "duration_seconds": 0.01,
+            "stdout_truncated": False, "stdout_text": stdout_text,
+        }
+        if final_handoff is not None:
+            result["final_handoff"] = final_handoff
+        return result
+
+    def _dispatch(self, result: dict | callable) -> dict:
+        return core.dispatch_secure_cloud_role(
+            "application-engineer", "brief", "planning-review-only", "internal",
+            task_id="TASK-1", session_id="SESSION-1", parent_classification="internal",
+            project_root=self.layout.project_root, plugin_agents_root=self.layout.plugin_root,
+            catalog_path=self.layout.catalog_path,
+            child_runner=result if callable(result) else lambda *a, **k: result,
+        )
+
+    def test_only_the_separate_final_handoff_field_reaches_automatic_capture(self) -> None:
+        captured: list[dict] = []
+        envelope = {"kind": "cadre-final-handoff", "schema_version": 1, "handoff": {"summary": "done"},
+                    "artifacts": [], "derived_from": []}
+        with mock.patch.object(core, "automatic_context_capture", side_effect=lambda result, **kwargs: captured.append(result) or {"status": "captured"}):
+            response = self._dispatch(self._runner_result(final_handoff=envelope, stdout_text='{"transcript":"never capture me"}'))
+        self.assertEqual(response["context_capture"], {"status": "captured"})
+        self.assertEqual(captured, [self._runner_result(final_handoff=envelope, stdout_text='{"transcript":"never capture me"}')])
+
+    def test_raw_stdout_alone_is_not_a_handoff(self) -> None:
+        response = self._dispatch(self._runner_result(stdout_text='{"kind":"cadre-final-handoff"}'))
+        self.assertEqual(response["context_capture"], {"status": "not_provided"})
+
+    def test_cli_child_final_handoff_uses_the_private_result_file_not_stdout(self) -> None:
+        envelope = {"kind": "cadre-final-handoff", "schema_version": 1, "handoff": {"summary": "done"},
+                    "artifacts": [], "derived_from": []}
+        observed: dict = {}
+
+        def runner(_argv, *, prompt, env, **_kwargs):
+            path = Path(env[core.FINAL_HANDOFF_RESULT_ENV_VAR])
+            observed["path"] = path
+            observed["prompt"] = prompt
+            path.write_text(json.dumps(envelope), encoding="utf-8")
+            return self._runner_result(stdout_text="unstructured stdout is ignored")
+
+        with mock.patch.object(core, "automatic_context_capture", return_value={"status": "captured"}) as capture:
+            response = self._dispatch(runner)
+        self.assertEqual(response["context_capture"], {"status": "captured"})
+        self.assertEqual(capture.call_args.args[0]["final_handoff"], envelope)
+        self.assertIn("stdout is not used for capture", observed["prompt"])
+        self.assertFalse(observed["path"].exists(), "private channel must be removed after capture")
+
+    def test_cli_result_fifo_replacement_is_ignored_without_blocking(self) -> None:
+        _env, _prompt, channel = core._prepare_cli_final_handoff_channel({}, "brief")
+        self.addCleanup(core._cleanup_cli_final_handoff_channel, channel)
+        channel.path.unlink()
+        os.mkfifo(channel.path)
+
+        result: dict = {}
+        started = time.monotonic()
+        core._read_cli_final_handoff(channel, result)
+
+        self.assertLess(time.monotonic() - started, 0.5, "a FIFO must never block result capture")
+        self.assertNotIn("final_handoff", result)
+        self.assertNotIn("final_handoff_capture_error", result)
+
+    def test_cli_result_regular_file_replacement_is_not_captured(self) -> None:
+        _env, _prompt, channel = core._prepare_cli_final_handoff_channel({}, "brief")
+        self.addCleanup(core._cleanup_cli_final_handoff_channel, channel)
+        channel.path.unlink()
+        channel.path.write_text('{"kind":"cadre-final-handoff"}', encoding="utf-8")
+
+        result: dict = {}
+        core._read_cli_final_handoff(channel, result)
+
+        self.assertNotIn("final_handoff", result)
+        self.assertNotIn("final_handoff_capture_error", result)
+
+    def test_cli_result_reads_the_retained_original_descriptor_not_a_replacement(self) -> None:
+        _env, _prompt, channel = core._prepare_cli_final_handoff_channel({}, "brief")
+        self.addCleanup(core._cleanup_cli_final_handoff_channel, channel)
+        original = {"kind": "cadre-final-handoff", "handoff": {"summary": "original"}}
+        replacement = {"kind": "cadre-final-handoff", "handoff": {"summary": "replacement"}}
+        channel.path.write_text(json.dumps(original), encoding="utf-8")
+        channel.path.unlink()
+        channel.path.write_text(json.dumps(replacement), encoding="utf-8")
+
+        result: dict = {}
+        core._read_cli_final_handoff(channel, result)
+
+        self.assertEqual(result["final_handoff"], original)
+
+    def test_cli_channel_cleanup_removes_nested_replacements_without_following_symlinks(self) -> None:
+        _env, _prompt, channel = core._prepare_cli_final_handoff_channel({}, "brief")
+        outside = Path(self.layout.tmp.name) / "outside.txt"
+        outside.write_text("must remain", encoding="utf-8")
+        channel.path.unlink()
+        nested = channel.path / "nested" / "deeper"
+        nested.mkdir(parents=True)
+        os.symlink(outside, nested / "outside-link")
+
+        result_fd = channel.result_fd
+        core._cleanup_cli_final_handoff_channel(channel)
+        core._cleanup_cli_final_handoff_channel(channel)
+
+        self.assertFalse(channel.directory.exists(), "all child-created channel contents must be removed")
+        self.assertEqual(outside.read_text(encoding="utf-8"), "must remain", "cleanup must unlink, not follow, symlinks")
+        with self.assertRaises(OSError):
+            os.fstat(result_fd)
+
+    def test_sync_audit_failure_still_cleans_a_nested_result_replacement(self) -> None:
+        observed: dict = {}
+
+        def runner(_argv, *, env, **_kwargs):
+            path = Path(env[core.FINAL_HANDOFF_RESULT_ENV_VAR])
+            observed["directory"] = path.parent
+            path.unlink()
+            (path / "nested").mkdir(parents=True)
+            return self._runner_result()
+
+        with mock.patch.object(core, "write_audit_record", side_effect=OSError("simulated audit failure")):
+            with self.assertRaises(OSError):
+                self._dispatch(runner)
+        self.assertFalse(observed["directory"].exists(), "sync exception paths must clean the private channel")
+
+    def test_async_runner_failure_still_cleans_a_nested_result_replacement(self) -> None:
+        observed: dict = {}
+        store = core.DispatchJobStore()
+
+        def runner(_argv, *, env, **_kwargs):
+            path = Path(env[core.FINAL_HANDOFF_RESULT_ENV_VAR])
+            observed["directory"] = path.parent
+            path.unlink()
+            (path / "nested").mkdir(parents=True)
+            raise core.DispatchUnavailable("simulated runner failure")
+
+        started = core.dispatch_secure_cloud_role(
+            "application-engineer", "brief", "planning-review-only", "internal",
+            task_id="TASK-1", session_id="SESSION-1", parent_classification="internal",
+            project_root=self.layout.project_root, plugin_agents_root=self.layout.plugin_root,
+            catalog_path=self.layout.catalog_path, wait=False, job_store=store, child_runner=runner,
+        )
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            completed = core.poll_dispatch_status(started["job_id"], job_store=store)
+            if completed["status"] != "running":
+                break
+            time.sleep(0.01)
+        else:
+            self.fail("async dispatch did not finish")
+        self.assertEqual(completed["status"], "unavailable")
+        self.assertFalse(observed["directory"].exists(), "async failure paths must clean the private channel")
+
+    def test_async_polling_returns_the_single_existing_capture_without_recapturing(self) -> None:
+        captures: list[dict] = []
+        store = core.DispatchJobStore()
+        envelope = {"kind": "cadre-final-handoff", "schema_version": 1, "handoff": {"summary": "done"},
+                    "artifacts": [], "derived_from": []}
+        with mock.patch.object(
+            core, "automatic_context_capture", side_effect=lambda result, **kwargs: captures.append(result) or {"status": "captured"}
+        ):
+            started = core.dispatch_secure_cloud_role(
+                "application-engineer", "brief", "planning-review-only", "internal",
+                task_id="TASK-1", session_id="SESSION-1", parent_classification="internal",
+                project_root=self.layout.project_root, plugin_agents_root=self.layout.plugin_root,
+                catalog_path=self.layout.catalog_path, wait=False, job_store=store,
+                child_runner=lambda *a, **k: self._runner_result(final_handoff=envelope),
+            )
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline:
+                completed = core.poll_dispatch_status(started["job_id"], job_store=store)
+                if completed["status"] == "dispatched":
+                    break
+                time.sleep(0.01)
+            else:
+                self.fail("async dispatch did not finish")
+            self.assertEqual(completed["context_capture"], {"status": "captured"})
+            self.assertEqual(core.poll_dispatch_status(started["job_id"], job_store=store)["context_capture"], {"status": "captured"})
+        self.assertEqual(len(captures), 1)
 
 
 if __name__ == "__main__":

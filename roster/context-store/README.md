@@ -46,6 +46,56 @@ it is open.
 **Phase 5** adds `export`. See "Exporting" below. This completes the planned
 build; remote embeddings remain deliberately unscheduled pending OD-5.
 
+### Automatic final-handoff capture
+
+Secure-cloud role dispatches automatically capture a final handoff only when a
+runner returns it in its separate `final_handoff` result field as this exact,
+versioned envelope:
+
+```json
+{
+  "kind": "cadre-final-handoff",
+  "schema_version": 1,
+  "handoff": {
+    "summary": "Implemented the bounded change.",
+    "disposition": "complete"
+  },
+  "artifacts": [],
+  "derived_from": []
+}
+```
+
+The envelope is deliberately a small allowlist. `handoff` must contain at
+least one field and may contain only
+`summary`, `disposition`, `findings`, `assumptions`, `unresolved_questions`,
+`next_action`, `context_handles`, and `knowledge_steward_handoffs`.
+`artifacts` is an identifier-only manifest (up to 64 entries); each entry may
+contain only `id`, `kind`, `revision`, `digest`, and `uri`. Capture never reads
+an artifact path or copies an artifact body. `derived_from` may cite only
+context handles or `ks:untrusted:<id>` markers, preserving untrusted-input
+provenance. The complete envelope has a 64 KiB cap.
+
+The dispatcher does not inspect stdout to infer a handoff. A missing or invalid
+envelope therefore stores nothing; capture is best-effort and its outcome is
+returned as `context_capture` without changing the dispatch result. Stored
+metadata is dispatch-derived: role, task and dispatch identifiers,
+classification, and source; captured entries use `dispatch` scope and its
+normal TTL. Redaction, audit, expiry, and untrusted-data rules are the same as
+for an explicit `put`. `context_capture.source` is returned with the handle and
+is required for a later dispatch-scoped read.
+
+CLI child adapters receive a private `SECURE_CLOUD_AGENTS_FINAL_HANDOFF_PATH`
+and a completion instruction; writing a valid envelope there activates capture
+without using stdout. The API runner does not yet expose this result channel,
+so it reports `context_capture: not_provided` rather than treating model output
+as a substitute.
+
+Conversation transcripts and raw tool results are excluded: they are neither
+accepted envelope fields nor inferred from child output. Whether those
+higher-volume, more-sensitive sources have enough retrieval value to justify
+separate storage remains a parked investigation, not an authorization to begin
+collecting them.
+
 ## Two surfaces, one behaviour
 
 The CLI above and the MCP tools are the same code path: the tools shell out to
@@ -288,7 +338,10 @@ implementation of the same rule is a second place for it to drift.
 Everything here expires, so an entry that matters beyond its TTL has nowhere to
 survive. `export` is the rescue hatch: one `<handle>.md` per entry, frontmatter
 plus the stored content, validated in shape against
-`context-entry.schema.json`. Nothing is ever exported automatically.
+`context-entry.schema.json`. Nothing is ever exported automatically. This is
+separate from automatic final-handoff capture: capture keeps its structured
+handoff and identifier-only artifact manifest as ephemeral local working
+material; export creates a durable repository file.
 
 The destination is normally a git-committed run directory, and that changes the
 exposure in two ways the command enforces before writing anything:
