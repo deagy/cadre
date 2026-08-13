@@ -32,6 +32,7 @@ import difflib
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
@@ -168,6 +169,50 @@ def refuse_if_self_checkout(target_root: Path) -> None:
     for why it resolves `target_root` once and calls
     `_refuse_if_self_checkout_resolved` directly on that same value."""
     _refuse_if_self_checkout_resolved(target_root.resolve(strict=False))
+
+
+def discover_target_root(cwd: Path | None = None) -> Path | None:
+    """Return the enclosing Git worktree root, when the CWD is in one.
+
+    ``cadre init`` owns project-local overlays, so running it from a nested
+    directory should still select the project rather than that implementation
+    subdirectory.  Ask Git rather than treating a path merely named ``.git``
+    as proof of a worktree: linked worktrees and submodules are supported, and
+    an incidental non-Git directory must not become a write target by default.
+    """
+    start = (cwd or Path.cwd()).resolve()
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(start), "rev-parse", "--show-toplevel"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    top_level = result.stdout.removesuffix("\n")
+    if result.returncode != 0 or not top_level:
+        return None
+    return Path(top_level).resolve()
+
+
+def resolve_target_root(args: argparse.Namespace) -> Path:
+    """Resolve the positional/legacy target inputs or infer one from the CWD."""
+    flag_target = getattr(args, "target", None)
+    positional_target = getattr(args, "target_path", None)
+    if flag_target is not None and positional_target is not None:
+        raise InitError("provide either TARGET or --target, not both")
+    if flag_target is not None:
+        return flag_target
+    if positional_target is not None:
+        return positional_target
+    inferred_target = discover_target_root()
+    if inferred_target is None:
+        raise InitError(
+            "could not determine a Git worktree from the current directory; "
+            "provide TARGET or --target"
+        )
+    return inferred_target
 
 
 def _write_overlay(target_root: Path, filename: str, content: str) -> Path:
@@ -1342,15 +1387,27 @@ def _parser() -> argparse.ArgumentParser:
         prog="cadre init",
         description="Guide a project through generating .agents/shared/ overlays",
     )
-    parser.add_argument("--target", required=True, type=Path, help="Project root to write overlays into (required, no cwd default)")
+    parser.add_argument(
+        "target_path",
+        nargs="?",
+        type=Path,
+        metavar="TARGET",
+        help="Project root (default: enclosing Git worktree; otherwise required)",
+    )
+    parser.add_argument(
+        "--target",
+        type=Path,
+        help="Project root (legacy spelling; cannot be combined with TARGET)",
+    )
     parser.add_argument("--stack", help="Named starter preset id from roster/shared/init-presets/*.yaml")
     parser.add_argument("--answers", type=Path, help="Non-interactive answer file (schema_version: 1)")
     parser.add_argument(
         "--interactive",
         action="store_true",
         help=(
-            "Prompt-flow mode. Optional: with no answer source at all, init keeps every "
-            "shipped default and writes nothing"
+            "Start the overlay questionnaire. Optional: with no answer source at all, init "
+            "keeps every shipped default and writes nothing (distinct from leading cadre "
+            "--interactive)"
         ),
     )
     parser.add_argument(
@@ -1427,14 +1484,18 @@ def run_init(args: argparse.Namespace) -> int:
         print("cadre init: --set and --interactive are mutually exclusive", file=sys.stderr)
         return 2
 
-    target_root = args.target
+    try:
+        target_root = resolve_target_root(args)
+    except InitError as error:
+        print(f"cadre init: {error}", file=sys.stderr)
+        return 2
     try:
         refuse_if_self_checkout(target_root)
     except InitError as error:
         print(f"cadre init: {error}", file=sys.stderr)
         return 1
     if not target_root.is_dir():
-        print(f"cadre init: --target does not exist or is not a directory: {target_root}", file=sys.stderr)
+        print(f"cadre init: project root does not exist or is not a directory: {target_root}", file=sys.stderr)
         return 1
 
     if repair_mode:

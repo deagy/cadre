@@ -8,6 +8,7 @@ import itertools
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -26,10 +27,12 @@ from init_project import (  # noqa: E402
     build_prose_addendum_overlay,
     build_platform_overlay,
     build_structured_overlay,
+    discover_target_root,
     parse_field_decisions,
     plan_writes,
     refuse_if_self_checkout,
     require_field_decisions_cover,
+    resolve_target_root,
     run_init,
     scan_guardrail_bullet,
     validate_autonomy_overlay_content,
@@ -50,6 +53,100 @@ def _tree_hash(root: Path) -> str:
         digest.update(str(path.relative_to(root)).encode("utf-8"))
         digest.update(path.read_bytes())
     return digest.hexdigest()
+
+
+class TargetDiscoveryTests(unittest.TestCase):
+    @staticmethod
+    def _init_git_worktree(root: Path) -> None:
+        subprocess.run(["git", "init", "-q", str(root)], check=True)
+        (root / "README.md").write_text("test\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(root), "add", "README.md"], check=True)
+        subprocess.run(
+            [
+                "git", "-C", str(root), "-c", "user.name=Test", "-c",
+                "user.email=test@example.invalid", "commit", "-qm", "initial",
+            ],
+            check=True,
+        )
+
+    def test_discovers_nearest_enclosing_git_root(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agents-init-discover-") as tmp:
+            root = Path(tmp)
+            self._init_git_worktree(root)
+            nested = root / "service" / "cmd"
+            nested.mkdir(parents=True)
+            self.assertEqual(root.resolve(), discover_target_root(nested))
+
+    def test_preserves_trailing_whitespace_in_git_worktree_root(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agents-init-discover-space-") as tmp:
+            parent = Path(tmp)
+            sibling = parent / "project"
+            root = parent / "project "
+            self._init_git_worktree(sibling)
+            self._init_git_worktree(root)
+            nested = root / "service"
+            nested.mkdir()
+            self.assertEqual(root.resolve(), discover_target_root(nested))
+
+    def test_omitted_cli_target_uses_the_enclosing_git_root(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agents-init-discover-cli-") as tmp:
+            root = Path(tmp)
+            self._init_git_worktree(root)
+            nested = root / "service" / "cmd"
+            nested.mkdir(parents=True)
+            audit_log = root / "audit.jsonl"
+            stdout = io.StringIO()
+            with mock.patch.object(init_mod.Path, "cwd", return_value=nested), mock.patch.dict(
+                os.environ, {"AGENTS_INIT_AUDIT_LOG": str(audit_log)}
+            ), contextlib.redirect_stdout(stdout):
+                self.assertEqual(0, run_init(init_mod._parser().parse_args([])))
+            self.assertIn(str(root.resolve()), stdout.getvalue())
+
+    def test_discovers_linked_worktree(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agents-init-discover-worktree-") as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            self._init_git_worktree(source)
+            linked = root / "linked"
+            subprocess.run(["git", "-C", str(source), "worktree", "add", "--detach", "-q", str(linked)], check=True)
+            nested = linked / "pkg"
+            nested.mkdir()
+            self.assertEqual(linked.resolve(), discover_target_root(nested))
+
+    def test_returns_none_when_no_git_boundary_exists(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agents-init-discover-nongit-") as tmp:
+            directory = Path(tmp)
+            self.assertIsNone(discover_target_root(directory))
+
+    def test_omitted_target_requires_a_git_worktree(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agents-init-discover-required-") as tmp:
+            with mock.patch.object(init_mod, "discover_target_root", return_value=None):
+                with self.assertRaisesRegex(InitError, "provide TARGET or --target"):
+                    resolve_target_root(argparse.Namespace(target=None, target_path=None))
+
+    def test_positional_target_wins_over_inference(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agents-init-positional-") as tmp:
+            target = Path(tmp)
+            args = argparse.Namespace(target=None, target_path=target)
+            self.assertEqual(target, resolve_target_root(args))
+
+    def test_legacy_target_flag_remains_supported(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agents-init-target-flag-") as tmp:
+            target = Path(tmp)
+            args = argparse.Namespace(target=target, target_path=None)
+            self.assertEqual(target, resolve_target_root(args))
+
+    def test_rejects_both_target_spellings(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agents-init-target-conflict-") as tmp:
+            target = Path(tmp)
+            with self.assertRaisesRegex(InitError, "either TARGET or --target"):
+                resolve_target_root(argparse.Namespace(target=target, target_path=target))
+
+    def test_parser_accepts_an_omitted_or_positional_target(self) -> None:
+        parser = init_mod._parser()
+        self.assertIsNone(parser.parse_args([]).target_path)
+        self.assertEqual(Path("."), parser.parse_args(["."]).target_path)
 
 
 class SelfCheckoutGuardTests(unittest.TestCase):

@@ -72,7 +72,7 @@ Use `./bin/cadre`, not bare `cadre` — bare `cadre` may resolve to a globally i
 
 **`roster/RUNBOOK.md` §17, "Regenerating derived output", is the canonical version** — why each step exists, why the order matters, what each guard catches, and the `git add` gotcha in both of its directions. Extend it there rather than restating it here.
 
-`bin/cadre` dispatches every subcommand: `select`, `selection-telemetry`, `knowledge`, `sdlc`, `generate-plugin`, `generate-authority-aides`, `generate-role-metadata`, `bootstrap-codex`, `resolve-shared`, `mcp-dispatch-server`, `init`, `profile`, `gitlab-evidence`, `config`, `doctor`. `subcommands.tsv` in `bin/` is the dispatch table (`sdlc` is the one exception — it delegates to the external kernel and has no row there). A leading `cadre --interactive <subcommand>` opts that subcommand into prompting for a missing operator setting.
+`bin/cadre` dispatches every subcommand: `select`, `selection-telemetry`, `knowledge`, `sdlc`, `generate-plugin`, `generate-authority-aides`, `generate-role-metadata`, `bootstrap-codex`, `resolve-shared`, `mcp-dispatch-server`, `init`, `profile`, `gitlab-evidence`, `config`, `doctor`. `subcommands.tsv` in `bin/` is the dispatch table (`sdlc` is the one exception — it delegates to the external kernel and has no row there). A leading `cadre --interactive <subcommand>` opts that subcommand into prompting for a missing operator setting; it is distinct from `cadre init --interactive`, which starts the shared-policy overlay questionnaire.
 
 Go and React components referenced in worked examples (e.g. sample services under agent briefs) belong to *consumer* projects, not this repository — there is no Go module or frontend build here to lint/test.
 

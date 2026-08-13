@@ -244,14 +244,16 @@ rather than naming the BOM/category jargon. Record `applicable` or
 If the target project also wants this suite's own `.agents/shared/*`
 policy overlays (team profile, library/technology standards, cloud
 guardrails, autonomy policy), separately ask if they want that. This
-subcommand takes `--target <path>` (not `--root`), and always previews by
-default — it only writes when `--force` is also passed.
+subcommand takes an optional project-root argument (or the legacy `--target
+<path>` spelling, not `--root`), and always previews by default — it only
+writes when `--force` is also passed. With no project root, it uses the nearest
+enclosing Git worktree; outside Git, it asks for the root explicitly.
 
 Start from the defaults. `cadre init` keeps every shipped default unless
 told otherwise, so the common case needs no answers at all:
 
 ```sh
-./bin/cadre init --target <path>
+./bin/cadre init
 ```
 
 That writes nothing, and it is not a half-finished run: the shared overlays
@@ -264,7 +266,7 @@ When the human does want something different, override just those fields
 with `--set [REGION:]PATH=VALUE`, which is repeatable:
 
 ```sh
-./bin/cadre init --target <path> --set platform.hosting_model=cloud --force
+./bin/cadre init --set platform.hosting_model=cloud --force
 ```
 
 Prefer `--set` over authoring an `--answers` file. It needs no file, and it

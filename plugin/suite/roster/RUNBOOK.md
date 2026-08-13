@@ -1066,6 +1066,11 @@ secret-classified field, and after a valid answer asks which tier to save
 it to (project, if the field's scope allows it; global; or skip to use for
 this run only).
 
+This leading flag is distinct from `cadre init --interactive`, which starts
+the shared-policy overlay questionnaire. Use `cadre init --interactive` for
+that questionnaire, or `cadre --interactive init --interactive` when both
+prompt flows are needed.
+
 ### `cadre config show` / `path` / `resolve` / `set`
 
 ```sh

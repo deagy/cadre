@@ -25,6 +25,12 @@ check and reporting "nothing to do". See
 
 **`cadre init` is defaults-first.** It no longer requires `--answers` or `--interactive`; running with neither keeps every shipped default and writes nothing, which is a complete run rather than a skipped one (overlays are sparse, so keeping a default means writing no overlay for that field). See [`roster/shared/README.md`](roster/shared/README.md)'s "Generating overlays with `cadre init`" for the three levels of effort.
 
+**`cadre init` now infers its target worktree.** Use `cadre init` from any
+nested directory in a Git worktree, `cadre init .` for an explicit current
+directory, or `cadre init <project-root>` for another project. The legacy
+`--target <project-root>` spelling remains accepted. Outside Git, an explicit
+target is still required so an incidental CWD never becomes a write target.
+
 ### Added
 
 - **The Cline lifecycle plugin now reaches full parity with the Claude Code /
