@@ -110,7 +110,7 @@ func TestRun_UnknownSubcommand(t *testing.T) {
 func TestRun_RoutesToSubcommandScript(t *testing.T) {
 	dir := t.TempDir()
 	subPath := writeSubcommandsTSV(t, dir, [][3]string{
-		{"select", "roster/orchestration/src/select_agents.py", "Deterministic agent/gate selection"},
+		{"config", "roster/shared/src/settings.py", "Show resolved operator settings"},
 	})
 
 	var gotScript string
@@ -130,11 +130,11 @@ func TestRun_RoutesToSubcommandScript(t *testing.T) {
 		},
 	}
 
-	code := Run(context.Background(), []string{"select", "--task", "foo"}, deps)
+	code := Run(context.Background(), []string{"config", "--task", "foo"}, deps)
 	if code != 0 {
 		t.Fatalf("Run() code = %d, want 0", code)
 	}
-	wantScript := filepath.Join(dir, "roster/orchestration/src/select_agents.py")
+	wantScript := filepath.Join(dir, "roster/shared/src/settings.py")
 	if gotScript != wantScript {
 		t.Errorf("script = %q, want %q", gotScript, wantScript)
 	}
@@ -187,7 +187,7 @@ func TestRun_InteractiveFlagSetsChildEnv(t *testing.T) {
 func TestRun_SubcommandExitCodePropagates(t *testing.T) {
 	dir := t.TempDir()
 	subPath := writeSubcommandsTSV(t, dir, [][3]string{
-		{"select", "roster/orchestration/src/select_agents.py", "desc"},
+		{"config", "roster/shared/src/settings.py", "desc"},
 	})
 
 	deps := Deps{
@@ -200,7 +200,7 @@ func TestRun_SubcommandExitCodePropagates(t *testing.T) {
 		},
 	}
 
-	code := Run(context.Background(), []string{"select"}, deps)
+	code := Run(context.Background(), []string{"config"}, deps)
 	if code != 7 {
 		t.Errorf("Run() code = %d, want 7", code)
 	}
@@ -209,7 +209,7 @@ func TestRun_SubcommandExitCodePropagates(t *testing.T) {
 func TestRun_SubcommandExecutionErrorReturnsOne(t *testing.T) {
 	dir := t.TempDir()
 	subPath := writeSubcommandsTSV(t, dir, [][3]string{
-		{"select", "roster/orchestration/src/select_agents.py", "desc"},
+		{"config", "roster/shared/src/settings.py", "desc"},
 	})
 
 	deps := Deps{
@@ -222,7 +222,7 @@ func TestRun_SubcommandExecutionErrorReturnsOne(t *testing.T) {
 		},
 	}
 
-	code := Run(context.Background(), []string{"select"}, deps)
+	code := Run(context.Background(), []string{"config"}, deps)
 	if code != 1 {
 		t.Errorf("Run() code = %d, want 1", code)
 	}
@@ -301,5 +301,27 @@ func TestRun_GeneratePluginRouting(t *testing.T) {
 	// Should fail with code 2 (missing required --output)
 	if code != 2 {
 		t.Errorf("Run() for generate-plugin code = %d, want 2", code)
+	}
+}
+
+func TestRun_SelectRouting(t *testing.T) {
+	// Test that select is properly routed to the Go CLI
+	dir := t.TempDir()
+	subPath := writeSubcommandsTSV(t, dir, [][3]string{})
+
+	var stderr bytes.Buffer
+	deps := Deps{
+		Stdout:          io.Discard,
+		Stderr:          &stderr,
+		RepoRoot:        dir,
+		SubcommandsPath: subPath,
+	}
+
+	// select without required flags should exit with 2
+	code := Run(context.Background(), []string{"select"}, deps)
+
+	// Should fail with code 2 (missing required --task and --task-id)
+	if code != 2 {
+		t.Errorf("Run() for select code = %d, want 2", code)
 	}
 }

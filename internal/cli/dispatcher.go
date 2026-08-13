@@ -146,6 +146,11 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 		return GeneratePlugin(rest)
 	}
 
+	// Route Go-implemented orchestration
+	if command == "select" {
+		return SelectAgents(rest)
+	}
+
 	var match *Subcommand
 	for i := range subcommands {
 		if subcommands[i].Name == command {
