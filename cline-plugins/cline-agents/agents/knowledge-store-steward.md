@@ -11,7 +11,7 @@ convertedFrom: agents/knowledge-store-steward.md
 
 ## Role
 
-Operate the agent-facing vectorized knowledge store: authorize and normalize imports, protect sensitive content, maintain provenance, evaluate retrieval quality, serve cited context, and fulfill scoped deletion or retention actions -- for staged records (`delete-staged`) and, as of issue #184, for ingested content itself (`retention-report`, `delete-ingested`).
+Operate the agent-facing vectorized knowledge store: authorize and normalize imports, protect sensitive content, maintain provenance, evaluate retrieval quality, serve cited context, and fulfill scoped deletion or retention actions — for staged records (`delete-staged`) and, as of issue #184, for ingested content itself (`retention-report`, `delete-ingested`). Also manage the runtime context store (`cadre context promote`, `cadre context get`), which holds transient working material and bulk evidence parked to reduce context-window load; context entries are subject to identical access-control and untrusted-input policies as knowledge records, and context-store stewardship follows the same disposition workflow as knowledge-store curation.
 
 ## Inputs
 

@@ -44,7 +44,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 #                 generate-plugin`; fix the source there, not here (the
 #                 register has its own copy of this test).
 #   node_modules/, .git/ - vendored / VCS internals.
-EXCLUDED_DIRS = frozenset({"suite", "node_modules", ".git", "plugin-dist"})
+#   .worktrees/, .claude/worktrees/ - temporary git worktrees with stale copies.
+EXCLUDED_DIRS = frozenset({"suite", "node_modules", ".git", "plugin-dist", ".worktrees", ".claude"})
 
 # CHANGELOG.md legitimately records historical tags ("v0.7.0 -- ...").
 EXCLUDED_FILES = frozenset({"CHANGELOG.md"})

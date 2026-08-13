@@ -15,6 +15,12 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.23.2](https://github.com/deagy/cadre/releases/tag/plugin-v0.23.2) - 2026-08-13
+
+### Added
+
+- **New `cadre upgrade` command checks for CLI updates and manages installation.** The command queries PyPI for the latest Cadre version, automatically detects the installation method (pip, pipx, or source checkout), and provides appropriate update instructions. Users can check for updates with `--check`, update without confirmation with `--force`, or get interactive prompts with no flags.
+
 ## [0.23.1](https://github.com/deagy/cadre/releases/tag/plugin-v0.23.1) - 2026-08-13
 
 ### Fixed

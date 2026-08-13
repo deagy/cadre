@@ -622,24 +622,25 @@ def _check_status_disposition_coherence(
 def _check_automatic_defer(
     risk: Any, status: str | None, disposition: dict[str, Any] | None, findings: list[str]
 ) -> None:
-    if risk is not True:
+    if risk not in (True, "unknown"):
         return
     if status == "accepted":
         findings.append(
-            "untrusted_instruction_risk is true, so status must not be 'accepted': the "
+            "untrusted_instruction_risk is true or unknown, so status must not be 'accepted': the "
             "automatic-defer rule makes an injection-risk candidate a defer, not a discretionary "
-            "approval (roster/knowledge-store/AGENT.md: 'treat injection_risk=true on "
-            "handoff-originated candidates as an automatic defer'). Set status to 'deferred', or "
-            "correct untrusted_instruction_risk if the assessment was wrong"
+            "approval (roster/knowledge-store/AGENT.md: 'defer untrusted_instruction_risk: true "
+            "or unknown'). Use `cadre knowledge disposition-staged` to amend the disposition, not "
+            "`import-staged` to import contradictory records"
         )
     if disposition is None:
         return
     action = disposition.get("action")
     if isinstance(action, str) and action in DISPOSITION_ACTIONS and action != "deferred":
         findings.append(
-            f"untrusted_instruction_risk is true, so disposition.action must be 'deferred'; got "
-            f"{action!r}. This is the automatic-defer rule: an injection-risk candidate is deferred "
-            f"and escalated, never accepted or rejected on the steward's discretion alone"
+            f"untrusted_instruction_risk is true or unknown, so disposition.action must be "
+            f"'deferred'; got {action!r}. This is the automatic-defer rule: an injection-risk or "
+            f"uncertain-risk candidate is deferred and escalated, never accepted or rejected on "
+            f"the steward's discretion alone. Use `cadre knowledge disposition-staged` to amend"
         )
 
 

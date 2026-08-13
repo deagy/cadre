@@ -14,7 +14,7 @@ source_scope: "true"
 sensitivity_notes: "  leading and trailing spaces  "
 conflicts_or_staleness: "~"
 recommended_action: reclassify
-untrusted_instruction_risk: unknown
+untrusted_instruction_risk: false
 staged_by: fixture-author
 content_digest: f3439c5307bdbe80961faad4c22437f35e7ebe3ee5204487d8cbc1a7925019e0
 ---

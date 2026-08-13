@@ -432,25 +432,25 @@ class Rule4StatusDispositionCoherenceTests(unittest.TestCase, StagedRecordDefect
 
 
 class Rule5AutomaticDeferTests(unittest.TestCase, StagedRecordDefectMixin):
-    """Rule 5: untrusted_instruction_risk true forces the automatic defer."""
+    """Rule 5: untrusted_instruction_risk true or unknown forces the automatic defer."""
 
-    def _risky(self, fields: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    def _risky(self, fields: list[tuple[str, str]], risk_value: str = "true") -> list[tuple[str, str]]:
         return [
-            (key, "untrusted_instruction_risk: true" if key == "untrusted_instruction_risk" else text)
+            (key, f"untrusted_instruction_risk: {risk_value}" if key == "untrusted_instruction_risk" else text)
             for key, text in fields
         ]
 
     def test_injection_risk_cannot_be_accepted(self) -> None:
         findings = self.assert_defect(
             render(self._risky(dispositioned("accepted"))),
-            "untrusted_instruction_risk is true, so status must not be 'accepted'",
+            "untrusted_instruction_risk is true or unknown, so status must not be 'accepted'",
         )
         self.assertIn("automatic-defer rule", "\n".join(findings))
 
     def test_injection_risk_disposition_must_be_deferred(self) -> None:
         findings = self.assert_defect(
             render(self._risky(dispositioned("rejected"))),
-            "untrusted_instruction_risk is true, so disposition.action must be 'deferred'",
+            "untrusted_instruction_risk is true or unknown, so disposition.action must be 'deferred'",
         )
         self.assertIn("automatic-defer rule", "\n".join(findings))
 
@@ -459,6 +459,23 @@ class Rule5AutomaticDeferTests(unittest.TestCase, StagedRecordDefectMixin):
 
     def test_injection_risk_still_proposed_is_accepted(self) -> None:
         self.assert_valid(render(self._risky(frontmatter_fields())))
+
+    def test_unknown_risk_cannot_be_accepted(self) -> None:
+        findings = self.assert_defect(
+            render(self._risky(dispositioned("accepted"), risk_value="unknown")),
+            "untrusted_instruction_risk is true or unknown, so status must not be 'accepted'",
+        )
+        self.assertIn("automatic-defer rule", "\n".join(findings))
+
+    def test_unknown_risk_disposition_must_be_deferred(self) -> None:
+        findings = self.assert_defect(
+            render(self._risky(dispositioned("rejected"), risk_value="unknown")),
+            "untrusted_instruction_risk is true or unknown, so disposition.action must be 'deferred'",
+        )
+        self.assertIn("automatic-defer rule", "\n".join(findings))
+
+    def test_unknown_risk_deferred_is_accepted(self) -> None:
+        self.assert_valid(render(self._risky(dispositioned("deferred"), risk_value="unknown")))
 
 
 class Rule6AbsoluteLocalPathTests(unittest.TestCase, StagedRecordDefectMixin):
