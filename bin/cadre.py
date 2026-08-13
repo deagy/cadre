@@ -16,6 +16,7 @@ Also runnable directly: `python bin/cadre.py <subcommand> [args...]`.
 from __future__ import annotations
 
 import argparse
+import ast
 import os
 import subprocess
 import sys
@@ -26,6 +27,36 @@ REPO_ROOT = BIN_DIR.parent
 SUBCOMMANDS_PATH = BIN_DIR / "subcommands.tsv"
 SDLC_DESCRIPTION = "Delegated Agentic SDLC CLI"
 PROVIDER_MANIFEST = REPO_ROOT / "provider" / "provider.json"
+
+
+def cli_version() -> str:
+    """Return Cadre's pip/pipx distribution version without importing it.
+
+    ``cadre_cli/_version.py`` is pyproject.toml's sole version source.  It
+    deliberately differs from provider.json's version, which versions the
+    Agentic SDLC provider manifest rather than this CLI distribution.
+
+    The source-checkout dispatcher lives at ``<repo>/bin/cadre.py``; a built
+    wheel vendors that same dispatcher at ``cadre_cli/_vendor/bin/cadre.py``.
+    Locate the marker in either layout.  Parse its single literal assignment
+    instead of importing it so asking for a version cannot run package code.
+    """
+    checkout_marker = REPO_ROOT / "cadre_cli" / "_version.py"
+    version_marker = checkout_marker if checkout_marker.is_file() else REPO_ROOT.parent / "_version.py"
+    try:
+        module = ast.parse(version_marker.read_text(encoding="utf-8"), filename=str(version_marker))
+    except (OSError, SyntaxError) as error:
+        raise RuntimeError(f"could not read Cadre version marker: {error}") from error
+
+    for statement in module.body:
+        if not isinstance(statement, ast.Assign):
+            continue
+        if not any(isinstance(target, ast.Name) and target.id == "VERSION" for target in statement.targets):
+            continue
+        if isinstance(statement.value, ast.Constant) and isinstance(statement.value.value, str):
+            return statement.value.value
+
+    raise RuntimeError(f"could not find VERSION in Cadre version marker: {version_marker}")
 
 
 def sdlc_install_message() -> str:
@@ -197,6 +228,14 @@ def _resolve_provider_injection(rest: list[str]) -> tuple[list[str], bool]:
 
 
 def main(argv: list[str]) -> int:
+    if argv == ["--version"]:
+        try:
+            print(f"cadre {cli_version()}")
+        except RuntimeError as error:
+            print(f"cadre: {error}", file=sys.stderr)
+            return 1
+        return 0
+
     interactive = False
     if argv and argv[0] == INTERACTIVE_FLAG:
         interactive = True
