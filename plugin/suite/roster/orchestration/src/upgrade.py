@@ -28,8 +28,17 @@ except ImportError as e:
     print(f"cadre upgrade: requires Python's urllib (standard library): {e}", file=sys.stderr)
     sys.exit(1)
 
-BIN_DIR = Path(__file__).resolve().parents[3] / "bin"
-REPO_ROOT = BIN_DIR.parent
+def _find_repo_root() -> Path:
+    """Find repository root by searching for cadre_cli/_version.py."""
+    current = Path(__file__).resolve().parent
+    for _ in range(10):  # Search up to 10 levels
+        if (current / "cadre_cli" / "_version.py").is_file():
+            return current
+        current = current.parent
+    # Fallback: assume standard location (3 levels up from src/)
+    return Path(__file__).resolve().parents[3]
+
+REPO_ROOT = _find_repo_root()
 
 
 def get_installed_version() -> str:
@@ -69,7 +78,6 @@ def fetch_latest_release() -> tuple[str, str] | None:
                 return None
             data = json.loads(response.read().decode("utf-8"))
             version = data.get("info", {}).get("version", "")
-            home_page = data.get("info", {}).get("home_page", "")
             release_url = f"https://pypi.org/project/cadre/{version}/"
             return (version, release_url) if version else None
     except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, OSError):
@@ -82,7 +90,11 @@ def detect_install_method() -> str:
     Returns the detection result, which influences how we recommend updating.
     """
     # Check if running from a source checkout
+    # Look for pyproject.toml and bin/cadre at repo root
     if (REPO_ROOT / "pyproject.toml").is_file() and (REPO_ROOT / "bin" / "cadre").is_file():
+        return "source"
+    # Also check parent directory in case we're in a plugin bundle
+    if (REPO_ROOT.parent / "pyproject.toml").is_file() and (REPO_ROOT.parent / "bin" / "cadre").is_file():
         return "source"
 
     # Try to detect pipx installation by checking if 'cadre' command exists
@@ -109,13 +121,22 @@ def detect_install_method() -> str:
 
 
 def compare_versions(current: str, latest: str) -> int:
-    """Compare version strings.
+    """Compare version strings, handling pre-release versions.
 
     Returns: -1 if current < latest, 0 if equal, 1 if current > latest
     """
-    def parse_version(v: str) -> tuple[int, ...]:
+    def parse_version(v: str) -> tuple:
+        # Strip pre-release markers (rc, a, b, dev, post, etc.)
+        # Examples: 1.2.3rc1 -> 1.2.3, 1.2.3a1 -> 1.2.3
+        base = v.split("+")[0]  # Remove local version
+        for marker in ("rc", "a", "b", "dev", "post"):
+            if marker in base.lower():
+                base = base.lower().split(marker)[0]
+                break
+
         try:
-            return tuple(int(x) for x in v.split("."))
+            parts = tuple(int(x) for x in base.split("."))
+            return parts if parts else (0,)
         except (ValueError, AttributeError):
             return (0,)
 
@@ -154,7 +175,7 @@ def update_cadre(install_method: str) -> int:
         print("  git pull origin main")
         print("  ./bin/cadre generate-role-metadata")
         print("  ./bin/cadre generate-plugin --output plugin")
-        return 1
+        return 0
 
     if install_method == "pipx":
         print("Updating via pipx...")
