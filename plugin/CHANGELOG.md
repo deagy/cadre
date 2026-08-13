@@ -15,6 +15,12 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.23.1](https://github.com/deagy/cadre/releases/tag/plugin-v0.23.1) - 2026-08-13
+
+### Fixed
+
+- **`cadre init` now selects its target worktree safely and `cadre sdlc repair --apply` confines its changes to the requested project.** Initialization can infer the enclosing Git worktree from a nested directory while preserving explicit-target compatibility. Repair rejects symlinked path components, prevents missing-only repair from replacing a concurrent project decision, and blocks a version-lock provenance mismatch rather than silently treating it as current.
+
 ## [0.23.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.23.0) - 2026-08-13
 
 ### Added
