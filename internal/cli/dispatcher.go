@@ -135,6 +135,11 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 		return DispatchSDLC(ctx, deps.RepoRoot, rest, interactive, deps.SDLCDeps)
 	}
 
+	// Route Go-implemented generators
+	if command == "generate-authority-aides" {
+		return GenerateAuthorityAides(rest)
+	}
+
 	var match *Subcommand
 	for i := range subcommands {
 		if subcommands[i].Name == command {
