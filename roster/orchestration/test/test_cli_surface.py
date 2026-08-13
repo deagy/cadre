@@ -22,15 +22,21 @@ the check exists to catch.
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SUBCOMMANDS_PATH = REPO_ROOT / "bin" / "subcommands.tsv"
+VERSION_SOURCE_PATH = REPO_ROOT / "cadre_cli" / "_version.py"
+PLUGIN_ROOT = REPO_ROOT / "plugin"
+PLUGIN_VERSION_MANIFEST_PATH = PLUGIN_ROOT / ".claude-plugin" / "plugin.json"
 
 # argparse colorizes its output on Python 3.14+, which puts ANSI escapes
 # between the start of the line and "usage:". NO_COLOR is the documented way
@@ -148,6 +154,88 @@ class SubcommandNamingTest(unittest.TestCase):
             "unrecognised flag as its default action instead of rejecting it; "
             "parse argv with argparse rather than scanning it.",
         )
+
+
+class GlobalVersionTest(unittest.TestCase):
+    def test_version_reports_the_pip_distribution_marker_without_mutating(self) -> None:
+        """The global flag must be safe before any subcommand is selected."""
+        version_match = re.search(
+            r'^VERSION = "(?P<version>[^"]+)"$',
+            VERSION_SOURCE_PATH.read_text(encoding="utf-8"),
+            flags=re.MULTILINE,
+        )
+        self.assertIsNotNone(version_match, f"VERSION assignment missing from {VERSION_SOURCE_PATH}")
+
+        before = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            timeout=120,
+        ).stdout
+        result = subprocess.run(
+            [str(REPO_ROOT / "bin" / "cadre"), "--version"],
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            cwd=REPO_ROOT,
+            timeout=120,
+        )
+        after = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            timeout=120,
+        ).stdout
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(f"cadre {version_match.group('version')}\n", result.stdout)
+        self.assertEqual("", result.stderr)
+        self.assertEqual(before, after, "`cadre --version` must not mutate the working tree")
+
+    @unittest.skipUnless(sys.platform != "win32", "plugin/bin/cadre is a POSIX sh script")
+    def test_plugin_version_reports_its_manifest_without_python_or_mutation(self) -> None:
+        """The generated launcher must not confuse plugin and pip versions."""
+        plugin_version = json.loads(PLUGIN_VERSION_MANIFEST_PATH.read_text(encoding="utf-8"))["version"]
+
+        before = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            timeout=120,
+        ).stdout
+        # Only the two POSIX utilities the wrapper needs before its version
+        # branch are present. In particular, Python is unavailable, proving
+        # the branch executes before the generic-subcommand Python check.
+        with tempfile.TemporaryDirectory(prefix="cadre-plugin-version-") as utility_directory:
+            utility_path = Path(utility_directory)
+            for utility in ("dirname", "sed"):
+                executable = shutil.which(utility)
+                self.assertIsNotNone(executable, f"{utility} is required for this POSIX wrapper test")
+                (utility_path / utility).symlink_to(executable)
+            result = subprocess.run(
+                [str(PLUGIN_ROOT / "bin" / "cadre"), "--version"],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                cwd=REPO_ROOT,
+                timeout=120,
+                env={"PATH": str(utility_path)},
+            )
+        after = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            timeout=120,
+        ).stdout
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(f"cadre {plugin_version}\n", result.stdout)
+        self.assertEqual("", result.stderr)
+        self.assertEqual(before, after, "plugin `cadre --version` must not mutate the working tree")
 
 
 if __name__ == "__main__":

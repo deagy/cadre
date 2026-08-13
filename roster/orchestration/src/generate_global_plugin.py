@@ -1255,6 +1255,16 @@ def generate_bin_wrapper(plugin_root: Path) -> Path:
             "fi",
             'command_name="${1:-help}"',
             '[ "$#" -gt 0 ] && shift || true',
+            # Release automation updates the hand-authored plugin manifests
+            # without regenerating this wrapper. Read its package-local
+            # manifest at invocation time, rather than baking a copy of that
+            # independently-versioned value into generated content.
+            'if [ "$command_name" = "--version" ] && [ "$#" -eq 0 ]; then',
+            '  plugin_version=$(sed -n \'s/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\\([^\"]*\\)".*/\\1/p\' "$PLUGIN_ROOT/.claude-plugin/plugin.json")',
+            '  [ -n "$plugin_version" ] || { echo "cadre: could not read plugin version from .claude-plugin/plugin.json" >&2; exit 1; }',
+            '  printf \'cadre %s\\n\' "$plugin_version"',
+            '  exit 0',
+            'fi',
             "detect_agent_python() {",
             "  AGENT_PYTHON=",
             "  for candidate in python3 python; do",
