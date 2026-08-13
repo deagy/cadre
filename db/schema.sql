@@ -4,6 +4,24 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+-- Tasks table (must be created first for foreign key dependency)
+CREATE TABLE IF NOT EXISTS tasks (
+  id VARCHAR(100) PRIMARY KEY,
+  description TEXT,
+  classification VARCHAR(50),
+  status VARCHAR(50) NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  completed_at TIMESTAMP,
+  workflow_id VARCHAR(100),
+  result_summary TEXT,
+  result_quality_score DECIMAL(3, 2)
+);
+
+CREATE INDEX tasks_status ON tasks(status);
+CREATE INDEX tasks_classification ON tasks(classification);
+CREATE INDEX tasks_created_at ON tasks(created_at DESC);
+
 -- Audit logs table
 CREATE TABLE IF NOT EXISTS audit_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -49,24 +67,6 @@ CREATE TABLE IF NOT EXISTS agent_executions (
 CREATE INDEX agent_executions_task_id ON agent_executions(task_id);
 CREATE INDEX agent_executions_status ON agent_executions(status);
 CREATE INDEX agent_executions_created_at ON agent_executions(created_at DESC);
-
--- Tasks table
-CREATE TABLE IF NOT EXISTS tasks (
-  id VARCHAR(100) PRIMARY KEY,
-  description TEXT,
-  classification VARCHAR(50),
-  status VARCHAR(50) NOT NULL DEFAULT 'pending',
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  completed_at TIMESTAMP,
-  workflow_id VARCHAR(100),
-  result_summary TEXT,
-  result_quality_score DECIMAL(3, 2)
-);
-
-CREATE INDEX tasks_status ON tasks(status);
-CREATE INDEX tasks_classification ON tasks(classification);
-CREATE INDEX tasks_created_at ON tasks(created_at DESC);
 
 -- Cache table
 CREATE TABLE IF NOT EXISTS cache_entries (

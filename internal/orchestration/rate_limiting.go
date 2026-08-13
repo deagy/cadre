@@ -54,9 +54,16 @@ func (tb *TokenBucketLimiter) AllowN(tokens int) bool {
 	return false
 }
 
-// Wait blocks until a token is available.
+// Wait blocks until a token is available, respecting maxWaitTime timeout.
 func (tb *TokenBucketLimiter) Wait() {
-	for !tb.Allow() {
+	deadline := time.Now().Add(tb.maxWaitTime)
+	for {
+		if tb.Allow() {
+			return
+		}
+		if time.Now().After(deadline) {
+			return // Timeout exceeded, return to avoid hanging forever
+		}
 		time.Sleep(10 * time.Millisecond)
 	}
 }

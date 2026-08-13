@@ -41,6 +41,7 @@ type ResultCache struct {
 	defaultTTL      time.Duration
 	stats           CacheStats
 	lastCleanupTime time.Time
+	done            chan struct{}
 }
 
 // NewResultCache creates a new result cache.
@@ -51,6 +52,7 @@ func NewResultCache(maxSize int, defaultTTL time.Duration) *ResultCache {
 		maxSize:    maxSize,
 		defaultTTL: defaultTTL,
 		stats:      CacheStats{MaxSize: maxSize},
+		done:       make(chan struct{}),
 	}
 	// Start cleanup goroutine
 	go cache.backgroundCleanup()
@@ -262,9 +264,19 @@ func (rc *ResultCache) backgroundCleanup() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		rc.cleanupExpired()
+	for {
+		select {
+		case <-ticker.C:
+			rc.cleanupExpired()
+		case <-rc.done:
+			return
+		}
 	}
+}
+
+// Shutdown stops the background cleanup goroutine.
+func (rc *ResultCache) Shutdown() {
+	close(rc.done)
 }
 
 // cleanupExpired removes all expired entries.

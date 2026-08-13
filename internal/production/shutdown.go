@@ -107,8 +107,12 @@ func (cd *ConnectionDrainer) Acquire() {
 func (cd *ConnectionDrainer) Release() {
 	cd.mu.Lock()
 	defer cd.mu.Unlock()
-	cd.active--
 
+	if cd.active <= 0 {
+		return // Guard against negative count and double-close panic
+	}
+
+	cd.active--
 	if cd.active == 0 {
 		close(cd.done)
 	}
