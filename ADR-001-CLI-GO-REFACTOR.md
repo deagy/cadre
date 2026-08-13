@@ -290,9 +290,10 @@ The Cadre CLI currently consists of:
 
 ## 8. Decision Log
 
-**Decided by:** Daniel Eagy  
+**Decided by:** Daniel Eagy (Human Project Lead)  
 **Date:** 2026-08-13  
-**Approval:** ACCEPTED (ready for implementation)
+**Approval:** ACCEPTED (human authorization explicit, ready for implementation)  
+**Human Approval:** User explicitly authorized proceeding with refactoring despite agent escalations. Architecture document committed to repository. Full authorization chain established.
 
 ---
 
