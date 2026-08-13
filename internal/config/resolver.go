@@ -29,7 +29,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 )
 
 // ErrSettingNotFound is returned by ResolveString when a key resolves to no
@@ -72,15 +71,35 @@ func (e *SettingsNotFoundError) Error() string {
 	return fmt.Sprintf("config: required setting %q was not found", e.Key)
 }
 
+// envVarNames maps a dotted setting key to its actual environment variable
+// name, per settings.py's per-field SettingSpec.env_var (see
+// roster/shared/src/settings.py, e.g. line 667's
+// env_var="AGENTIC_SDLC_BIN" and the registry table starting around line
+// 1335). Names are NOT a mechanical CADRE_<KEY_UPPER_SNAKE> transform of the
+// dotted key -- settings.py assigns each field's env var explicitly, and
+// several (like this one) predate and intentionally omit any CADRE_ prefix.
+// Add an entry here for every key ResolveString needs to support; do not
+// fall back to a formula, since a formula independently invented here has
+// already produced one wrong, unreviewed name (CADRE_AGENTIC_SDLC_BIN_PATH)
+// that never matched settings.py.
+//
+// NOTE (Phase 1 scope, see resolver.go's package doc): this map is expected
+// to be superseded/extended by the application-engineer's full settings
+// registry port; reconcile rather than override on merge.
+var envVarNames = map[string]string{
+	"agentic_sdlc.bin_path": "AGENTIC_SDLC_BIN",
+}
+
 // ResolveString resolves a dotted setting key (e.g. "agentic_sdlc.bin_path")
 // to its configured value.
 //
-// Phase 1 scope: only the environment-variable step is implemented,
-// following settings.py's CADRE_<KEY_UPPER_SNAKE_WITH_UNDERSCORES> naming
-// (dots become underscores, then upper-cased). No project-local or
-// user-global config file is read. If no environment variable is set, this
-// returns ErrSettingNotFound -- never a bare empty string with a nil error,
-// so callers can distinguish "not configured" from "configured as empty"
+// Phase 1 scope: only the environment-variable step is implemented. The
+// environment variable name for each supported key comes from envVarNames
+// above, mirroring settings.py's explicit per-field env_var assignment --
+// not a mechanical name transform. No project-local or user-global config
+// file is read. If no environment variable is set, this returns
+// ErrSettingNotFound -- never a bare empty string with a nil error, so
+// callers can distinguish "not configured" from "configured as empty"
 // unambiguously.
 func ResolveString(ctx context.Context, key string) (string, error) {
 	select {
@@ -89,7 +108,11 @@ func ResolveString(ctx context.Context, key string) (string, error) {
 	default:
 	}
 
-	envKey := "CADRE_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
+	envKey, ok := envVarNames[key]
+	if !ok {
+		return "", ErrSettingNotFound
+	}
+
 	if val, ok := os.LookupEnv(envKey); ok {
 		return val, nil
 	}

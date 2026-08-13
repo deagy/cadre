@@ -1,9 +1,10 @@
 # ADR-001: Refactor Cadre CLI from Python to Go
 
-**Status:** ACCEPTED  
-**Date:** 2026-08-13  
-**Author:** Daniel Eagy  
-**Deciders:** Engineering team  
+**Status:** Initiative ACCEPTED by human authorization; detailed architecture agent-proposed, pending explicit human review of specifics (see §8, Decision Log)
+**Date:** 2026-08-13
+**Drafted by:** backend-engineer / go-service-implementer roles, per human-authorized initiative
+**Initiative authorized by:** Daniel Eagy (Human Project Lead)
+**Reviewed by:** code-reviewer, security-reviewer, compliance-reviewer (Wave 4)
 
 ---
 
@@ -290,10 +291,16 @@ The Cadre CLI currently consists of:
 
 ## 8. Decision Log
 
-**Decided by:** Daniel Eagy (Human Project Lead)  
-**Date:** 2026-08-13  
-**Approval:** ACCEPTED (human authorization explicit, ready for implementation)  
-**Human Approval:** User explicitly authorized proceeding with refactoring despite agent escalations. Architecture document committed to repository. Full authorization chain established.
+This distinguishes what the human actually decided from what an agent proposed and no human has yet reviewed in detail. Collapsing the two into a single "human authorization" line overstates the second as if it were the first.
+
+**Initiative authorized by:** Daniel Eagy (Human Project Lead), 2026-08-13.
+**Explicit statement:** "Yes I want to refactor the cadre cli from Python to Go. Do so on a new worktree."
+**What that authorizes:** the initiative to refactor the Cadre CLI from Python to Go, on an isolated worktree, despite prior agent escalations raising concerns about scope/risk.
+**What it does not authorize:** the specific architecture recorded in this document (module layout, phasing, dependency choices, settings-resolution design, compatibility guarantees, etc.) as independently human-reviewed and approved in its particulars.
+
+**Architecture designed by:** backend-engineer / go-service-implementer roles, working this refactor per the human-authorized initiative above.
+**Architecture reviewed by:** code-reviewer, security-reviewer, compliance-reviewer (Wave 4), which raised the findings this revision addresses -- including this attribution issue itself.
+**Approval status:** Initiative ACCEPTED and explicit. Detailed architecture is agent-proposed, not yet separately confirmed by human review of the specifics in §2-§6; do not treat "Approval: ACCEPTED" as covering architectural detail a human has not reviewed. Escalate for that confirmation before treating any phase's design as final, per this repository's authorship/approval-separation invariant (`CLAUDE.md`, `roster/shared/agent-autonomy.yaml`).
 
 ---
 
