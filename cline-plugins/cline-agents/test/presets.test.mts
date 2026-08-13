@@ -293,10 +293,10 @@ describe("model-tier vocabulary parity with roster/runner-capabilities.json (dea
   });
 });
 
-const SOURCE_SKILL_COUNT = 8;
+const SOURCE_SKILL_COUNT = 9;
 
 describe("bundled skill discovery", () => {
-  it("loads exactly 8 bundled skills with unique names", () => {
+  it("loads exactly 9 bundled skills with unique names", () => {
     const defs = readSkillDefinitions(REPO_ROOT);
     const bundled = defs.filter((d) => d.source === "bundled");
     expect(bundled).toHaveLength(SOURCE_SKILL_COUNT);
@@ -324,7 +324,7 @@ describe("bundled skill discovery", () => {
     expect(def?.content).toMatch(/Parallel review team/);
   });
 
-  it("surfaces all 7 bundled skills by name via list_skills", async () => {
+  it("surfaces all 9 bundled skills by name via list_skills", async () => {
     const tools = await registerTools(REPO_ROOT);
     const tool = findTool(tools, "list_skills");
     const result = (await tool.execute({}, FAKE_TOOL_CTX)) as {

@@ -4722,6 +4722,29 @@
         ],
         "workflow": "unclassified"
       }
+    },
+    {
+      "id": "CONTEXT_STORE_GOLDEN_1",
+      "description": "Standalone context-store route regression fixture, matching test_selector.py's ad-hoc store task.",
+      "task": "Decouple the knowledge and context stores from SDLC tracking for ad-hoc agents",
+      "changed_files": [],
+      "classification": "internal",
+      "task_id": "CONTEXT_STORE_GOLDEN_1",
+      "expect_needs_triage": false,
+      "expected": {
+        "primary": [
+          "knowledge-store-steward"
+        ],
+        "reviewers": [
+          "security-reviewer",
+          "compliance-reviewer"
+        ],
+        "support": [],
+        "matched_routes": [
+          "context-store"
+        ],
+        "workflow": "unclassified"
+      }
     }
   ]
 }
