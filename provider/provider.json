@@ -3,7 +3,7 @@
   "id": "cadre",
   "version": "0.3.0",
   "kernel_compatibility": {
-    "minimum": "0.13.2",
+    "minimum": "0.13.3",
     "maximum_exclusive": "1.0.0"
   },
   "agent_catalog": "agent-catalog.json",
