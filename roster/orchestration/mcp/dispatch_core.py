@@ -1731,6 +1731,7 @@ class CliFinalHandoffChannel:
     path: Path
     directory_fd: int
     parent_directory_fd: int
+    result_fd: int
     directory_device: int
     directory_inode: int
     result_device: int
@@ -1776,33 +1777,37 @@ def _prepare_cli_final_handoff_channel(
     directory = Path(tempfile.mkdtemp(prefix="cadre-final-handoff-"))
     parent_fd = -1
     directory_fd = -1
+    result_fd = -1
     try:
         os.chmod(directory, 0o700)
         parent_fd = os.open(directory.parent, _directory_open_flags())
         directory_fd = os.open(directory.name, _directory_open_flags(), dir_fd=parent_fd)
         directory_metadata = os.fstat(directory_fd)
         path = directory / "handoff.json"
-        descriptor = os.open(
+        result_fd = os.open(
             path.name,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL | _nofollow_flag(),
+            os.O_RDWR | os.O_CREAT | os.O_EXCL | _nofollow_flag(),
             0o600,
             dir_fd=directory_fd,
         )
-        try:
-            result_metadata = os.fstat(descriptor)
-        finally:
-            os.close(descriptor)
+        result_metadata = os.fstat(result_fd)
         channel = CliFinalHandoffChannel(
             directory=directory,
             path=path,
             directory_fd=directory_fd,
             parent_directory_fd=parent_fd,
+            result_fd=result_fd,
             directory_device=directory_metadata.st_dev,
             directory_inode=directory_metadata.st_ino,
             result_device=result_metadata.st_dev,
             result_inode=result_metadata.st_ino,
         )
     except Exception:
+        if result_fd >= 0:
+            try:
+                os.close(result_fd)
+            except OSError:
+                pass
         if directory_fd >= 0:
             # The only possible entry here is the server-created result file:
             # the child has not been given the path until after this block.
@@ -1816,9 +1821,15 @@ def _prepare_cli_final_handoff_channel(
             except OSError:
                 pass
         if directory_fd >= 0:
-            os.close(directory_fd)
+            try:
+                os.close(directory_fd)
+            except OSError:
+                pass
         if parent_fd >= 0:
-            os.close(parent_fd)
+            try:
+                os.close(parent_fd)
+            except OSError:
+                pass
         raise
     env = dict(child_env)
     env[FINAL_HANDOFF_RESULT_ENV_VAR] = str(channel.path)
@@ -1834,20 +1845,9 @@ def _prepare_cli_final_handoff_channel(
 
 
 def _read_cli_final_handoff(channel: CliFinalHandoffChannel, result: dict[str, Any]) -> None:
-    """Attach a bounded JSON result only from the pre-created regular file."""
+    """Attach a bounded JSON result only from the original server-opened file."""
     try:
-        descriptor = os.open(
-            channel.path.name,
-            os.O_RDONLY | os.O_NONBLOCK | _nofollow_flag(),
-            dir_fd=channel.directory_fd,
-        )
-    except FileNotFoundError:
-        return
-    except OSError as error:
-        result["final_handoff_capture_error"] = f"final_handoff result file was invalid: {error}"
-        return
-    try:
-        metadata = os.fstat(descriptor)
+        metadata = os.fstat(channel.result_fd)
         if not stat.S_ISREG(metadata.st_mode):
             result["final_handoff_capture_error"] = "final_handoff result file was not a regular file"
             return
@@ -1859,15 +1859,14 @@ def _read_cli_final_handoff(channel: CliFinalHandoffChannel, result: dict[str, A
         if metadata.st_size > MAX_FINAL_HANDOFF_RESULT_BYTES:
             result["final_handoff_capture_error"] = "final_handoff result file exceeds the 64KiB cap"
             return
-        payload = os.read(descriptor, MAX_FINAL_HANDOFF_RESULT_BYTES + 1)
+        os.lseek(channel.result_fd, 0, os.SEEK_SET)
+        payload = os.read(channel.result_fd, MAX_FINAL_HANDOFF_RESULT_BYTES + 1)
         if len(payload) > MAX_FINAL_HANDOFF_RESULT_BYTES:
             result["final_handoff_capture_error"] = "final_handoff result file exceeds the 64KiB cap"
             return
         result["final_handoff"] = json.loads(payload.decode("utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         result["final_handoff_capture_error"] = f"final_handoff result file was invalid: {error}"
-    finally:
-        os.close(descriptor)
 
 
 def _cleanup_cli_final_handoff_channel(channel: CliFinalHandoffChannel) -> None:
@@ -1897,8 +1896,11 @@ def _cleanup_cli_final_handoff_channel(channel: CliFinalHandoffChannel) -> None:
             except OSError:
                 pass
         finally:
-            os.close(channel.directory_fd)
-            os.close(channel.parent_directory_fd)
+            for descriptor in (channel.result_fd, channel.directory_fd, channel.parent_directory_fd):
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
 
 
 def write_audit_record(record: dict[str, Any], *, path: Path | None = None) -> None:

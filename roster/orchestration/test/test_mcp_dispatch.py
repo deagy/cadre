@@ -4258,7 +4258,7 @@ class AutomaticContextCaptureDispatchTests(unittest.TestCase):
         self.assertIn("stdout is not used for capture", observed["prompt"])
         self.assertFalse(observed["path"].exists(), "private channel must be removed after capture")
 
-    def test_cli_result_fifo_replacement_is_rejected_without_blocking(self) -> None:
+    def test_cli_result_fifo_replacement_is_ignored_without_blocking(self) -> None:
         _env, _prompt, channel = core._prepare_cli_final_handoff_channel({}, "brief")
         self.addCleanup(core._cleanup_cli_final_handoff_channel, channel)
         channel.path.unlink()
@@ -4269,7 +4269,8 @@ class AutomaticContextCaptureDispatchTests(unittest.TestCase):
         core._read_cli_final_handoff(channel, result)
 
         self.assertLess(time.monotonic() - started, 0.5, "a FIFO must never block result capture")
-        self.assertEqual(result["final_handoff_capture_error"], "final_handoff result file was not a regular file")
+        self.assertNotIn("final_handoff", result)
+        self.assertNotIn("final_handoff_capture_error", result)
 
     def test_cli_result_regular_file_replacement_is_not_captured(self) -> None:
         _env, _prompt, channel = core._prepare_cli_final_handoff_channel({}, "brief")
@@ -4281,7 +4282,21 @@ class AutomaticContextCaptureDispatchTests(unittest.TestCase):
         core._read_cli_final_handoff(channel, result)
 
         self.assertNotIn("final_handoff", result)
-        self.assertEqual(result["final_handoff_capture_error"], "final_handoff result file was replaced")
+        self.assertNotIn("final_handoff_capture_error", result)
+
+    def test_cli_result_reads_the_retained_original_descriptor_not_a_replacement(self) -> None:
+        _env, _prompt, channel = core._prepare_cli_final_handoff_channel({}, "brief")
+        self.addCleanup(core._cleanup_cli_final_handoff_channel, channel)
+        original = {"kind": "cadre-final-handoff", "handoff": {"summary": "original"}}
+        replacement = {"kind": "cadre-final-handoff", "handoff": {"summary": "replacement"}}
+        channel.path.write_text(json.dumps(original), encoding="utf-8")
+        channel.path.unlink()
+        channel.path.write_text(json.dumps(replacement), encoding="utf-8")
+
+        result: dict = {}
+        core._read_cli_final_handoff(channel, result)
+
+        self.assertEqual(result["final_handoff"], original)
 
     def test_cli_channel_cleanup_removes_nested_replacements_without_following_symlinks(self) -> None:
         _env, _prompt, channel = core._prepare_cli_final_handoff_channel({}, "brief")
@@ -4292,10 +4307,14 @@ class AutomaticContextCaptureDispatchTests(unittest.TestCase):
         nested.mkdir(parents=True)
         os.symlink(outside, nested / "outside-link")
 
+        result_fd = channel.result_fd
+        core._cleanup_cli_final_handoff_channel(channel)
         core._cleanup_cli_final_handoff_channel(channel)
 
         self.assertFalse(channel.directory.exists(), "all child-created channel contents must be removed")
         self.assertEqual(outside.read_text(encoding="utf-8"), "must remain", "cleanup must unlink, not follow, symlinks")
+        with self.assertRaises(OSError):
+            os.fstat(result_fd)
 
     def test_sync_audit_failure_still_cleans_a_nested_result_replacement(self) -> None:
         observed: dict = {}
