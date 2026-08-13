@@ -33,7 +33,7 @@ from urllib.parse import quote
 # feature-incomplete v0.3.0 tag no matter which later tag a consumer's
 # bootstrap script actually installed from) -- verify this string matches
 # the tag being cut before pushing it.
-VERSION = "0.13.3"
+VERSION = "0.13.2"
 
 # Packaged as the `agentic-sdlc` pip/pipx-installable distribution (see
 # kernel/pyproject.toml); contracts/ is bundled as package data

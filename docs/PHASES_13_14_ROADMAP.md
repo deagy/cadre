@@ -281,7 +281,7 @@ results := chaos.RunExperiment(context.Background())
 
 ## References
 
-- [Production Readiness Checklist](./PRODUCTION_CHECKLIST.md)
 - [Security Hardening Guide](./DEPLOYMENT_GUIDE.md#security-hardening)
 - [Operations Manual](./OPERATIONS_MANUAL.md)
+- [Production Readiness Status](./PRODUCTION_READINESS_STATUS.md)
 - Implementation: `internal/production/`, `internal/security/`, `internal/reliability/`

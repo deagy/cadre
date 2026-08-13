@@ -358,4 +358,3 @@ Grafana dashboards provided for:
 - [Troubleshooting Guide](./TROUBLESHOOTING_GUIDE.md)
 - [Operations Manual](./OPERATIONS_MANUAL.md)
 - [Phases 13-14 Roadmap](./PHASES_13_14_ROADMAP.md)
-- [GitHub Release Notes](../../CHANGELOG.md)
