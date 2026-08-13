@@ -1718,24 +1718,110 @@ def automatic_context_capture(
         return {"status": "not_captured", "reason": f"automatic context capture failed: {error}"}
 
 
-def _prepare_cli_final_handoff_channel(child_env: dict[str, str], prompt: str) -> tuple[dict[str, str], str, Path, Path]:
-    """Create a private, per-child result file; stdout is never inspected."""
+@dataclasses.dataclass
+class CliFinalHandoffChannel:
+    """Server-owned descriptors for one CLI child's handoff result channel.
+
+    The child receives only ``path``.  Retaining directory descriptors lets
+    the parent read and clean the original directory even if this same-uid
+    child swaps the visible path after it has started.
+    """
+
+    directory: Path
+    path: Path
+    directory_fd: int
+    parent_directory_fd: int
+    directory_device: int
+    directory_inode: int
+    result_device: int
+    result_inode: int
+    cleaned: bool = False
+    cleanup_lock: threading.Lock = dataclasses.field(default_factory=threading.Lock, repr=False)
+
+
+def _directory_open_flags() -> int:
+    return os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | _nofollow_flag()
+
+
+def _remove_tree_at(directory_fd: int, name: str) -> None:
+    """Remove one directory entry recursively without resolving symlinks."""
+    try:
+        child_fd = os.open(name, _directory_open_flags() | os.O_NONBLOCK, dir_fd=directory_fd)
+    except OSError:
+        # unlink() removes a symlink, FIFO, socket, or ordinary file itself;
+        # it never follows a symlink.  A raced-in directory needs rmdir().
+        try:
+            os.unlink(name, dir_fd=directory_fd)
+        except IsADirectoryError:
+            os.rmdir(name, dir_fd=directory_fd)
+        return
+    try:
+        if not stat.S_ISDIR(os.fstat(child_fd).st_mode):
+            # O_DIRECTORY should make this unreachable, but do not recurse
+            # through an object merely because a platform ignores that flag.
+            os.unlink(name, dir_fd=directory_fd)
+            return
+        with os.scandir(child_fd) as entries:
+            for entry in entries:
+                _remove_tree_at(child_fd, entry.name)
+    finally:
+        os.close(child_fd)
+    os.rmdir(name, dir_fd=directory_fd)
+
+
+def _prepare_cli_final_handoff_channel(
+    child_env: dict[str, str], prompt: str,
+) -> tuple[dict[str, str], str, CliFinalHandoffChannel]:
+    """Create a private result channel whose read/cleanup operations are fd-based."""
     directory = Path(tempfile.mkdtemp(prefix="cadre-final-handoff-"))
+    parent_fd = -1
+    directory_fd = -1
     try:
         os.chmod(directory, 0o700)
+        parent_fd = os.open(directory.parent, _directory_open_flags())
+        directory_fd = os.open(directory.name, _directory_open_flags(), dir_fd=parent_fd)
+        directory_metadata = os.fstat(directory_fd)
         path = directory / "handoff.json"
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | _nofollow_flag(), 0o600)
-        os.close(descriptor)
-    except Exception:
+        descriptor = os.open(
+            path.name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | _nofollow_flag(),
+            0o600,
+            dir_fd=directory_fd,
+        )
         try:
-            for item in directory.iterdir():
-                item.unlink()
-            directory.rmdir()
-        except OSError:
-            pass
+            result_metadata = os.fstat(descriptor)
+        finally:
+            os.close(descriptor)
+        channel = CliFinalHandoffChannel(
+            directory=directory,
+            path=path,
+            directory_fd=directory_fd,
+            parent_directory_fd=parent_fd,
+            directory_device=directory_metadata.st_dev,
+            directory_inode=directory_metadata.st_ino,
+            result_device=result_metadata.st_dev,
+            result_inode=result_metadata.st_ino,
+        )
+    except Exception:
+        if directory_fd >= 0:
+            # The only possible entry here is the server-created result file:
+            # the child has not been given the path until after this block.
+            try:
+                os.unlink("handoff.json", dir_fd=directory_fd)
+            except OSError:
+                pass
+        if parent_fd >= 0:
+            try:
+                os.rmdir(directory.name, dir_fd=parent_fd)
+            except OSError:
+                pass
+        if directory_fd >= 0:
+            os.close(directory_fd)
+        if parent_fd >= 0:
+            os.close(parent_fd)
         raise
     env = dict(child_env)
-    env[FINAL_HANDOFF_RESULT_ENV_VAR] = str(path)
+    env[FINAL_HANDOFF_RESULT_ENV_VAR] = str(channel.path)
     protocol = (
         "\n\nFinal-handoff result channel: after completing the task, optionally write one JSON "
         f"object (max {MAX_FINAL_HANDOFF_RESULT_BYTES} bytes) to the path in ${FINAL_HANDOFF_RESULT_ENV_VAR}. "
@@ -1744,35 +1830,75 @@ def _prepare_cli_final_handoff_channel(child_env: dict[str, str], prompt: str) -
         "results, test logs, raw diffs, secrets, or credentials. This file is the only automatic-capture "
         "channel; stdout is not used for capture.\n"
     )
-    return env, prompt + protocol, directory, path
+    return env, prompt + protocol, channel
 
 
-def _read_cli_final_handoff(path: Path, result: dict[str, Any]) -> None:
-    """Attach a bounded JSON result from the server-owned channel, if present."""
+def _read_cli_final_handoff(channel: CliFinalHandoffChannel, result: dict[str, Any]) -> None:
+    """Attach a bounded JSON result only from the pre-created regular file."""
     try:
-        metadata = path.lstat()
-        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0:
+        descriptor = os.open(
+            channel.path.name,
+            os.O_RDONLY | os.O_NONBLOCK | _nofollow_flag(),
+            dir_fd=channel.directory_fd,
+        )
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        result["final_handoff_capture_error"] = f"final_handoff result file was invalid: {error}"
+        return
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            result["final_handoff_capture_error"] = "final_handoff result file was not a regular file"
+            return
+        if (metadata.st_dev, metadata.st_ino) != (channel.result_device, channel.result_inode):
+            result["final_handoff_capture_error"] = "final_handoff result file was replaced"
+            return
+        if metadata.st_size == 0:
             return
         if metadata.st_size > MAX_FINAL_HANDOFF_RESULT_BYTES:
             result["final_handoff_capture_error"] = "final_handoff result file exceeds the 64KiB cap"
             return
-        with path.open("rb") as stream:
-            payload = stream.read(MAX_FINAL_HANDOFF_RESULT_BYTES + 1)
+        payload = os.read(descriptor, MAX_FINAL_HANDOFF_RESULT_BYTES + 1)
         if len(payload) > MAX_FINAL_HANDOFF_RESULT_BYTES:
             result["final_handoff_capture_error"] = "final_handoff result file exceeds the 64KiB cap"
             return
         result["final_handoff"] = json.loads(payload.decode("utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         result["final_handoff_capture_error"] = f"final_handoff result file was invalid: {error}"
+    finally:
+        os.close(descriptor)
 
 
-def _cleanup_cli_final_handoff_channel(directory: Path) -> None:
-    try:
-        for item in directory.iterdir():
-            item.unlink()
-        directory.rmdir()
-    except OSError:
-        pass
+def _cleanup_cli_final_handoff_channel(channel: CliFinalHandoffChannel) -> None:
+    """Best-effort, idempotent teardown without traversing child replacements."""
+    with channel.cleanup_lock:
+        if channel.cleaned:
+            return
+        channel.cleaned = True
+        try:
+            with os.scandir(channel.directory_fd) as entries:
+                for entry in entries:
+                    try:
+                        _remove_tree_at(channel.directory_fd, entry.name)
+                    except OSError:
+                        # A malicious child can continuously race cleanup.
+                        # Keep trying other entries and never follow its path.
+                        pass
+            try:
+                visible = os.stat(
+                    channel.directory.name, dir_fd=channel.parent_directory_fd, follow_symlinks=False,
+                )
+                if (
+                    stat.S_ISDIR(visible.st_mode)
+                    and (visible.st_dev, visible.st_ino) == (channel.directory_device, channel.directory_inode)
+                ):
+                    os.rmdir(channel.directory.name, dir_fd=channel.parent_directory_fd)
+            except OSError:
+                pass
+        finally:
+            os.close(channel.directory_fd)
+            os.close(channel.parent_directory_fd)
 
 
 def write_audit_record(record: dict[str, Any], *, path: Path | None = None) -> None:
@@ -1849,8 +1975,7 @@ def _run_async_role_dispatch(
     effective_sandbox: str,
     classification: str,
     parent_classification: str | None,
-    handoff_directory: Path | None,
-    handoff_path: Path | None,
+    handoff_channel: CliFinalHandoffChannel | None,
 ) -> None:
     """Background-thread body for dispatch_secure_cloud_role(wait=False).
 
@@ -1889,8 +2014,8 @@ def _run_async_role_dispatch(
             job_store.fail(job_id, str(error))
             return
 
-        if handoff_path is not None:
-            _read_cli_final_handoff(handoff_path, result)
+        if handoff_channel is not None:
+            _read_cli_final_handoff(handoff_channel, result)
 
         # Compute the terminal result before attempting the audit write, and
         # write it to the job store unconditionally afterward (Finding 2):
@@ -1966,8 +2091,8 @@ def _run_async_role_dispatch(
         )
         job_store.fail(job_id, f"unexpected error: {error}")
     finally:
-        if handoff_directory is not None:
-            _cleanup_cli_final_handoff_channel(handoff_directory)
+        if handoff_channel is not None:
+            _cleanup_cli_final_handoff_channel(handoff_channel)
         limiter.release()
 
 
@@ -2060,6 +2185,8 @@ def dispatch_secure_cloud_role(
         )
         return {"status": "unavailable", "reason": message}
 
+    handoff_channel: CliFinalHandoffChannel | None = None
+    limiter_acquired = False
     try:
         if current_dispatch_depth() >= MAX_DISPATCH_DEPTH:
             return _deny("maximum dispatch depth exceeded; a child spawned by this tool may not re-dispatch")
@@ -2147,6 +2274,7 @@ def dispatch_secure_cloud_role(
             return _deny(
                 f"too many concurrent dispatches (limit {MAX_CONCURRENT_CHILDREN}); retry later"
             )
+        limiter_acquired = True
 
         # Everything above this point (file reads, regex parsing, at most one
         # `git status` call, plus this non-blocking try_acquire()) is fast --
@@ -2158,10 +2286,8 @@ def dispatch_secure_cloud_role(
         child_env = build_child_env(depth, resolved_project_root)
         argv = build_child_argv_for_runner(runner, role, effective_sandbox, resolved_project_root)
         prompt = compose_prompt(role.developer_instructions, brief)
-        handoff_directory: Path | None = None
-        handoff_path: Path | None = None
         if runner in {"codex", "claude-code"}:
-            child_env, prompt, handoff_directory, handoff_path = _prepare_cli_final_handoff_channel(child_env, prompt)
+            child_env, prompt, handoff_channel = _prepare_cli_final_handoff_channel(child_env, prompt)
         active_child_runner = child_runner or resolve_child_runner_for_runner(
             runner, role, mode, effective_sandbox, brief
         )
@@ -2219,17 +2345,18 @@ def dispatch_secure_cloud_role(
                         effective_sandbox=effective_sandbox,
                         classification=classification,
                         parent_classification=parent_classification,
-                        handoff_directory=handoff_directory,
-                        handoff_path=handoff_path,
+                        handoff_channel=handoff_channel,
                     ),
                     daemon=True,
                 )
                 thread.start()
             except Exception:
-                if handoff_directory is not None:
-                    _cleanup_cli_final_handoff_channel(handoff_directory)
+                if handoff_channel is not None:
+                    _cleanup_cli_final_handoff_channel(handoff_channel)
                 limiter.release()
+                limiter_acquired = False
                 raise
+            limiter_acquired = False  # the started thread now owns this slot and the channel
             return {
                 "status": "dispatched_async",
                 "job_id": job_id,
@@ -2251,71 +2378,80 @@ def dispatch_secure_cloud_role(
                     timeout_seconds=timeout_seconds,
                 )
             except DispatchUnavailable as error:
-                if handoff_directory is not None:
-                    _cleanup_cli_final_handoff_channel(handoff_directory)
                 return _unavailable(str(error), resolved_path=str(role.path), resolution_tier=role.tier)
+
+            if handoff_channel is not None:
+                _read_cli_final_handoff(handoff_channel, result)
+
+            write_audit_record(
+                build_audit_record(
+                    **audit_base,
+                    decision=sandbox_decision,
+                    resolved_path=str(role.path),
+                    resolution_tier=role.tier,
+                    model=role.model,
+                    instructions_sha256=role.instructions_sha256,
+                    mode=mode,
+                    effective_sandbox=effective_sandbox,
+                    classification=classification,
+                    child_pid=result["pid"],
+                    exit_status=result["exit_code"],
+                    timed_out=result["timed_out"],
+                    duration_seconds=result["duration_seconds"],
+                    stdout_truncated=result["stdout_truncated"],
+                    project_tier_git_clean=role.project_tier_git_clean,
+                    **runner_activity_fields(result),
+                ),
+                path=audit_path,
+            )
+            response = {
+                "status": "dispatched",
+                "role_id": role_id,
+                "resolution_tier": role.tier,
+                "model": role.model,
+                "effective_sandbox": effective_sandbox,
+                "classification": classification,
+                "child_pid": result["pid"],
+                "exit_status": result["exit_code"],
+                "timed_out": result["timed_out"],
+                "duration_seconds": result["duration_seconds"],
+                "stdout_truncated": result["stdout_truncated"],
+                "output": wrap_untrusted_output(result.get("stdout_text", "")),
+                **runner_activity_fields(result),
+            }
+            response["context_capture"] = automatic_context_capture(
+                result,
+                role_id=role_id,
+                task_id=task_id,
+                session_id=session_id,
+                parent_classification=parent_classification,
+                classification=classification,
+                project_root=resolved_project_root,
+            )
+            return response
         finally:
             limiter.release()
-
-        if handoff_path is not None:
-            _read_cli_final_handoff(handoff_path, result)
-
-        write_audit_record(
-            build_audit_record(
-                **audit_base,
-                decision=sandbox_decision,
-                resolved_path=str(role.path),
-                resolution_tier=role.tier,
-                model=role.model,
-                instructions_sha256=role.instructions_sha256,
-                mode=mode,
-                effective_sandbox=effective_sandbox,
-                classification=classification,
-                child_pid=result["pid"],
-                exit_status=result["exit_code"],
-                timed_out=result["timed_out"],
-                duration_seconds=result["duration_seconds"],
-                stdout_truncated=result["stdout_truncated"],
-                project_tier_git_clean=role.project_tier_git_clean,
-                **runner_activity_fields(result),
-            ),
-            path=audit_path,
-        )
-        response = {
-            "status": "dispatched",
-            "role_id": role_id,
-            "resolution_tier": role.tier,
-            "model": role.model,
-            "effective_sandbox": effective_sandbox,
-            "classification": classification,
-            "child_pid": result["pid"],
-            "exit_status": result["exit_code"],
-            "timed_out": result["timed_out"],
-            "duration_seconds": result["duration_seconds"],
-            "stdout_truncated": result["stdout_truncated"],
-            "output": wrap_untrusted_output(result.get("stdout_text", "")),
-            **runner_activity_fields(result),
-        }
-        response["context_capture"] = automatic_context_capture(
-            result,
-            role_id=role_id,
-            task_id=task_id,
-            session_id=session_id,
-            parent_classification=parent_classification,
-            classification=classification,
-            project_root=resolved_project_root,
-        )
-        if handoff_directory is not None:
-            _cleanup_cli_final_handoff_channel(handoff_directory)
-        return response
+            limiter_acquired = False
+            if handoff_channel is not None:
+                _cleanup_cli_final_handoff_channel(handoff_channel)
     except DispatchDenied as error:
-        if "handoff_directory" in locals() and handoff_directory is not None:
-            _cleanup_cli_final_handoff_channel(handoff_directory)
+        if handoff_channel is not None:
+            _cleanup_cli_final_handoff_channel(handoff_channel)
+        if limiter_acquired:
+            limiter.release()
         return _deny(str(error))
     except DispatchUnavailable as error:
-        if "handoff_directory" in locals() and handoff_directory is not None:
-            _cleanup_cli_final_handoff_channel(handoff_directory)
+        if handoff_channel is not None:
+            _cleanup_cli_final_handoff_channel(handoff_channel)
+        if limiter_acquired:
+            limiter.release()
         return _unavailable(str(error))
+    except Exception:
+        if handoff_channel is not None:
+            _cleanup_cli_final_handoff_channel(handoff_channel)
+        if limiter_acquired:
+            limiter.release()
+        raise
 
 
 def poll_dispatch_status(job_id: str, *, job_store: DispatchJobStore | None = None) -> dict[str, Any]:
@@ -2724,10 +2860,9 @@ def dispatch_team(
             child_env = build_child_env(depth, resolved_project_root)
             argv = build_child_argv_for_runner(runner, role, effective_sandbox, resolved_project_root)
             prompt = compose_prompt(role.developer_instructions, member.brief)
-            handoff_directory: Path | None = None
-            handoff_path: Path | None = None
+            handoff_channel: CliFinalHandoffChannel | None = None
             if runner in {"codex", "claude-code"}:
-                child_env, prompt, handoff_directory, handoff_path = _prepare_cli_final_handoff_channel(child_env, prompt)
+                child_env, prompt, handoff_channel = _prepare_cli_final_handoff_channel(child_env, prompt)
             # Selected per member, not once for the team: the api runner's
             # callable closes over that member's own role and brief.
             active_child_runner = child_runner or resolve_child_runner_for_runner(
@@ -2759,8 +2894,8 @@ def dispatch_team(
                 }
                 return
 
-            if handoff_path is not None:
-                _read_cli_final_handoff(handoff_path, result)
+            if handoff_channel is not None:
+                _read_cli_final_handoff(handoff_channel, result)
 
             # Compute the terminal result before attempting the audit write,
             # and set results[index] unconditionally afterward (Finding 2):
@@ -2812,8 +2947,6 @@ def dispatch_team(
                 path=audit_path,
             )
             results[index] = member_result
-            if handoff_directory is not None:
-                _cleanup_cli_final_handoff_channel(handoff_directory)
         except Exception as error:  # noqa: BLE001 -- deliberately catch-all, see comment above
             # Best-effort audit write here too (Finding 2): results[index]
             # must be set even if the same underlying I/O condition that
@@ -2829,8 +2962,8 @@ def dispatch_team(
                 "reason": f"unexpected error: {error}",
             }
         finally:
-            if handoff_directory is not None:
-                _cleanup_cli_final_handoff_channel(handoff_directory)
+            if "handoff_channel" in locals() and handoff_channel is not None:
+                _cleanup_cli_final_handoff_channel(handoff_channel)
             if acquired:
                 limiter.release()
 

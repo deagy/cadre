@@ -58,13 +58,17 @@ versioned envelope:
 {
   "kind": "cadre-final-handoff",
   "schema_version": 1,
-  "handoff": {},
+  "handoff": {
+    "summary": "Implemented the bounded change.",
+    "disposition": "complete"
+  },
   "artifacts": [],
   "derived_from": []
 }
 ```
 
-The envelope is deliberately a small allowlist. `handoff` may contain only
+The envelope is deliberately a small allowlist. `handoff` must contain at
+least one field and may contain only
 `summary`, `disposition`, `findings`, `assumptions`, `unresolved_questions`,
 `next_action`, `context_handles`, and `knowledge_steward_handoffs`.
 `artifacts` is an identifier-only manifest (up to 64 entries); each entry may
