@@ -281,3 +281,25 @@ func TestRun_GenerateRoleMetadataRouting(t *testing.T) {
 		t.Errorf("Run() for generate-role-metadata code = %d, want 2", code)
 	}
 }
+
+func TestRun_GeneratePluginRouting(t *testing.T) {
+	// Test that generate-plugin is properly routed to the Go CLI
+	dir := t.TempDir()
+	subPath := writeSubcommandsTSV(t, dir, [][3]string{})
+
+	var stderr bytes.Buffer
+	deps := Deps{
+		Stdout:          io.Discard,
+		Stderr:          &stderr,
+		RepoRoot:        dir,
+		SubcommandsPath: subPath,
+	}
+
+	// generate-plugin without --output should exit with 2
+	code := Run(context.Background(), []string{"generate-plugin"}, deps)
+
+	// Should fail with code 2 (missing required --output)
+	if code != 2 {
+		t.Errorf("Run() for generate-plugin code = %d, want 2", code)
+	}
+}

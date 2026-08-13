@@ -142,6 +142,9 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 	if command == "generate-role-metadata" {
 		return GenerateRoleMetadata(rest)
 	}
+	if command == "generate-plugin" {
+		return GeneratePlugin(rest)
+	}
 
 	var match *Subcommand
 	for i := range subcommands {
