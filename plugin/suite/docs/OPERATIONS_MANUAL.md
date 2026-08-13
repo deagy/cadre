@@ -351,6 +351,5 @@ After each deployment:
 
 - [Deployment Guide](./DEPLOYMENT_GUIDE.md)
 - [Troubleshooting Guide](./TROUBLESHOOTING_GUIDE.md)
-- [Performance Tuning](./PERFORMANCE_TUNING.md)
 - Configuration: `internal/production/config.go`
 - Health checks: `internal/server/server.go`
