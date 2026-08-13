@@ -24,7 +24,7 @@ This directory contains the executable dispatch entry point for the Cadre agent 
 ./bin/cadre knowledge --source ...    # Knowledge store ingestion/retrieval
 ./bin/cadre sdlc <subcommand>         # Agentic SDLC lifecycle governance
 ./bin/cadre generate-role-metadata    # Regenerate derived role metadata
-./bin/cadre init                      # Initialize a project for cadre adoption
+./bin/cadre init <project-root>       # From this checkout, initialize another project's shared-policy overlays
 ```
 
 ### Subcommand categories

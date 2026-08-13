@@ -215,7 +215,7 @@ resolver must not perturb.
 ## Generating overlays with `cadre init`
 
 Rather than hand-authoring `.agents/shared/<filename>` overlays from scratch,
-run `cadre init --target <project-root>` (see
+run `cadre init [<project-root>]` (see
 `roster/shared/src/init_project.py`). It covers three sections (`--sections`
 restricts to a comma-separated subset; default: all):
 
@@ -228,16 +228,52 @@ restricts to a comma-separated subset; default: all):
 levels of effort, and the first one is the default:
 
 ```sh
-cadre init --target <project-root>                       # keep every shipped default
-cadre init --target <project-root> --set platform.hosting_model=cloud --force
-cadre init --target <project-root> --interactive --force  # review every group
+cadre init                                                # installed command: use the enclosing Git worktree
+cadre init .                                              # installed command: explicitly use the current directory
+cadre init <project-root> --set platform.hosting_model=cloud --force
+cadre init <project-root> --interactive --force           # review every group
+./bin/cadre init <project-root>                            # from this Cadre checkout: target another project
 ```
+
+`--target <project-root>` remains accepted for compatibility, but cannot be
+combined with the positional project root. When no root is supplied, `init`
+uses Git to locate the enclosing worktree (including linked worktrees and
+submodules). Outside a Git worktree, supply a root explicitly rather than
+having an incidental CWD become a write target. It still refuses to initialize
+this Cadre checkout or another Cadre checkout.
+
+Accordingly, do not run `./bin/cadre init` with no target from this Cadre
+checkout: inference selects the checkout itself and the self-checkout guard
+will refuse it. Use an installed `cadre` command from the target worktree, or
+pass the target path to this checkout's `./bin/cadre` launcher.
+
+The initializer's `--interactive` starts the overlay questionnaire. The
+leading dispatcher flag in `cadre --interactive init` has a different purpose:
+it permits prompting for missing operator settings, but does not start that
+questionnaire. Use `cadre init --interactive` for the questionnaire, or
+`cadre --interactive init --interactive` when both behaviors are needed.
 
 A run with no answer source keeps every shipped default and **plans no writes
 at all**. That is not a degraded outcome: overlays are sparse, so "keep the
 default" means "write no overlay for that field", and a project with no
 overlay resolves to exactly the shipped values. It is also the safest run
 available — it cannot weaken a governance posture, because it changes nothing.
+
+### Inspecting shared-policy overlays
+
+Use `cadre init [<project-root>] --repair` to validate and inventory
+the six overlays this initializer manages. It is always read-only; `--apply`
+is accepted only as an explicit acknowledgement and still makes no changes.
+Missing overlays are reported as healthy because they inherit shipped defaults.
+Existing overlays are protected project decisions, including entries whose
+platform applicability is still `unknown`.
+
+Repair does not re-run initialization, recreate sparse overlays, resolve
+unknown applicability, or overwrite policy. It fails closed on malformed
+structured data, a non-narrowing autonomy overlay, an unsafe overlay path, or
+an incomplete/ambiguous `agents-init` managed block. Correct those cases
+manually, then use the normal reviewed change flow (`--set`, `--answers`, or
+`--interactive` with `--force`) when a policy update is intended.
 
 Key behavior:
 

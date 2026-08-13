@@ -253,6 +253,10 @@ class SdlcDispatchTests(unittest.TestCase):
         self.assertTrue(args[2].endswith("provider.json"))
         self.assertEqual(args[3:], ["plan", "--foo"])
 
+    def test_repair_command_reaches_the_kernel_unchanged(self) -> None:
+        args = self._argv_for(["repair", "--root", "/project", "--apply"])
+        self.assertEqual(args[3:], ["repair", "--root", "/project", "--apply"])
+
     def test_a_caller_supplied_provider_suppresses_the_injected_one(self) -> None:
         """PP-FR-4 acceptance (a), at the argv level.
 

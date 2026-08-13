@@ -80,7 +80,17 @@ Initialization creates or manages this target-repository structure:
 AGENTS.md                      # Small managed Agentic SDLC instruction block
 ```
 
-`init --runner {codex,claude,both}` (default `both`) controls which wrapper set is generated; both are safe to keep even if only one runner is in active use. Existing custom agent wrapper files are never overwritten, and existing managed overlay files (`.agentic-sdlc/project.json`, `authorities.json`, `impact-profile.json`, `routing.json`, `commands.json`) are never overwritten either. In the current release, `--force` does not change this: `init`, with or without `--force`, is non-destructive and idempotent with respect to already-written wrapper and overlay files. Do not rely on `--force` to refresh managed files or intentionally replace prior project decisions; always check `init --help` for the installed version's actual behavior before assuming otherwise.
+`init --runner {codex,claude,both}` (default `both`) controls which wrapper set is generated; both are safe to keep even if only one runner is in active use. Existing custom agent wrapper files are never overwritten, and existing managed overlay files (`.agentic-sdlc/project.json`, `authorities.json`, `impact-profile.json`, `routing.json`, `commands.json`) are never overwritten either. `init`, with or without `--force`, remains non-destructive and idempotent with respect to existing wrapper and overlay files.
+
+For an interrupted or stale initialization, inspect the explicit repair plan before changing anything:
+
+```sh
+agentic-sdlc repair --root /path/to/target
+agentic-sdlc repair --root /path/to/target --apply
+# Equivalent compatibility spelling: agentic-sdlc init --repair [--apply]
+```
+
+Repair is read-only by default. It recreates only missing baseline files and profile-generated wrappers, refreshes only the uniquely delimited Agentic SDLC block in `AGENTS.md`, and updates stale kernel/contract metadata in `version.lock`. It preserves existing project JSON, custom wrappers, run records, approvals, evidence, authority assignments, applicability decisions, and content outside that `AGENTS.md` block. Malformed managed JSON, an incomplete/ambiguous managed block, or provider-profile drift fails closed without a repair write; resolve or migrate that state explicitly instead.
 
 ## Safe defaults
 
@@ -180,6 +190,7 @@ decide      Record a human decision (approved/rejected/request-changes) for a li
 invalidate  Record a material change and invalidate the earliest affected gate and its dependents.
 reenter     Prepare an invalidated run for explicit re-entry at a gate.
 upgrade     Check (--check) or apply (--apply) a non-destructive kernel lock upgrade.
+repair      Inspect (default) or apply a safe repair for an incomplete or stale initialization.
 provider / profile / extension  Inspect loaded provider/profile/extension resources (list, or inspect for a given provider id).
 show-contract  Print a bundled lifecycle contract or schema (lifecycle-gates, mutation-gates, run-record.schema, etc.) as JSON.
 ```
@@ -384,6 +395,8 @@ For an upgrade:
 3. Run `detect` and `validate` against the existing overlay and records.
 4. Review any generated overlay differences; do not overwrite local authority or applicability decisions without an accountable owner.
 5. Migrate incompatible records explicitly, rerun validation, and commit the lock change with the reviewed overlay changes.
+
+Use `repair` only for missing baseline artifacts and stale lock metadata. It is not a schema migration tool and never rewrites an existing project decision or lifecycle record.
 
 Keep lifecycle state in version control according to the project's evidence-classification and retention rules. Do not commit secrets or raw approval credentials.
 

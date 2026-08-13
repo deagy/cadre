@@ -174,6 +174,214 @@ class V03MigrationTests(unittest.TestCase):
         self.assertEqual("keep", self.load(".agentic-sdlc/project.json")["decision"])
         self.assertEqual(agentic_sdlc.VERSION, self.load(".agentic-sdlc/version.lock")["kernel_version"])
 
+    def test_repair_recreates_only_missing_baseline_and_is_idempotent(self):
+        self.run_cli("init", "--profile", "generic", provider=True)
+        authorities_path = self.root / ".agentic-sdlc" / "authorities.json"
+        authorities = self.load(".agentic-sdlc/authorities.json")
+        authorities["product_owner"]["assignee"] = "preserve-this-decision"
+        authorities_path.write_text(json.dumps(authorities), encoding="utf-8")
+        commands_path = self.root / ".agentic-sdlc" / "commands.json"
+        commands_path.unlink()
+
+        before = tree_hash(self.root)
+        check = self.run_cli("repair", provider=True)
+        self.assertEqual("repair-available", check["status"])
+        self.assertFalse(check["mutation"])
+        self.assertIn(
+            {"path": ".agentic-sdlc/commands.json", "action": "recreate_missing_baseline"},
+            check["actions"],
+        )
+        self.assertEqual(before, tree_hash(self.root))
+
+        applied = self.run_cli("repair", "--apply", provider=True)
+        self.assertEqual("repaired", applied["status"])
+        self.assertTrue(applied["mutation"])
+        self.assertTrue(commands_path.is_file())
+        self.assertEqual("preserve-this-decision", self.load(".agentic-sdlc/authorities.json")["product_owner"]["assignee"])
+        second = self.run_cli("repair", provider=True)
+        self.assertEqual("current", second["status"])
+        self.assertEqual([], second["actions"])
+
+    def test_repair_upgrades_only_stale_lock_metadata(self):
+        self.run_cli("init", "--profile", "generic", provider=True)
+        lock_path = self.root / ".agentic-sdlc" / "version.lock"
+        lock = self.load(".agentic-sdlc/version.lock")
+        lock["kernel_version"] = "0.2.0"
+        lock["operator_note"] = "preserve"
+        lock_path.write_text(json.dumps(lock), encoding="utf-8")
+        project_before = (self.root / ".agentic-sdlc" / "project.json").read_bytes()
+
+        check = self.run_cli("repair", provider=True)
+        self.assertEqual("repair-available", check["status"])
+        self.assertIn("upgrade_lock:kernel_version", [item["action"] for item in check["actions"]])
+        applied = self.run_cli("repair", "--apply", provider=True)
+        self.assertTrue(applied["mutation"])
+        repaired_lock = self.load(".agentic-sdlc/version.lock")
+        self.assertEqual(agentic_sdlc.VERSION, repaired_lock["kernel_version"])
+        self.assertEqual("preserve", repaired_lock["operator_note"])
+        self.assertEqual(project_before, (self.root / ".agentic-sdlc" / "project.json").read_bytes())
+
+    def test_repair_fails_closed_before_writing_on_unsafe_existing_state(self):
+        self.run_cli("init", "--profile", "generic", provider=True)
+        (self.root / ".agentic-sdlc" / "commands.json").unlink()
+        agents_path = self.root / "AGENTS.md"
+        agents_path.write_text(agents_path.read_text(encoding="utf-8").replace(agentic_sdlc.MANAGED_END, ""), encoding="utf-8")
+        before = tree_hash(self.root)
+        blocked = self.run_cli("repair", "--apply", provider=True, expected=1)
+        self.assertEqual("blocked", blocked["status"])
+        self.assertFalse(blocked["mutation"])
+        self.assertEqual(before, tree_hash(self.root))
+
+    def test_repair_refuses_unreviewed_provider_profile_drift(self):
+        self.run_cli("init", "--profile", "generic", provider=True)
+        project_path = self.root / ".agentic-sdlc" / "project.json"
+        project = self.load(".agentic-sdlc/project.json")
+        project["profile_digest"] = "sha256:old-profile"
+        project_path.write_text(json.dumps(project), encoding="utf-8")
+        before = tree_hash(self.root)
+        blocked = self.run_cli("repair", "--apply", provider=True, expected=1)
+        self.assertEqual("blocked", blocked["status"])
+        self.assertTrue(any("provider profile has changed" in item["reason"] for item in blocked["blockers"]))
+        self.assertEqual(before, tree_hash(self.root))
+
+    def test_repair_refuses_managed_file_symlinks_without_touching_the_target(self):
+        self.run_cli("init", "--profile", "generic", provider=True)
+        external = self.root.parent / "repair-external-sentinel.json"
+        sentinel = b'{"outside": "must remain unchanged"}\n'
+        external.write_bytes(sentinel)
+        paths = (
+            ".agentic-sdlc/project.json",
+            ".agentic-sdlc/authorities.json",
+            ".agentic-sdlc/impact-profile.json",
+            ".agentic-sdlc/routing.json",
+            ".agentic-sdlc/commands.json",
+            ".agentic-sdlc/version.lock",
+            "AGENTS.md",
+            ".codex/agents/product-intent-agent.toml",
+        )
+        for relative in paths:
+            with self.subTest(relative=relative):
+                path = self.root / relative
+                original = path.read_bytes()
+                path.unlink()
+                path.symlink_to(external)
+                blocked = self.run_cli("repair", "--apply", provider=True, expected=1)
+                self.assertEqual("blocked", blocked["status"])
+                self.assertEqual(sentinel, external.read_bytes())
+                path.unlink()
+                path.write_bytes(original)
+
+    def test_repair_refuses_lock_provenance_drift(self):
+        self.run_cli("init", "--profile", "generic", provider=True)
+        lock_path = self.root / ".agentic-sdlc" / "version.lock"
+        original = lock_path.read_bytes()
+        for field, value in (
+            ("providers", []),
+            ("profile_digest", "sha256:old-profile"),
+            ("dispatch_binding_digest", "sha256:old-dispatch"),
+        ):
+            with self.subTest(field=field):
+                lock = self.load(".agentic-sdlc/version.lock")
+                lock[field] = value
+                lock_path.write_text(json.dumps(lock), encoding="utf-8")
+                before = tree_hash(self.root)
+                blocked = self.run_cli("repair", "--apply", provider=True, expected=1)
+                self.assertEqual("blocked", blocked["status"])
+                self.assertTrue(any("lock provenance has changed" in item["reason"] for item in blocked["blockers"]))
+                self.assertEqual(before, tree_hash(self.root))
+                lock_path.write_bytes(original)
+
+    def test_repair_filesystem_keeps_a_pinned_parent_after_a_path_swap(self):
+        self.run_cli("init", "--profile", "generic", provider=True)
+        filesystem = agentic_sdlc.RepairFilesystem(self.root)
+        overlay = self.root / ".agentic-sdlc"
+        pinned_overlay = self.root / "pinned-overlay"
+        external = self.root.parent / f"repair-external-directory-{self.root.name}"
+        external.mkdir()
+        original_file_state = filesystem.file_state
+
+        def swap_after_check(parts):
+            result = original_file_state(parts)
+            if parts == (agentic_sdlc.OVERLAY, "race-proof.json"):
+                overlay.rename(pinned_overlay)
+                overlay.symlink_to(external, target_is_directory=True)
+            return result
+
+        try:
+            filesystem.file_state = swap_after_check  # type: ignore[method-assign]
+            filesystem.write_text((agentic_sdlc.OVERLAY, "race-proof.json"), "inside\n", overwrite=False)
+        finally:
+            filesystem.close()
+        self.assertEqual("inside\n", (pinned_overlay / "race-proof.json").read_text(encoding="utf-8"))
+        self.assertFalse((external / "race-proof.json").exists())
+        external.rmdir()
+
+    def test_repair_filesystem_does_not_replace_a_raced_project_decision(self):
+        self.run_cli("init", "--profile", "generic", provider=True)
+        filesystem = agentic_sdlc.RepairFilesystem(self.root)
+        target = self.root / ".agentic-sdlc" / "commands.json"
+        target.unlink()
+        original_link = os.link
+
+        def create_decision_then_link(*args, **kwargs):
+            target.write_text('{"operator": "decision"}\n', encoding="utf-8")
+            return original_link(*args, **kwargs)
+
+        try:
+            with mock.patch.object(agentic_sdlc.os, "link", side_effect=create_decision_then_link):
+                with self.assertRaises(FileExistsError):
+                    filesystem.write_text(
+                        (agentic_sdlc.OVERLAY, "commands.json"),
+                        '{"generated": "repair"}\n',
+                        overwrite=False,
+                    )
+        finally:
+            filesystem.close()
+        self.assertEqual('{"operator": "decision"}\n', target.read_text(encoding="utf-8"))
+
+    def test_repair_refuses_a_symlinked_target_root(self):
+        actual = self.root / "actual"
+        actual.mkdir()
+        initialized = subprocess.run(
+            CLI_COMMAND + ["--provider", str(DEFAULT_PROVIDER), "init", "--profile", "generic", "--root", str(actual)],
+            text=True,
+            capture_output=True,
+            check=False,
+            env=cli_env(),
+        )
+        self.assertEqual(0, initialized.returncode, initialized.stderr)
+        linked = self.root / "linked"
+        linked.symlink_to(actual, target_is_directory=True)
+        blocked = subprocess.run(
+            CLI_COMMAND + ["--provider", str(DEFAULT_PROVIDER), "repair", "--apply", "--root", str(linked)],
+            text=True,
+            capture_output=True,
+            check=False,
+            env=cli_env(),
+        )
+        self.assertEqual(1, blocked.returncode, blocked.stderr)
+        result = json.loads(blocked.stdout or blocked.stderr)
+        self.assertEqual("blocked", result["status"])
+        self.assertTrue(any("no safe existing initialization" in item["reason"] for item in result["blockers"]))
+
+    def test_repair_filesystem_refuses_an_intermediate_symlinked_root_component(self):
+        outside = self.root.parent / f"outside-root-{self.root.name}"
+        project = outside / "project"
+        project.mkdir(parents=True)
+        linked_parent = self.root / "linked-parent"
+        linked_parent.symlink_to(outside, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            agentic_sdlc.RepairFilesystem(linked_parent / "project")
+
+    def test_init_repair_alias_is_read_only_until_apply(self):
+        self.run_cli("init", "--profile", "generic", provider=True)
+        (self.root / ".agentic-sdlc" / "commands.json").unlink()
+        check = self.run_cli("init", "--repair", provider=True)
+        self.assertEqual("repair-available", check["status"])
+        self.assertFalse((self.root / ".agentic-sdlc" / "commands.json").exists())
+        self.run_cli("init", "--repair", "--apply", provider=True)
+        self.assertTrue((self.root / ".agentic-sdlc" / "commands.json").exists())
+
     def test_invalidation_and_reentry_preserve_history_but_clear_stale_bindings(self):
         self.run_cli("init", "--profile", "generic", provider=True)
         self.run_cli("plan", "--task-id", "REENTRY-1", "--task", "Create the service architecture", provider=True)

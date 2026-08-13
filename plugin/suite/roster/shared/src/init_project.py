@@ -32,6 +32,7 @@ import difflib
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
@@ -76,6 +77,14 @@ PLATFORM_FILENAME = "platform-impact-profile.yaml"
 PLATFORM_APPLICABILITY_VALUES = ("applicable", "not-applicable", "unknown")
 
 ALL_SECTIONS = ("rg-a-stack", "rg-b-governance", "rg-c-platform")
+INIT_OVERLAY_FILENAMES = (
+    TEAM_PROFILE_FILENAME,
+    LIBRARY_STANDARDS_FILENAME,
+    TECHNOLOGY_STANDARDS_FILENAME,
+    _AUTONOMY_FILENAME,
+    GUARDRAILS_FILENAME,
+    PLATFORM_FILENAME,
+)
 
 # Requirement B-004 / THREAT-MODEL-HARDENING-2: a heuristic safety net, not a
 # complete solution. Case-insensitive substring match against phrasing that
@@ -162,6 +171,50 @@ def refuse_if_self_checkout(target_root: Path) -> None:
     _refuse_if_self_checkout_resolved(target_root.resolve(strict=False))
 
 
+def discover_target_root(cwd: Path | None = None) -> Path | None:
+    """Return the enclosing Git worktree root, when the CWD is in one.
+
+    ``cadre init`` owns project-local overlays, so running it from a nested
+    directory should still select the project rather than that implementation
+    subdirectory.  Ask Git rather than treating a path merely named ``.git``
+    as proof of a worktree: linked worktrees and submodules are supported, and
+    an incidental non-Git directory must not become a write target by default.
+    """
+    start = (cwd or Path.cwd()).resolve()
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(start), "rev-parse", "--show-toplevel"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    top_level = result.stdout.removesuffix("\n")
+    if result.returncode != 0 or not top_level:
+        return None
+    return Path(top_level).resolve()
+
+
+def resolve_target_root(args: argparse.Namespace) -> Path:
+    """Resolve the positional/legacy target inputs or infer one from the CWD."""
+    flag_target = getattr(args, "target", None)
+    positional_target = getattr(args, "target_path", None)
+    if flag_target is not None and positional_target is not None:
+        raise InitError("provide either TARGET or --target, not both")
+    if flag_target is not None:
+        return flag_target
+    if positional_target is not None:
+        return positional_target
+    inferred_target = discover_target_root()
+    if inferred_target is None:
+        raise InitError(
+            "could not determine a Git worktree from the current directory; "
+            "provide TARGET or --target"
+        )
+    return inferred_target
+
+
 def _write_overlay(target_root: Path, filename: str, content: str) -> Path:
     """The ONLY function in this module allowed to write generated overlay
     output to disk. Resolves target_root/.agents/shared/filename, requires it
@@ -201,6 +254,50 @@ def _read_existing_overlay_text(target_root: Path, filename: str) -> str | None:
     if path.is_file():
         return path.read_text(encoding="utf-8")
     return None
+
+
+def inspect_repair_state(target_root: Path) -> tuple[list[dict[str, str]], list[str]]:
+    """Inspect every overlay `cadre init` can own without changing it.
+
+    Sparse overlays intentionally use a missing file to mean "keep the
+    shipped default", so a missing file is healthy rather than something a
+    repair may materialize.  Existing overlays are project decisions; repair
+    validates and reports them but only changes a field when the caller
+    explicitly supplies an answer, preset, or ``--set`` override.
+    """
+    state: list[dict[str, str]] = []
+    errors: list[str] = []
+    resolved_root = target_root.resolve()
+    for filename in INIT_OVERLAY_FILENAMES:
+        path = _existing_overlay_path(target_root, filename)
+        if path.is_symlink():
+            errors.append(f"{filename}: refusing to inspect symlinked overlay: {path}")
+            continue
+        if not path.exists():
+            state.append({"path": str(path), "status": "missing_uses_shipped_default"})
+            continue
+        if not path.is_file():
+            errors.append(f"{filename}: overlay is not a regular file: {path}")
+            continue
+        if not _is_same_or_descendant(path.resolve(strict=False), resolved_root):
+            errors.append(f"{filename}: refusing to inspect path outside target root (possible symlink escape): {path}")
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+            if filename in (TECHNOLOGY_STANDARDS_FILENAME, GUARDRAILS_FILENAME):
+                starts, ends = text.count(MANAGED_START), text.count(MANAGED_END)
+                if starts != ends or starts > 1 or (
+                    starts == 1 and text.index(MANAGED_START) > text.index(MANAGED_END)
+                ):
+                    raise InitError("incomplete or ambiguous cadre init managed block")
+            # This validates structured content and the autonomy narrowing
+            # rule through the same production resolver consumers use.
+            resolve_shared_config(filename, start=target_root)
+        except (OSError, OverlayError, RuntimeError, InitError) as error:
+            errors.append(f"{filename}: {error}")
+            continue
+        state.append({"path": str(path), "status": "valid_project_overlay"})
+    return state, errors
 
 
 # --------------------------------------------------------------------------
@@ -1290,15 +1387,27 @@ def _parser() -> argparse.ArgumentParser:
         prog="cadre init",
         description="Guide a project through generating .agents/shared/ overlays",
     )
-    parser.add_argument("--target", required=True, type=Path, help="Project root to write overlays into (required, no cwd default)")
+    parser.add_argument(
+        "target_path",
+        nargs="?",
+        type=Path,
+        metavar="TARGET",
+        help="Project root (default: enclosing Git worktree; otherwise required)",
+    )
+    parser.add_argument(
+        "--target",
+        type=Path,
+        help="Project root (legacy spelling; cannot be combined with TARGET)",
+    )
     parser.add_argument("--stack", help="Named starter preset id from roster/shared/init-presets/*.yaml")
     parser.add_argument("--answers", type=Path, help="Non-interactive answer file (schema_version: 1)")
     parser.add_argument(
         "--interactive",
         action="store_true",
         help=(
-            "Prompt-flow mode. Optional: with no answer source at all, init keeps every "
-            "shipped default and writes nothing"
+            "Start the overlay questionnaire. Optional: with no answer source at all, init "
+            "keeps every shipped default and writes nothing (distinct from leading cadre "
+            "--interactive)"
         ),
     )
     parser.add_argument(
@@ -1320,6 +1429,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true", help="Preview only (default unless --force)")
     parser.add_argument("--force", action="store_true", help="Required to actually write")
     parser.add_argument(
+        "--repair",
+        action="store_true",
+        help=(
+            "Inspect existing shared-policy overlays for stale or invalid state; "
+            "always read-only"
+        ),
+    )
+    parser.add_argument("--apply", action="store_true", help="Acknowledge the repair inspection (valid only with --repair; no automatic overlay rewrite)")
+    parser.add_argument(
         "--print-answers",
         action="store_true",
         help=(
@@ -1332,6 +1450,29 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def run_init(args: argparse.Namespace) -> int:
+    repair_mode = bool(getattr(args, "repair", False))
+    apply_repair = bool(getattr(args, "apply", False))
+    if apply_repair and not repair_mode:
+        print("cadre init: --apply is valid only with --repair", file=sys.stderr)
+        return 2
+    if repair_mode:
+        incompatible = []
+        for attribute, option in (
+            ("force", "--force"), ("dry_run", "--dry-run"), ("answers", "--answers"),
+            ("interactive", "--interactive"), ("stack", "--stack"),
+            ("set_values", "--set"), ("print_answers", "--print-answers"),
+        ):
+            if getattr(args, attribute, None):
+                incompatible.append(option)
+        if getattr(args, "sections", ",".join(ALL_SECTIONS)) != ",".join(ALL_SECTIONS):
+            incompatible.append("--sections")
+        if incompatible:
+            print(
+                "cadre init: --repair does not accept change-planning options: "
+                + ", ".join(incompatible),
+                file=sys.stderr,
+            )
+            return 2
     if args.answers and args.interactive:
         print("cadre init: --answers and --interactive are mutually exclusive", file=sys.stderr)
         return 2
@@ -1343,15 +1484,31 @@ def run_init(args: argparse.Namespace) -> int:
         print("cadre init: --set and --interactive are mutually exclusive", file=sys.stderr)
         return 2
 
-    target_root = args.target
+    try:
+        target_root = resolve_target_root(args)
+    except InitError as error:
+        print(f"cadre init: {error}", file=sys.stderr)
+        return 2
     try:
         refuse_if_self_checkout(target_root)
     except InitError as error:
         print(f"cadre init: {error}", file=sys.stderr)
         return 1
     if not target_root.is_dir():
-        print(f"cadre init: --target does not exist or is not a directory: {target_root}", file=sys.stderr)
+        print(f"cadre init: project root does not exist or is not a directory: {target_root}", file=sys.stderr)
         return 1
+
+    if repair_mode:
+        repair_state, repair_errors = inspect_repair_state(target_root)
+        for item in repair_state:
+            print(f"cadre init: repair: {item['status']}: {item['path']}")
+        if repair_errors:
+            for error in repair_errors:
+                print(f"cadre init: repair blocked: {error}", file=sys.stderr)
+            print("cadre init: repair made no changes", file=sys.stderr)
+            return 1
+        print("cadre init: repair inspection complete; no automatic overlay rewrite is safe")
+        return 0
 
     sections = [s.strip() for s in args.sections.split(",") if s.strip()]
     unknown_sections = [s for s in sections if s not in ALL_SECTIONS]
@@ -1483,7 +1640,8 @@ def run_init(args: argparse.Namespace) -> int:
                     lineterm="",
                 )
             )
-            print(f"--- {'would write' if not force else 'writing'}: {dest} ---")
+            verb = "would write" if not force else "writing"
+            print(f"--- {verb}: {dest} ---")
             if diff:
                 print(diff)
             else:

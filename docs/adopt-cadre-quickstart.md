@@ -58,6 +58,18 @@ project to run the `lifecycle-onboarding` skill instead — it drives this same
 flow (and the optional shared-policy overlay in step 4) conversationally. See
 [.agents/skills/lifecycle-onboarding/SKILL.md](../.agents/skills/lifecycle-onboarding/SKILL.md).
 
+If initialization was interrupted or you upgraded Cadre later, inspect a safe
+repair plan before re-running setup:
+
+```sh
+cadre sdlc repair --root /path/to/your-project
+cadre sdlc repair --root /path/to/your-project --apply
+```
+
+The default is read-only. Repair recreates missing generated baseline files and
+updates stale lock metadata, but preserves existing decisions, custom wrappers,
+and lifecycle records; malformed existing state is reported for manual repair.
+
 Validate once you've made the required decisions:
 
 ```sh

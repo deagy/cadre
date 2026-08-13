@@ -1,4 +1,4 @@
-# Example `cadre init --stack golang-postgres-k8s` starter preset.
+# Example `cadre init [TARGET] --stack golang-postgres-k8s` starter preset.
 #
 # A stack preset is a static, human-reviewed RG-A-only starter fragment: it
 # may only propose values for team-profile.yaml / library-standards.yaml /

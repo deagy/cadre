@@ -117,6 +117,10 @@ def usage(subcommands: list[tuple[str, str, str]]) -> str:
         "environment) -- only honored when stdin/stdout are both a real terminal; a value entered "
         "is offered a write to the project-local or user-global cadre config file."
     )
+    lines.append(
+        "For `init`, this is distinct from `cadre init --interactive`, which starts the "
+        "shared-policy overlay questionnaire; use both flags when both prompt flows are needed."
+    )
     return "\n".join(lines)
 
 
