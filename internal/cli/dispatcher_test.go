@@ -257,3 +257,27 @@ func TestUsage_ListsAllSubcommandsAndSDLC(t *testing.T) {
 		t.Error("Usage() missing description")
 	}
 }
+
+func TestRun_GenerateRoleMetadataRouting(t *testing.T) {
+	// Test that generate-role-metadata is properly routed to the Go CLI
+	dir := t.TempDir()
+	subPath := writeSubcommandsTSV(t, dir, [][3]string{})
+
+	var stderr bytes.Buffer
+	deps := Deps{
+		Stdout:          io.Discard,
+		Stderr:          &stderr,
+		RepoRoot:        dir,
+		SubcommandsPath: subPath,
+	}
+
+	// generate-role-metadata should be routed to the Go CLI
+	// It will fail because the repo root structure doesn't exist, but it should
+	// reach the Go CLI code path (not Python dispatch)
+	code := Run(context.Background(), []string{"generate-role-metadata", "--help"}, deps)
+
+	// The command should exit with code 2 (flag parsing error for --help)
+	if code != 2 {
+		t.Errorf("Run() for generate-role-metadata code = %d, want 2", code)
+	}
+}

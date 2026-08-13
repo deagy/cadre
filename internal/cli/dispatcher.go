@@ -139,6 +139,9 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 	if command == "generate-authority-aides" {
 		return GenerateAuthorityAides(rest)
 	}
+	if command == "generate-role-metadata" {
+		return GenerateRoleMetadata(rest)
+	}
 
 	var match *Subcommand
 	for i := range subcommands {
