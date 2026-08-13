@@ -208,3 +208,42 @@ func TestValidClassifications(t *testing.T) {
 		}
 	}
 }
+
+func TestExecuteCmdInvalidStrategy(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := ExecuteCmd(context.Background(), []string{
+		"--task-id", "TASK-001",
+		"--task", "Test task",
+		"--strategy", "invalid",
+		"--routing", "/nonexistent/routing.json",
+	}, &stdout, &stderr)
+
+	if code != 2 {
+		t.Errorf("expected exit code 2 for invalid strategy, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "strategy") {
+		t.Errorf("stderr should mention invalid strategy")
+	}
+}
+
+func TestValidStrategies(t *testing.T) {
+	validStrategies := []string{"mock", "dry", "subprocess"}
+
+	for _, strategy := range validStrategies {
+		var stdout, stderr bytes.Buffer
+		// Use a nonexistent routing path to test strategy validation
+		// The strategy validation happens before routing loading
+		ExecuteCmd(context.Background(), []string{
+			"--task-id", "TASK-001",
+			"--task", "Test",
+			"--strategy", strategy,
+			"--routing", "/nonexistent/routing.json",
+		}, &stdout, &stderr)
+
+		// Should fail on routing, not strategy
+		errMsg := stderr.String()
+		if strings.Contains(errMsg, "strategy") {
+			t.Errorf("strategy %q should be valid, got error: %s", strategy, errMsg)
+		}
+	}
+}

@@ -14,20 +14,6 @@ import (
 	"github.com/deagy/cadre/cli/internal/orchestration"
 )
 
-// mockSubprocessRunner is a placeholder for subprocess-based agent execution.
-// In production, this would spawn actual agent processes (Python scripts, Go binaries, etc.).
-type mockSubprocessRunner struct{}
-
-func (m *mockSubprocessRunner) RunAgent(ctx context.Context, agentID string, task string, plan *orchestration.DispatchPlan) (*orchestration.AgentResult, error) {
-	// Placeholder: agents run, but produce no results (skipped status)
-	return &orchestration.AgentResult{
-		AgentID:     agentID,
-		Status:      "skipped",
-		StartedAt:   time.Now(),
-		CompletedAt: time.Now(),
-	}, nil
-}
-
 // ExecuteCmd handles the `cadre execute` command.
 // Execute runs a complete orchestration workflow: route selection → dispatch planning →
 // knowledge retrieval → agent execution → result reporting.
@@ -46,6 +32,7 @@ func ExecuteCmd(ctx context.Context, argv []string, stdout, stderr io.Writer) in
 	var outputPath string
 	var routingPath string
 	var checkMode bool
+	var execStrategy string
 
 	fs.StringVar(&taskID, "task-id", "", "Task identifier (required)")
 	fs.StringVar(&task, "task", "", "Task description (required)")
@@ -55,6 +42,7 @@ func ExecuteCmd(ctx context.Context, argv []string, stdout, stderr io.Writer) in
 	fs.StringVar(&outputPath, "output-path", "", "Write output to file instead of stdout")
 	fs.StringVar(&routingPath, "routing", "", "Path to routing.json (default: repo_root/roster/orchestration/routing.json)")
 	fs.BoolVar(&checkMode, "check", false, "Check mode: validate plan without executing agents")
+	fs.StringVar(&execStrategy, "strategy", "mock", "Execution strategy (mock, dry, subprocess)")
 
 	if err := fs.Parse(argv); err != nil {
 		_, _ = fmt.Fprintf(stderr, "cadre execute: %v\n", err)
@@ -96,6 +84,18 @@ func ExecuteCmd(ctx context.Context, argv []string, stdout, stderr io.Writer) in
 		return 2
 	}
 
+	// Validate execution strategy
+	validStrategies := map[string]orchestration.ExecutionStrategy{
+		"mock":       orchestration.StrategyMock,
+		"dry":        orchestration.StrategyDry,
+		"subprocess": orchestration.StrategySubprocess,
+	}
+	strategy, exists := validStrategies[execStrategy]
+	if !exists {
+		_, _ = fmt.Fprintf(stderr, "cadre execute: invalid strategy %q (must be mock, dry, or subprocess)\n", execStrategy)
+		return 2
+	}
+
 	// Load routing configuration
 	if routingPath == "" {
 		// Try to locate routing.json in the repository
@@ -111,9 +111,16 @@ func ExecuteCmd(ctx context.Context, argv []string, stdout, stderr io.Writer) in
 		return 1
 	}
 
-	// Create executor with mock agent runner (placeholder for full agent spawning)
-	mockRunner := &mockSubprocessRunner{}
-	executor := orchestration.NewExecutor(mockRunner, 4, 0)
+	// Locate repository root for agent script discovery
+	repoRoot, err := findRepositoryRoot()
+	if err != nil {
+		// Agent execution will gracefully degrade to mock if repo root is unavailable
+		repoRoot = ""
+	}
+
+	// Create executor with real subprocess agent runner
+	runner := orchestration.NewSubprocessAgentRunner(repoRoot, 30*time.Second, strategy)
+	executor := orchestration.NewExecutor(runner, 4, 0)
 	if executor == nil {
 		_, _ = fmt.Fprintf(stderr, "cadre execute: failed to create executor\n")
 		return 1
