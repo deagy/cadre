@@ -228,10 +228,11 @@ restricts to a comma-separated subset; default: all):
 levels of effort, and the first one is the default:
 
 ```sh
-cadre init                                                # use the enclosing Git worktree
-cadre init .                                              # explicitly use the current directory
+cadre init                                                # installed command: use the enclosing Git worktree
+cadre init .                                              # installed command: explicitly use the current directory
 cadre init <project-root> --set platform.hosting_model=cloud --force
 cadre init <project-root> --interactive --force           # review every group
+./bin/cadre init <project-root>                            # from this Cadre checkout: target another project
 ```
 
 `--target <project-root>` remains accepted for compatibility, but cannot be
@@ -240,6 +241,11 @@ uses Git to locate the enclosing worktree (including linked worktrees and
 submodules). Outside a Git worktree, supply a root explicitly rather than
 having an incidental CWD become a write target. It still refuses to initialize
 this Cadre checkout or another Cadre checkout.
+
+Accordingly, do not run `./bin/cadre init` with no target from this Cadre
+checkout: inference selects the checkout itself and the self-checkout guard
+will refuse it. Use an installed `cadre` command from the target worktree, or
+pass the target path to this checkout's `./bin/cadre` launcher.
 
 The initializer's `--interactive` starts the overlay questionnaire. The
 leading dispatcher flag in `cadre --interactive init` has a different purpose:

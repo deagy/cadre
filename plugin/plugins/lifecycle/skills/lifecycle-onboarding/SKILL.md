@@ -250,7 +250,15 @@ Start from the defaults. `cadre init` keeps every shipped default unless
 told otherwise, so the common case needs no answers at all:
 
 ```sh
-./bin/cadre init
+# From this Cadre suite checkout, name the selected target explicitly.
+./bin/cadre init <absolute-target-project-root>
+```
+
+When `cadre` is installed and the shell is already in the target project's Git
+worktree, the target may instead be inferred:
+
+```sh
+cadre init
 ```
 
 That writes nothing, and it is not a half-finished run: the shared overlays
@@ -263,7 +271,7 @@ When the human does want something different, override just those fields
 with `--set [REGION:]PATH=VALUE`, which is repeatable:
 
 ```sh
-./bin/cadre init --set platform.hosting_model=cloud --force
+./bin/cadre init <absolute-target-project-root> --set platform.hosting_model=cloud --force
 ```
 
 Prefer `--set` over authoring an `--answers` file. It needs no file, and it

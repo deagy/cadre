@@ -9,6 +9,8 @@ import hashlib
 import json
 import os
 import re
+import secrets
+import stat
 import subprocess
 import sys
 from collections.abc import Callable
@@ -1171,6 +1173,176 @@ def confined_path(root: Path, *parts: str) -> Path:
     return candidate
 
 
+class RepairFilesystem:
+    """Descriptor-confined I/O for the mutable surface of ``repair``.
+
+    Planning with ``Path.resolve`` followed by ordinary path I/O leaves a gap:
+    an attacker can exchange a checked directory or file for a symlink before a
+    repair writes it.  Repair therefore pins the project root and each parent
+    directory with file descriptors, refuses symlinks at every component, and
+    writes replacement files through a temporary file in the pinned directory.
+    """
+
+    def __init__(self, root: Path) -> None:
+        if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
+            raise ValueError("secure repair I/O requires O_NOFOLLOW and O_DIRECTORY support")
+        self.root = root.absolute()
+        try:
+            self._root_fd = self._open_root_fd(self.root)
+        except OSError as error:
+            raise ValueError(f"cannot securely open project root: {error}") from error
+
+    def close(self) -> None:
+        os.close(self._root_fd)
+
+    @staticmethod
+    def _component(value: str) -> str:
+        if not value or value in {".", ".."} or "/" in value or "\\" in value:
+            raise ValueError(f"unsafe repair path component: {value!r}")
+        return value
+
+    @classmethod
+    def _open_root_fd(cls, root: Path) -> int:
+        """Pin every supplied absolute-root component without following it."""
+        if not root.is_absolute():
+            raise ValueError("secure repair root must be absolute")
+        fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            for part in root.parts[1:]:
+                next_fd = os.open(
+                    cls._component(part),
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=fd,
+                )
+                os.close(fd)
+                fd = next_fd
+            return fd
+        except Exception:
+            os.close(fd)
+            raise
+
+    def _directory_fd(self, parts: tuple[str, ...], *, create: bool = False) -> int:
+        fd = os.dup(self._root_fd)
+        try:
+            for part in parts:
+                name = self._component(part)
+                try:
+                    next_fd = os.open(
+                        name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd
+                    )
+                except FileNotFoundError:
+                    if not create:
+                        raise
+                    os.mkdir(name, dir_fd=fd)
+                    next_fd = os.open(
+                        name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd
+                    )
+                except OSError as error:
+                    raise ValueError(
+                        f"unsafe repair directory component {'/'.join(parts)}: {error}"
+                    ) from error
+                os.close(fd)
+                fd = next_fd
+            return fd
+        except Exception:
+            os.close(fd)
+            raise
+
+    def file_state(self, parts: tuple[str, ...]) -> str:
+        if not parts:
+            raise ValueError("repair file path is empty")
+        try:
+            parent = self._directory_fd(parts[:-1])
+        except FileNotFoundError:
+            return "missing"
+        try:
+            try:
+                metadata = os.stat(self._component(parts[-1]), dir_fd=parent, follow_symlinks=False)
+            except FileNotFoundError:
+                return "missing"
+            if stat.S_ISLNK(metadata.st_mode):
+                raise ValueError(f"unsafe repair symlink: {'/'.join(parts)}")
+            if not stat.S_ISREG(metadata.st_mode):
+                raise ValueError(f"repair path is not a regular file: {'/'.join(parts)}")
+            return "regular"
+        finally:
+            os.close(parent)
+
+    def read_text(self, parts: tuple[str, ...]) -> str:
+        if self.file_state(parts) != "regular":
+            raise ValueError(f"missing repair file: {'/'.join(parts)}")
+        parent = self._directory_fd(parts[:-1])
+        try:
+            try:
+                descriptor = os.open(self._component(parts[-1]), os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent)
+            except OSError as error:
+                raise ValueError(f"cannot securely read {'/'.join(parts)}: {error}") from error
+            try:
+                if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                    raise ValueError(f"repair path is not a regular file: {'/'.join(parts)}")
+                with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+                    descriptor = -1
+                    return handle.read()
+            finally:
+                if descriptor >= 0:
+                    os.close(descriptor)
+        finally:
+            os.close(parent)
+
+    def write_text(self, parts: tuple[str, ...], content: str, *, overwrite: bool) -> bool:
+        if not parts:
+            raise ValueError("repair file path is empty")
+        parent = self._directory_fd(parts[:-1], create=True)
+        temp_name = ""
+        try:
+            name = self._component(parts[-1])
+            state = self.file_state(parts)
+            if state == "regular" and not overwrite:
+                return False
+            for _attempt in range(20):
+                candidate = f".agentic-sdlc-repair-{os.getpid()}-{secrets.token_hex(8)}"
+                try:
+                    descriptor = os.open(
+                        candidate,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                        0o600,
+                        dir_fd=parent,
+                    )
+                except FileExistsError:
+                    continue
+                temp_name = candidate
+                try:
+                    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                        descriptor = -1
+                        handle.write(content)
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                finally:
+                    if descriptor >= 0:
+                        os.close(descriptor)
+                break
+            else:
+                raise ValueError("could not create a secure temporary repair file")
+            if overwrite:
+                # rename replaces a raced-in symlink itself; it never follows it.
+                os.replace(temp_name, name, src_dir_fd=parent, dst_dir_fd=parent)
+            else:
+                # ``link`` is an atomic no-clobber installation in this pinned
+                # directory.  Unlike rename, it fails if a decision appeared
+                # after planning, so repair cannot overwrite it.
+                os.link(temp_name, name, src_dir_fd=parent, dst_dir_fd=parent, follow_symlinks=False)
+                os.unlink(temp_name, dir_fd=parent)
+            temp_name = ""
+            return True
+        finally:
+            if temp_name:
+                try:
+                    os.unlink(temp_name, dir_fd=parent)
+                except FileNotFoundError:
+                    pass
+            os.close(parent)
+
+
 def fingerprint(value: Any) -> str:
     canonical = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return "sha256:" + hashlib.sha256(canonical).hexdigest()
@@ -1567,133 +1739,198 @@ def repair(args: argparse.Namespace) -> int:
     the uniquely delimited AGENTS.md block; it never replaces existing JSON,
     wrappers, run records, approvals, or other user content.
     """
-    root = Path(args.root).resolve()
-    overlay = confined_path(root, OVERLAY)
+    # Do not resolve the supplied root before opening it with O_NOFOLLOW: that
+    # would silently accept a final-component symlink selected by an operator.
+    root = Path(args.root).absolute()
     apply = bool(getattr(args, "apply", False))
     blockers: list[dict[str, str]] = []
     actions: list[dict[str, str]] = []
     protected: list[str] = []
-    if not root.is_dir() or not overlay.is_dir():
-        blockers.append({"path": OVERLAY, "reason": "no existing initialization; run init first"})
+    try:
+        filesystem = RepairFilesystem(root)
+        overlay_fd = filesystem._directory_fd((OVERLAY,))
+    except (OSError, ValueError) as error:
+        blockers.append({"path": OVERLAY, "reason": f"no safe existing initialization: {error}"})
         print(json.dumps({"status": "blocked", "mutation": False, "root": str(root), "actions": actions, "protected": protected, "blockers": blockers}, indent=2))
         return 1
-
-    loaded: dict[str, dict[str, Any]] = {}
-    for name in ("project.json", "authorities.json", "impact-profile.json", "routing.json", "commands.json"):
-        path = overlay / name
-        if not path.exists():
-            continue
-        try:
-            loaded[name] = load_json(path)
-        except (OSError, ValueError, json.JSONDecodeError) as error:
-            blockers.append({"path": f"{OVERLAY}/{name}", "reason": f"unreadable managed JSON: {error}"})
-    project = loaded.get("project.json")
-    if project is None:
-        blockers.append({"path": f"{OVERLAY}/project.json", "reason": "missing project identity; cannot safely reconstruct it"})
-    elif not isinstance(project.get("project_id"), str) or not isinstance(project.get("classification"), str):
-        blockers.append({"path": f"{OVERLAY}/project.json", "reason": "missing project_id or classification"})
-
-    profile: dict[str, Any] = {}
-    artifacts: list[tuple[str, dict[str, Any]]] = []
-    routing: dict[str, Any] = {}
-    if not blockers and project is not None:
-        profile_id = project.get("profile")
-        extensions = project.get("extensions", [])
-        if profile_id is not None and not isinstance(profile_id, str):
-            blockers.append({"path": f"{OVERLAY}/project.json", "reason": "profile must be a string or null"})
-        elif not isinstance(extensions, list) or not all(isinstance(item, str) for item in extensions):
-            blockers.append({"path": f"{OVERLAY}/project.json", "reason": "extensions must be a string list"})
-        else:
-            try:
-                profile, artifacts, routing = initialization_artifacts(
-                    root, profile_id, extensions, project["project_id"], project["classification"]
-                )
-            except (OSError, ValueError, json.JSONDecodeError) as error:
-                blockers.append({"path": OVERLAY, "reason": f"cannot load current provider/profile: {error}"})
-            else:
-                # A provider/profile change can alter generated routes and
-                # wrappers.  Those are not safe to overwrite just because a
-                # newer kernel happens to be present; require an explicit,
-                # reviewed migration instead.
-                if project.get("profile_digest") != fingerprint(profile):
-                    blockers.append({
-                        "path": f"{OVERLAY}/project.json",
-                        "reason": "provider profile has changed; review and migrate project decisions explicitly",
-                    })
-
-    agents_path = confined_path(root, "AGENTS.md")
-    if agents_path.exists():
-        agents_text = agents_path.read_text(encoding="utf-8")
-        starts, ends = agents_text.count(MANAGED_START), agents_text.count(MANAGED_END)
-        if starts != ends or starts > 1:
-            blockers.append({"path": "AGENTS.md", "reason": "incomplete or ambiguous Agentic SDLC managed block"})
-        elif rendered_agents_md(agents_text) != agents_text:
-            actions.append({"path": "AGENTS.md", "action": "refresh_managed_block"})
     else:
-        actions.append({"path": "AGENTS.md", "action": "create_managed_block"})
+        os.close(overlay_fd)
 
-    if not blockers and project is not None:
-        for name, _value in artifacts:
-            path = overlay / name
-            if path.exists():
-                protected.append(f"{OVERLAY}/{name}")
-            else:
-                actions.append({"path": f"{OVERLAY}/{name}", "action": "recreate_missing_baseline"})
-        expected_lock = version_lock(project.get("profile"), profile, routing)
-        lock_path = overlay / "version.lock"
-        if lock_path.exists():
+    try:
+        managed_json = ("project.json", "authorities.json", "impact-profile.json", "routing.json", "commands.json")
+        loaded: dict[str, dict[str, Any]] = {}
+        for name in managed_json:
             try:
-                lock = load_json(lock_path)
+                state = filesystem.file_state((OVERLAY, name))
+                if state == "regular":
+                    value = json.loads(filesystem.read_text((OVERLAY, name)))
+                    if not isinstance(value, dict):
+                        raise ValueError("must contain a JSON object")
+                    loaded[name] = value
             except (OSError, ValueError, json.JSONDecodeError) as error:
-                blockers.append({"path": f"{OVERLAY}/version.lock", "reason": f"unreadable lock: {error}"})
+                blockers.append({"path": f"{OVERLAY}/{name}", "reason": f"unsafe or unreadable managed JSON: {error}"})
+        project = loaded.get("project.json")
+        if project is None:
+            blockers.append({"path": f"{OVERLAY}/project.json", "reason": "missing project identity; cannot safely reconstruct it"})
+        elif not isinstance(project.get("project_id"), str) or not isinstance(project.get("classification"), str):
+            blockers.append({"path": f"{OVERLAY}/project.json", "reason": "missing project_id or classification"})
+
+        profile: dict[str, Any] = {}
+        artifacts: list[tuple[str, dict[str, Any]]] = []
+        routing: dict[str, Any] = {}
+        if not blockers and project is not None:
+            profile_id = project.get("profile")
+            extensions = project.get("extensions", [])
+            if profile_id is not None and not isinstance(profile_id, str):
+                blockers.append({"path": f"{OVERLAY}/project.json", "reason": "profile must be a string or null"})
+            elif not isinstance(extensions, list) or not all(isinstance(item, str) for item in extensions):
+                blockers.append({"path": f"{OVERLAY}/project.json", "reason": "extensions must be a string list"})
             else:
-                changed = [key for key in ("plugin_version", "kernel_version", "contracts", "contract_digest") if lock.get(key) != expected_lock[key]]
-                if changed:
-                    actions.append({"path": f"{OVERLAY}/version.lock", "action": "upgrade_lock:" + ",".join(changed)})
+                try:
+                    profile, artifacts, routing = initialization_artifacts(
+                        root, profile_id, extensions, project["project_id"], project["classification"]
+                    )
+                except (OSError, ValueError, json.JSONDecodeError) as error:
+                    blockers.append({"path": OVERLAY, "reason": f"cannot load current provider/profile: {error}"})
                 else:
-                    protected.append(f"{OVERLAY}/version.lock")
-        else:
-            actions.append({"path": f"{OVERLAY}/version.lock", "action": "recreate_missing_lock"})
-        if project.get("profile") is not None:
-            catalog = load_agent_catalog()
+                    if project.get("profile_digest") != fingerprint(profile):
+                        blockers.append({
+                            "path": f"{OVERLAY}/project.json",
+                            "reason": "provider profile has changed; review and migrate project decisions explicitly",
+                        })
+
+        agents_text = ""
+        try:
+            if filesystem.file_state(("AGENTS.md",)) == "regular":
+                agents_text = filesystem.read_text(("AGENTS.md",))
+                starts, ends = agents_text.count(MANAGED_START), agents_text.count(MANAGED_END)
+                if starts != ends or starts > 1:
+                    blockers.append({"path": "AGENTS.md", "reason": "incomplete or ambiguous Agentic SDLC managed block"})
+                elif rendered_agents_md(agents_text) != agents_text:
+                    actions.append({"path": "AGENTS.md", "action": "refresh_managed_block"})
+            else:
+                actions.append({"path": "AGENTS.md", "action": "create_managed_block"})
+        except (OSError, ValueError) as error:
+            blockers.append({"path": "AGENTS.md", "reason": f"unsafe or unreadable managed file: {error}"})
+
+        catalog: dict[str, Any] = {}
+        expected_lock: dict[str, Any] = {}
+        if not blockers and project is not None:
+            for name, _value in artifacts:
+                try:
+                    state = filesystem.file_state((OVERLAY, name))
+                except (OSError, ValueError) as error:
+                    blockers.append({"path": f"{OVERLAY}/{name}", "reason": f"unsafe managed artifact: {error}"})
+                    continue
+                if state == "regular":
+                    protected.append(f"{OVERLAY}/{name}")
+                else:
+                    actions.append({"path": f"{OVERLAY}/{name}", "action": "recreate_missing_baseline"})
+            expected_lock = version_lock(project.get("profile"), profile, routing)
+            try:
+                lock_state = filesystem.file_state((OVERLAY, "version.lock"))
+                if lock_state == "regular":
+                    lock_value = json.loads(filesystem.read_text((OVERLAY, "version.lock")))
+                    if not isinstance(lock_value, dict):
+                        raise ValueError("must contain a JSON object")
+                    immutable_keys = ("profile", "profile_digest", "dispatch_binding_digest", "providers")
+                    drift = [key for key in immutable_keys if lock_value.get(key) != expected_lock[key]]
+                    if drift:
+                        blockers.append({
+                            "path": f"{OVERLAY}/version.lock",
+                            "reason": "lock provenance has changed (" + ",".join(drift) + "); review and migrate explicitly",
+                        })
+                    else:
+                        changed = [key for key in ("plugin_version", "kernel_version", "contracts", "contract_digest") if lock_value.get(key) != expected_lock[key]]
+                        if changed:
+                            actions.append({"path": f"{OVERLAY}/version.lock", "action": "upgrade_lock:" + ",".join(changed)})
+                        else:
+                            protected.append(f"{OVERLAY}/version.lock")
+                else:
+                    actions.append({"path": f"{OVERLAY}/version.lock", "action": "recreate_missing_lock"})
+            except (OSError, ValueError, json.JSONDecodeError) as error:
+                blockers.append({"path": f"{OVERLAY}/version.lock", "reason": f"unsafe or unreadable lock: {error}"})
+            if project.get("profile") is not None:
+                catalog = load_agent_catalog()
+                for runner, extension in (("codex", "toml"), ("claude", "md")):
+                    if args.runner not in (runner, "both"):
+                        continue
+                    for agent_id in profile.get("agents", []):
+                        if agent_id not in catalog:
+                            continue
+                        parts = (f".{runner}", "agents", f"{agent_id}.{extension}")
+                        try:
+                            state = filesystem.file_state(parts)
+                        except (OSError, ValueError) as error:
+                            blockers.append({"path": "/".join(parts), "reason": f"unsafe wrapper path: {error}"})
+                            continue
+                        if state == "regular":
+                            protected.append("/".join(parts))
+                        else:
+                            actions.append({"path": "/".join(parts), "action": "recreate_missing_wrapper"})
+
+        if blockers:
+            print(json.dumps({"status": "blocked", "mutation": False, "root": str(root), "actions": actions, "protected": protected, "blockers": blockers}, indent=2))
+            return 1
+        if not apply:
+            print(json.dumps({"status": "repair-available" if actions else "current", "mutation": False, "root": str(root), "actions": actions, "protected": protected, "blockers": []}, indent=2))
+            return 0
+
+        action_paths = {item["path"] for item in actions}
+        writes: list[tuple[tuple[str, ...], str, bool]] = []
+        for name, value in artifacts:
+            if f"{OVERLAY}/{name}" in action_paths:
+                writes.append(((OVERLAY, name), json.dumps(value, indent=2) + "\n", False))
+        if f"{OVERLAY}/version.lock" in action_paths:
+            if filesystem.file_state((OVERLAY, "version.lock")) == "regular":
+                lock_value = json.loads(filesystem.read_text((OVERLAY, "version.lock")))
+                if not isinstance(lock_value, dict):
+                    raise ValueError("version.lock must contain a JSON object")
+                immutable_keys = ("profile", "profile_digest", "dispatch_binding_digest", "providers")
+                if any(lock_value.get(key) != expected_lock[key] for key in immutable_keys):
+                    raise ValueError("version.lock provenance changed during repair planning")
+                lock_value.update({key: expected_lock[key] for key in ("plugin_version", "kernel_version", "contracts", "contract_digest")})
+                writes.append(((OVERLAY, "version.lock"), json.dumps(lock_value, indent=2) + "\n", True))
+            else:
+                writes.append(((OVERLAY, "version.lock"), json.dumps(expected_lock, indent=2) + "\n", False))
+        if "AGENTS.md" in action_paths:
+            current_agents = filesystem.read_text(("AGENTS.md",)) if filesystem.file_state(("AGENTS.md",)) == "regular" else ""
+            writes.append((("AGENTS.md",), rendered_agents_md(current_agents), True))
+        if project is not None and project.get("profile") is not None:
             for runner, extension in (("codex", "toml"), ("claude", "md")):
                 if args.runner not in (runner, "both"):
                     continue
                 for agent_id in profile.get("agents", []):
-                    if agent_id not in catalog:
+                    metadata = catalog.get(agent_id)
+                    parts = (f".{runner}", "agents", f"{agent_id}.{extension}")
+                    if not metadata or "/".join(parts) not in action_paths:
                         continue
-                    path = confined_path(root, f".{runner}", "agents", f"{agent_id}.{extension}")
-                    if path.exists():
-                        protected.append(str(path.relative_to(root)))
+                    reviewer = metadata["kind"] == "reviewer"
+                    if runner == "codex":
+                        content = "\n".join([
+                            f"name = {toml_string(agent_id)}",
+                            f"description = {toml_string('Portable Agentic SDLC ' + metadata.get('kind', 'specialist') + ' for ' + metadata.get('phase', 'lifecycle'))}",
+                            f"sandbox_mode = {toml_string('read-only' if reviewer else 'workspace-write')}",
+                            f"developer_instructions = {toml_string(agent_wrapper_body(agent_id, reviewer, metadata, profile))}",
+                            "",
+                        ])
                     else:
-                        actions.append({"path": str(path.relative_to(root)), "action": "recreate_missing_wrapper"})
-
-    if blockers:
-        print(json.dumps({"status": "blocked", "mutation": False, "root": str(root), "actions": actions, "protected": protected, "blockers": blockers}, indent=2))
-        return 1
-    if not apply:
-        print(json.dumps({"status": "repair-available" if actions else "current", "mutation": False, "root": str(root), "actions": actions, "protected": protected, "blockers": []}, indent=2))
+                        content = "\n".join([
+                            "---", f"name: {agent_id}",
+                            f"description: Portable Agentic SDLC {metadata.get('kind', 'specialist')} for {metadata.get('phase', 'lifecycle')}",
+                            f"tools: {'Read, Grep, Glob, Bash' if reviewer else 'Read, Grep, Glob, Bash, Edit, Write'}",
+                            "---", "", agent_wrapper_body(agent_id, reviewer, metadata, profile), "",
+                        ])
+                    writes.append((parts, content, False))
+        for parts, content, overwrite in writes:
+            filesystem.write_text(parts, content, overwrite=overwrite)
+        print(json.dumps({"status": "repaired" if actions else "current", "mutation": bool(actions), "root": str(root), "actions": actions, "protected": protected, "blockers": []}, indent=2))
         return 0
-
-    # All reads and integrity checks above happen before the first write.
-    action_paths = {item["path"] for item in actions}
-    for name, value in artifacts:
-        if f"{OVERLAY}/{name}" in action_paths:
-            write_json(overlay / name, value, overwrite=False)
-    lock_path = overlay / "version.lock"
-    expected_lock = version_lock(project.get("profile"), profile, routing)
-    if f"{OVERLAY}/version.lock" in action_paths and lock_path.exists():
-        lock = load_json(lock_path)
-        lock.update({key: expected_lock[key] for key in ("plugin_version", "kernel_version", "contracts", "contract_digest")})
-        write_json(lock_path, lock)
-    elif f"{OVERLAY}/version.lock" in action_paths:
-        write_json(lock_path, expected_lock, overwrite=False)
-    if "AGENTS.md" in action_paths:
-        update_agents_md(root)
-    if project.get("profile") is not None:
-        write_agent_wrappers(root, profile, args.runner)
-    print(json.dumps({"status": "repaired" if actions else "current", "mutation": bool(actions), "root": str(root), "actions": actions, "protected": protected, "blockers": []}, indent=2))
-    return 0
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print(json.dumps({"status": "blocked", "mutation": False, "root": str(root), "actions": actions, "protected": protected, "blockers": [{"path": OVERLAY, "reason": f"secure repair failed: {error}"}]}, indent=2))
+        return 1
+    finally:
+        filesystem.close()
 
 
 def initialize(args: argparse.Namespace) -> int:
