@@ -30,6 +30,24 @@ class RuntimeStewardshipWaveTests(unittest.TestCase):
         self.assertIn("staged by `knowledge-store-steward`", text)
         self.assertIn("untrusted_instruction_risk: true` **or** `unknown` requires `deferred`", text)
 
+    def test_eligible_ids_defined_as_newly_staged_excluding_steward(self) -> None:
+        text = SKILL.read_text(encoding="utf-8")
+        self.assertIn("eligible IDs (eligible = newly staged by this run, excluding any staged by `knowledge-store-steward`)", text)
+
+    def test_steward_cannot_disposition_its_own_proposals(self) -> None:
+        text = SKILL.read_text(encoding="utf-8")
+        self.assertIn("Filter out from this wave any ID whose `staged_by` value is `knowledge-store-steward`", text)
+        self.assertIn("a steward cannot disposition its own proposals", text)
+
+    def test_originating_role_captured_from_handoff(self) -> None:
+        text = SKILL.read_text(encoding="utf-8")
+        self.assertIn("Set `staged_by` to the handoff item's `source_role`", text)
+
+    def test_edge_case_all_ids_steward_staged(self) -> None:
+        text = SKILL.read_text(encoding="utf-8")
+        self.assertIn("If no newly-staged eligible IDs remain after filtering", text)
+        self.assertIn("state that no stewardship wave ran because all staged proposals were from the steward", text)
+
     def test_ingestion_is_limited_to_accepted_ids_from_the_wave(self) -> None:
         text = SKILL.read_text(encoding="utf-8")
         self.assertIn("cadre knowledge disposition-staged --id <id>", text)
