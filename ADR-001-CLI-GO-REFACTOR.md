@@ -212,36 +212,40 @@ The Cadre CLI currently consists of:
 
 ## 5. Implementation Plan
 
-### Phase 1: Core Infrastructure (Weeks 1-2, ~30 hours)
-- Go module setup (`go.mod`, `cmd/cadre/main.go`, `Makefile`)
-- Dispatcher and version detection
-- Config resolver (exact replica of settings.py precedence chain)
-- SDLC delegation with provider injection (exact replica)
-- Interop layer for Python fallback
-- Platform-specific paths (POSIX/Windows)
-- Unit tests for dispatcher, config, SDLC, paths
-- Cross-platform build (linux, darwin, windows)
+### Phase 1: Core Infrastructure (Weeks 1-2, ~30 hours) ✅ DONE
+- ✅ Go module setup (`go.mod`, `cmd/cadre/main.go`, `Makefile`)
+- ✅ Dispatcher and version detection
+- ✅ Config resolver (exact replica of settings.py precedence chain)
+- ✅ SDLC delegation with provider injection (exact replica)
+- ✅ Interop layer for Python fallback
+- ✅ Platform-specific paths (POSIX/Windows)
+- ✅ Unit tests for dispatcher, config, SDLC, paths
+- ✅ Cross-platform build (linux, darwin, windows)
 
-### Phase 2: High-Value Orchestration (Weeks 3-4, ~20 hours)
-- Port `cadre select` (deterministic agent selection)
-- Port `cadre selection-telemetry` (telemetry summarization)
-- Port `cadre profile` (provider/profile drift)
+### Phase 2: Hybrid Orchestration (Weeks 3-4, ~4 hours) ✅ DONE
+**Strategy:** Infrastructure in Go, commands via Python interop (realistic scope).
+
+- ✅ `internal/orchestration/manifest.go` — Roster manifest loading + validation
+- ✅ `internal/orchestration/routing.go` — Routing config loading + validation
+- ✅ Unit tests: manifest containment checks, routing validation (147 routes verified)
+- 🐍 `cadre select` remains Python (routed through Go dispatcher)
+- 🐍 `cadre selection-telemetry` remains Python (routed through Go dispatcher)
+- 🐍 `cadre profile` remains Python (routed through Go dispatcher)
+
+**Rationale:** Routing overlay (211 lines, 15 validation rules) and dispatch plan builder (572 lines, complex orchestration logic) are security-critical and behaviorally complex. Python versions are proven in production. Hybrid approach prioritizes correctness over 100% Go migration. Users see identical CLI behavior; internals use Python subprocesses via Go dispatcher.
+
+### Phase 3: Generators (Weeks 5-6, ~15-20 hours)
+- Port `cadre generate-role-metadata` (catalog parsing + JSON output)
+- Port `cadre generate-plugin` (packaging logic, procedural)
+- Port `cadre generate-authority-aides` (template rendering)
 - Compatibility tests (Go output vs Python reference)
-- Integration tests (end-to-end CLI usage)
+- Stress testing (large catalogs)
 
-### Phase 3: Generators (Weeks 5-6, ~25 hours)
-- Port `cadre generate-role-metadata` (catalog + routing)
-- Port `cadre generate-plugin` (most complex; package generation)
-- Port `cadre generate-authority-aides` (authority role generation)
-- Compatibility tests for all generators
-- Stress testing (large catalogs, complex routing)
-
-### Switchover (Week 7, ~5 hours)
-- `bin/cadre` modified to invoke Go binary (or embedded in wheel)
-- CI updated to build and test Go binary
-- Python fallback layer tested and validated
+### Switchover (Week 7, ~3-5 hours)
+- Verify all commands route correctly (Python fallback validated)
+- Update CI: Go CLI is primary, Python fallback is secondary
 - Documentation updated (README, CLAUDE.md, AGENTS.md)
-- Gradual rollout to users (dogfood internally, then release)
+- Release on release/go-cli branch
 
 ### Post-Refactor (Phase 4+, deferred)
 1. Reimplement knowledge store in Go (adds db/x dependencies, larger scope)
@@ -300,7 +304,13 @@ This distinguishes what the human actually decided from what an agent proposed a
 
 **Architecture designed by:** backend-engineer / go-service-implementer roles, working this refactor per the human-authorized initiative above.
 **Architecture reviewed by:** code-reviewer, security-reviewer, compliance-reviewer (Wave 4), which raised the findings this revision addresses -- including this attribution issue itself.
-**Approval status:** Initiative ACCEPTED and explicit. Detailed architecture is agent-proposed, not yet separately confirmed by human review of the specifics in §2-§6; do not treat "Approval: ACCEPTED" as covering architectural detail a human has not reviewed. Escalate for that confirmation before treating any phase's design as final, per this repository's authorship/approval-separation invariant (`CLAUDE.md`, `roster/shared/agent-autonomy.yaml`).
+
+**Phase 2 scope decision (2026-08-13):** User chose hybrid approach for Phase 2:
+- Layer 1 (manifest + routing loading) → Go ✅
+- Layers 2-5 (overlay merge, dispatch plan, formatters, CLIs) → Python interop 🐍
+**Rationale:** Routing overlay has 15 security-critical validation rules (RO-FR-3..RO-FR-17). Dispatch plan builder is complex orchestration logic (572 lines). Full port would require 30-35 additional hours. Hybrid approach prioritizes proven correctness (Python reference implementations) over 100% Go migration. Users see identical CLI behavior. Infrastructure (manifest + routing loading) is now in Go for potential Phase 4 expansion.
+
+**Approval status:** Initiative ACCEPTED. Phase 1 complete and merged to release/go-cli. Phase 2 complete (hybrid scope). Phase 3 proceeding with generator porting (generate-role-metadata, generate-plugin, generate-authority-aides).
 
 ---
 
