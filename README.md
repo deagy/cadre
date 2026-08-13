@@ -204,8 +204,8 @@ Most projects want the per-project `--profile secure-cloud` path above instead
 of this section — it avoids forcing this repository's cloud-specific roles
 onto projects with a different stack, and each project's generated wrappers
 are static files it owns, not a live link back to this checkout. This section
-is for the narrower case of genuinely wanting all 159 roles, the 12 skills, and
-the knowledge store reachable from *every* project on the machine
+is for the narrower case of genuinely wanting all 159 roles, the 13 skills, and
+the knowledge and context stores reachable from *every* project on the machine
 unconditionally.
 
 ```text

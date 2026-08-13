@@ -366,6 +366,10 @@ def port_agents(root: Path, source_root: Path | None = None) -> list[str]:
 # doc set agents reference) -- authored fresh for this port, since the
 # previous skills port never rewrote any of this.
 SKILL_PATH_SUBSTITUTIONS: list[tuple[str, str]] = [
+    # A standalone store skill may name the packaged suite path while
+    # explaining how Codex/Claude resolve its shared policies. Cline inlines
+    # skills instead, so it must receive consumer-neutral prose.
+    ("`../../suite/roster/`", "the bundled suite policy directory"),
     # Same late-arriving shared policy as PATH_SUBSTITUTIONS'
     # workspace-isolation entry: skills cite it too.
     (

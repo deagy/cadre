@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Stores"
+  short_description: "Use knowledge and context stores independently."
+  default_prompt: "Use $agent-stores to retrieve knowledge or park working context without SDLC tracking."

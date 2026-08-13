@@ -448,7 +448,7 @@ minus the ability to shadow a reserved bundled agent name:
 | Kind | Bundled | Global | Project |
 |---|---|---|---|
 | Agents | `agents/` next to `index.ts` (159 Cadre roles, reserved names) | `~/.cline/data/settings/agents/` | `<workspaceRoot>/.cline/agents/` |
-| Skills | `skills/` next to `index.ts` (8 skills, reserved names) | `~/.cline/data/settings/skills/` | `<workspaceRoot>/.cline/skills/` |
+| Skills | `skills/` next to `index.ts` (9 skills, reserved names) | `~/.cline/data/settings/skills/` | `<workspaceRoot>/.cline/skills/` |
 
 **Warning: a hand-authored global or project preset with no `allowedTools`
 gets full, unrestricted ambient tool access.** `resolveToolPolicyConfig`

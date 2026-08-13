@@ -840,7 +840,7 @@ This plugin system currently applies to the Cline CLI, SDK, and Kanban only, not
 
 ## 17. Make this repository's own suite available system-wide
 
-Most projects want §16's `cadre sdlc init --profile secure-cloud` instead of this section — it's scoped to one project and generates static, project-owned wrappers rather than a live link back to this checkout. This section covers the narrower case: wanting this repository's 159 roles, 12 skills, and shared knowledge store reachable from *every* project directory unconditionally, since everything above otherwise requires your cwd to be inside this checkout.
+Most projects want §16's `cadre sdlc init --profile secure-cloud` instead of this section — it's scoped to one project and generates static, project-owned wrappers rather than a live link back to this checkout. This section covers the narrower case: wanting this repository's 159 roles, 13 skills, and shared knowledge and context stores reachable from *every* project directory unconditionally, since everything above otherwise requires your cwd to be inside this checkout.
 
 **[`docs/INSTALL.md`](../docs/INSTALL.md) is the canonical install guide** for every runner (Claude Code, Codex, Cline, the one-command install script) and for the optional lifecycle plugins — this section is a pointer, not a second copy of it. In short, for Claude Code:
 
@@ -887,7 +887,7 @@ regeneration specifically, means silently committing output built by the wrong
 generator. Elsewhere the stakes are lower and bare `cadre` is fine.
 
 `./bin/cadre generate-plugin` does **not** regenerate the Cline mirror. Porting the
-159 role presets and 8 skills into `cline-plugins/cline-agents/` is a separate
+159 role presets and 9 skills into `cline-plugins/cline-agents/` is a separate
 command that must run *after* `generate-plugin`, because it reads the freshly
 written `plugin/` tree:
 
