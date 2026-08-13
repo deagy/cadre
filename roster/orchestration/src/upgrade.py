@@ -124,21 +124,33 @@ def compare_versions(current: str, latest: str) -> int:
     """Compare version strings, handling pre-release versions.
 
     Returns: -1 if current < latest, 0 if equal, 1 if current > latest
+    Pre-release versions (e.g., 1.2.3rc1) are treated as older than the
+    corresponding release (1.2.3).
     """
     def parse_version(v: str) -> tuple:
-        # Strip pre-release markers (rc, a, b, dev, post, etc.)
-        # Examples: 1.2.3rc1 -> 1.2.3, 1.2.3a1 -> 1.2.3
-        base = v.split("+")[0]  # Remove local version
-        for marker in ("rc", "a", "b", "dev", "post"):
-            if marker in base.lower():
-                base = base.lower().split(marker)[0]
-                break
-
-        try:
-            parts = tuple(int(x) for x in base.split("."))
-            return parts if parts else (0,)
-        except (ValueError, AttributeError):
+        import re
+        # Split into base version and pre-release suffix
+        match = re.match(r'^(\d+(?:\.\d+)*)', v)
+        if not match:
             return (0,)
+
+        base = match.group(1)
+        remainder = v[len(base):]
+
+        # Parse base version numbers
+        try:
+            base_parts = tuple(int(x) for x in base.split("."))
+        except ValueError:
+            return (0,)
+
+        # If there's a pre-release suffix, mark it as older
+        # by appending a sentinel tuple after the base version
+        if remainder:
+            # Pre-release: (1, 2, 3, -1) means older than (1, 2, 3, 0)
+            return base_parts + (-1,)
+        else:
+            # Release version: (1, 2, 3, 0)
+            return base_parts + (0,)
 
     current_parts = parse_version(current)
     latest_parts = parse_version(latest)
