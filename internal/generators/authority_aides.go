@@ -15,10 +15,10 @@ const GeneratedMarker = "<!-- GENERATED FILE: edit the canonical source and rege
 
 // AideData represents one authority-aide role from aides.yaml.
 type AideData struct {
-	ID             string   `yaml:""`
-	Title          string   `yaml:"title"`
-	Gates          []int    `yaml:"gates"`
-	KnowledgeFocus string   `yaml:"knowledge_focus"`
+	ID             string `yaml:""`
+	Title          string `yaml:"title"`
+	Gates          []int  `yaml:"gates"`
+	KnowledgeFocus string `yaml:"knowledge_focus"`
 }
 
 // LoadAides reads and parses aides.yaml.
@@ -186,7 +186,6 @@ func RenderAide(template string, aide AideData, generatedMarker string) (string,
 	lines[closingLineIdx] = lines[closingLineIdx] + "\n\n" + generatedMarker
 	return strings.Join(lines, "\n"), nil
 }
-
 
 // GenerateAuthorityAides generates all aide AGENT.md files.
 func GenerateAuthorityAides(authorityRoot, aidesPath, templatePath string, generatedMarker string) (map[string]string, error) {

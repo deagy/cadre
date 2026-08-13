@@ -72,9 +72,9 @@ func TestLoadRosterManifestPaths(t *testing.T) {
 
 	// Verify all paths exist
 	paths := map[string]string{
-		"catalog":      manifest.CatalogPath,
-		"routing":      manifest.RoutingPath,
-		"role_root":    manifest.RoleRootPath,
+		"catalog":       manifest.CatalogPath,
+		"routing":       manifest.RoutingPath,
+		"role_root":     manifest.RoleRootPath,
 		"shared_policy": manifest.SharedPolicyRootPath,
 	}
 

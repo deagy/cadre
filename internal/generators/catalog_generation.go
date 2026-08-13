@@ -127,13 +127,13 @@ func ExportAgentCatalogJSON(roles []RoleMetadata) map[string]map[string]string {
 
 	for _, role := range roles {
 		catalog[role.ID] = map[string]string{
-			"definition":      role.Definition,
-			"phase":           role.Phase,
-			"capability":      role.Capability,
-			"model":           role.Model,
-			"codex_model":     role.CodexModel,
+			"definition":       role.Definition,
+			"phase":            role.Phase,
+			"capability":       role.Capability,
+			"model":            role.Model,
+			"codex_model":      role.CodexModel,
 			"reasoning_effort": role.ReasoningEffort,
-			"knowledge_focus": role.KnowledgeFocus,
+			"knowledge_focus":  role.KnowledgeFocus,
 		}
 	}
 

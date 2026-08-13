@@ -12,15 +12,15 @@ const ManifestSchemaVersion = 1
 
 // RosterManifest is a validated roster package manifest with all paths resolved.
 type RosterManifest struct {
-	Root               string `json:"-"`
-	ManifestPath       string `json:"-"`
-	ID                 string `json:"id"`
-	Version            string `json:"version"`
-	SchemaVersion      int    `json:"schema_version"`
-	Catalog            string `json:"catalog"`
-	Routing            string `json:"routing"`
-	RoleRoot           string `json:"role_root"`
-	SharedPolicyRoot   string `json:"shared_policy_root"`
+	Root             string `json:"-"`
+	ManifestPath     string `json:"-"`
+	ID               string `json:"id"`
+	Version          string `json:"version"`
+	SchemaVersion    int    `json:"schema_version"`
+	Catalog          string `json:"catalog"`
+	Routing          string `json:"routing"`
+	RoleRoot         string `json:"role_root"`
+	SharedPolicyRoot string `json:"shared_policy_root"`
 	// Resolved absolute paths
 	CatalogPath          string `json:"-"`
 	RoutingPath          string `json:"-"`
@@ -70,10 +70,10 @@ func LoadRosterManifest(root string) (*RosterManifest, error) {
 
 	// Resolve and validate path fields
 	requiredPaths := map[string]*string{
-		"catalog":             &manifest.CatalogPath,
-		"routing":             &manifest.RoutingPath,
-		"role_root":           &manifest.RoleRootPath,
-		"shared_policy_root":  &manifest.SharedPolicyRootPath,
+		"catalog":            &manifest.CatalogPath,
+		"routing":            &manifest.RoutingPath,
+		"role_root":          &manifest.RoleRootPath,
+		"shared_policy_root": &manifest.SharedPolicyRootPath,
 	}
 
 	for fieldName, resolvedPtr := range requiredPaths {

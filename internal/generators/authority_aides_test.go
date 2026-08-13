@@ -195,13 +195,13 @@ Prepare the package for {gate_phrase} ({gate_list}).`
 
 	// Check replacements
 	checks := map[string]string{
-		"id: test-aide":                       "id replaced",
-		"title: Test Authority":               "title replaced",
-		"knowledge_focus: test knowledge":     "knowledge_focus replaced",
-		"# Test Authority Aide":               "title in body",
-		"gates G1 and G2":                     "gate_phrase replaced",
-		"(G1, G2)":                            "gate_list replaced",
-		"<!-- GENERATED -->":                  "marker inserted",
+		"id: test-aide":                   "id replaced",
+		"title: Test Authority":           "title replaced",
+		"knowledge_focus: test knowledge": "knowledge_focus replaced",
+		"# Test Authority Aide":           "title in body",
+		"gates G1 and G2":                 "gate_phrase replaced",
+		"(G1, G2)":                        "gate_list replaced",
+		"<!-- GENERATED -->":              "marker inserted",
 	}
 
 	for check, desc := range checks {
@@ -308,4 +308,3 @@ func TestGenerateAuthorityAidesReal(t *testing.T) {
 
 	t.Logf("generated %d aide AGENT.md files", len(generated))
 }
-

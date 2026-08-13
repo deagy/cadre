@@ -9,31 +9,31 @@ import (
 // RoutingConfig holds the complete routing configuration for agent selection.
 // Additional fields beyond Routes/RiskRules are kept as interface{} for forward compatibility.
 type RoutingConfig struct {
-	Version                  int       `json:"version"`
-	Routes                   []Route   `json:"routes"`
-	RiskRules                []Risk    `json:"risk_rules"`
-	TeamRecipes              []interface{} `json:"team_recipes,omitempty"`
-	DefaultGateReviewAgents  []string  `json:"default_gate_review_agents,omitempty"`
-	IgnoredGates             []string  `json:"ignored_gates,omitempty"`
-	KnowledgeFocus           interface{} `json:"knowledge_focus,omitempty"`
-	ChangeIntake             interface{} `json:"change_intake,omitempty"`
-	ContextPacks             interface{} `json:"context_packs,omitempty"`
-	CrossStack               interface{} `json:"cross_stack,omitempty"`
+	Version                 int           `json:"version"`
+	Routes                  []Route       `json:"routes"`
+	RiskRules               []Risk        `json:"risk_rules"`
+	TeamRecipes             []interface{} `json:"team_recipes,omitempty"`
+	DefaultGateReviewAgents []string      `json:"default_gate_review_agents,omitempty"`
+	IgnoredGates            []string      `json:"ignored_gates,omitempty"`
+	KnowledgeFocus          interface{}   `json:"knowledge_focus,omitempty"`
+	ChangeIntake            interface{}   `json:"change_intake,omitempty"`
+	ContextPacks            interface{}   `json:"context_packs,omitempty"`
+	CrossStack              interface{}   `json:"cross_stack,omitempty"`
 }
 
 // Route is a single routing rule for agent selection.
 type Route struct {
-	ID               string   `json:"id"`
-	WorkflowShape    string   `json:"workflow_shape"`
-	Paths            []string `json:"paths"`
-	Keywords         []string `json:"keywords"`
-	Primary          []string `json:"primary"`
-	Reviewers        []string `json:"reviewers"`
-	Support          []string `json:"support"`
-	QualityGates     []string `json:"quality_gates"`
-	RequiredGates    []string `json:"required_gates,omitempty"`
-	HumanGates       []string `json:"human_gates,omitempty"`
-	LifecycleGates   []string `json:"lifecycle_gates,omitempty"`
+	ID             string   `json:"id"`
+	WorkflowShape  string   `json:"workflow_shape"`
+	Paths          []string `json:"paths"`
+	Keywords       []string `json:"keywords"`
+	Primary        []string `json:"primary"`
+	Reviewers      []string `json:"reviewers"`
+	Support        []string `json:"support"`
+	QualityGates   []string `json:"quality_gates"`
+	RequiredGates  []string `json:"required_gates,omitempty"`
+	HumanGates     []string `json:"human_gates,omitempty"`
+	LifecycleGates []string `json:"lifecycle_gates,omitempty"`
 }
 
 // Risk is a risk classification rule.

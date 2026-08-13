@@ -18,7 +18,7 @@ func TestRenderCatalog(t *testing.T) {
 			Model:           "sonnet",
 			CodexModel:      "gpt-5.6-terra",
 			ReasoningEffort: "medium",
-			KnowledgeFocus: "product objectives",
+			KnowledgeFocus:  "product objectives",
 		},
 		{
 			ID:              "backend-engineer",
@@ -28,7 +28,7 @@ func TestRenderCatalog(t *testing.T) {
 			Model:           "sonnet",
 			CodexModel:      "gpt-5.6-terra",
 			ReasoningEffort: "medium",
-			KnowledgeFocus: "backend implementation",
+			KnowledgeFocus:  "backend implementation",
 		},
 	}
 
@@ -117,7 +117,7 @@ func TestExportAgentCatalogJSON(t *testing.T) {
 			Model:           "sonnet",
 			CodexModel:      "gpt-5.6-terra",
 			ReasoningEffort: "medium",
-			KnowledgeFocus: "focus1",
+			KnowledgeFocus:  "focus1",
 		},
 		{
 			ID:              "role2",
@@ -127,7 +127,7 @@ func TestExportAgentCatalogJSON(t *testing.T) {
 			Model:           "opus",
 			CodexModel:      "gpt-5.6-sol",
 			ReasoningEffort: "high",
-			KnowledgeFocus: "focus2",
+			KnowledgeFocus:  "focus2",
 		},
 	}
 
