@@ -15,6 +15,23 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.23.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.23.0) - 2026-08-13
+
+### Added
+
+- **Final handoffs can now be captured automatically and safely.** A dispatched
+  Codex or Claude Code child may write one bounded, versioned
+  `cadre-final-handoff` envelope to its private result channel. Cadre captures
+  only the structured handoff and identifier-only artifact manifest; it never
+  captures stdout, conversation text, prompts, command or tool results, raw
+  diffs, secrets, or credentials. Capture is best-effort and does not affect
+  the child task's terminal result. The result channel is descriptor-backed, so
+  a same-UID child cannot redirect capture by replacing the advertised path.
+
+- **`cadre --version` reports the installed CLI version.** This is useful when
+  a checkout, plugin cache, and pip/pipx installation might otherwise be hard
+  to distinguish during diagnosis.
+
 ## [0.22.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.22.0) - 2026-08-12
 
 ### Added
