@@ -16,6 +16,7 @@ type OrchestrationWorkflow struct {
 	dispatchPlan       *DispatchPlan
 	executionResult    *ExecutionResult
 	executionContext   *ExecutionContext
+	consolidatedResult *ConsolidatedResult
 }
 
 // WorkflowInput defines the input to an orchestration workflow.
@@ -29,15 +30,16 @@ type WorkflowInput struct {
 
 // WorkflowOutput defines the complete output of an orchestration workflow.
 type WorkflowOutput struct {
-	DispatchPlan    *DispatchPlan
-	ExecutionResult *ExecutionResult
-	Formatter       *ResultFormatter
-	ReportCard      *ReportCard
-	Status          string
-	Error           string
-	StartedAt       time.Time
-	CompletedAt     time.Time
-	Duration        time.Duration
+	DispatchPlan       *DispatchPlan
+	ExecutionResult    *ExecutionResult
+	ConsolidatedResult *ConsolidatedResult
+	Formatter          *ResultFormatter
+	ReportCard         *ReportCard
+	Status             string
+	Error              string
+	StartedAt          time.Time
+	CompletedAt        time.Time
+	Duration           time.Duration
 }
 
 // NewOrchestrationWorkflow creates a new orchestration workflow.
@@ -133,21 +135,25 @@ func (ow *OrchestrationWorkflow) Execute(ctx context.Context, input *WorkflowInp
 	ow.executionResult = execResult
 	output.ExecutionResult = execResult
 
-	// Step 5: Format and consolidate results
+	// Step 5: Consolidate results from multiple agents
+	consolidated := ConsolidateResults(execResult)
+	ow.consolidatedResult = consolidated
+	output.ConsolidatedResult = consolidated
+
+	// Step 6: Format results
 	formatter := NewResultFormatter(execResult)
 	ow.ResultFormatter = formatter
 	output.Formatter = formatter
 
-	// Step 6: Generate report card
+	// Step 7: Generate report card
 	reportCard := formatter.GenerateReportCard()
 	output.ReportCard = reportCard
 
-	// Step 7: Determine final status
-	consolidated := formatter.consolidated
-	if consolidated == nil || consolidated.Summary == nil {
-		output.Status = "complete-no-summary"
+	// Step 8: Determine final status
+	if consolidated == nil {
+		output.Status = "complete-no-consolidation"
 	} else {
-		output.Status = fmt.Sprintf("complete-%s", consolidated.Summary.Status)
+		output.Status = fmt.Sprintf("complete-quality-%.0f", consolidated.QualityScore*100)
 	}
 
 	output.CompletedAt = time.Now()
@@ -194,6 +200,11 @@ type WorkflowStatus struct {
 	KnowledgeRetrieved bool
 }
 
+// GetConsolidatedResult returns the consolidated analysis results.
+func (ow *OrchestrationWorkflow) GetConsolidatedResult() *ConsolidatedResult {
+	return ow.consolidatedResult
+}
+
 // GetStatus returns a status summary of the workflow execution.
 func (ow *OrchestrationWorkflow) GetStatus() *WorkflowStatus {
 	status := &WorkflowStatus{}
@@ -210,21 +221,21 @@ func (ow *OrchestrationWorkflow) GetStatus() *WorkflowStatus {
 		return status
 	}
 
-	consolidated := ConsolidateResults(ow.executionResult)
-	if consolidated == nil || consolidated.Summary == nil {
-		status.OverallStatus = "failed"
+	consolidated := ow.consolidatedResult
+	if consolidated == nil {
+		status.OverallStatus = "incomplete"
 		status.Phase = "consolidation"
 		return status
 	}
 
-	status.OverallStatus = consolidated.Summary.Status
 	status.Phase = "complete"
-	status.AgentsDispatched = consolidated.Summary.TotalAgents
-	status.AgentsFailed = consolidated.Summary.FailedCount
-	status.AgentsSuccessful = consolidated.Summary.SuccessfulCount
+	status.AgentsDispatched = consolidated.TotalAgents
+	status.AgentsFailed = consolidated.FailedAgents
+	status.AgentsSuccessful = consolidated.SuccessfulAgents
 	status.FindingsCount = len(consolidated.Findings)
-	status.Duration = consolidated.Summary.ExecutionTime
-	status.KnowledgeRetrieved = ow.executionContext.RetrievedKnowledge != nil &&
+	status.Duration = fmt.Sprintf("%v", consolidated.Duration)
+	status.KnowledgeRetrieved = ow.executionContext != nil &&
+		ow.executionContext.RetrievedKnowledge != nil &&
 		ow.executionContext.RetrievedKnowledge.Status == "success"
 
 	// Count finding severity
@@ -235,6 +246,16 @@ func (ow *OrchestrationWorkflow) GetStatus() *WorkflowStatus {
 		case "high":
 			status.HighFindings++
 		}
+	}
+
+	// Overall status based on quality score
+	switch {
+	case consolidated.QualityScore >= 0.8:
+		status.OverallStatus = "high-quality"
+	case consolidated.QualityScore >= 0.6:
+		status.OverallStatus = "medium-quality"
+	default:
+		status.OverallStatus = "low-quality"
 	}
 
 	return status

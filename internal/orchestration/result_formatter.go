@@ -43,7 +43,7 @@ func (rf *ResultFormatter) FormatJSON(pretty bool) (string, error) {
 
 // FormatMarkdown generates a markdown report of execution results.
 func (rf *ResultFormatter) FormatMarkdown() string {
-	if rf.consolidated == nil || rf.consolidated.Summary == nil {
+	if rf.consolidated == nil {
 		return "# Execution Report\n\nNo results available.\n"
 	}
 
@@ -52,19 +52,19 @@ func (rf *ResultFormatter) FormatMarkdown() string {
 	sb.WriteString("# Cadre Orchestration Report\n\n")
 
 	// Execution summary
-	fmt.Fprintf(&sb, "**Status:** %s  \n", rf.consolidated.Summary.Status)
-	fmt.Fprintf(&sb, "**Executed:** %s  \n", rf.execution.ExecutedAt.Format(time.RFC3339))
-	fmt.Fprintf(&sb, "**Duration:** %s  \n", rf.consolidated.Summary.ExecutionTime)
+	fmt.Fprintf(&sb, "**Quality Score:** %.2f%%  \n", rf.consolidated.QualityScore*100)
+	fmt.Fprintf(&sb, "**Executed:** %s  \n", rf.consolidated.ExecutedAt.Format(time.RFC3339))
+	fmt.Fprintf(&sb, "**Duration:** %v  \n", rf.consolidated.Duration)
 	sb.WriteString("\n")
 
 	// Statistics
 	sb.WriteString("## Statistics\n\n")
 	sb.WriteString("| Metric | Count |\n")
 	sb.WriteString("|--------|-------|\n")
-	fmt.Fprintf(&sb, "| Total Agents | %d |\n", rf.consolidated.Summary.TotalAgents)
-	fmt.Fprintf(&sb, "| Successful | %d |\n", rf.consolidated.Summary.SuccessfulCount)
-	fmt.Fprintf(&sb, "| Failed | %d |\n", rf.consolidated.Summary.FailedCount)
-	fmt.Fprintf(&sb, "| Skipped | %d |\n", rf.consolidated.Summary.SkippedCount)
+	fmt.Fprintf(&sb, "| Total Agents | %d |\n", rf.consolidated.TotalAgents)
+	fmt.Fprintf(&sb, "| Successful | %d |\n", rf.consolidated.SuccessfulAgents)
+	fmt.Fprintf(&sb, "| Failed | %d |\n", rf.consolidated.FailedAgents)
+	fmt.Fprintf(&sb, "| Skipped | %d |\n", rf.consolidated.SkippedAgents)
 	sb.WriteString("\n")
 
 	// Agent results
@@ -77,10 +77,13 @@ func (rf *ResultFormatter) FormatMarkdown() string {
 		rf.formatFindings(&sb)
 	}
 
-	// Errors
-	if len(rf.consolidated.Errors) > 0 {
-		sb.WriteString("## Execution Errors\n\n")
-		rf.formatErrors(&sb)
+	// Consolidation Errors
+	if len(rf.consolidated.ConsolidationErrors) > 0 {
+		sb.WriteString("## Consolidation Errors\n\n")
+		for _, err := range rf.consolidated.ConsolidationErrors {
+			fmt.Fprintf(&sb, "- %s\n", err)
+		}
+		sb.WriteString("\n")
 	}
 
 	return sb.String()
@@ -131,29 +134,14 @@ func (rf *ResultFormatter) formatFindings(sb *strings.Builder) {
 
 		fmt.Fprintf(sb, "### %s Findings (%d)\n\n", strings.ToUpper(severity), len(findings))
 		for _, finding := range findings {
-			fmt.Fprintf(sb, "#### %s\n", finding.Title)
-			fmt.Fprintf(sb, "**Agent:** `%s` (%s)  \n", finding.AgentID, finding.Role)
-			if finding.Description != "" {
-				fmt.Fprintf(sb, "**Description:** %s  \n", finding.Description)
-			}
-			if finding.Recommendation != "" {
-				fmt.Fprintf(sb, "**Recommendation:** %s  \n", finding.Recommendation)
-			}
+			fmt.Fprintf(sb, "#### %s\n", finding.Description)
+			fmt.Fprintf(sb, "**ID:** `%s`  \n", finding.ID)
+			fmt.Fprintf(sb, "**Reported by:** %v  \n", finding.AgentIDs)
+			fmt.Fprintf(sb, "**Confidence:** %.0f%%  \n", finding.Confidence*100)
+			fmt.Fprintf(sb, "**Agreement:** %d agent(s)  \n", finding.Count)
 			sb.WriteString("\n")
 		}
 	}
-}
-
-// formatErrors formats execution errors as a list.
-func (rf *ResultFormatter) formatErrors(sb *strings.Builder) {
-	sb.WriteString("| Agent | Error Type | Message |\n")
-	sb.WriteString("|-------|-----------|----------|\n")
-
-	for _, err := range rf.consolidated.Errors {
-		fmt.Fprintf(sb, "| `%s` | %s | %s |\n",
-			err.AgentID, err.ErrorType, truncateForTable(err.Message, 50))
-	}
-	sb.WriteString("\n")
 }
 
 // FormatText generates a human-readable text report.
@@ -162,21 +150,22 @@ func (rf *ResultFormatter) FormatText() string {
 		return "No results available.\n"
 	}
 
-	return rf.consolidated.TextSummary()
+	return rf.consolidated.Summary()
 }
 
 // FormatSummary generates a brief summary suitable for logs or status messages.
 func (rf *ResultFormatter) FormatSummary() string {
-	if rf.consolidated == nil || rf.consolidated.Summary == nil {
+	if rf.consolidated == nil {
 		return "Execution completed with no results."
 	}
 
-	s := rf.consolidated.Summary
 	return fmt.Sprintf(
-		"Execution %s: %d/%d agents successful, %d failed, %d skipped (took %s)",
-		strings.ToUpper(s.Status),
-		s.SuccessfulCount, s.TotalAgents, s.FailedCount, s.SkippedCount,
-		s.ExecutionTime,
+		"Quality Score: %.1f%% | Agents: %d/%d successful | Findings: %d | Duration: %v",
+		rf.consolidated.QualityScore*100,
+		rf.consolidated.SuccessfulAgents,
+		rf.consolidated.TotalAgents,
+		len(rf.consolidated.Findings),
+		rf.consolidated.Duration,
 	)
 }
 
@@ -205,15 +194,15 @@ func (rf *ResultFormatter) GenerateReportCard() *ReportCard {
 	}
 
 	card := &ReportCard{
-		TaskID:         rf.execution.Plan.TaskID,
-		Status:         rf.consolidated.Summary.Status,
-		AgentCount:     rf.consolidated.Summary.TotalAgents,
-		SuccessCount:   rf.consolidated.Summary.SuccessfulCount,
-		FailedCount:    rf.consolidated.Summary.FailedCount,
+		TaskID:         rf.consolidated.TaskID,
+		Status:         fmt.Sprintf("Quality: %.0f%%", rf.consolidated.QualityScore*100),
+		AgentCount:     rf.consolidated.TotalAgents,
+		SuccessCount:   rf.consolidated.SuccessfulAgents,
+		FailedCount:    rf.consolidated.FailedAgents,
 		FindingCount:   len(rf.consolidated.Findings),
-		Duration:       rf.consolidated.Summary.ExecutionTime,
-		ExecutedAt:     rf.execution.ExecutedAt.Format(time.RFC3339),
-		CompletedAt:    rf.execution.CompletedAt.Format(time.RFC3339),
+		Duration:       fmt.Sprintf("%v", rf.consolidated.Duration),
+		ExecutedAt:     rf.consolidated.ExecutedAt.Format(time.RFC3339),
+		CompletedAt:    rf.consolidated.CompletedAt.Format(time.RFC3339),
 		PrimaryAgents:  append([]string{}, rf.execution.Plan.Agents.Primary...),
 		ReviewerAgents: append([]string{}, rf.execution.Plan.Agents.Reviewers...),
 		SupportAgents:  append([]string{}, rf.execution.Plan.Agents.Support...),

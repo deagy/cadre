@@ -148,7 +148,7 @@ func TestFormatText(t *testing.T) {
 		t.Errorf("text output is empty")
 	}
 
-	if !strings.Contains(text, "Dispatch Execution Summary") {
+	if !strings.Contains(text, "Consolidation Summary") {
 		t.Errorf("text missing expected content")
 	}
 }
@@ -178,8 +178,8 @@ func TestFormatSummary(t *testing.T) {
 		t.Errorf("summary is empty")
 	}
 
-	if !strings.Contains(summary, "Execution") {
-		t.Errorf("summary missing 'Execution'")
+	if !strings.Contains(summary, "Quality") {
+		t.Errorf("summary missing 'Quality'")
 	}
 
 	if !strings.Contains(summary, "2") {
@@ -256,7 +256,7 @@ func TestExportResults(t *testing.T) {
 		{"json-pretty", true, "{"},
 		{"markdown", true, "#"},
 		{"text", true, "Agent"},
-		{"summary", true, "Execution"},
+		{"summary", true, "Quality"},
 		{"invalid", false, ""},
 	}
 
@@ -305,16 +305,22 @@ func TestFormatMarkdownWithFindings(t *testing.T) {
 	// Manually add findings to consolidated result
 	formatter.consolidated.Findings = []Finding{
 		{
-			AgentID:     "agent-1",
+			ID:          "f1",
 			Severity:    "critical",
-			Title:       "Security issue found",
-			Description: "Missing input validation",
+			Description: "Security issue found: Missing input validation",
+			AgentIDs:    []string{"agent-1"},
+			Confidence:  0.9,
+			FirstSeen:   "agent-1",
+			Count:       1,
 		},
 		{
-			AgentID:     "agent-1",
+			ID:          "f2",
 			Severity:    "high",
-			Title:       "Code quality issue",
-			Description: "Function too complex",
+			Description: "Code quality issue: Function too complex",
+			AgentIDs:    []string{"agent-1"},
+			Confidence:  0.8,
+			FirstSeen:   "agent-1",
+			Count:       1,
 		},
 	}
 
@@ -329,6 +335,6 @@ func TestFormatMarkdownWithFindings(t *testing.T) {
 	}
 
 	if !strings.Contains(md, "Security issue found") {
-		t.Errorf("markdown missing finding title")
+		t.Errorf("markdown missing finding description")
 	}
 }
