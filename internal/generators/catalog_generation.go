@@ -71,13 +71,13 @@ func RenderCatalog(roles []RoleMetadata, headerTemplate string) (string, error) 
 		}
 
 		entry := e.entry
-		b.WriteString(fmt.Sprintf("  %s:\n", entry.ID))
-		b.WriteString(fmt.Sprintf("    definition: %s\n", entry.Definition))
-		b.WriteString(fmt.Sprintf("    phase: %s\n", entry.Phase))
-		b.WriteString(fmt.Sprintf("    capability: %s\n", entry.Capability))
-		b.WriteString(fmt.Sprintf("    model: %s\n", entry.Model))
-		b.WriteString(fmt.Sprintf("    codex_model: %s\n", entry.CodexModel))
-		b.WriteString(fmt.Sprintf("    reasoning_effort: %s\n", entry.ReasoningEffort))
+		fmt.Fprintf(&b, "  %s:\n", entry.ID)
+		fmt.Fprintf(&b, "    definition: %s\n", entry.Definition)
+		fmt.Fprintf(&b, "    phase: %s\n", entry.Phase)
+		fmt.Fprintf(&b, "    capability: %s\n", entry.Capability)
+		fmt.Fprintf(&b, "    model: %s\n", entry.Model)
+		fmt.Fprintf(&b, "    codex_model: %s\n", entry.CodexModel)
+		fmt.Fprintf(&b, "    reasoning_effort: %s\n", entry.ReasoningEffort)
 	}
 
 	return b.String(), nil
@@ -109,13 +109,13 @@ func SpliceKnowledgeFocus(originalRouting string, knowledgeFocus map[string]stri
 func RenderCodexWrapper(role RoleMetadata) string {
 	var b strings.Builder
 
-	b.WriteString("[role]\n")
-	b.WriteString(fmt.Sprintf("name = \"%s\"\n", role.ID))
-	b.WriteString(fmt.Sprintf("model = \"%s\"\n", role.CodexModel))
+	fmt.Fprint(&b, "[role]\n")
+	fmt.Fprintf(&b, "name = \"%s\"\n", role.ID)
+	fmt.Fprintf(&b, "model = \"%s\"\n", role.CodexModel)
 
 	// Optional: add capabilities based on role.Capability
 	// For now, just the basic structure
-	b.WriteString("capabilities = [\"read_only\"]\n")
+	fmt.Fprint(&b, "capabilities = [\"read_only\"]\n")
 
 	return b.String()
 }
