@@ -275,7 +275,7 @@ class RealRepoRegressionTests(unittest.TestCase):
             shutil.copytree(generated_package() / "skills", root / "skills")
 
             ported = p.port_skills(root)
-            self.assertEqual(len(ported), 8)
+            self.assertEqual(len(ported), 9)
             self._assert_mirror_matches_committed("skills", ported, root / "cline-agents" / "skills")
 
     def test_skills_have_no_remaining_roster_relative_leakage(self) -> None:
@@ -287,7 +287,7 @@ class RealRepoRegressionTests(unittest.TestCase):
             shutil.copytree(generated_package() / "skills", root / "skills")
 
             ported = p.port_skills(root)
-            self.assertEqual(len(ported), 8)
+            self.assertEqual(len(ported), 9)
 
             for name in ported:
                 content = (root / "cline-agents" / "skills" / f"{name}.md").read_text(encoding="utf-8")
@@ -369,7 +369,7 @@ class RealRepoRegressionTests(unittest.TestCase):
                 text=True,
             )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Ported 159 agent(s) and 8 skill(s)", result.stdout)
+        self.assertIn("Ported 159 agent(s) and 9 skill(s)", result.stdout)
 
     def test_the_suite_leaves_the_committed_mirror_untouched(self) -> None:
         # The property the fix above restores, asserted directly rather than

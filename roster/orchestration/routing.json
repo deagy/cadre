@@ -3683,6 +3683,28 @@
       ]
     },
     {
+      "id": "context-store",
+      "workflow_shape": "unclassified",
+      "paths": [
+        "roster/context-store/**",
+        "roster/shared/context-use-policy.md"
+      ],
+      "keywords": [
+        "context store",
+        "context stores",
+        "working context",
+        "agent context",
+        "context handle"
+      ],
+      "primary": [
+        "knowledge-store-steward"
+      ],
+      "reviewers": [
+        "security-reviewer",
+        "compliance-reviewer"
+      ]
+    },
+    {
       "id": "architecture-design",
       "workflow_shape": "unclassified",
       "paths": [

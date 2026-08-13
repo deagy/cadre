@@ -695,6 +695,17 @@ class SelectorTests(unittest.TestCase):
         self.assertEqual(result["agents"]["primary"], ["knowledge-store-steward"])
         self.assertEqual([match["id"] for match in result["matched_routes"]], ["knowledge-store"])
 
+    def test_selects_knowledge_store_steward_for_context_store_work(self) -> None:
+        result = plan(
+            task="Decouple the knowledge and context stores from SDLC tracking for ad-hoc agents",
+            changed_files=[],
+            classification="internal",
+        )
+        self.assertEqual(result["agents"]["primary"], ["knowledge-store-steward"])
+        self.assertEqual([match["id"] for match in result["matched_routes"]], ["context-store"])
+        self.assertIn("security-reviewer", result["agents"]["reviewers"])
+        self.assertIn("compliance-reviewer", result["agents"]["reviewers"])
+
     def test_record_this_decision_stays_on_decision_record_route(self) -> None:
         result = plan(
             task="Record this decision",
