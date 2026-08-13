@@ -672,6 +672,19 @@ dispositioned, and this store holds working material no one reviewed.
   bulk material by reference. Every field that contract requires stays inline
   and complete; a reviewer must be able to verify a handoff without fetching
   anything.
+- **Automatic capture is narrow.** Secure-cloud dispatch captures only a
+  runner's separate, valid `cadre-final-handoff` v1 envelope; it never infers
+  a handoff from stdout. The envelope contains an allowlisted structured
+  handoff, an identifier-only artifact manifest, and provenance references —
+  not artifact bodies. Dispatch supplies its identity, source, classification,
+  `dispatch` scope, and normal TTL; this policy's redaction, expiry, audit, and
+  untrusted-data rules still apply. Invalid or absent envelopes store nothing
+  and do not change the dispatch outcome.
+- **Conversations and raw tool results stay out.** They are not valid
+  final-handoff fields and are never inferred from child output. Their
+  retrieval value, privacy impact, and retention implications are a parked
+  investigation requiring a separate decision before any implementation
+  collects them.
 - **Export deliberately, never by habit.** `cadre context export` writes entries
   to a directory that is normally committed and cloneable, where none of this
   store's protections reach: no scope, no expiry, no untrusted fence. Export

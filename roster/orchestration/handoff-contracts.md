@@ -32,6 +32,23 @@ Every handoff includes:
   sibling keys `findings: []`, `human_gates: []`, and
   `knowledge_steward_handoffs: []`.
 
+  A secure-cloud runner can have its final handoff captured automatically only
+  by returning a separate `final_handoff` field containing a
+  `cadre-final-handoff` v1 envelope. The exact top-level keys are `kind`,
+  `schema_version`, `handoff`, `artifacts`, and `derived_from`. `handoff` is
+  limited to `summary`, `disposition`, `findings`, `assumptions`,
+  `unresolved_questions`, `next_action`, `context_handles`, and
+  `knowledge_steward_handoffs`; `artifacts` is an identifier-only manifest,
+  never copied artifact content. The dispatcher binds identity, source,
+  classification, scope, and TTL from the dispatch rather than accepting them
+  from the envelope. It does not parse stdout for a handoff: absent or invalid
+  envelopes are not captured and do not change dispatch completion.
+
+  Conversation transcripts and raw tool results are excluded from the
+  envelope and are never inferred from child output. Whether either should be
+  stored later is a separate parked investigation. Automatic capture never
+  changes the inline-completeness rule below.
+
   **A handle may replace bulk content. A handle may never replace a required
   field of this contract.** Findings with evidence and severity, inputs
   examined, assumptions, unresolved questions, citations, approval status, and

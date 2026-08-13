@@ -345,6 +345,97 @@ class AuditTests(ContextToolTestCase):
         self.assertNotIn("a distinctive query phrase", json.dumps(record))
 
 
+class AutomaticFinalHandoffTests(ContextToolTestCase):
+    def _envelope(self, **overrides) -> dict:
+        envelope = {
+            "kind": "cadre-final-handoff",
+            "schema_version": 1,
+            "handoff": {"summary": "Implemented the bounded change.", "disposition": "complete"},
+            "artifacts": [{"id": "roster/orchestration/mcp/context_tools.py", "revision": "abc123"}],
+            "derived_from": [],
+        }
+        envelope.update(overrides)
+        return envelope
+
+    def test_capture_is_dispatch_scoped_and_uses_a_dispatch_derived_source(self) -> None:
+        result = context_tools.capture_final_handoff(
+            envelope=self._envelope(), role_id="code-reviewer", task_id="TASK-1",
+            dispatch_id="SESSION-1", parent_classification="internal", classification="internal",
+            project_root=Path(self.tmp.name) / "target-project",
+        )
+        self.assertEqual(result["status"], "captured")
+        self.assertEqual(result["source"], context_tools._dispatch_source(Path(self.tmp.name) / "target-project"))
+        bundle = context_tools.get(
+            handle=result["handle"], agent="security-reviewer", task_id="TASK-1",
+            dispatch_id="SESSION-1", parent_classification="internal", classification="internal", source=result["source"],
+        )
+        self.assertEqual(len(bundle["results"]), 1)
+        self.assertIn("cadre-final-handoff", bundle["results"][0]["content"])
+
+    def test_raw_tool_output_and_transcripts_are_refused_not_stored(self) -> None:
+        for field in ("stdout_text", "tool_results", "transcript"):
+            result = context_tools.capture_final_handoff(
+                envelope=self._envelope(handoff={"summary": "safe", field: "do not store"}),
+                role_id="code-reviewer", task_id="TASK-1", dispatch_id="SESSION-1",
+                parent_classification="internal", classification="internal", project_root=Path(self.tmp.name),
+            )
+            self.assertEqual(result["status"], "not_captured")
+            self.assertIn("handoff", result["reason"])
+
+    def test_untrusted_knowledge_provenance_is_preserved(self) -> None:
+        result = context_tools.capture_final_handoff(
+            envelope=self._envelope(derived_from=["ks:untrusted:chunk-1"]),
+            role_id="code-reviewer", task_id="TASK-1", dispatch_id="SESSION-1",
+            parent_classification="internal", classification="internal", project_root=Path(self.tmp.name),
+        )
+        self.assertEqual(result["status"], "captured")
+        self.assertTrue(result["untrusted_inputs"])
+
+    def test_capture_uses_the_dispatch_role_not_a_conflicting_ambient_role(self) -> None:
+        with mock.patch.dict(os.environ, {context_tools.ROLE_ID_ENV_VAR: "security-reviewer"}):
+            result = context_tools.capture_final_handoff(
+                envelope=self._envelope(), role_id="code-reviewer", task_id="TASK-1",
+                dispatch_id="SESSION-1", parent_classification="internal", classification="internal",
+                project_root=Path(self.tmp.name),
+            )
+        self.assertEqual(result["status"], "captured")
+        captured = context_tools.get(
+            handle=result["handle"], agent="code-reviewer", task_id="TASK-1", dispatch_id="SESSION-1",
+            parent_classification="internal", classification="internal", source=result["source"],
+        )
+        self.assertEqual(len(captured["results"]), 1)
+        # Dispatch-scoped entries are deliberately peer-readable; attribution,
+        # not peer visibility, is what the forced dispatch role protects.
+        peer = context_tools.get(
+            handle=result["handle"], agent="security-reviewer", task_id="TASK-1", dispatch_id="SESSION-1",
+            parent_classification="internal", classification="internal", source=result["source"],
+        )
+        self.assertEqual(peer["results"][0]["agent"], "code-reviewer")
+
+    def test_artifact_identifiers_reject_local_or_query_bearing_sources(self) -> None:
+        forbidden = ("/etc/passwd", r"C:\\secret.txt", "file:///tmp/secret", "https://example.test/a?token=secret")
+        for identifier in forbidden:
+            result = context_tools.capture_final_handoff(
+                envelope=self._envelope(artifacts=[{"id": identifier}]), role_id="code-reviewer",
+                task_id="TASK-1", dispatch_id="SESSION-1", parent_classification="internal",
+                classification="internal", project_root=Path(self.tmp.name),
+            )
+            self.assertEqual(result["status"], "not_captured", identifier)
+            self.assertIn("artifacts.id", result["reason"])
+
+    def test_bounded_typed_handoff_rejects_multiline_bulk_text_and_nested_shapes(self) -> None:
+        for handoff in (
+            {"summary": "\n".join("line" for _ in range(42))},
+            {"summary": {"nested": "not allowed"}},
+        ):
+            result = context_tools.capture_final_handoff(
+                envelope=self._envelope(handoff=handoff), role_id="code-reviewer", task_id="TASK-1",
+                dispatch_id="SESSION-1", parent_classification="internal", classification="internal",
+                project_root=Path(self.tmp.name),
+            )
+            self.assertEqual(result["status"], "not_captured")
+
+
 class ServerRegistrationTests(unittest.TestCase):
     def setUp(self) -> None:
         stub_module = type(sys)("mcp")

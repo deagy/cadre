@@ -29,6 +29,7 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from datetime import datetime, timezone
@@ -113,6 +114,8 @@ WRITE_CAPABLE_SANDBOX_MODES = KNOWN_SANDBOX_MODES - {READ_ONLY_SANDBOX}
 MAX_ROLE_FILE_BYTES = 256 * 1024
 MAX_BRIEF_BYTES = 32 * 1024
 MAX_CHILD_OUTPUT_BYTES = 1 * 1024 * 1024
+MAX_FINAL_HANDOFF_RESULT_BYTES = 64 * 1024
+FINAL_HANDOFF_RESULT_ENV_VAR = "SECURE_CLOUD_AGENTS_FINAL_HANDOFF_PATH"
 DEFAULT_TIMEOUT_SECONDS = 600.0
 MAX_CONCURRENT_CHILDREN = 3
 CONFIRMATION_TTL_SECONDS = 300.0
@@ -1682,6 +1685,96 @@ def runner_activity_fields(result: dict[str, Any]) -> dict[str, Any]:
     return {key: result[key] for key in _OPTIONAL_ACTIVITY_KEYS if key in result}
 
 
+def automatic_context_capture(
+    result: dict[str, Any], *, role_id: str, task_id: str | None, session_id: str | None,
+    parent_classification: str | None, classification: str, project_root: Path,
+) -> dict[str, Any]:
+    """Capture only a runner's explicit final-handoff envelope, best-effort.
+
+    Import lazily to keep this safety core independent of the context-store
+    adapter at import time (the adapter imports this module for its shared
+    classification and audit rules). stdout is deliberately not inspected:
+    arbitrary child output is untrusted data, never an inferred handoff.
+    """
+    channel_error = result.get("final_handoff_capture_error")
+    if channel_error:
+        return {"status": "not_captured", "reason": str(channel_error)}
+    envelope = result.get("final_handoff")
+    if envelope is None:
+        return {"status": "not_provided"}
+    try:
+        import context_tools
+
+        return context_tools.capture_final_handoff(
+            envelope=envelope,
+            role_id=role_id,
+            task_id=task_id,
+            dispatch_id=session_id,
+            parent_classification=parent_classification,
+            classification=classification,
+            project_root=project_root,
+        )
+    except Exception as error:  # noqa: BLE001 -- a failed local capture cannot change child completion
+        return {"status": "not_captured", "reason": f"automatic context capture failed: {error}"}
+
+
+def _prepare_cli_final_handoff_channel(child_env: dict[str, str], prompt: str) -> tuple[dict[str, str], str, Path, Path]:
+    """Create a private, per-child result file; stdout is never inspected."""
+    directory = Path(tempfile.mkdtemp(prefix="cadre-final-handoff-"))
+    try:
+        os.chmod(directory, 0o700)
+        path = directory / "handoff.json"
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | _nofollow_flag(), 0o600)
+        os.close(descriptor)
+    except Exception:
+        try:
+            for item in directory.iterdir():
+                item.unlink()
+            directory.rmdir()
+        except OSError:
+            pass
+        raise
+    env = dict(child_env)
+    env[FINAL_HANDOFF_RESULT_ENV_VAR] = str(path)
+    protocol = (
+        "\n\nFinal-handoff result channel: after completing the task, optionally write one JSON "
+        f"object (max {MAX_FINAL_HANDOFF_RESULT_BYTES} bytes) to the path in ${FINAL_HANDOFF_RESULT_ENV_VAR}. "
+        "It must be the versioned cadre-final-handoff envelope. Write only the final structured "
+        "handoff and identifier-only artifact manifest; never write conversation text, prompts, command/tool "
+        "results, test logs, raw diffs, secrets, or credentials. This file is the only automatic-capture "
+        "channel; stdout is not used for capture.\n"
+    )
+    return env, prompt + protocol, directory, path
+
+
+def _read_cli_final_handoff(path: Path, result: dict[str, Any]) -> None:
+    """Attach a bounded JSON result from the server-owned channel, if present."""
+    try:
+        metadata = path.lstat()
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size == 0:
+            return
+        if metadata.st_size > MAX_FINAL_HANDOFF_RESULT_BYTES:
+            result["final_handoff_capture_error"] = "final_handoff result file exceeds the 64KiB cap"
+            return
+        with path.open("rb") as stream:
+            payload = stream.read(MAX_FINAL_HANDOFF_RESULT_BYTES + 1)
+        if len(payload) > MAX_FINAL_HANDOFF_RESULT_BYTES:
+            result["final_handoff_capture_error"] = "final_handoff result file exceeds the 64KiB cap"
+            return
+        result["final_handoff"] = json.loads(payload.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        result["final_handoff_capture_error"] = f"final_handoff result file was invalid: {error}"
+
+
+def _cleanup_cli_final_handoff_channel(directory: Path) -> None:
+    try:
+        for item in directory.iterdir():
+            item.unlink()
+        directory.rmdir()
+    except OSError:
+        pass
+
+
 def write_audit_record(record: dict[str, Any], *, path: Path | None = None) -> None:
     target = _ensure_audit_log_path(path) if path is not None else _ensure_audit_log_path()
     line = (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")
@@ -1755,6 +1848,9 @@ def _run_async_role_dispatch(
     mode: str,
     effective_sandbox: str,
     classification: str,
+    parent_classification: str | None,
+    handoff_directory: Path | None,
+    handoff_path: Path | None,
 ) -> None:
     """Background-thread body for dispatch_secure_cloud_role(wait=False).
 
@@ -1793,6 +1889,9 @@ def _run_async_role_dispatch(
             job_store.fail(job_id, str(error))
             return
 
+        if handoff_path is not None:
+            _read_cli_final_handoff(handoff_path, result)
+
         # Compute the terminal result before attempting the audit write, and
         # write it to the job store unconditionally afterward (Finding 2):
         # if the audit write below raises, the job's completion must still
@@ -1818,6 +1917,15 @@ def _run_async_role_dispatch(
             # path is the one a caller cannot watch directly.
             **runner_activity_fields(result),
         }
+        completion_result["context_capture"] = automatic_context_capture(
+            result,
+            role_id=role.role_id,
+            task_id=audit_base.get("task_id"),
+            session_id=audit_base.get("session_id"),
+            parent_classification=parent_classification,
+            classification=classification,
+            project_root=cwd,
+        )
         _write_audit_record_best_effort(
             build_audit_record(
                 **audit_base,
@@ -1858,6 +1966,8 @@ def _run_async_role_dispatch(
         )
         job_store.fail(job_id, f"unexpected error: {error}")
     finally:
+        if handoff_directory is not None:
+            _cleanup_cli_final_handoff_channel(handoff_directory)
         limiter.release()
 
 
@@ -2048,6 +2158,10 @@ def dispatch_secure_cloud_role(
         child_env = build_child_env(depth, resolved_project_root)
         argv = build_child_argv_for_runner(runner, role, effective_sandbox, resolved_project_root)
         prompt = compose_prompt(role.developer_instructions, brief)
+        handoff_directory: Path | None = None
+        handoff_path: Path | None = None
+        if runner in {"codex", "claude-code"}:
+            child_env, prompt, handoff_directory, handoff_path = _prepare_cli_final_handoff_channel(child_env, prompt)
         active_child_runner = child_runner or resolve_child_runner_for_runner(
             runner, role, mode, effective_sandbox, brief
         )
@@ -2104,11 +2218,16 @@ def dispatch_secure_cloud_role(
                         mode=mode,
                         effective_sandbox=effective_sandbox,
                         classification=classification,
+                        parent_classification=parent_classification,
+                        handoff_directory=handoff_directory,
+                        handoff_path=handoff_path,
                     ),
                     daemon=True,
                 )
                 thread.start()
             except Exception:
+                if handoff_directory is not None:
+                    _cleanup_cli_final_handoff_channel(handoff_directory)
                 limiter.release()
                 raise
             return {
@@ -2132,9 +2251,14 @@ def dispatch_secure_cloud_role(
                     timeout_seconds=timeout_seconds,
                 )
             except DispatchUnavailable as error:
+                if handoff_directory is not None:
+                    _cleanup_cli_final_handoff_channel(handoff_directory)
                 return _unavailable(str(error), resolved_path=str(role.path), resolution_tier=role.tier)
         finally:
             limiter.release()
+
+        if handoff_path is not None:
+            _read_cli_final_handoff(handoff_path, result)
 
         write_audit_record(
             build_audit_record(
@@ -2157,7 +2281,7 @@ def dispatch_secure_cloud_role(
             ),
             path=audit_path,
         )
-        return {
+        response = {
             "status": "dispatched",
             "role_id": role_id,
             "resolution_tier": role.tier,
@@ -2172,9 +2296,25 @@ def dispatch_secure_cloud_role(
             "output": wrap_untrusted_output(result.get("stdout_text", "")),
             **runner_activity_fields(result),
         }
+        response["context_capture"] = automatic_context_capture(
+            result,
+            role_id=role_id,
+            task_id=task_id,
+            session_id=session_id,
+            parent_classification=parent_classification,
+            classification=classification,
+            project_root=resolved_project_root,
+        )
+        if handoff_directory is not None:
+            _cleanup_cli_final_handoff_channel(handoff_directory)
+        return response
     except DispatchDenied as error:
+        if "handoff_directory" in locals() and handoff_directory is not None:
+            _cleanup_cli_final_handoff_channel(handoff_directory)
         return _deny(str(error))
     except DispatchUnavailable as error:
+        if "handoff_directory" in locals() and handoff_directory is not None:
+            _cleanup_cli_final_handoff_channel(handoff_directory)
         return _unavailable(str(error))
 
 
@@ -2540,7 +2680,9 @@ def dispatch_team(
     results: list[dict[str, Any] | None] = [None] * len(resolved_members)
     threads: list[threading.Thread] = []
 
-    def _run_member(index: int, member: TeamMember, role: ResolvedRole, effective_sandbox: str) -> None:
+    def _run_member(
+        index: int, member: TeamMember, role: ResolvedRole, member_classification: str, effective_sandbox: str
+    ) -> None:
         member_audit_base = {
             **team_audit_base,
             "role_id": member.role_id,
@@ -2582,6 +2724,10 @@ def dispatch_team(
             child_env = build_child_env(depth, resolved_project_root)
             argv = build_child_argv_for_runner(runner, role, effective_sandbox, resolved_project_root)
             prompt = compose_prompt(role.developer_instructions, member.brief)
+            handoff_directory: Path | None = None
+            handoff_path: Path | None = None
+            if runner in {"codex", "claude-code"}:
+                child_env, prompt, handoff_directory, handoff_path = _prepare_cli_final_handoff_channel(child_env, prompt)
             # Selected per member, not once for the team: the api runner's
             # callable closes over that member's own role and brief.
             active_child_runner = child_runner or resolve_child_runner_for_runner(
@@ -2613,6 +2759,9 @@ def dispatch_team(
                 }
                 return
 
+            if handoff_path is not None:
+                _read_cli_final_handoff(handoff_path, result)
+
             # Compute the terminal result before attempting the audit write,
             # and set results[index] unconditionally afterward (Finding 2):
             # an audit-write failure here must not fall through to the
@@ -2633,6 +2782,15 @@ def dispatch_team(
                 "output": wrap_untrusted_output(result.get("stdout_text", "")),
                 **runner_activity_fields(result),
             }
+            member_result["context_capture"] = automatic_context_capture(
+                result,
+                role_id=member.role_id,
+                task_id=task_id,
+                session_id=session_id,
+                parent_classification=parent_classification,
+                classification=member_classification,
+                project_root=resolved_project_root,
+            )
             _write_audit_record_best_effort(
                 build_audit_record(
                     **member_audit_base,
@@ -2654,6 +2812,8 @@ def dispatch_team(
                 path=audit_path,
             )
             results[index] = member_result
+            if handoff_directory is not None:
+                _cleanup_cli_final_handoff_channel(handoff_directory)
         except Exception as error:  # noqa: BLE001 -- deliberately catch-all, see comment above
             # Best-effort audit write here too (Finding 2): results[index]
             # must be set even if the same underlying I/O condition that
@@ -2669,11 +2829,17 @@ def dispatch_team(
                 "reason": f"unexpected error: {error}",
             }
         finally:
+            if handoff_directory is not None:
+                _cleanup_cli_final_handoff_channel(handoff_directory)
             if acquired:
                 limiter.release()
 
-    for index, (member, role, _classification, effective_sandbox) in enumerate(resolved_members):
-        thread = threading.Thread(target=_run_member, args=(index, member, role, effective_sandbox), daemon=True)
+    for index, (member, role, member_classification, effective_sandbox) in enumerate(resolved_members):
+        thread = threading.Thread(
+            target=_run_member,
+            args=(index, member, role, member_classification, effective_sandbox),
+            daemon=True,
+        )
         threads.append(thread)
         thread.start()
 

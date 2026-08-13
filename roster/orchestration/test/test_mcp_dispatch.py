@@ -4184,5 +4184,89 @@ class WriteAuditRecordBestEffortStderrFallbackTests(unittest.TestCase):
                 core._write_audit_record_best_effort(record, path=None)  # must not raise
 
 
+class AutomaticContextCaptureDispatchTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.layout = TempLayout()
+        self.addCleanup(self.layout.close)
+        _write_wrapper(self.layout.plugin_file("application-engineer"), sandbox_mode="read-only")
+
+    def _runner_result(self, *, final_handoff=None, stdout_text="ordinary child stdout") -> dict:
+        result = {
+            "pid": 1, "exit_code": 0, "timed_out": False, "duration_seconds": 0.01,
+            "stdout_truncated": False, "stdout_text": stdout_text,
+        }
+        if final_handoff is not None:
+            result["final_handoff"] = final_handoff
+        return result
+
+    def _dispatch(self, result: dict | callable) -> dict:
+        return core.dispatch_secure_cloud_role(
+            "application-engineer", "brief", "planning-review-only", "internal",
+            task_id="TASK-1", session_id="SESSION-1", parent_classification="internal",
+            project_root=self.layout.project_root, plugin_agents_root=self.layout.plugin_root,
+            catalog_path=self.layout.catalog_path,
+            child_runner=result if callable(result) else lambda *a, **k: result,
+        )
+
+    def test_only_the_separate_final_handoff_field_reaches_automatic_capture(self) -> None:
+        captured: list[dict] = []
+        envelope = {"kind": "cadre-final-handoff", "schema_version": 1, "handoff": {"summary": "done"},
+                    "artifacts": [], "derived_from": []}
+        with mock.patch.object(core, "automatic_context_capture", side_effect=lambda result, **kwargs: captured.append(result) or {"status": "captured"}):
+            response = self._dispatch(self._runner_result(final_handoff=envelope, stdout_text='{"transcript":"never capture me"}'))
+        self.assertEqual(response["context_capture"], {"status": "captured"})
+        self.assertEqual(captured, [self._runner_result(final_handoff=envelope, stdout_text='{"transcript":"never capture me"}')])
+
+    def test_raw_stdout_alone_is_not_a_handoff(self) -> None:
+        response = self._dispatch(self._runner_result(stdout_text='{"kind":"cadre-final-handoff"}'))
+        self.assertEqual(response["context_capture"], {"status": "not_provided"})
+
+    def test_cli_child_final_handoff_uses_the_private_result_file_not_stdout(self) -> None:
+        envelope = {"kind": "cadre-final-handoff", "schema_version": 1, "handoff": {"summary": "done"},
+                    "artifacts": [], "derived_from": []}
+        observed: dict = {}
+
+        def runner(_argv, *, prompt, env, **_kwargs):
+            path = Path(env[core.FINAL_HANDOFF_RESULT_ENV_VAR])
+            observed["path"] = path
+            observed["prompt"] = prompt
+            path.write_text(json.dumps(envelope), encoding="utf-8")
+            return self._runner_result(stdout_text="unstructured stdout is ignored")
+
+        with mock.patch.object(core, "automatic_context_capture", return_value={"status": "captured"}) as capture:
+            response = self._dispatch(runner)
+        self.assertEqual(response["context_capture"], {"status": "captured"})
+        self.assertEqual(capture.call_args.args[0]["final_handoff"], envelope)
+        self.assertIn("stdout is not used for capture", observed["prompt"])
+        self.assertFalse(observed["path"].exists(), "private channel must be removed after capture")
+
+    def test_async_polling_returns_the_single_existing_capture_without_recapturing(self) -> None:
+        captures: list[dict] = []
+        store = core.DispatchJobStore()
+        envelope = {"kind": "cadre-final-handoff", "schema_version": 1, "handoff": {"summary": "done"},
+                    "artifacts": [], "derived_from": []}
+        with mock.patch.object(
+            core, "automatic_context_capture", side_effect=lambda result, **kwargs: captures.append(result) or {"status": "captured"}
+        ):
+            started = core.dispatch_secure_cloud_role(
+                "application-engineer", "brief", "planning-review-only", "internal",
+                task_id="TASK-1", session_id="SESSION-1", parent_classification="internal",
+                project_root=self.layout.project_root, plugin_agents_root=self.layout.plugin_root,
+                catalog_path=self.layout.catalog_path, wait=False, job_store=store,
+                child_runner=lambda *a, **k: self._runner_result(final_handoff=envelope),
+            )
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline:
+                completed = core.poll_dispatch_status(started["job_id"], job_store=store)
+                if completed["status"] == "dispatched":
+                    break
+                time.sleep(0.01)
+            else:
+                self.fail("async dispatch did not finish")
+            self.assertEqual(completed["context_capture"], {"status": "captured"})
+            self.assertEqual(core.poll_dispatch_status(started["job_id"], job_store=store)["context_capture"], {"status": "captured"})
+        self.assertEqual(len(captures), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
