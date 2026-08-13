@@ -1309,17 +1309,24 @@ def managed_agents_block() -> str:
 
 def update_agents_md(root: Path) -> None:
     path = confined_path(root, "AGENTS.md")
-    block = managed_agents_block()
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    path.write_text(rendered_agents_md(existing), encoding="utf-8")
+
+
+def rendered_agents_md(existing: str) -> str:
+    """Return the stable AGENTS.md content after updating our managed block."""
+    block = managed_agents_block()
     if (MANAGED_START in existing) != (MANAGED_END in existing):
         raise ValueError("AGENTS.md contains an incomplete Agentic SDLC managed block")
     if MANAGED_START in existing and MANAGED_END in existing:
         before, remainder = existing.split(MANAGED_START, 1)
         _, after = remainder.split(MANAGED_END, 1)
-        content = before.rstrip() + "\n\n" + block + after
+        prefix = before.rstrip()
+        suffix = after.lstrip("\n")
+        content = (prefix + "\n\n" if prefix else "") + block + ("\n" + suffix if suffix else "\n")
     else:
         content = existing.rstrip() + ("\n\n" if existing.strip() else "") + block + "\n"
-    path.write_text(content, encoding="utf-8")
+    return content
 
 
 def toml_string(value: str) -> str:
@@ -1473,15 +1480,25 @@ def impact_item(item_id: str, extension: str) -> dict[str, Any]:
     }
 
 
-def initialize(args: argparse.Namespace) -> int:
-    root = Path(args.root).resolve()
-    dry_run = bool(getattr(args, "dry_run", False))
-    if not dry_run:
-        root.mkdir(parents=True, exist_ok=True)
-    detected = detect_repository(root)
-    profile_id = None if args.profile in {None, "kernel-only"} else (detected["proposed_profile"] if args.profile == "auto" else args.profile)
-    profile = merge_profile(profile_id) if profile_id else {"id": "kernel-only", "routing": [], "ignored_gates": [], "gate_bindings": [], "impact_categories": []}
-    extension_ids = unique(args.extension or [])
+def initialization_artifacts(
+    root: Path,
+    profile_id: str | None,
+    extension_ids: list[str],
+    project_id: str,
+    classification: str,
+    detected: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], list[tuple[str, dict[str, Any]]], dict[str, Any]]:
+    """Build the conservative bootstrap artifacts without writing them.
+
+    Both ``init`` and ``repair`` use this one builder.  Keeping creation and
+    repair on the same representation prevents a repair from becoming a
+    second, subtly different initializer.
+    """
+    detected = detect_repository(root) if detected is None else detected
+    profile = merge_profile(profile_id) if profile_id else {
+        "id": "kernel-only", "routing": [], "ignored_gates": [],
+        "gate_bindings": [], "impact_categories": [],
+    }
     impact = [impact_item(item_id, "generic-software") for item_id in profile.get("impact_categories", [])]
     specialized_boms: list[dict[str, Any]] = []
     for extension_id in extension_ids:
@@ -1496,53 +1513,208 @@ def initialize(args: argparse.Namespace) -> int:
             raise ValueError(f"extension {extension_id} has malformed metadata")
         impact.extend(impact_item(item_id, extension_id) for item_id in extension.get("impact_categories", []))
         specialized_boms.extend(impact_item(bom, extension_id) for bom in extension.get("specialized_boms", []))
-    overlay = confined_path(root, OVERLAY)
-    if not dry_run:
-        overlay.mkdir(parents=True, exist_ok=True)
-        (overlay / "runs").mkdir(exist_ok=True)
     project = {
-        "schema_version": 1,
-        "project_id": args.project_id or root.name,
-        "classification": args.classification,
-        "profile": profile_id,
-        "profile_digest": fingerprint(profile),
-        "extensions": extension_ids,
+        "schema_version": 1, "project_id": project_id,
+        "classification": classification, "profile": profile_id,
+        "profile_digest": fingerprint(profile), "extensions": extension_ids,
         "providers": [item["id"] for item in LOADED_PROVIDERS],
-        "approval_sources": {
-            "human_gate_default": "manual",
-            "allow_manual_fallback": True,
-        },
+        "approval_sources": {"human_gate_default": "manual", "allow_manual_fallback": True},
         "detected": detected,
         "environments": [{"name": "local", "persistence": "unknown", "production": "unknown"}],
     }
     authorities = {
         role: {
-            "status": "unknown",
-            "assignee": None,
+            "status": "unknown", "assignee": None,
             "applicability": "unknown" if role in CONDITIONAL_AUTHORITY_ROLES else "applicable",
-            "rationale": None,
-            "evidence_reference": None,
-            "gates": gates,
+            "rationale": None, "evidence_reference": None, "gates": gates,
         }
         for role, gates in AUTHORITY_ROLES.items()
     }
-    impact_profile = {"profile_id": f"{project['project_id']}-impact", "status": "blocked", "impact_categories": impact, "specialized_boms": specialized_boms, "blocking_unknowns": [item["id"] for item in impact + specialized_boms]}
+    impact_profile = {
+        "profile_id": f"{project_id}-impact", "status": "blocked",
+        "impact_categories": impact, "specialized_boms": specialized_boms,
+        "blocking_unknowns": [item["id"] for item in impact + specialized_boms],
+    }
     routing = {
-        "version": 1,
-        "profile": profile_id,
-        "routes": profile.get("routing", []),
+        "version": 1, "profile": profile_id, "routes": profile.get("routing", []),
         "change_intake": profile.get("change_intake", {}),
         "ignored_gates": profile.get("ignored_gates", []),
         "gate_bindings": profile.get("gate_bindings", {}),
     }
     commands = {"version": 1, "commands": detected["command_candidates"], "confirmed": False}
-    overlay_files = [
-        ("project.json", project),
-        ("authorities.json", authorities),
-        ("impact-profile.json", impact_profile),
-        ("routing.json", routing),
+    return profile, [
+        ("project.json", project), ("authorities.json", authorities),
+        ("impact-profile.json", impact_profile), ("routing.json", routing),
         ("commands.json", commands),
-    ]
+    ], routing
+
+
+def version_lock(profile_id: str | None, profile: dict[str, Any], routing: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "plugin_version": VERSION, "kernel_version": VERSION, "contracts": 2,
+        "contract_digest": fingerprint(lifecycle_contract()), "profile": profile_id,
+        "profile_digest": fingerprint(profile),
+        "dispatch_binding_digest": fingerprint(routing.get("gate_bindings", {})),
+        "providers": LOADED_PROVIDERS,
+    }
+
+
+def repair(args: argparse.Namespace) -> int:
+    """Safely reconcile an incomplete or stale initialization.
+
+    Existing project artifacts are decisions, not generated cache files.  This
+    command therefore creates only *missing* baseline artifacts and refreshes
+    the uniquely delimited AGENTS.md block; it never replaces existing JSON,
+    wrappers, run records, approvals, or other user content.
+    """
+    root = Path(args.root).resolve()
+    overlay = confined_path(root, OVERLAY)
+    apply = bool(getattr(args, "apply", False))
+    blockers: list[dict[str, str]] = []
+    actions: list[dict[str, str]] = []
+    protected: list[str] = []
+    if not root.is_dir() or not overlay.is_dir():
+        blockers.append({"path": OVERLAY, "reason": "no existing initialization; run init first"})
+        print(json.dumps({"status": "blocked", "mutation": False, "root": str(root), "actions": actions, "protected": protected, "blockers": blockers}, indent=2))
+        return 1
+
+    loaded: dict[str, dict[str, Any]] = {}
+    for name in ("project.json", "authorities.json", "impact-profile.json", "routing.json", "commands.json"):
+        path = overlay / name
+        if not path.exists():
+            continue
+        try:
+            loaded[name] = load_json(path)
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            blockers.append({"path": f"{OVERLAY}/{name}", "reason": f"unreadable managed JSON: {error}"})
+    project = loaded.get("project.json")
+    if project is None:
+        blockers.append({"path": f"{OVERLAY}/project.json", "reason": "missing project identity; cannot safely reconstruct it"})
+    elif not isinstance(project.get("project_id"), str) or not isinstance(project.get("classification"), str):
+        blockers.append({"path": f"{OVERLAY}/project.json", "reason": "missing project_id or classification"})
+
+    profile: dict[str, Any] = {}
+    artifacts: list[tuple[str, dict[str, Any]]] = []
+    routing: dict[str, Any] = {}
+    if not blockers and project is not None:
+        profile_id = project.get("profile")
+        extensions = project.get("extensions", [])
+        if profile_id is not None and not isinstance(profile_id, str):
+            blockers.append({"path": f"{OVERLAY}/project.json", "reason": "profile must be a string or null"})
+        elif not isinstance(extensions, list) or not all(isinstance(item, str) for item in extensions):
+            blockers.append({"path": f"{OVERLAY}/project.json", "reason": "extensions must be a string list"})
+        else:
+            try:
+                profile, artifacts, routing = initialization_artifacts(
+                    root, profile_id, extensions, project["project_id"], project["classification"]
+                )
+            except (OSError, ValueError, json.JSONDecodeError) as error:
+                blockers.append({"path": OVERLAY, "reason": f"cannot load current provider/profile: {error}"})
+            else:
+                # A provider/profile change can alter generated routes and
+                # wrappers.  Those are not safe to overwrite just because a
+                # newer kernel happens to be present; require an explicit,
+                # reviewed migration instead.
+                if project.get("profile_digest") != fingerprint(profile):
+                    blockers.append({
+                        "path": f"{OVERLAY}/project.json",
+                        "reason": "provider profile has changed; review and migrate project decisions explicitly",
+                    })
+
+    agents_path = confined_path(root, "AGENTS.md")
+    if agents_path.exists():
+        agents_text = agents_path.read_text(encoding="utf-8")
+        starts, ends = agents_text.count(MANAGED_START), agents_text.count(MANAGED_END)
+        if starts != ends or starts > 1:
+            blockers.append({"path": "AGENTS.md", "reason": "incomplete or ambiguous Agentic SDLC managed block"})
+        elif rendered_agents_md(agents_text) != agents_text:
+            actions.append({"path": "AGENTS.md", "action": "refresh_managed_block"})
+    else:
+        actions.append({"path": "AGENTS.md", "action": "create_managed_block"})
+
+    if not blockers and project is not None:
+        for name, _value in artifacts:
+            path = overlay / name
+            if path.exists():
+                protected.append(f"{OVERLAY}/{name}")
+            else:
+                actions.append({"path": f"{OVERLAY}/{name}", "action": "recreate_missing_baseline"})
+        expected_lock = version_lock(project.get("profile"), profile, routing)
+        lock_path = overlay / "version.lock"
+        if lock_path.exists():
+            try:
+                lock = load_json(lock_path)
+            except (OSError, ValueError, json.JSONDecodeError) as error:
+                blockers.append({"path": f"{OVERLAY}/version.lock", "reason": f"unreadable lock: {error}"})
+            else:
+                changed = [key for key in ("plugin_version", "kernel_version", "contracts", "contract_digest") if lock.get(key) != expected_lock[key]]
+                if changed:
+                    actions.append({"path": f"{OVERLAY}/version.lock", "action": "upgrade_lock:" + ",".join(changed)})
+                else:
+                    protected.append(f"{OVERLAY}/version.lock")
+        else:
+            actions.append({"path": f"{OVERLAY}/version.lock", "action": "recreate_missing_lock"})
+        if project.get("profile") is not None:
+            catalog = load_agent_catalog()
+            for runner, extension in (("codex", "toml"), ("claude", "md")):
+                if args.runner not in (runner, "both"):
+                    continue
+                for agent_id in profile.get("agents", []):
+                    if agent_id not in catalog:
+                        continue
+                    path = confined_path(root, f".{runner}", "agents", f"{agent_id}.{extension}")
+                    if path.exists():
+                        protected.append(str(path.relative_to(root)))
+                    else:
+                        actions.append({"path": str(path.relative_to(root)), "action": "recreate_missing_wrapper"})
+
+    if blockers:
+        print(json.dumps({"status": "blocked", "mutation": False, "root": str(root), "actions": actions, "protected": protected, "blockers": blockers}, indent=2))
+        return 1
+    if not apply:
+        print(json.dumps({"status": "repair-available" if actions else "current", "mutation": False, "root": str(root), "actions": actions, "protected": protected, "blockers": []}, indent=2))
+        return 0
+
+    # All reads and integrity checks above happen before the first write.
+    action_paths = {item["path"] for item in actions}
+    for name, value in artifacts:
+        if f"{OVERLAY}/{name}" in action_paths:
+            write_json(overlay / name, value, overwrite=False)
+    lock_path = overlay / "version.lock"
+    expected_lock = version_lock(project.get("profile"), profile, routing)
+    if f"{OVERLAY}/version.lock" in action_paths and lock_path.exists():
+        lock = load_json(lock_path)
+        lock.update({key: expected_lock[key] for key in ("plugin_version", "kernel_version", "contracts", "contract_digest")})
+        write_json(lock_path, lock)
+    elif f"{OVERLAY}/version.lock" in action_paths:
+        write_json(lock_path, expected_lock, overwrite=False)
+    if "AGENTS.md" in action_paths:
+        update_agents_md(root)
+    if project.get("profile") is not None:
+        write_agent_wrappers(root, profile, args.runner)
+    print(json.dumps({"status": "repaired" if actions else "current", "mutation": bool(actions), "root": str(root), "actions": actions, "protected": protected, "blockers": []}, indent=2))
+    return 0
+
+
+def initialize(args: argparse.Namespace) -> int:
+    if getattr(args, "repair", False):
+        return repair(args)
+    if getattr(args, "apply", False):
+        raise ValueError("--apply is only valid with init --repair")
+    root = Path(args.root).resolve()
+    dry_run = bool(getattr(args, "dry_run", False))
+    if not dry_run:
+        root.mkdir(parents=True, exist_ok=True)
+    detected = detect_repository(root)
+    profile_id = None if args.profile in {None, "kernel-only"} else (detected["proposed_profile"] if args.profile == "auto" else args.profile)
+    extension_ids = unique(args.extension or [])
+    profile, overlay_files, routing = initialization_artifacts(
+        root, profile_id, extension_ids, args.project_id or root.name, args.classification, detected
+    )
+    overlay = confined_path(root, OVERLAY)
+    if not dry_run:
+        overlay.mkdir(parents=True, exist_ok=True)
+        (overlay / "runs").mkdir(exist_ok=True)
     lock_path = overlay / "version.lock"
     agents_md_path = confined_path(root, "AGENTS.md")
     if dry_run:
@@ -1578,23 +1750,7 @@ def initialize(args: argparse.Namespace) -> int:
         if write_json(overlay / name, value, overwrite=False):
             created.append(f"{OVERLAY}/{name}")
     if not lock_path.exists():
-        lock_path.write_text(
-            json.dumps(
-                {
-                    "plugin_version": VERSION,
-                    "kernel_version": VERSION,
-                    "contracts": 2,
-                    "contract_digest": fingerprint(lifecycle_contract()),
-                    "profile": profile_id,
-                    "profile_digest": fingerprint(profile),
-                    "dispatch_binding_digest": fingerprint(routing.get("gate_bindings", {})),
-                    "providers": LOADED_PROVIDERS,
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
+        write_json(lock_path, version_lock(profile_id, profile, routing), overwrite=False)
         created.append(f"{OVERLAY}/version.lock")
     agents_md_status = "created" if not agents_md_path.exists() else "updated_managed_block"
     update_agents_md(root)
@@ -2935,7 +3091,14 @@ def build_parser() -> argparse.ArgumentParser:
     init_mode = init.add_mutually_exclusive_group()
     init_mode.add_argument("--force", action="store_true", help="Reserved for future use; in this release init never overwrites existing wrapper or managed overlay files, with or without --force")
     init_mode.add_argument("--dry-run", action="store_true", help="Report what init would create without writing anything to disk")
+    init.add_argument("--repair", action="store_true", help="Inspect an existing initialization and plan safe repairs; use --apply to make them")
+    init.add_argument("--apply", action="store_true", help="Apply repairs selected by init --repair")
     init.set_defaults(handler=initialize)
+    repair_parser = subparsers.add_parser("repair", help="Inspect or safely repair an existing initialization")
+    repair_parser.add_argument("--root", default=".")
+    repair_parser.add_argument("--runner", choices=["codex", "claude", "both"], default="both", help="Which missing wrapper set(s) to recreate")
+    repair_parser.add_argument("--apply", action="store_true", help="Apply the safe repair plan; default is read-only inspection")
+    repair_parser.set_defaults(handler=repair)
     plan = subparsers.add_parser("plan", help="Create a dispatch plan and pending run record")
     plan.add_argument("--root", default=".")
     plan.add_argument("--task-id", required=True)

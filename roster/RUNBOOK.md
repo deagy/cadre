@@ -803,7 +803,7 @@ Before team adoption:
 - Configure authoritative approval and evidence references.
 - Run the plugin `validate` command and preserve the version lock with the reviewed overlay.
 
-On upgrade, reinstall the plugin, inspect lifecycle/schema changes, validate existing records, migrate incompatible records explicitly, and update the project version lock only with the reviewed overlay change. Plugin upgrades never grant approval or rewrite project decisions automatically.
+On upgrade, reinstall the plugin, inspect lifecycle/schema changes, validate existing records, migrate incompatible records explicitly, and update the project version lock only with the reviewed overlay change. For an incomplete or stale initialization, use `cadre sdlc repair --root /path/to/target` first to inspect its read-only repair plan, then add `--apply` only for its safe missing-artifact/lock repairs. Plugin upgrades never grant approval or rewrite project decisions automatically.
 
 See `kernel/README.md` for lifecycle command and upgrade documentation.
 

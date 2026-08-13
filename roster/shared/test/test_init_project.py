@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import io
 import itertools
 import json
@@ -41,6 +42,14 @@ from init_project_interactive import run_interactive_flow  # noqa: E402
 def _make_project(root: Path) -> Path:
     (root / ".git").mkdir()
     return root
+
+
+def _tree_hash(root: Path) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(candidate for candidate in root.rglob("*") if candidate.is_file()):
+        digest.update(str(path.relative_to(root)).encode("utf-8"))
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
 
 
 class SelfCheckoutGuardTests(unittest.TestCase):
@@ -754,7 +763,7 @@ class EndToEndDryRunAndForceTests(unittest.TestCase):
             stack=None,
             answers=self._answers_path(),
             interactive=False,
-            sections="rg-a-stack",
+            sections=",".join(init_mod.ALL_SECTIONS),
             dry_run=False,
             force=False,
             print_answers=False,
@@ -785,6 +794,128 @@ class EndToEndDryRunAndForceTests(unittest.TestCase):
 
         resolved = resolve_shared_config("team-profile.yaml", start=self.root)
         self.assertEqual(resolved["platform"]["hosting_model"], "cloud")
+
+
+class RepairModeTests(unittest.TestCase):
+    """Explicit repair is an inspect-first wrapper around safe overlay merging."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory(prefix="agents-init-repair-")
+        self.root = _make_project(Path(self.temporary.name))
+        self.audit = tempfile.TemporaryDirectory(prefix="agents-init-repair-audit-")
+        os.environ["AGENTS_INIT_AUDIT_LOG"] = str(Path(self.audit.name) / "audit.jsonl")
+
+    def tearDown(self) -> None:
+        os.environ.pop("AGENTS_INIT_AUDIT_LOG", None)
+        self.audit.cleanup()
+        self.temporary.cleanup()
+
+    def _args(self, **overrides: object) -> argparse.Namespace:
+        base = dict(
+            target=self.root,
+            stack=None,
+            answers=None,
+            interactive=False,
+            sections=",".join(init_mod.ALL_SECTIONS),
+            dry_run=False,
+            force=False,
+            repair=True,
+            apply=False,
+            print_answers=False,
+            set_values=None,
+        )
+        base.update(overrides)
+        return argparse.Namespace(**base)
+
+    def _answers(self) -> Path:
+        path = self.root / "answers.yaml"
+        path.write_text(
+            "schema_version: 1\n"
+            "rg_a_stack:\n"
+            "  platform:\n"
+            "    hosting_model: cloud\n"
+            "field_decisions:\n"
+            "  platform.hosting_model:\n"
+            "    status: overridden\n"
+            "    category: stack\n"
+            "    source_value: self-hosted\n"
+            "    new_value: cloud\n",
+            encoding="utf-8",
+        )
+        return path
+
+    def test_repair_check_treats_missing_sparse_overlays_as_current_defaults(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = run_init(self._args())
+        self.assertEqual(0, code)
+        self.assertIn("missing_uses_shipped_default", stdout.getvalue())
+        self.assertFalse((self.root / ".agents").exists())
+        self.assertFalse(Path(os.environ["AGENTS_INIT_AUDIT_LOG"]).exists())
+
+    def test_repair_never_merges_answers_or_rewrites_project_values(self) -> None:
+        init_mod._write_overlay(
+            self.root,
+            "team-profile.yaml",
+            "engineering:\n  primary_language: golang\n",
+        )
+        args = self._args()
+        before = _tree_hash(self.root)
+        self.assertEqual(0, run_init(args))
+        self.assertEqual(before, _tree_hash(self.root))
+
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual(2, run_init(self._args(answers=self._answers(), apply=True)))
+        self.assertIn("does not accept", stderr.getvalue())
+        merged = init_mod._load_structured(
+            self.root / ".agents" / "shared" / "team-profile.yaml"
+        )
+        self.assertEqual("golang", merged["engineering"]["primary_language"])
+        self.assertNotIn("platform", merged)
+
+    def test_repair_fails_closed_on_an_invalid_existing_overlay(self) -> None:
+        init_mod._write_overlay(
+            self.root,
+            "agent-autonomy.yaml",
+            "mutations:\n  production: allowed\n",
+        )
+        before = _tree_hash(self.root)
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            code = run_init(self._args(apply=True))
+        self.assertEqual(1, code)
+        self.assertIn("repair blocked", stderr.getvalue())
+        self.assertEqual(before, _tree_hash(self.root))
+
+    def test_repair_rejects_dangling_symlink_and_reversed_managed_block(self) -> None:
+        overlay_dir = self.root / ".agents" / "shared"
+        overlay_dir.mkdir(parents=True)
+        dangling = overlay_dir / "team-profile.yaml"
+        dangling.symlink_to(self.root / "outside.yaml")
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual(1, run_init(self._args()))
+        self.assertIn("symlinked overlay", stderr.getvalue())
+
+        dangling.unlink()
+        (overlay_dir / "technology-standards.md").write_text(
+            f"{init_mod.MANAGED_END}\ncontent\n{init_mod.MANAGED_START}\n", encoding="utf-8"
+        )
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual(1, run_init(self._args()))
+        self.assertIn("incomplete or ambiguous", stderr.getvalue())
+
+    def test_apply_requires_repair_and_is_an_inspection_only_alias(self) -> None:
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual(2, run_init(self._args(repair=False, apply=True)))
+        self.assertIn("valid only with --repair", stderr.getvalue())
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual(2, run_init(self._args(force=True)))
+        self.assertIn("does not accept", stderr.getvalue())
 
 
 class PrintAnswersRedactionTests(unittest.TestCase):

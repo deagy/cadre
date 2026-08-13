@@ -241,6 +241,22 @@ default" means "write no overlay for that field", and a project with no
 overlay resolves to exactly the shipped values. It is also the safest run
 available — it cannot weaken a governance posture, because it changes nothing.
 
+### Inspecting shared-policy overlays
+
+Use `cadre init --target <project-root> --repair` to validate and inventory
+the six overlays this initializer manages. It is always read-only; `--apply`
+is accepted only as an explicit acknowledgement and still makes no changes.
+Missing overlays are reported as healthy because they inherit shipped defaults.
+Existing overlays are protected project decisions, including entries whose
+platform applicability is still `unknown`.
+
+Repair does not re-run initialization, recreate sparse overlays, resolve
+unknown applicability, or overwrite policy. It fails closed on malformed
+structured data, a non-narrowing autonomy overlay, an unsafe overlay path, or
+an incomplete/ambiguous `agents-init` managed block. Correct those cases
+manually, then use the normal reviewed change flow (`--set`, `--answers`, or
+`--interactive` with `--force`) when a policy update is intended.
+
 Key behavior:
 
 - Nothing is written without `--force` (omitting it previews only), and every
