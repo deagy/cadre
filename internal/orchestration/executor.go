@@ -117,6 +117,7 @@ func (e *Executor) executeWave(ctx context.Context, waveNum int, agentIDs []stri
 	defer cancel()
 
 	var wg sync.WaitGroup
+	var mu sync.Mutex // Protect concurrent writes to result.AgentResults
 	errChan := make(chan error, len(agentIDs))
 
 	// Launch all agents in this wave concurrently
@@ -132,6 +133,7 @@ func (e *Executor) executeWave(ctx context.Context, waveNum int, agentIDs []stri
 			agentResult, err := e.runner.RunAgent(waveCtx, id, plan.Task, plan)
 			if err != nil {
 				errChan <- fmt.Errorf("agent %s failed: %w", id, err)
+				mu.Lock()
 				result.AgentResults[id] = &AgentResult{
 					AgentID:     id,
 					Role:        role,
@@ -140,6 +142,7 @@ func (e *Executor) executeWave(ctx context.Context, waveNum int, agentIDs []stri
 					StartedAt:   time.Now(), // approximate
 					CompletedAt: time.Now(),
 				}
+				mu.Unlock()
 				return
 			}
 
@@ -152,7 +155,9 @@ func (e *Executor) executeWave(ctx context.Context, waveNum int, agentIDs []stri
 				}
 			}
 			agentResult.Role = role
+			mu.Lock()
 			result.AgentResults[id] = agentResult
+			mu.Unlock()
 		}(agentID)
 	}
 
