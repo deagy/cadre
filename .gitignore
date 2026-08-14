@@ -105,3 +105,5 @@ cline-plugins/node_modules/
 # Go CLI build output (ADR-001-CLI-GO-REFACTOR.md). Never bin/ -- that
 # directory is the existing, committed Python dispatcher.
 /dist/
+cadre
+cadre_cli/
