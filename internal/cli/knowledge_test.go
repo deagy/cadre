@@ -58,25 +58,58 @@ func TestKnowledgeCmdUnknown(t *testing.T) {
 	}
 }
 
-func TestKnowledgeSearchStubbed(t *testing.T) {
+func TestKnowledgeIngestMissingSource(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
-	// search subcommand should return 1 (not implemented)
-	code := KnowledgeCmd([]string{"--config", dbPath, "search"})
-	if code == 0 {
-		t.Error("Expected non-zero exit code for search (not yet implemented)")
+	// ingest without --source should fail
+	code := knowledgeIngest(dbPath, []string{})
+	if code != 2 {
+		t.Errorf("Expected exit code 2 for missing source, got %d", code)
 	}
 }
 
-func TestKnowledgeContextStubbed(t *testing.T) {
+func TestKnowledgeSearchMissingQuery(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
-	// context subcommand should return 1 (not implemented)
-	code := KnowledgeCmd([]string{"--config", dbPath, "context"})
-	if code == 0 {
-		t.Error("Expected non-zero exit code for context (not yet implemented)")
+	// search without query should fail
+	code := knowledgeSearch(dbPath, []string{})
+	if code != 2 {
+		t.Errorf("Expected exit code 2 for missing query, got %d", code)
+	}
+}
+
+func TestKnowledgeSearchMissingClassification(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// search without --classification should fail
+	code := knowledgeSearch(dbPath, []string{"test-query"})
+	if code != 2 {
+		t.Errorf("Expected exit code 2 for missing classification, got %d", code)
+	}
+}
+
+func TestKnowledgeDeleteNoMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// delete without deletion mode should fail
+	code := knowledgeDelete(dbPath, []string{})
+	if code != 2 {
+		t.Errorf("Expected exit code 2 for no deletion mode, got %d", code)
+	}
+}
+
+func TestKnowledgeDeleteMultipleModes(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// delete with multiple modes should fail
+	code := knowledgeDelete(dbPath, []string{"--expired", "--source", "test"})
+	if code != 2 {
+		t.Errorf("Expected exit code 2 for multiple deletion modes, got %d", code)
 	}
 }
 

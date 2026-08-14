@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/deagy/cadre/cli/internal/knowledge"
 	"github.com/deagy/cadre/cli/internal/platform"
@@ -19,8 +21,9 @@ func KnowledgeCmd(args []string) int {
 Subcommands:
   init           Initialize or verify the knowledge store
   stats          Display knowledge store statistics
-  search         Search the knowledge store (stubbed for Phase 4.2)
-  context        Retrieve agent context (stubbed for Phase 4.2)
+  ingest         Ingest messages into the knowledge store
+  search         Search the knowledge store by content or vector similarity
+  delete         Delete messages or run retention policies
 
 Options:
 `)
@@ -67,12 +70,12 @@ Options:
 		return knowledgeInit(dbPath, subArgs)
 	case "stats":
 		return knowledgeStats(dbPath, subArgs)
+	case "ingest":
+		return knowledgeIngest(dbPath, subArgs)
 	case "search":
-		fmt.Fprintf(os.Stderr, "cadre knowledge search: not yet implemented (Phase 4.3+)\n")
-		return 1
-	case "context":
-		fmt.Fprintf(os.Stderr, "cadre knowledge context: not yet implemented (Phase 4.3+)\n")
-		return 1
+		return knowledgeSearch(dbPath, subArgs)
+	case "delete":
+		return knowledgeDelete(dbPath, subArgs)
 	case "help", "-h", "--help":
 		fs.Usage()
 		return 0
@@ -260,4 +263,387 @@ func knowledgeStats(dbPath string, args []string) int {
 	}
 
 	return 0
+}
+
+// knowledgeIngest ingests messages into the knowledge store.
+func knowledgeIngest(dbPath string, args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge ingest", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge ingest [options]
+
+Ingests messages from stdin (JSON) into the knowledge store.
+Each line should be a JSON object with message fields.
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
+
+	source := fs.String("source", "", "Source identifier (required)")
+	sourceURI := fs.String("source-uri", "", "Source URI (optional)")
+	classification := fs.String("classification", "general", "Classification level")
+	embeddingModel := fs.String("embedding", "local-hashing", "Embedding model (local-hashing or openai-compatible)")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if *source == "" {
+		fmt.Fprintf(os.Stderr, "cadre knowledge ingest: --source is required\n")
+		return 2
+	}
+
+	// Open store
+	store, err := knowledge.Open(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge ingest: cannot open store: %v\n", err)
+		return 1
+	}
+	defer store.Close()
+
+	// Create embedder
+	var embedder knowledge.EmbeddingProvider
+	if *embeddingModel == "openai-compatible" {
+		remoteEmbedder, err := knowledge.NewRemoteEmbedderFromEnv()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cadre knowledge ingest: cannot create remote embedder: %v\n", err)
+			return 1
+		}
+		embedder = remoteEmbedder
+	} else {
+		embedder = knowledge.NewLocalHashingEmbedder(128)
+	}
+
+	// Start ingestion run
+	runID, err := store.BeginRun(*source, *sourceURI)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge ingest: cannot begin ingestion run: %v\n", err)
+		return 1
+	}
+
+	// Read messages from stdin (JSON lines)
+	var messageCount, chunkCount int
+	decoder := json.NewDecoder(os.Stdin)
+
+	for decoder.More() {
+		var msgData map[string]interface{}
+		if err := decoder.Decode(&msgData); err != nil {
+			store.FailRun(runID, err)
+			fmt.Fprintf(os.Stderr, "cadre knowledge ingest: cannot decode message: %v\n", err)
+			return 1
+		}
+
+		// Extract message fields
+		convID := getString(msgData, "conversation_id", "default-conversation")
+		convTitle := getStringPtr(msgData, "conversation_title")
+		srcMsgID := getString(msgData, "message_id", "")
+		role := getString(msgData, "role", "user")
+		content := getString(msgData, "content", "")
+
+		if srcMsgID == "" || content == "" {
+			continue // Skip incomplete messages
+		}
+
+		// Save message
+		msgID, err := store.SaveMessage(
+			*source, sourceURI, convID, convTitle, srcMsgID,
+			role, content, nil, *classification, false,
+			`[]`, `{}`, nil,
+		)
+		if err != nil {
+			store.FailRun(runID, err)
+			fmt.Fprintf(os.Stderr, "cadre knowledge ingest: cannot save message: %v\n", err)
+			return 1
+		}
+		messageCount++
+
+		// Embed and save chunk
+		embeddings, err := embedder.Embed([]string{content})
+		if err != nil {
+			store.FailRun(runID, err)
+			fmt.Fprintf(os.Stderr, "cadre knowledge ingest: cannot embed message: %v\n", err)
+			return 1
+		}
+
+		if len(embeddings) > 0 {
+			err = store.SaveChunk(msgID, 0, content, embedder.Name(), embedder.Model(), embeddings[0])
+			if err != nil {
+				store.FailRun(runID, err)
+				fmt.Fprintf(os.Stderr, "cadre knowledge ingest: cannot save chunk: %v\n", err)
+				return 1
+			}
+			chunkCount++
+		}
+	}
+
+	// Complete ingestion run
+	if err := store.CompleteRun(runID, messageCount, chunkCount); err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge ingest: cannot complete ingestion run: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("Ingested %d messages (%d chunks) from source '%s'\n", messageCount, chunkCount, *source)
+	return 0
+}
+
+// knowledgeSearch searches the knowledge store.
+func knowledgeSearch(dbPath string, args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge search", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge search [options] <query>
+
+Searches the knowledge store by vector similarity or text content.
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
+
+	classification := fs.String("classification", "", "Classification filter (required)")
+	sources := fs.String("sources", "", "Comma-separated source filters (optional)")
+	topK := fs.Int("top", 10, "Number of results to return")
+	searchMode := fs.String("mode", "vector", "Search mode: vector or content")
+	embeddingModel := fs.String("embedding", "local-hashing", "Embedding model for vector search")
+	jsonOutput := fs.Bool("json", false, "Output results as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if fs.NArg() < 1 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge search: query is required\n")
+		return 2
+	}
+
+	if *classification == "" {
+		fmt.Fprintf(os.Stderr, "cadre knowledge search: --classification is required\n")
+		return 2
+	}
+
+	query := fs.Arg(0)
+
+	// Open store
+	store, err := knowledge.Open(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge search: cannot open store: %v\n", err)
+		return 1
+	}
+	defer store.Close()
+
+	if *searchMode == "content" {
+		// Text search
+		results, err := store.SearchByContent(query, *classification, *topK)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cadre knowledge search: cannot search by content: %v\n", err)
+			return 1
+		}
+
+		if *jsonOutput {
+			data := map[string]interface{}{
+				"query":      query,
+				"mode":       "content",
+				"count":      len(results),
+				"results":    results,
+			}
+			encoder := json.NewEncoder(os.Stdout)
+			encoder.SetIndent("", "  ")
+			encoder.Encode(data)
+		} else {
+			fmt.Printf("Content Search Results (%d)\n", len(results))
+			fmt.Printf("═══════════════════════════════\n")
+			for i, msg := range results {
+				fmt.Printf("\n%d. %s (source: %s)\n", i+1, msg.ConversationID, msg.Source)
+				fmt.Printf("   Role: %s\n", msg.Role)
+				fmt.Printf("   Content: %s...\n", truncate(msg.Content, 100))
+			}
+		}
+		return 0
+	}
+
+	// Vector search (default)
+	var embedder knowledge.EmbeddingProvider
+	if *embeddingModel == "openai-compatible" {
+		remoteEmbedder, err := knowledge.NewRemoteEmbedderFromEnv()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cadre knowledge search: cannot create remote embedder: %v\n", err)
+			return 1
+		}
+		embedder = remoteEmbedder
+	} else {
+		embedder = knowledge.NewLocalHashingEmbedder(128)
+	}
+
+	sourceFilters := []string{}
+	if *sources != "" {
+		sourceFilters = strings.Split(*sources, ",")
+		for i := range sourceFilters {
+			sourceFilters[i] = strings.TrimSpace(sourceFilters[i])
+		}
+	}
+
+	results, err := store.Search(knowledge.SearchOptions{
+		Query:             query,
+		Classification:    *classification,
+		SourceFilters:     sourceFilters,
+		AllSources:        *sources == "",
+		EmbeddingProvider: embedder,
+		Top:               *topK,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge search: cannot search: %v\n", err)
+		return 1
+	}
+
+	if *jsonOutput {
+		data := map[string]interface{}{
+			"query":      query,
+			"mode":       "vector",
+			"count":      len(results),
+			"results":    results,
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		encoder.Encode(data)
+	} else {
+		fmt.Printf("Vector Search Results (%d)\n", len(results))
+		fmt.Printf("═════════════════════════════\n")
+		for i, result := range results {
+			fmt.Printf("\n%d. %s (source: %s) - Similarity: %.4f\n",
+				i+1, result.Message.ConversationID, result.Message.Source,
+				result.CosineSimilarity)
+			fmt.Printf("   Role: %s\n", result.Message.Role)
+			fmt.Printf("   Content: %s...\n", truncate(result.Message.Content, 100))
+			fmt.Printf("   Chunk ordinal: %d\n", result.Chunk.Ordinal)
+		}
+	}
+
+	return 0
+}
+
+// knowledgeDelete deletes messages or runs retention policies.
+func knowledgeDelete(dbPath string, args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge delete", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge delete [options]
+
+Deletes messages or runs retention policies.
+
+Deletion modes:
+  --expired               Delete messages past their retention_until date
+  --classification <cls>  Delete all messages with given classification
+  --source <src>          Delete all messages from given source
+  --age <days>            Delete messages older than N days
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
+
+	deleteExpired := fs.Bool("expired", false, "Delete expired messages")
+	classification := fs.String("classification", "", "Delete by classification")
+	source := fs.String("source", "", "Delete by source")
+	ageDays := fs.Int("age", 0, "Delete by age (days)")
+	authorizedBy := fs.String("authorized-by", "cli-user", "Authorization user")
+	jsonOutput := fs.Bool("json", false, "Output stats as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	// Validate that exactly one deletion mode is specified
+	modeCount := 0
+	if *deleteExpired {
+		modeCount++
+	}
+	if *classification != "" {
+		modeCount++
+	}
+	if *source != "" {
+		modeCount++
+	}
+	if *ageDays > 0 {
+		modeCount++
+	}
+
+	if modeCount != 1 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge delete: must specify exactly one deletion mode\n")
+		return 2
+	}
+
+	// Open store
+	store, err := knowledge.Open(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge delete: cannot open store: %v\n", err)
+		return 1
+	}
+	defer store.Close()
+
+	var deleted int64
+
+	if *deleteExpired {
+		deleted, err = store.DeleteExpired(*authorizedBy)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cadre knowledge delete: cannot delete expired: %v\n", err)
+			return 1
+		}
+	} else if *classification != "" {
+		deleted, err = store.DeleteByClassification(*classification, "CLI deletion", *authorizedBy)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cadre knowledge delete: cannot delete by classification: %v\n", err)
+			return 1
+		}
+	} else if *source != "" {
+		deleted, err = store.DeleteBySource(*source, "CLI deletion", *authorizedBy)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cadre knowledge delete: cannot delete by source: %v\n", err)
+			return 1
+		}
+	} else if *ageDays > 0 {
+		deleted, err = store.DeleteByAge(*ageDays, nil, "CLI deletion", *authorizedBy)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cadre knowledge delete: cannot delete by age: %v\n", err)
+			return 1
+		}
+	}
+
+	if *jsonOutput {
+		data := map[string]interface{}{
+			"deleted": deleted,
+			"authorized_by": *authorizedBy,
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		encoder.Encode(data)
+	} else {
+		fmt.Printf("Deleted %d messages\n", deleted)
+	}
+
+	return 0
+}
+
+// Helper functions
+
+func getString(data map[string]interface{}, key, defaultVal string) string {
+	if val, ok := data[key]; ok {
+		if str, ok := val.(string); ok {
+			return str
+		}
+	}
+	return defaultVal
+}
+
+func getStringPtr(data map[string]interface{}, key string) *string {
+	if val, ok := data[key]; ok {
+		if str, ok := val.(string); ok {
+			return &str
+		}
+	}
+	return nil
+}
+
+func truncate(s string, maxLen int) string {
+	if len(s) > maxLen {
+		return s[:maxLen]
+	}
+	return s
 }
