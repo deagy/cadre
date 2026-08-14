@@ -398,9 +398,7 @@ jobs:
             exe-suffix: .exe
     environment: release
     permissions:
-      contents: write
-      id-token: write
-      attestations: write
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -473,6 +471,24 @@ jobs:
           path: dist/cadre-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.*
           retention-days: 1
 
+      - name: Smoke test binary on native platforms
+        # Test the built binary on native (non-cross-compiled) platforms only.
+        # linux-arm64 and windows-arm64 are cross-compiled and cannot run without
+        # emulation, so they are explicitly excluded from smoke testing.
+        if: |
+          steps.tag.outputs.skip == 'false' && (
+            (matrix.goos == 'linux' && matrix.goarch == 'amd64') ||
+            (matrix.goos == 'darwin') ||
+            (matrix.goos == 'windows' && matrix.goarch == 'amd64')
+          )
+        shell: bash
+        run: |
+          set -eu
+          binary="dist/cadre-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.exe-suffix }}"
+          echo "Testing $binary..."
+          $binary --version
+          $binary knowledge --help
+
   cli-publish:
     name: Publish Cadre CLI release
     needs: [changed, cli]
@@ -495,12 +511,24 @@ jobs:
           value=$(grep '^VERSION = ' cadre_cli/_version.py | sed -n 's/^VERSION = "\([^"]*\)".*/\1/p')
           echo "value=$value" >> "$GITHUB_OUTPUT"
 
+      - name: Skip if this version is already tagged
+        id: tag
+        run: |
+          if git rev-parse "refs/tags/cli-v${{ steps.version.outputs.value }}" >/dev/null 2>&1; then
+            echo "cli-v${{ steps.version.outputs.value }} already tagged; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Download all artifacts
+        if: steps.tag.outputs.skip == 'false'
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           path: dist
 
       - name: Flatten artifacts directory
+        if: steps.tag.outputs.skip == 'false'
         run: |
           set -eu
           mkdir -p flat-dist
@@ -508,19 +536,77 @@ jobs:
             cp "$f" flat-dist/
           done
 
+      - name: Verify all contracted platforms are present
+        if: steps.tag.outputs.skip == 'false'
+        run: |
+          set -eu
+          python3 << 'VERIFY'
+          import sys, re
+          from pathlib import Path
+
+          contracted = {
+              ('linux', 'amd64'), ('linux', 'arm64'),
+              ('darwin', 'amd64'), ('darwin', 'arm64'),
+              ('windows', 'amd64'), ('windows', 'arm64'),
+          }
+
+          flat_dist = Path('flat-dist')
+          found = set()
+
+          for f in flat_dist.glob('cadre-v*.*'):
+              # Extract goos-goarch from filename cadre-vX.Y.Z-goos-goarch.tar.gz or .zip
+              match = re.search(r'cadre-v[\d.]+-([a-z]+)-([a-z0-9]+)\.(?:tar\.gz|zip)', f.name)
+              if match:
+                  goos, goarch = match.group(1), match.group(2)
+                  found.add((goos, goarch))
+
+          missing = contracted - found
+          if missing:
+              print(f'ERROR: Missing archives for platforms {missing}', file=sys.stderr)
+              sys.exit(1)
+
+          print(f'✓ All {len(contracted)} contracted platforms present')
+          VERIFY
+
+      - name: Install syft
+        if: steps.tag.outputs.skip == 'false'
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+
+      - name: Generate SBOM for CLI Go dependencies
+        if: steps.tag.outputs.skip == 'false'
+        run: |
+          set -eu
+          syft scan dir:. \
+            --select-catalogers go \
+            --source-name cadre-cli \
+            --source-version "${{ steps.version.outputs.value }}" \
+            -o spdx-json=flat-dist/cadre-cli-sbom.spdx.json
+          python3 -c "
+          import json, pathlib
+          d = json.loads(pathlib.Path('flat-dist/cadre-cli-sbom.spdx.json').read_text())
+          names = {p['name'] for p in d.get('packages', []) if p.get('name')}
+          assert len(names) >= 5, f'SBOM has only {len(names)} packages: {sorted(names)}'
+          assert 'github.com/mattn/go-sqlite3' in names, f'go-sqlite3 missing from SBOM'
+          print(f'SBOM lists {len(names)} distinct packages')
+          "
+
       - name: Checksum the artifacts
+        if: steps.tag.outputs.skip == 'false'
         working-directory: flat-dist
         run: sha256sum * > SHA256SUMS
 
       - name: Attest build provenance
+        if: steps.tag.outputs.skip == 'false'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
             flat-dist/cadre-v*.tar.gz
             flat-dist/cadre-v*.zip
+            flat-dist/cadre-cli-sbom.spdx.json
             flat-dist/SHA256SUMS
 
       - name: Set up tag signing
+        if: steps.tag.outputs.skip == 'false'
         id: signing
         env:
           TAG_SIGNING_KEY: ${{ secrets.TAG_SIGNING_KEY }}
@@ -540,6 +626,7 @@ jobs:
           echo "enabled=true" >> "$GITHUB_OUTPUT"
 
       - name: Tag
+        if: steps.tag.outputs.skip == 'false'
         run: |
           git config user.name "deagy"
           git config user.email "48447733+deagy@users.noreply.github.com"
@@ -556,6 +643,7 @@ jobs:
           git push origin "cli-v${{ steps.version.outputs.value }}"
 
       - name: Publish GitHub Release with artifacts
+        if: steps.tag.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
