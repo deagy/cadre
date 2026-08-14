@@ -161,6 +161,17 @@ func TestFindInstallationRoot_NormalCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Isolate this test from CADRE_REPO_ROOT
+	oldEnv := os.Getenv("CADRE_REPO_ROOT")
+	t.Cleanup(func() {
+		if oldEnv == "" {
+			os.Unsetenv("CADRE_REPO_ROOT")
+		} else {
+			os.Setenv("CADRE_REPO_ROOT", oldEnv)
+		}
+	})
+	os.Unsetenv("CADRE_REPO_ROOT")
+
 	got, err := FindInstallationRoot()
 	if err != nil {
 		t.Fatalf("FindInstallationRoot() error = %v", err)
@@ -304,5 +315,23 @@ func TestFindInstallationRoot_FailsWhenNoRosterFound(t *testing.T) {
 	_, err = FindInstallationRoot()
 	if err == nil {
 		t.Fatal("expected FindInstallationRoot to fail when roster/ is not found")
+	}
+}
+
+func TestFindAncestorWith_RejectsEmptySuiteDirectory(t *testing.T) {
+	// Negative case: a directory containing suite/ but no roster/ beneath it
+	// should not resolve as an installation.
+	root := t.TempDir()
+
+	// Create suite/ but empty (no suite/roster/)
+	suiteDir := filepath.Join(root, "suite")
+	if err := os.Mkdir(suiteDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Start from suite and walk up; should not find anything
+	got, found := findAncestorWith(suiteDir, "roster", 64)
+	if found {
+		t.Errorf("findAncestorWith() should reject empty suite/, got: %q", got)
 	}
 }
