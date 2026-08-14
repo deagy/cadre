@@ -26,7 +26,7 @@
           "internal/api/handler.go"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -40,7 +40,7 @@
             "agent": "backend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -70,7 +70,7 @@
             "agent": "go-service-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -100,7 +100,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -130,7 +130,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -270,8 +270,7 @@
       "task_id": "BACKEND-GO-CHANGE",
       "teams": [],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:73b13001208ae7d405fdc416e253d8a6ec67bffcdac8fc9436e14e90f87cbbe7"
+    }
   },
   "classification-confidential": {
     "canonical": {
@@ -300,7 +299,7 @@
           "internal/api/handler.go"
         ],
         "classification": "confidential",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -314,7 +313,7 @@
             "agent": "backend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -344,7 +343,7 @@
             "agent": "go-service-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -374,7 +373,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -404,7 +403,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -544,8 +543,7 @@
       "task_id": "CLASSIFICATION-CONFIDENTIAL",
       "teams": [],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:7d9a40ce60b489e6a3d209fb158e44fcc64569786fc1aad6525e0455f034bb2d"
+    }
   },
   "classification-internal": {
     "canonical": {
@@ -574,7 +572,7 @@
           "internal/api/handler.go"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -588,7 +586,7 @@
             "agent": "backend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -618,7 +616,7 @@
             "agent": "go-service-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -648,7 +646,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -678,7 +676,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -818,8 +816,7 @@
       "task_id": "CLASSIFICATION-INTERNAL",
       "teams": [],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:8f83fcb6e45fa6f5b6ac37bbf84a21107c582e5fdbe509e39fffb020cbbfeb93"
+    }
   },
   "classification-public": {
     "canonical": {
@@ -848,7 +845,7 @@
           "internal/api/handler.go"
         ],
         "classification": "public",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -862,7 +859,7 @@
             "agent": "backend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -892,7 +889,7 @@
             "agent": "go-service-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -922,7 +919,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -952,7 +949,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1092,8 +1089,7 @@
       "task_id": "CLASSIFICATION-PUBLIC",
       "teams": [],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:b8e800b8a4bca7a19bce527e55909b02572bc08b26562289e93bca86abcba361"
+    }
   },
   "classification-restricted": {
     "canonical": {
@@ -1122,7 +1118,7 @@
           "internal/api/handler.go"
         ],
         "classification": "restricted",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -1136,7 +1132,7 @@
             "agent": "backend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1166,7 +1162,7 @@
             "agent": "go-service-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1196,7 +1192,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1226,7 +1222,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1366,8 +1362,7 @@
       "task_id": "CLASSIFICATION-RESTRICTED",
       "teams": [],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:4eafc515ffee7c3336110de1cac1b3090afce15e08b52a742b918176496a8bc3"
+    }
   },
   "context-pack-match": {
     "canonical": {
@@ -1409,7 +1404,7 @@
           "internal/crypto/qrng.go"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -1423,7 +1418,7 @@
             "agent": "cryptographic-assurance-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1453,7 +1448,7 @@
             "agent": "threat-modeler",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1483,7 +1478,7 @@
             "agent": "backend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1513,7 +1508,7 @@
             "agent": "go-service-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1543,7 +1538,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1573,7 +1568,7 @@
             "agent": "secrets-identity-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1603,7 +1598,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1633,7 +1628,7 @@
             "agent": "security-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1778,8 +1773,7 @@
       "task_id": "CONTEXT-PACK-MATCH",
       "teams": [],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:a3efd5b89d03f69b04e787ba1c4837518c07170b6d370cb9c8b603b9bba0ee3a"
+    }
   },
   "cross-stack-team": {
     "canonical": {
@@ -1817,7 +1811,7 @@
           ".github/workflows/validate.yml"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -1831,7 +1825,7 @@
             "agent": "interaction-designer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1861,7 +1855,7 @@
             "agent": "frontend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1891,7 +1885,7 @@
             "agent": "backend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1921,7 +1915,7 @@
             "agent": "go-service-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1951,7 +1945,7 @@
             "agent": "cicd-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -1981,7 +1975,7 @@
             "agent": "github-actions-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2011,7 +2005,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2041,7 +2035,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2071,7 +2065,7 @@
             "agent": "accessibility-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2101,7 +2095,7 @@
             "agent": "pipeline-security-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2344,8 +2338,7 @@
         }
       ],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:2d68a029b20df7ad8acfa65e356c7af6d25f39907791791d61a93c129d1f191c"
+    }
   },
   "documentation-only": {
     "canonical": {
@@ -2370,7 +2363,7 @@
           "docs/getting-started.md"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -2384,7 +2377,7 @@
             "agent": "technical-writer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2446,8 +2439,7 @@
       "task_id": "DOCUMENTATION-ONLY",
       "teams": [],
       "workflow": "unclassified"
-    },
-    "dispatch_fingerprint": "sha256:2f9872f2f1d0e0a7e8882993edbf2f26bfe0b81f3b982344fbbbe1ea1f68c02f"
+    }
   },
   "frontend-react-change": {
     "canonical": {
@@ -2484,7 +2476,7 @@
           "web/src/Dashboard.tsx"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -2498,7 +2490,7 @@
             "agent": "product-intent-agent",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2528,7 +2520,7 @@
             "agent": "requirements-agent",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2558,7 +2550,7 @@
             "agent": "interaction-designer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2588,7 +2580,7 @@
             "agent": "frontend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2618,7 +2610,7 @@
             "agent": "react-component-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2648,7 +2640,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2678,7 +2670,7 @@
             "agent": "support-triage-agent",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2708,7 +2700,7 @@
             "agent": "observability-sre",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2738,7 +2730,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2768,7 +2760,7 @@
             "agent": "accessibility-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2798,7 +2790,7 @@
             "agent": "technical-writer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -2967,8 +2959,7 @@
       "task_id": "FRONTEND-REACT-CHANGE",
       "teams": [],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:2d4f3cc9b5d3976b12aac5093954a289da56ac4ba7e341a81c6f9967444e9623"
+    }
   },
   "infrastructure-route": {
     "canonical": {
@@ -2998,7 +2989,7 @@
           "infra/modules/storage/main.tf"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -3012,7 +3003,7 @@
             "agent": "infrastructure-provisioner",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3042,7 +3033,7 @@
             "agent": "opentofu-module-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3072,7 +3063,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3102,7 +3093,7 @@
             "agent": "infrastructure-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3267,8 +3258,7 @@
       "task_id": "INFRASTRUCTURE-ROUTE",
       "teams": [],
       "workflow": "infrastructure-change"
-    },
-    "dispatch_fingerprint": "sha256:8176ecaae21b3e5c6b259bd86dd7c454338ba6fce62f353bd099335b102cd4a8"
+    }
   },
   "keyword-word-boundary": {
     "canonical": {
@@ -3293,7 +3283,7 @@
           "notes/runners.md"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -3307,7 +3297,7 @@
             "agent": "technical-writer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3365,8 +3355,7 @@
       "task_id": "KEYWORD-WORD-BOUNDARY",
       "teams": [],
       "workflow": "unclassified"
-    },
-    "dispatch_fingerprint": "sha256:4c10fac3f88dc65e292c2803697ee6e3c88290bb690132614419408d4c4f249c"
+    }
   },
   "long-task-text": {
     "canonical": {
@@ -3398,7 +3387,7 @@
           "internal/dispatch/core.go"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -3412,7 +3401,7 @@
             "agent": "product-intent-agent",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3442,7 +3431,7 @@
             "agent": "requirements-agent",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3472,7 +3461,7 @@
             "agent": "backend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3502,7 +3491,7 @@
             "agent": "go-service-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3532,7 +3521,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3562,7 +3551,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3695,8 +3684,7 @@
       "task_id": "LONG-TASK-TEXT",
       "teams": [],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:d8d618855666fa2b44799eef8363c310efab26840df88d27f50e28ebc996131d"
+    }
   },
   "many-files": {
     "canonical": {
@@ -3739,7 +3727,7 @@
           "web/src/App.tsx"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -3753,7 +3741,7 @@
             "agent": "product-intent-agent",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3783,7 +3771,7 @@
             "agent": "requirements-agent",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3813,7 +3801,7 @@
             "agent": "interaction-designer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3843,7 +3831,7 @@
             "agent": "frontend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3873,7 +3861,7 @@
             "agent": "backend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3903,7 +3891,7 @@
             "agent": "go-service-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3933,7 +3921,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3963,7 +3951,7 @@
             "agent": "release-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -3993,7 +3981,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -4023,7 +4011,7 @@
             "agent": "accessibility-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -4053,7 +4041,7 @@
             "agent": "supply-chain-security-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -4083,7 +4071,7 @@
             "agent": "security-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -4113,7 +4101,7 @@
             "agent": "technical-writer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -4363,8 +4351,7 @@
         }
       ],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:f31edd61e82253d38128ef48a9aa13b76dc0d2d9f89d7cf6ad75713186036505"
+    }
   },
   "needs-triage": {
     "canonical": {
@@ -4387,7 +4374,7 @@
           "notes/scratch.txt"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -4409,8 +4396,7 @@
       "task_id": "NEEDS-TRIAGE",
       "teams": [],
       "workflow": "needs-triage"
-    },
-    "dispatch_fingerprint": "sha256:c97cae34ed219e7be6dc409d1ccacca23df0f13f1494283a71ef6099c5deeed6"
+    }
   },
   "parallel-review-team": {
     "canonical": {
@@ -4447,7 +4433,7 @@
           ".github/workflows/release.yml"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -4461,7 +4447,7 @@
             "agent": "product-intent-agent",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -4491,7 +4477,7 @@
             "agent": "requirements-agent",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -4521,7 +4507,7 @@
             "agent": "frontend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -4551,7 +4537,7 @@
             "agent": "backend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -4581,7 +4567,7 @@
             "agent": "go-service-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -4611,7 +4597,7 @@
             "agent": "cicd-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -4641,7 +4627,7 @@
             "agent": "github-actions-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -4671,7 +4657,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -4701,7 +4687,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -4731,7 +4717,7 @@
             "agent": "pipeline-security-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -4951,8 +4937,7 @@
         }
       ],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:1ce7facb6a58200e4f6058ed2874d13d6041155b2fe0c9a5b20369fa23ffe6a3"
+    }
   },
   "path-glob-edge": {
     "canonical": {
@@ -4985,7 +4970,7 @@
           "services/edge/.github/workflows/build.yml"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -4999,7 +4984,7 @@
             "agent": "frontend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5029,7 +5014,7 @@
             "agent": "backend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5059,7 +5044,7 @@
             "agent": "cicd-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5089,7 +5074,7 @@
             "agent": "github-actions-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5119,7 +5104,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5149,7 +5134,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5179,7 +5164,7 @@
             "agent": "pipeline-security-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5371,8 +5356,7 @@
         }
       ],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:96403403ab5b161e813efcc7bad1af17b5d97a75dc20bd74460441b6b128b2c1"
+    }
   },
   "risk-destructive": {
     "canonical": {
@@ -5421,7 +5405,7 @@
           "db/migrations/003_drop.sql"
         ],
         "classification": "confidential",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -5435,7 +5419,7 @@
             "agent": "product-intent-agent",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5465,7 +5449,7 @@
             "agent": "requirements-agent",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5495,7 +5479,7 @@
             "agent": "backend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5525,7 +5509,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5555,7 +5539,7 @@
             "agent": "database-reliability-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5585,7 +5569,7 @@
             "agent": "release-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5615,7 +5599,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5645,7 +5629,7 @@
             "agent": "infrastructure-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5675,7 +5659,7 @@
             "agent": "security-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5705,7 +5689,7 @@
             "agent": "sql-query-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -5908,8 +5892,7 @@
       "task_id": "RISK-DESTRUCTIVE",
       "teams": [],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:cdd2f98e7a372ec0751772bd62e66c76d8370031bb63f88e042ded2adc080be7"
+    }
   },
   "risk-identity-privilege": {
     "canonical": {
@@ -5958,7 +5941,7 @@
           "infra/iam.tf"
         ],
         "classification": "restricted",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -5972,7 +5955,7 @@
             "agent": "product-intent-agent",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6002,7 +5985,7 @@
             "agent": "requirements-agent",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6032,7 +6015,7 @@
             "agent": "infrastructure-provisioner",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6062,7 +6045,7 @@
             "agent": "opentofu-module-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6092,7 +6075,7 @@
             "agent": "secrets-identity-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6122,7 +6105,7 @@
             "agent": "release-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6152,7 +6135,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6182,7 +6165,7 @@
             "agent": "infrastructure-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6212,7 +6195,7 @@
             "agent": "security-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6242,7 +6225,7 @@
             "agent": "compliance-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6449,8 +6432,7 @@
       "task_id": "RISK-IDENTITY-PRIVILEGE",
       "teams": [],
       "workflow": "production-release"
-    },
-    "dispatch_fingerprint": "sha256:10bde079a46fa837129cfc6e62047033b95190becb89453a5cdfc1384a057d27"
+    }
   },
   "risk-production-deploy": {
     "canonical": {
@@ -6485,7 +6467,7 @@
           "deploy/prod.yaml"
         ],
         "classification": "confidential",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -6499,7 +6481,7 @@
             "agent": "product-intent-agent",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6529,7 +6511,7 @@
             "agent": "requirements-agent",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6559,7 +6541,7 @@
             "agent": "release-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6589,7 +6571,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6725,8 +6707,7 @@
       "task_id": "RISK-PRODUCTION-DEPLOY",
       "teams": [],
       "workflow": "production-release"
-    },
-    "dispatch_fingerprint": "sha256:0f22c23d3d3cfabff386ffcd66571914a1a3e9de2ff0dbb3eb7b6f3a193b6a0e"
+    }
   },
   "risk-sensitive-data": {
     "canonical": {
@@ -6767,7 +6748,7 @@
           "db/schema.sql"
         ],
         "classification": "restricted",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -6781,7 +6762,7 @@
             "agent": "backend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6811,7 +6792,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6841,7 +6822,7 @@
             "agent": "database-reliability-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6871,7 +6852,7 @@
             "agent": "release-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6901,7 +6882,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6931,7 +6912,7 @@
             "agent": "infrastructure-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6961,7 +6942,7 @@
             "agent": "security-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -6991,7 +6972,7 @@
             "agent": "compliance-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -7160,8 +7141,7 @@
       "task_id": "RISK-SENSITIVE-DATA",
       "teams": [],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:fd4c5a7e2920f0c42be92603ec7da8ccd2c3a76fca6dca243e805a612b0d9c24"
+    }
   },
   "security-route": {
     "canonical": {
@@ -7190,7 +7170,7 @@
           "security/threat-model.md"
         ],
         "classification": "confidential",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -7204,7 +7184,7 @@
             "agent": "cloud-architect",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -7234,7 +7214,7 @@
             "agent": "threat-modeler",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -7264,7 +7244,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -7294,7 +7274,7 @@
             "agent": "technical-writer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -7388,8 +7368,7 @@
       "task_id": "SECURITY-ROUTE",
       "teams": [],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:93c107902c1a45e0ef42196c9f70ce6a3a2079abf5444e09edcbfffd0860e5e7"
+    }
   },
   "supply-chain-by-keyword": {
     "canonical": {
@@ -7419,7 +7398,7 @@
           "docs/release.md"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -7433,7 +7412,7 @@
             "agent": "release-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -7463,7 +7442,7 @@
             "agent": "supply-chain-security-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -7493,7 +7472,7 @@
             "agent": "security-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -7523,7 +7502,7 @@
             "agent": "technical-writer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -7596,8 +7575,7 @@
       "task_id": "SUPPLY-CHAIN-BY-KEYWORD",
       "teams": [],
       "workflow": "unclassified"
-    },
-    "dispatch_fingerprint": "sha256:4f2c522c6f361b99476ae2c5466dcc4a2d82990a6dfad91ec44c94c78b5e340c"
+    }
   },
   "supply-chain-by-path": {
     "canonical": {
@@ -7627,7 +7605,7 @@
           "go.sum"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -7641,7 +7619,7 @@
             "agent": "release-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -7671,7 +7649,7 @@
             "agent": "supply-chain-security-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -7701,7 +7679,7 @@
             "agent": "security-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -7771,8 +7749,7 @@
       "task_id": "SUPPLY-CHAIN-BY-PATH",
       "teams": [],
       "workflow": "unclassified"
-    },
-    "dispatch_fingerprint": "sha256:eeac35c6504fb06464db1cbc70f60fc847b0addc5d2398b9c306dd7b7faf2e71"
+    }
   },
   "testing-route": {
     "canonical": {
@@ -7800,7 +7777,7 @@
           "test/features/failure.feature"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -7814,7 +7791,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -7844,7 +7821,7 @@
             "agent": "black-box-tester",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -7874,7 +7851,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -8000,8 +7977,7 @@
       "task_id": "TESTING-ROUTE",
       "teams": [],
       "workflow": "unclassified"
-    },
-    "dispatch_fingerprint": "sha256:506f86e0707bfba358a10751874bd76e05e624b8926a53b7e1620bb06c13f9c1"
+    }
   },
   "unicode-and-quotes": {
     "canonical": {
@@ -8030,7 +8006,7 @@
           "internal/parse/text.go"
         ],
         "classification": "internal",
-        "repository_root": "/home/deagy/sdk/cadre",
+        "repository_root": "<REPO_ROOT>",
         "source_filter": [
           "deagy/cadre",
           "proposed-knowledge"
@@ -8044,7 +8020,7 @@
             "agent": "backend-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -8074,7 +8050,7 @@
             "agent": "go-service-implementer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -8104,7 +8080,7 @@
             "agent": "test-engineer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -8134,7 +8110,7 @@
             "agent": "code-reviewer",
             "invocation": {
               "args": [
-                "/home/deagy/sdk/cadre/bin/cadre",
+                "<REPO_ROOT>/bin/cadre",
                 "knowledge",
                 "search",
                 "--agent",
@@ -8267,7 +8243,6 @@
       "task_id": "UNICODE-AND-QUOTES",
       "teams": [],
       "workflow": "new-service"
-    },
-    "dispatch_fingerprint": "sha256:2fc3568004e4b27acc1177d7d44760463d5b99b7cfcc595b4c476614cf891a7b"
+    }
   }
 }

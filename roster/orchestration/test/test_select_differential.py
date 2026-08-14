@@ -27,6 +27,20 @@ comparison, and not a convenience:
   regenerate goldens without reading them -- the failure mode that makes a
   golden suite worthless.
 
+One further property, discovered by this harness failing in CI and worth
+stating because it is not obvious from the contract: **the plan embeds
+absolute paths**, in `inputs.repository_root` and in the knowledge
+invocation's argv. Those are inside the fingerprint's canonical form, so
+`dispatch_fingerprint` is *checkout-location dependent* -- the same task
+against the same tree fingerprints differently at `/home/me/cadre` and
+`/home/runner/work/cadre/cadre`. Verified directly against two clones.
+
+So goldens store the canonical form with the repository root replaced by
+`<REPO_ROOT>`, which is portable, and cross-implementation fingerprint
+equality is asserted **within a single machine and run** rather than against
+a stored value. Storing a fingerprint in the golden file would have pinned
+one developer's directory layout and failed for everyone else.
+
 Everything else is compared. A matching fingerprint is therefore a claim
 about every semantic field in the plan, which is why it is asserted
 separately from the field-by-field comparison rather than instead of it.
@@ -34,7 +48,7 @@ separately from the field-by-field comparison rather than instead of it.
 ## What this file is worth today
 
 Two of its three tests have teeth immediately, against the *Python*
-implementation: they pin the selector's output for 24 input shapes, so an
+implementation: they pin the selector's output for 25 input shapes, so an
 unintended change to routing, gate derivation, team recipes or plan encoding
 fails here. That is useful independently of any port.
 
@@ -88,6 +102,21 @@ def canonical_form(plan: dict) -> dict:
     return {key: value for key, value in plan.items() if key not in VOLATILE_KEYS}
 
 
+REPO_ROOT_PLACEHOLDER = "<REPO_ROOT>"
+
+
+def portable_form(plan: dict) -> dict:
+    """canonical_form with this checkout's absolute path abstracted away.
+
+    See the module docstring: the plan embeds absolute paths, so a golden
+    recorded verbatim pins whoever generated it to their own directory
+    layout.
+    """
+    encoded = json.dumps(canonical_form(plan), sort_keys=True, separators=(",", ":"))
+    encoded = encoded.replace(str(REPO_ROOT), REPO_ROOT_PLACEHOLDER)
+    return json.loads(encoded)
+
+
 def canonical_bytes(plan: dict) -> bytes:
     return json.dumps(canonical_form(plan), sort_keys=True, separators=(",", ":")).encode("utf-8")
 
@@ -105,6 +134,15 @@ def run_select(case: dict, *, implementation: str) -> tuple[int, str, str]:
             "--files", case["files"],
             "--classification", case["classification"],
             "--task-id", case["id"].upper(),
+            # Pinned, not defaulted. Left alone, source_filter is derived from
+            # the checkout's git origin slug, so this suite would pass on
+            # deagy/cadre and fail on every fork and every local clone -- the
+            # same class of environmental dependency that passing --files
+            # removes for changed-file discovery. The origin-derivation path
+            # itself is selector behaviour covered by test_selector.py; what
+            # is pinned here is everything downstream of it.
+            "--source", "deagy/cadre",
+            "--source", "proposed-knowledge",
         ],
         capture_output=True, text=True, timeout=180,
         cwd=REPO_ROOT, env=environment,
@@ -132,10 +170,7 @@ class SelectGoldenTest(unittest.TestCase):
             goldens = {}
             for case in cls.corpus:
                 plan = plan_for(case)
-                goldens[case["id"]] = {
-                    "canonical": canonical_form(plan),
-                    "dispatch_fingerprint": plan["dispatch_fingerprint"],
-                }
+                goldens[case["id"]] = {"canonical": portable_form(plan)}
             GOLDEN_PATH.write_text(
                 json.dumps(goldens, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
                 encoding="utf-8",
@@ -164,14 +199,9 @@ class SelectGoldenTest(unittest.TestCase):
                 plan = plan_for(case)
                 golden = self.goldens[case["id"]]
                 self.assertEqual(
-                    golden["canonical"], canonical_form(plan),
+                    golden["canonical"], portable_form(plan),
                     f"the plan for {case['id']!r} changed. This case exists because: "
                     f"{case['why']}",
-                )
-                self.assertEqual(
-                    golden["dispatch_fingerprint"], plan["dispatch_fingerprint"],
-                    f"dispatch_fingerprint changed for {case['id']!r} -- consumers "
-                    "compare this value across invocation paths",
                 )
 
     def test_canonical_form_matches_the_shipped_fingerprint(self) -> None:
@@ -217,19 +247,30 @@ class SelectGoParityTest(unittest.TestCase):
             )
 
     def test_go_selector_matches_the_python_plan_byte_for_byte(self) -> None:
+        """Both implementations are run here, in this process, on this
+        machine -- so the fingerprints are directly comparable and no stored
+        value has to encode anyone's directory layout."""
         for case in self.corpus:
             with self.subTest(case=case["id"]):
-                plan = plan_for(case, implementation="go")
-                golden = self.goldens[case["id"]]
+                python_plan = plan_for(case, implementation="python")
+                go_plan = plan_for(case, implementation="go")
+
                 self.assertEqual(
-                    golden["canonical"], canonical_form(plan),
+                    canonical_form(python_plan), canonical_form(go_plan),
                     f"the Go plan for {case['id']!r} differs from the Python one. "
                     f"This case exists because: {case['why']}",
                 )
                 self.assertEqual(
-                    golden["dispatch_fingerprint"], plan["dispatch_fingerprint"],
+                    python_plan["dispatch_fingerprint"], go_plan["dispatch_fingerprint"],
                     f"dispatch_fingerprint differs for {case['id']!r}; the Go plan "
                     "is a different plan, whatever else matches",
+                )
+                # And still the recorded shape, so a change that moved both
+                # implementations together is not silently accepted.
+                self.assertEqual(
+                    self.goldens[case["id"]]["canonical"], portable_form(go_plan),
+                    f"both implementations agree but differ from the recorded plan "
+                    f"for {case['id']!r}",
                 )
 
 
