@@ -19,6 +19,10 @@ func main() {
 }
 
 func run() int {
+	// Try resolving the repository root in order:
+	// 1. The caller's project (project-relative, from cwd)
+	// 2. The CLI installation (for packaged plugins and checkouts)
+	// 3. CADRE_REPO_ROOT environment variable (set by bin/cadre wrapper)
 	repoRoot, err := platform.RepoRoot()
 	if err != nil {
 		// platform.RepoRoot() answers "which project is the caller working
@@ -26,15 +30,20 @@ func run() int {
 		// a directory that is not a checkout at all -- `cadre select --root
 		// <elsewhere>` run from a scratch directory, which
 		// test_repository_health.py's symlink case does deliberately.
-		// $CADRE_REPO_ROOT, exported by bin/cadre and bin/cadre.ps1, names
-		// the checkout that produced this binary and is the right fallback:
-		// it is where this CLI's own resources live, and it is never
-		// consulted while the working-directory walk succeeds, so it cannot
-		// redirect a caller who is inside a project.
-		repoRoot = os.Getenv("CADRE_REPO_ROOT")
-		if repoRoot == "" {
-			fmt.Fprintf(os.Stderr, "cadre: could not resolve repository root: %s\n", err)
-			return 1
+		// Try self-discovery for packaged plugin installations: find the
+		// installation's own roster/ by walking up from the executable or cwd.
+		installErr := error(nil)
+		repoRoot, installErr = platform.FindInstallationRoot()
+		if installErr != nil {
+			// Self-discovery failed; try CADRE_REPO_ROOT, which is exported
+			// by bin/cadre and bin/cadre.ps1 so the built binary knows where
+			// the checkout that produced it lives. This is the right fallback
+			// when explicit configuration is needed.
+			repoRoot = os.Getenv("CADRE_REPO_ROOT")
+			if repoRoot == "" {
+				fmt.Fprintf(os.Stderr, "cadre: could not resolve repository root: %s\n", installErr)
+				return 1
+			}
 		}
 	}
 

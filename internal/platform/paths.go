@@ -181,9 +181,11 @@ func FindInstallationRoot() (string, error) {
 }
 
 // findAncestorWith walks upward from start looking for an ancestor directory
-// containing a specific subdirectory (the markerPath). Returns the ancestor
-// and true if found, or ("", false) if the search exhausts depth or reaches
-// the filesystem root.
+// containing a specific subdirectory (the markerPath). Also checks for the
+// plugin layout where content is at suite/<markerPath> (e.g., <plugin>/suite/roster).
+//
+// Returns the ancestor (or ancestor/suite if that layout was found) and true if
+// found, or ("", false) if the search exhausts depth or reaches the filesystem root.
 func findAncestorWith(start, markerPath string, maxDepth int) (string, bool) {
 	directory, err := filepath.Abs(start)
 	if err != nil {
@@ -191,9 +193,16 @@ func findAncestorWith(start, markerPath string, maxDepth int) (string, bool) {
 	}
 
 	for i := 0; i < maxDepth; i++ {
+		// Check for direct marker path (normal checkout: <root>/roster)
 		candidate := filepath.Join(directory, markerPath)
 		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
 			return directory, true
+		}
+
+		// Check for plugin layout (packaged plugin: <plugin>/suite/roster)
+		suiteCandidate := filepath.Join(directory, "suite", markerPath)
+		if info, err := os.Stat(suiteCandidate); err == nil && info.IsDir() {
+			return filepath.Join(directory, "suite"), true
 		}
 
 		parent := filepath.Dir(directory)

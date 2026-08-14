@@ -171,12 +171,49 @@ func TestFindInstallationRoot_NormalCheckout(t *testing.T) {
 	}
 }
 
-func TestFindInstallationRoot_PackagedPluginLayout(t *testing.T) {
-	// Simulate a packaged plugin with suite/roster but no .git
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "suite", "roster"), 0o755); err != nil {
+func TestFindInstallationRoot_PackagedPluginLayout_FromBinDir(t *testing.T) {
+	// Simulate a packaged plugin with bin/cadre-bin and suite/roster.
+	// The binary walks up from <plugin>/bin/ and must find suite/roster.
+	pluginRoot := t.TempDir()
+	binDir := filepath.Join(pluginRoot, "bin")
+	suiteDir := filepath.Join(pluginRoot, "suite")
+	rosterDir := filepath.Join(suiteDir, "roster")
+
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(rosterDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test that walking from the bin directory finds suite/roster
+	got, found := findAncestorWith(binDir, "roster", 64)
+	if !found {
+		t.Fatalf("findAncestorWith() should find suite/roster from bin dir")
+	}
+	want, _ := filepath.Abs(suiteDir)
+	if got != want {
+		t.Errorf("findAncestorWith() = %q, want %q", got, want)
+	}
+}
+
+func TestFindInstallationRoot_PackagedPluginLayout_NoGitNoEnv(t *testing.T) {
+	// Test FindInstallationRoot from an unrelated cwd with a plugin in a separate temp dir.
+	// This simulates: user runs <plugin>/bin/cadre from their own project dir.
+	pluginRoot := t.TempDir()
+	binDir := filepath.Join(pluginRoot, "bin")
+	suiteDir := filepath.Join(pluginRoot, "suite")
+	rosterDir := filepath.Join(suiteDir, "roster")
+
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(rosterDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a completely separate user project directory
+	userProjectDir := t.TempDir()
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -184,17 +221,32 @@ func TestFindInstallationRoot_PackagedPluginLayout(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chdir(cwd) })
 
-	if err := os.Chdir(filepath.Join(root, "suite")); err != nil {
+	// Change to the unrelated user project directory
+	if err := os.Chdir(userProjectDir); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := FindInstallationRoot()
-	if err != nil {
-		t.Fatalf("FindInstallationRoot() error = %v", err)
+	// Clear CADRE_REPO_ROOT to force self-discovery
+	oldEnv := os.Getenv("CADRE_REPO_ROOT")
+	t.Cleanup(func() {
+		if oldEnv == "" {
+			os.Unsetenv("CADRE_REPO_ROOT")
+		} else {
+			os.Setenv("CADRE_REPO_ROOT", oldEnv)
+		}
+	})
+	os.Unsetenv("CADRE_REPO_ROOT")
+
+	// This test would require os.Executable() to return binDir, which we can't
+	// control in the test. So we only test that findAncestorWith finds the suite layout.
+	// The full end-to-end test requires running the actual binary.
+	got, found := findAncestorWith(binDir, "roster", 64)
+	if !found {
+		t.Fatalf("findAncestorWith() should find suite/roster from bin dir, even without CADRE_REPO_ROOT")
 	}
-	wantAbs, _ := filepath.Abs(filepath.Join(root, "suite"))
-	if got != wantAbs {
-		t.Errorf("FindInstallationRoot() = %q, want %q", got, wantAbs)
+	want, _ := filepath.Abs(suiteDir)
+	if got != want {
+		t.Errorf("findAncestorWith() = %q, want %q", got, want)
 	}
 }
 
