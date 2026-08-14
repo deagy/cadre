@@ -3,6 +3,7 @@ package generators
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -77,41 +78,90 @@ func LoadModelTiers(path string) (map[string]ModelTierInfo, error) {
 	return manifest.ModelTiers, nil
 }
 
-// DiscoverRoles walks the roster directory and discovers all role AGENT.md files.
-// Returns a map of role_id -> AGENT.md path.
+// nonRosterDirectoryParts mirrors generate_role_metadata.py's
+// NON_ROSTER_DIRECTORY_PARTS: directories whose AGENT.md files describe some
+// *other* roster (the orchestration selector's fixture roster under
+// roster/orchestration/test/fixtures/) and must never enter this one's
+// inventory. A recursive walk without this exclusion silently claims those
+// three fixture roles as Cadre's own.
+var nonRosterDirectoryParts = map[string]bool{"test": true, "fixtures": true}
+
+// isRoleDefinition reports whether an AGENT.md at rel (a slash-separated path
+// relative to the roster root) belongs to this roster's inventory.
+func isRoleDefinition(rel string) bool {
+	for _, part := range strings.Split(rel, "/") {
+		if nonRosterDirectoryParts[part] {
+			return false
+		}
+	}
+	return true
+}
+
+// DiscoverRoles walks the roster directory recursively and discovers every
+// role AGENT.md. Returns a map of role id -> AGENT.md path.
+//
+// Roles are keyed by the frontmatter `id` field, not by directory name: the
+// knowledge-store steward's definition lives at roster/knowledge-store/AGENT.md
+// (depth 2, directory "knowledge-store") while its id is
+// "knowledge-store-steward". Keying by directory name made that role
+// undiscoverable and every generator crash on it. Mirrors
+// generate_role_metadata.py's build_role_model().
 func DiscoverRoles(rosterRoot string) (map[string]string, error) {
 	roles := make(map[string]string)
+	seen := make(map[string]string) // role id -> relative path, for duplicate reporting
 
-	// Walk each phase directory
-	phases, err := os.ReadDir(rosterRoot)
+	var paths []string
+	err := filepath.WalkDir(rosterRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || d.Name() != "AGENT.md" {
+			return nil
+		}
+		rel, relErr := filepath.Rel(rosterRoot, path)
+		if relErr != nil {
+			return relErr
+		}
+		if !isRoleDefinition(filepath.ToSlash(rel)) {
+			return nil
+		}
+		paths = append(paths, path)
+		return nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("cannot read roster root: %w", err)
 	}
+	sort.Strings(paths)
 
-	for _, phaseEntry := range phases {
-		if !phaseEntry.IsDir() {
-			continue
-		}
-		phasePath := filepath.Join(rosterRoot, phaseEntry.Name())
-
-		// Walk each role directory
-		roleEntries, err := os.ReadDir(phasePath)
+	for _, path := range paths {
+		rel, _ := filepath.Rel(rosterRoot, path)
+		rel = filepath.ToSlash(rel)
+		content, err := os.ReadFile(path)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("cannot read %s: %w", rel, err)
 		}
-
-		for _, roleEntry := range roleEntries {
-			if !roleEntry.IsDir() {
-				continue
-			}
-			rolePath := filepath.Join(phasePath, roleEntry.Name())
-			agentMdPath := filepath.Join(rolePath, "AGENT.md")
-
-			// Check if AGENT.md exists
-			if _, err := os.Stat(agentMdPath); err == nil {
-				roles[roleEntry.Name()] = agentMdPath
-			}
+		text := string(content)
+		if !IsMigrated(text) {
+			return nil, fmt.Errorf("%s: AGENT.md does not carry '---'-delimited frontmatter", rel)
 		}
+		frontmatter, err := extractFrontmatter(text)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", rel, err)
+		}
+		var fields struct {
+			ID string `yaml:"id"`
+		}
+		if err := yaml.Unmarshal([]byte(frontmatter), &fields); err != nil {
+			return nil, fmt.Errorf("%s: cannot parse frontmatter: %w", rel, err)
+		}
+		if fields.ID == "" {
+			return nil, fmt.Errorf("%s: frontmatter is missing required field 'id'", rel)
+		}
+		if previous, exists := seen[fields.ID]; exists {
+			return nil, fmt.Errorf("duplicate role id %q: %q and %q", fields.ID, previous, rel)
+		}
+		seen[fields.ID] = rel
+		roles[fields.ID] = path
 	}
 
 	if len(roles) == 0 {
@@ -231,24 +281,4 @@ func LoadAllRoles(rosterRoot string, orderIDs []string, discovered map[string]st
 	}
 
 	return roles, nil
-}
-
-// BuildKnowledgeFocus creates a knowledge_focus block from all roles.
-// Returns a map suitable for JSON marshaling.
-func BuildKnowledgeFocus(roles []RoleMetadata) map[string]string {
-	kf := make(map[string]string)
-	for _, role := range roles {
-		kf[role.ID] = role.KnowledgeFocus
-	}
-	return kf
-}
-
-// SortedRoleIDs returns the role IDs in sorted order (for deterministic output).
-func SortedRoleIDs(roles []RoleMetadata) []string {
-	var ids []string
-	for _, role := range roles {
-		ids = append(ids, role.ID)
-	}
-	sort.Strings(ids)
-	return ids
 }

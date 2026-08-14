@@ -40,17 +40,33 @@ func TestGenerateRoleMetadata(t *testing.T) {
 		t.Errorf("CatalogJSON has no roles")
 	}
 
-	// Check Codex wrappers
-	if len(generated.CodexWrappers) == 0 {
-		t.Errorf("CodexWrappers is empty")
+	// Check the generated provider/ bundle: one Codex .toml wrapper and one
+	// verbatim role copy per role.
+	if len(generated.ProviderContent) == 0 {
+		t.Errorf("ProviderContent is empty")
 	}
-	for path, content := range generated.CodexWrappers {
+	wrappers, roleCopies := 0, 0
+	for path, content := range generated.ProviderContent {
 		if content == "" {
-			t.Errorf("Codex wrapper at %s is empty", path)
+			t.Errorf("provider file at %s is empty", path)
 		}
-		if !contains(content, "[role]") {
-			t.Errorf("Codex wrapper at %s missing [role] section", path)
+		switch {
+		case contains(path, filepath.Join("provider", "codex-agents")):
+			wrappers++
+			if !contains(content, "developer_instructions = ") {
+				t.Errorf("Codex wrapper at %s carries no developer_instructions", path)
+			}
+			if !contains(filepath.Base(path), "agents-") {
+				t.Errorf("Codex wrapper %s is not namespaced with the agents- prefix", path)
+			}
+		case contains(path, filepath.Join("provider", "roles")):
+			roleCopies++
+		default:
+			t.Errorf("unexpected provider file: %s", path)
 		}
+	}
+	if wrappers == 0 || wrappers != roleCopies {
+		t.Errorf("expected one wrapper and one role copy per role, got %d and %d", wrappers, roleCopies)
 	}
 
 	// Check routing.json
@@ -73,7 +89,7 @@ func TestWriteRoleMetadataFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create minimal directory structure
-	for _, dir := range []string{"roster", "provider/wrappers"} {
+	for _, dir := range []string{"roster", "provider/codex-agents"} {
 		if err := os.MkdirAll(filepath.Join(tmpDir, dir), 0755); err != nil {
 			t.Fatalf("cannot create directory: %v", err)
 		}
@@ -83,8 +99,8 @@ func TestWriteRoleMetadataFiles(t *testing.T) {
 	generated := &GeneratedRoleMetadataFiles{
 		CatalogYAML: "agents:\n  test-role:\n    definition: test\n",
 		CatalogJSON: `{"test-role": {"model": "sonnet"}}`,
-		CodexWrappers: map[string]string{
-			filepath.Join(tmpDir, "provider", "wrappers", "test-role.toml"): "[role]\nname = \"test-role\"\n",
+		ProviderContent: map[string]string{
+			filepath.Join(tmpDir, "provider", "codex-agents", "agents-test-role.toml"): "name = \"agents-test-role\"\n",
 		},
 		UpdatedRouting:  `{"knowledge_focus": {"test-role": "test"}}`,
 		RoutingJSONPath: filepath.Join(tmpDir, "routing.json"),
@@ -106,7 +122,7 @@ func TestWriteRoleMetadataFiles(t *testing.T) {
 		t.Errorf("agent-catalog.json not written: %v", err)
 	}
 
-	wrapperPath := filepath.Join(tmpDir, "provider", "wrappers", "test-role.toml")
+	wrapperPath := filepath.Join(tmpDir, "provider", "codex-agents", "agents-test-role.toml")
 	if _, err := os.Stat(wrapperPath); err != nil {
 		t.Errorf("codex wrapper not written: %v", err)
 	}
@@ -116,7 +132,7 @@ func TestCheckRoleMetadata(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create directory structure
-	for _, dir := range []string{"roster", "provider/wrappers"} {
+	for _, dir := range []string{"roster", "provider/codex-agents"} {
 		if err := os.MkdirAll(filepath.Join(tmpDir, dir), 0755); err != nil {
 			t.Fatalf("cannot create directory: %v", err)
 		}
@@ -126,8 +142,8 @@ func TestCheckRoleMetadata(t *testing.T) {
 	generated := &GeneratedRoleMetadataFiles{
 		CatalogYAML: "agents:\n  test:\n",
 		CatalogJSON: `{"test": {}}`,
-		CodexWrappers: map[string]string{
-			filepath.Join(tmpDir, "provider", "wrappers", "test.toml"): "[role]\n",
+		ProviderContent: map[string]string{
+			filepath.Join(tmpDir, "provider", "codex-agents", "agents-test.toml"): "name = \"agents-test\"\n",
 		},
 		UpdatedRouting:  `{"knowledge_focus": {}}`,
 		RoutingJSONPath: filepath.Join(tmpDir, "routing.json"),

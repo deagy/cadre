@@ -68,9 +68,20 @@ SUBCOMMANDS = _load_subcommands()
 
 
 def _run_help(name: str) -> subprocess.CompletedProcess[str]:
+    """Ask the real dispatcher, whichever one that currently is.
+
+    This used to run `python bin/cadre.py <name> --help`. The Python-to-Go
+    migration deleted `bin/cadre.py` and made `bin/cadre` the dispatcher, so
+    that invocation stopped reaching a CLI at all -- every subTest below saw
+    an interpreter error instead of help text. Going through `bin/cadre`
+    keeps this asking the question it was written to ask ("does the command
+    the user typed name itself?") of whatever implementation is shipping,
+    Python or Go, rather than pinning a file path that a migration can
+    delete out from under it.
+    """
     env = dict(os.environ, NO_COLOR="1")
     return subprocess.run(
-        [sys.executable, str(REPO_ROOT / "bin" / "cadre.py"), name, "--help"],
+        [str(REPO_ROOT / "bin" / "cadre"), name, "--help"],
         capture_output=True,
         text=True,
         # stdin closed deliberately: mcp-dispatch-server serves MCP over stdio,

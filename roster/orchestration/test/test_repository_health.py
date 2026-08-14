@@ -2011,18 +2011,22 @@ class RepositoryHealthTests(unittest.TestCase):
                 self.assertTrue((REPOSITORY_ROOT / script).is_file(), script)
                 self.assertTrue(description)
 
-        # bin/cadre.py owns table parsing, sdlc delegation, usage text, and
+        # One dispatcher owns table parsing, sdlc delegation, usage text, and
         # dispatch; the per-platform shims (bin/cadre, bin/cadre.ps1) only
-        # find a Python interpreter and hand off to it, so this logic exists
-        # exactly once instead of being duplicated per shell language.
-        dispatcher_source = (REPOSITORY_ROOT / "bin" / "cadre.py").read_text(encoding="utf-8")
+        # locate it and hand off, so this logic exists exactly once instead
+        # of being duplicated per shell language. The dispatcher was
+        # bin/cadre.py until the Python-to-Go migration
+        # (ADR-001-CLI-GO-REFACTOR.md) replaced it with internal/cli; the
+        # invariant this test exists for is unchanged, so it follows the
+        # dispatcher rather than the filename.
+        dispatcher_source = (REPOSITORY_ROOT / "internal" / "cli" / "dispatcher.go").read_text(encoding="utf-8")
         self.assertIn("subcommands.tsv", dispatcher_source)
 
         sh_source = (REPOSITORY_ROOT / "bin" / "cadre").read_text(encoding="utf-8")
         ps1_source = (REPOSITORY_ROOT / "bin" / "cadre.ps1").read_text(encoding="utf-8")
         for source in (sh_source, ps1_source):
             self.assertNotIn("subcommands.tsv", source, "shims must not also parse the subcommand table")
-            self.assertIn("cadre.py", source, "shims must hand off to the shared dispatcher")
+            self.assertIn("cmd/cadre", source, "shims must hand off to the shared dispatcher")
             for _name, script, _description in rows:
                 self.assertNotIn(script, source, "subcommand table must not also be hardcoded in the shim")
 

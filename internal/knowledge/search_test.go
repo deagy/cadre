@@ -54,6 +54,7 @@ func TestVectorSearch(t *testing.T) {
 	results, err := store.Search(SearchOptions{
 		Query:             "machine learning",
 		Classification:    "technical",
+		AllSources:        true,
 		EmbeddingProvider: embedder,
 		Top:               5,
 	})
@@ -234,6 +235,7 @@ func TestSearchClassificationFilter(t *testing.T) {
 	results, err := store.Search(SearchOptions{
 		Query:             "content",
 		Classification:    "technical",
+		AllSources:        true,
 		EmbeddingProvider: embedder,
 	})
 
@@ -277,6 +279,7 @@ func TestSearchTopK(t *testing.T) {
 	results, err := store.Search(SearchOptions{
 		Query:             "message",
 		Classification:    "general",
+		AllSources:        true,
 		EmbeddingProvider: embedder,
 		Top:               2,
 	})
@@ -315,6 +318,7 @@ func TestSearchDefaultTopK(t *testing.T) {
 	results, err := store.Search(SearchOptions{
 		Query:             "test",
 		Classification:    "general",
+		AllSources:        true,
 		EmbeddingProvider: embedder,
 		Top:               0, // Will be set to default
 	})

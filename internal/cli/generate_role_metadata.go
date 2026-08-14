@@ -59,8 +59,9 @@ func GenerateRoleMetadata(args []string) int {
 			return 1
 		}
 
-		// Count generated files for report
-		fileCount := 2 + len(generated.CodexWrappers) + 1 // catalog.yaml + agent-catalog.json + wrappers + routing.json
+		// catalog.yaml + agent-catalog.json + routing.json, plus the rest of
+		// the generated provider/ bundle (codex-agents/, roles/).
+		fileCount := 3 + len(generated.ProviderContent)
 		fmt.Printf("%d role metadata files are current\n", fileCount)
 		return 0
 	}
@@ -72,11 +73,10 @@ func GenerateRoleMetadata(args []string) int {
 	}
 
 	// Report generated files
-	wrapperCount := len(generated.CodexWrappers)
 	fmt.Printf("Generated role metadata:\n")
 	fmt.Printf("  catalog.yaml: %s\n", filepath.Join(repoRoot, "roster", "catalog.yaml"))
 	fmt.Printf("  agent-catalog.json: %s\n", filepath.Join(repoRoot, "provider", "agent-catalog.json"))
-	fmt.Printf("  Codex wrappers: %d role .toml files under %s\n", wrapperCount, filepath.Join(repoRoot, "provider", "wrappers"))
+	fmt.Printf("  provider bundle: %d files under %s\n", len(generated.ProviderContent), filepath.Join(repoRoot, "provider"))
 	fmt.Printf("  routing.json: updated with knowledge_focus\n")
 	return 0
 }

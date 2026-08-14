@@ -37,19 +37,28 @@ func GitLabEvidenceCmd(args []string) int {
 	}
 }
 
+// printGitLabResult emits the tool result exactly as
+// roster/orchestration/mcp/gitlab_cli.py's main() does: one compact JSON
+// document on stdout, exit 0.
+//
+// The exit code is deliberately not derived from `status`. The JSON *is*
+// the answer, and "unavailable" (no GITLAB_SVC_TOKEN, no project id, ...)
+// is a reported outcome carrying a `reason` the caller is meant to read --
+// not a process failure. Exiting non-zero for it made every consumer that
+// treats a non-zero exit as "the command blew up" discard the document:
+// cline-plugins/cline-agents/index.ts falls into its catch branch, finds
+// stderr empty (the reason went to stdout), and reports the useless
+// "gitlab-evidence CLI failed" in place of the actual reason. Argument
+// errors still exit 2, and a marshalling failure still exits 1, because
+// neither of those produces a result document at all.
 func printGitLabResult(result map[string]any) int {
-	data, err := json.MarshalIndent(result, "", "  ")
+	data, err := json.Marshal(result)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "cadre gitlab-evidence: %v\n", err)
 		return 1
 	}
 	fmt.Println(string(data))
-	switch result["status"] {
-	case "ok", "confirmation_required":
-		return 0
-	default:
-		return 1
-	}
+	return 0
 }
 
 func gitlabCreateReviewSubtaskCmd(args []string) int {

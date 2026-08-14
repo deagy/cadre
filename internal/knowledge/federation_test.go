@@ -89,6 +89,7 @@ func TestFederatedSearch(t *testing.T) {
 		SearchOptions: SearchOptions{
 			Query:             "learning",
 			Classification:    "technical",
+			AllSources:        true,
 			EmbeddingProvider: embedder,
 			Top:               10,
 		},
@@ -159,6 +160,7 @@ func TestFederatedSearchResultAggregation(t *testing.T) {
 		SearchOptions: SearchOptions{
 			Query:             "test",
 			Classification:    "general",
+			AllSources:        true,
 			EmbeddingProvider: embedder,
 			Top:               5,
 		},

@@ -6,9 +6,6 @@
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 
-$GoCommand = Get-Command go -ErrorAction SilentlyContinue
-if (-not $GoCommand) { throw "cadre: Go is required to build this checkout's CLI (checked PATH for 'go')" }
-
 $BuildCache = if ($env:CADRE_BUILD_CACHE) { $env:CADRE_BUILD_CACHE } else { Join-Path $RepoRoot ".cadre-build-cache" }
 $Binary = Join-Path $BuildCache "cadre.exe"
 
@@ -22,15 +19,33 @@ if (Test-Path $Binary) {
 }
 
 if ($NeedsBuild) {
+  # Resolved here, not up front: a warm cache needs no toolchain, and
+  # demanding one anyway made `cadre` unusable under a deliberately narrowed
+  # PATH (see bin/cadre for the case that surfaced it).
+  $GoCommand = Get-Command go -ErrorAction SilentlyContinue
+  if (-not $GoCommand) { throw "cadre: Go is required to build this checkout's CLI (checked PATH for 'go')" }
   New-Item -ItemType Directory -Force -Path $BuildCache | Out-Null
   Push-Location $RepoRoot
   try {
-    & $GoCommand.Source build -o $Binary "./cmd/cadre"
-    if ($LASTEXITCODE -ne 0) { throw "cadre: build failed" }
+    # Silent on success, verbatim on failure. `go build` writes progress to
+    # stderr on a cold module cache ("go: downloading ..."), which is
+    # indistinguishable from CLI diagnostics to anything reading this
+    # wrapper's stderr -- it breaks `cadre --version`'s "writes nothing to
+    # stderr" contract. Buffering loses nothing: a real build failure is
+    # replayed in full before throwing.
+    $BuildOutput = & $GoCommand.Source build -o $Binary "./cmd/cadre" 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      $BuildOutput | ForEach-Object { [Console]::Error.WriteLine($_) }
+      throw "cadre: failed to build the Go CLI from $RepoRoot"
+    }
   } finally {
     Pop-Location
   }
 }
+
+# Tell the built binary which checkout produced it -- see bin/cadre for why
+# a working-directory walk cannot answer this.
+$env:CADRE_REPO_ROOT = $RepoRoot
 
 & $Binary @args
 exit $LASTEXITCODE

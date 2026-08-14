@@ -176,6 +176,7 @@ func BenchmarkSearch(b *testing.B) {
 		store.Search(SearchOptions{
 			Query:             "machine learning algorithms",
 			Classification:    "general",
+			AllSources:        true,
 			EmbeddingProvider: embedder,
 			Top:               10,
 		})

@@ -95,11 +95,26 @@ type EmbeddingProvider interface {
 }
 
 // SearchOptions controls how a retrieval search is executed.
+//
+// Scope is a required, explicit caller choice: exactly one of SourceFilters
+// (restrict to these sources) or AllSources (deliberately span every source)
+// must be supplied. Supplying neither is refused rather than treated as
+// "no filter", and supplying both is refused as ambiguous. This ports the
+// fail-closed scope rule from roster/knowledge-store/SECURITY.md's "Global
+// default, project-local override" section -- an omitted scope must never
+// silently widen a read across projects sharing one store.
+//
+// Agent and TaskID are the caller attribution recorded in the retrieval_runs
+// audit row. They are caller-asserted and unauthenticated, exactly as
+// SECURITY.md states for --source: recording them makes an honest caller
+// auditable, it does not authenticate anyone.
 type SearchOptions struct {
 	Query             string
 	Classification    string
-	SourceFilters     []string // If set, restrict to these sources only
-	AllSources        bool     // If true, ignore SourceFilters
+	SourceFilters     []string // Restrict to these sources; mutually exclusive with AllSources
+	AllSources        bool     // Explicitly span every source; mutually exclusive with SourceFilters
+	Agent             string   // Retrieving agent, recorded in the audit row
+	TaskID            string   // Task the retrieval is for, recorded in the audit row
 	Top               int      // Number of results to return (default 10)
 	EmbeddingProvider EmbeddingProvider
 }

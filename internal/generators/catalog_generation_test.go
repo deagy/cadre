@@ -8,7 +8,7 @@ import (
 )
 
 func TestRenderCatalog(t *testing.T) {
-	header := "# Generated catalog\n"
+	header := "# Generated catalog\nagents:\n"
 	roles := []RoleMetadata{
 		{
 			ID:              "product-intent-agent",
@@ -84,63 +84,106 @@ func TestLoadCatalogHeader(t *testing.T) {
 	if !strings.Contains(header, "#") {
 		t.Errorf("header doesn't contain expected comments")
 	}
-
-	t.Logf("loaded header: %d bytes", len(header))
 }
 
-func TestRenderCodexWrapper(t *testing.T) {
-	role := RoleMetadata{
-		ID:         "test-role",
-		CodexModel: "gpt-5.6-terra",
+func TestRenderCatalogCarriesTheAuthorityBlockComment(t *testing.T) {
+	roles := []RoleMetadata{{
+		ID:              "product-owner-aide",
+		Definition:      "authority/product-owner-aide/AGENT.md",
+		Phase:           "authority",
+		Capability:      "read_only",
+		Model:           "opus",
+		CodexModel:      "gpt-5.6-sol",
+		ReasoningEffort: "high",
+	}}
+	catalog, err := RenderCatalog(roles, "agents:\n")
+	if err != nil {
+		t.Fatalf("render failed: %v", err)
 	}
-
-	wrapper := RenderCodexWrapper(role)
-
-	if !strings.Contains(wrapper, "[role]") {
-		t.Errorf("missing [role] section")
+	if !strings.Contains(catalog, "# `phase: authority` roles below prepare the decision package") {
+		t.Errorf("the hand-authored authority-block comment was dropped:\n%s", catalog)
 	}
-	if !strings.Contains(wrapper, `name = "test-role"`) {
-		t.Errorf("missing role name")
-	}
-	if !strings.Contains(wrapper, `model = "gpt-5.6-terra"`) {
-		t.Errorf("missing model")
+	if strings.Index(catalog, "# `phase: authority`") > strings.Index(catalog, "  product-owner-aide:") {
+		t.Errorf("the authority-block comment must precede its role block")
 	}
 }
 
-func TestExportAgentCatalogJSON(t *testing.T) {
+func TestSpliceKnowledgeFocusIsAByteExactNoOpOnAnUnchangedRoleSet(t *testing.T) {
+	original := strings.Join([]string{
+		"{",
+		`  "routes": [`,
+		`    {"id": "keep-me"}`,
+		"  ],",
+		`  "knowledge_focus": {`,
+		`    "beta": "second role, listed first on purpose",`,
+		`    "alpha": "first role"`,
+		"  },",
+		`  "teams": {}`,
+		"}",
+		"",
+	}, "\n")
+
+	// Deliberately supplied in a different order than routing.json lists them:
+	// the splice must preserve each existing row's position rather than
+	// reordering the file to match catalog-order.txt.
 	roles := []RoleMetadata{
-		{
-			ID:              "role1",
-			Definition:      "def1",
-			Phase:           "planning",
-			Capability:      "read_only",
-			Model:           "sonnet",
-			CodexModel:      "gpt-5.6-terra",
-			ReasoningEffort: "medium",
-			KnowledgeFocus:  "focus1",
-		},
-		{
-			ID:              "role2",
-			Definition:      "def2",
-			Phase:           "build",
-			Capability:      "code_author",
-			Model:           "opus",
-			CodexModel:      "gpt-5.6-sol",
-			ReasoningEffort: "high",
-			KnowledgeFocus:  "focus2",
-		},
+		{ID: "alpha", KnowledgeFocus: "first role"},
+		{ID: "beta", KnowledgeFocus: "second role, listed first on purpose"},
 	}
 
-	catalog := ExportAgentCatalogJSON(roles)
+	spliced, err := SpliceKnowledgeFocus(original, roles)
+	if err != nil {
+		t.Fatalf("splice failed: %v", err)
+	}
+	if spliced != original {
+		t.Errorf("splice was not byte-exact:\ngot:\n%s\nwant:\n%s", spliced, original)
+	}
+}
 
-	if len(catalog) != 2 {
-		t.Errorf("expected 2 roles in export, got %d", len(catalog))
+func TestSpliceKnowledgeFocusAppendsNewRolesAndLeavesSiblingsAlone(t *testing.T) {
+	original := strings.Join([]string{
+		"{",
+		`  "routes": [`,
+		`    {"id": "keep-me"}`,
+		"  ],",
+		`  "knowledge_focus": {`,
+		`    "alpha": "first role"`,
+		"  }",
+		"}",
+		"",
+	}, "\n")
+
+	roles := []RoleMetadata{
+		{ID: "alpha", KnowledgeFocus: "first role"},
+		{ID: "gamma", KnowledgeFocus: "a newly added role"},
 	}
 
-	if catalog["role1"]["model"] != "sonnet" {
-		t.Errorf("role1 model mismatch")
+	spliced, err := SpliceKnowledgeFocus(original, roles)
+	if err != nil {
+		t.Fatalf("splice failed: %v", err)
 	}
-	if catalog["role2"]["reasoning_effort"] != "high" {
-		t.Errorf("role2 reasoning_effort mismatch")
+	if !strings.Contains(spliced, `"gamma": "a newly added role"`) {
+		t.Errorf("new role was not appended:\n%s", spliced)
+	}
+	if !strings.Contains(spliced, `    {"id": "keep-me"}`) {
+		t.Errorf("splice disturbed an unrelated region:\n%s", spliced)
+	}
+	if strings.Index(spliced, `"alpha"`) > strings.Index(spliced, `"gamma"`) {
+		t.Errorf("an existing row must keep its position ahead of an appended one")
+	}
+}
+
+func TestSpliceKnowledgeFocusRejectsAMissingAnchor(t *testing.T) {
+	if _, err := SpliceKnowledgeFocus(`{"routes": []}`, nil); err == nil {
+		t.Fatal("expected a failure when routing.json has no knowledge_focus anchor")
+	}
+}
+
+func TestPyJSONStringUnicodeLeavesNonASCIIAlone(t *testing.T) {
+	if got := pyJSONStringUnicode("an em — dash"); got != `"an em — dash"` {
+		t.Errorf("pyJSONStringUnicode = %s", got)
+	}
+	if got := pyJSONStringUnicode("quote \" and \\ slash"); got != `"quote \" and \\ slash"` {
+		t.Errorf("pyJSONStringUnicode = %s", got)
 	}
 }

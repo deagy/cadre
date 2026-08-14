@@ -1,85 +1,63 @@
 package generators
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 )
 
-// CatalogEntry represents one role entry in catalog.yaml.
-type CatalogEntry struct {
-	ID              string
-	Definition      string
-	Phase           string
-	Capability      string
-	Model           string
-	CodexModel      string
-	ReasoningEffort string
+// Port of roster/orchestration/src/generate_role_metadata.py's catalog.yaml
+// renderer and routing.json knowledge_focus splicer. Both must be byte-exact:
+// the committed catalog.yaml and routing.json are compared against them by
+// `cadre generate-role-metadata --check`.
+
+// catalogFieldOrder is the fixed per-role field order in catalog.yaml.
+// knowledge_focus is deliberately absent: it lives in routing.json.
+var catalogFieldOrder = []string{"definition", "phase", "capability", "model", "codex_model", "reasoning_effort"}
+
+// rolePrefixComments is the historic hand-authored comment that sits directly
+// above the first `phase: authority` role block. It documents authority-aide
+// policy, not any one role's metadata, so it does not belong in frontmatter --
+// it is reproduced here verbatim so the rendered catalog.yaml stays
+// byte-identical to the hand-authored original. It is pinned to a specific id
+// only because that is where it already lives today; if product-owner-aide is
+// ever reordered behind another authority role, this must move to whichever
+// role becomes the first `phase: authority` entry.
+var rolePrefixComments = map[string]string{
+	"product-owner-aide": "  # `phase: authority` roles below prepare the decision package a human\n" +
+		"  # lifecycle authority needs for their assigned gate(s); they never approve,\n" +
+		"  # recommend a disposition, or hold delegated authority themselves (see\n" +
+		"  # docs/proposals/human-authority-role-agents.md). All read_only/opus per the\n" +
+		"  # design doc's rationale: these support high-blast-radius, hard-to-reverse\n" +
+		"  # human judgment calls even though the aide itself only assembles evidence.\n",
 }
 
-// RenderCatalog generates the complete catalog.yaml content from roles and a header template.
+const knowledgeFocusAnchor = `  "knowledge_focus": {`
+
+// RenderCatalog generates the complete catalog.yaml content. The header
+// template already ends with the `agents:` line, so this appends role blocks
+// directly to it.
 func RenderCatalog(roles []RoleMetadata, headerTemplate string) (string, error) {
 	var b strings.Builder
-
-	// Write header (template as-is, with leading newline)
-	if strings.TrimSpace(headerTemplate) != "" {
-		b.WriteString(headerTemplate)
-		if !strings.HasSuffix(headerTemplate, "\n") {
-			b.WriteString("\n")
-		}
-	}
-
-	// Write agents block
-	b.WriteString("agents:\n")
-
-	// Collect entries with their prefix comments
-	entries := []struct {
-		comment string
-		entry   CatalogEntry
-	}{}
-
+	b.WriteString(headerTemplate)
 	for _, role := range roles {
-		entry := CatalogEntry{
-			ID:              role.ID,
-			Definition:      role.Definition,
-			Phase:           role.Phase,
-			Capability:      role.Capability,
-			Model:           role.Model,
-			CodexModel:      role.CodexModel,
-			ReasoningEffort: role.ReasoningEffort,
+		b.WriteString(rolePrefixComments[role.ID])
+		fields := map[string]string{
+			"definition":       role.Definition,
+			"phase":            role.Phase,
+			"capability":       role.Capability,
+			"model":            role.Model,
+			"codex_model":      role.CodexModel,
+			"reasoning_effort": role.ReasoningEffort,
 		}
-
-		// Check for role-specific prefix comments (like the authority block header)
-		comment := ""
-		if role.ID == "product-owner-aide" && role.Phase == "authority" {
-			comment = "  # `phase: authority` roles below prepare the decision package a human\n" +
-				"  # lifecycle authority needs for their assigned gate(s); they never approve,\n" +
-				"  # recommend a disposition, or hold delegated authority themselves (see\n" +
-				"  # roster/shared/agent-autonomy.yaml)\n"
+		lines := []string{"  " + role.ID + ":"}
+		for _, field := range catalogFieldOrder {
+			lines = append(lines, "    "+field+": "+fields[field])
 		}
-
-		entries = append(entries, struct {
-			comment string
-			entry   CatalogEntry
-		}{comment, entry})
+		b.WriteString(strings.Join(lines, "\n") + "\n")
 	}
-
-	// Write entries
-	for _, e := range entries {
-		if e.comment != "" {
-			b.WriteString(e.comment)
-		}
-
-		entry := e.entry
-		fmt.Fprintf(&b, "  %s:\n", entry.ID)
-		fmt.Fprintf(&b, "    definition: %s\n", entry.Definition)
-		fmt.Fprintf(&b, "    phase: %s\n", entry.Phase)
-		fmt.Fprintf(&b, "    capability: %s\n", entry.Capability)
-		fmt.Fprintf(&b, "    model: %s\n", entry.Model)
-		fmt.Fprintf(&b, "    codex_model: %s\n", entry.CodexModel)
-		fmt.Fprintf(&b, "    reasoning_effort: %s\n", entry.ReasoningEffort)
-	}
-
 	return b.String(), nil
 }
 
@@ -92,66 +70,204 @@ func LoadCatalogHeader(templatePath string) (string, error) {
 	return string(content), nil
 }
 
-// SpliceKnowledgeFocus replaces the knowledge_focus block in an existing routing.json-like text.
-// This is used to update routing.json with fresh knowledge_focus data.
-func SpliceKnowledgeFocus(originalRouting string, knowledgeFocus map[string]string) (string, error) {
-	// For now, we'll return the original routing unchanged.
-	// The proper implementation requires parsing JSON, updating the knowledge_focus field,
-	// and re-serializing. This is more complex and depends on understanding the exact
-	// routing.json structure and how to preserve formatting.
-	//
-	// For Phase 3 Layer 2, we focus on catalog.yaml generation first.
-	// Knowledge focus splicing will be added in a follow-up if needed.
-	return originalRouting, nil
-}
-
-// RenderCodexWrapper generates a .toml file for one role's Codex wrapper.
-func RenderCodexWrapper(role RoleMetadata) string {
+// pyJSONStringUnicode renders s the way Python's
+// json.dumps(s, ensure_ascii=False) does: escape only the characters JSON
+// requires, leaving non-ASCII prose as its literal character. Used for
+// routing.json's knowledge_focus rows, where today's prose is all-ASCII but a
+// future em dash should render as itself rather than —.
+func pyJSONStringUnicode(s string) string {
 	var b strings.Builder
-
-	fmt.Fprint(&b, "[role]\n")
-	fmt.Fprintf(&b, "name = \"%s\"\n", role.ID)
-	fmt.Fprintf(&b, "model = \"%s\"\n", role.CodexModel)
-
-	// Optional: add capabilities based on role.Capability
-	// For now, just the basic structure
-	fmt.Fprint(&b, "capabilities = [\"read_only\"]\n")
-
+	b.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '\\':
+			b.WriteString(`\\`)
+		case '"':
+			b.WriteString(`\"`)
+		case '\b':
+			b.WriteString(`\b`)
+		case '\f':
+			b.WriteString(`\f`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			if r < 0x20 {
+				fmt.Fprintf(&b, `\u%04x`, r)
+				continue
+			}
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
 	return b.String()
 }
 
-// ExportAgentCatalogJSON generates the agent-catalog.json export.
-// Returns a map that can be JSON marshaled.
-func ExportAgentCatalogJSON(roles []RoleMetadata) map[string]map[string]string {
-	catalog := make(map[string]map[string]string)
+// findKnowledgeFocusBlock locates the byte offsets of the `{` and its matching
+// `}` for routing.json's knowledge_focus object.
+func findKnowledgeFocusBlock(text string) (int, int, error) {
+	anchor := regexp.QuoteMeta(knowledgeFocusAnchor)
+	occurrences := regexp.MustCompile(anchor).FindAllStringIndex(text, -1)
+	if len(occurrences) != 1 {
+		return 0, 0, fmt.Errorf(
+			"expected exactly one %q anchor line in routing.json, found %d",
+			knowledgeFocusAnchor, len(occurrences))
+	}
+	openBrace := strings.Index(text[occurrences[0][0]:], "{")
+	if openBrace < 0 {
+		return 0, 0, fmt.Errorf("no '{' after the knowledge_focus anchor")
+	}
+	openBrace += occurrences[0][0]
 
+	depth := 0
+	inString := false
+	escape := false
+	for index := openBrace; index < len(text); index++ {
+		character := text[index]
+		if inString {
+			switch {
+			case escape:
+				escape = false
+			case character == '\\':
+				escape = true
+			case character == '"':
+				inString = false
+			}
+			continue
+		}
+		switch character {
+		case '"':
+			inString = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return openBrace, index, nil
+			}
+		}
+	}
+	return 0, 0, fmt.Errorf("could not find a matching closing '}' for the knowledge_focus block")
+}
+
+// SpliceKnowledgeFocus surgically replaces only the `"knowledge_focus": { ... }`
+// region of routing.json's raw source, leaving every other byte untouched.
+//
+// Row order within the rebuilt block preserves each already-present role id's
+// existing position, so an unchanged role set reproduces the original bytes
+// exactly -- today's routing.json key order does not match catalog-order.txt's
+// dispatch-precedence order, the two orders are independent, and this
+// generator does not try to force them to match. Any role id newly present
+// that was not already in the block is appended in catalog-order.txt order.
+func SpliceKnowledgeFocus(originalText string, roles []RoleMetadata) (string, error) {
+	openBrace, closeBrace, err := findKnowledgeFocusBlock(originalText)
+	if err != nil {
+		return "", err
+	}
+
+	focus := map[string]string{}
+	orderIDs := make([]string, 0, len(roles))
 	for _, role := range roles {
-		catalog[role.ID] = map[string]string{
-			"definition":       role.Definition,
-			"phase":            role.Phase,
-			"capability":       role.Capability,
-			"model":            role.Model,
-			"codex_model":      role.CodexModel,
-			"reasoning_effort": role.ReasoningEffort,
-			"knowledge_focus":  role.KnowledgeFocus,
+		focus[role.ID] = role.KnowledgeFocus
+		orderIDs = append(orderIDs, role.ID)
+	}
+
+	original, err := parseOrderedJSON([]byte(originalText[openBrace : closeBrace+1]))
+	if err != nil {
+		return "", fmt.Errorf("knowledge_focus block is not a JSON object: %w", err)
+	}
+	present := map[string]bool{}
+	var ordered []string
+	for _, roleID := range original.Keys() {
+		present[roleID] = true
+		if _, known := focus[roleID]; known {
+			ordered = append(ordered, roleID)
+		}
+	}
+	for _, roleID := range orderIDs {
+		if !present[roleID] {
+			ordered = append(ordered, roleID)
 		}
 	}
 
-	return catalog
+	var body strings.Builder
+	for position, roleID := range ordered {
+		comma := ","
+		if position == len(ordered)-1 {
+			comma = ""
+		}
+		body.WriteString("    " + pyJSONStringUnicode(roleID) + ": " +
+			pyJSONStringUnicode(focus[roleID]) + comma + "\n")
+	}
+	newBlock := knowledgeFocusAnchor + "\n" + body.String() + "  }"
+
+	anchorStart := strings.LastIndex(originalText[:openBrace+1], knowledgeFocusAnchor)
+	if anchorStart < 0 {
+		return "", fmt.Errorf("knowledge_focus anchor vanished between locate and splice")
+	}
+	spliced := originalText[:anchorStart] + newBlock + originalText[closeBrace+1:]
+
+	if err := verifySpliceLeftEverythingElseAlone(originalText, spliced, focus); err != nil {
+		return "", err
+	}
+	return spliced, nil
 }
 
-// UpdateRoutingKnowledgeFocus parses routing.json, updates knowledge_focus, and returns updated JSON.
-// This is a placeholder for the JSON update logic.
-func UpdateRoutingKnowledgeFocus(routingJSON string, knowledgeFocus map[string]string) (string, error) {
-	// Parse JSON
-	// var routing map[string]interface{}
-	// (Would use json.Unmarshal here)
+// verifySpliceLeftEverythingElseAlone re-parses both sides and fails closed if
+// the splice altered any key other than knowledge_focus, or produced a
+// knowledge_focus whose id set is not exactly the role set.
+func verifySpliceLeftEverythingElseAlone(originalText, spliced string, focus map[string]string) error {
+	var before, after map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(originalText), &before); err != nil {
+		return fmt.Errorf("routing.json is not valid JSON: %w", err)
+	}
+	if err := json.Unmarshal([]byte(spliced), &after); err != nil {
+		return fmt.Errorf("spliced routing.json is not valid JSON: %w", err)
+	}
+	for key, value := range before {
+		if key == "knowledge_focus" {
+			continue
+		}
+		other, present := after[key]
+		if !present || !jsonEquivalent(value, other) {
+			return fmt.Errorf("splice unexpectedly altered routing.json key %q", key)
+		}
+	}
+	var splicedFocus map[string]string
+	if raw, present := after["knowledge_focus"]; present {
+		if err := json.Unmarshal(raw, &splicedFocus); err != nil {
+			return fmt.Errorf("spliced knowledge_focus is not a string map: %w", err)
+		}
+	}
+	if len(splicedFocus) != len(focus) {
+		return fmt.Errorf("knowledge_focus id-set mismatch after splice")
+	}
+	for roleID := range focus {
+		if _, present := splicedFocus[roleID]; !present {
+			return fmt.Errorf("knowledge_focus id-set mismatch after splice")
+		}
+	}
+	return nil
+}
 
-	// Update knowledge_focus field
-	// routing["knowledge_focus"] = knowledgeFocus
-
-	// Re-serialize to JSON
-	// (Would use json.Marshal here)
-
-	return routingJSON, nil
+func jsonEquivalent(left, right json.RawMessage) bool {
+	var leftValue, rightValue any
+	if err := json.Unmarshal(left, &leftValue); err != nil {
+		return false
+	}
+	if err := json.Unmarshal(right, &rightValue); err != nil {
+		return false
+	}
+	leftCanonical, err := json.Marshal(leftValue)
+	if err != nil {
+		return false
+	}
+	rightCanonical, err := json.Marshal(rightValue)
+	if err != nil {
+		return false
+	}
+	return string(leftCanonical) == string(rightCanonical)
 }

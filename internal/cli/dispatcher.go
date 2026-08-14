@@ -6,8 +6,10 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +19,12 @@ import (
 
 // InteractiveFlag mirrors bin/cadre.py's INTERACTIVE_FLAG.
 const InteractiveFlag = "--interactive"
+
+// SubcommandsTableRelativePath locates bin/subcommands.tsv relative to a
+// Cadre checkout. It is also what `cadre generate-plugin` reads to build
+// the packaged plugin's own `bin/cadre` wrapper, so a row added here
+// reaches both dispatchers.
+const SubcommandsTableRelativePath = "bin/subcommands.tsv"
 
 // Subcommand is one row of bin/subcommands.tsv: a name, the Python script it
 // dispatches to (relative to the repository root), and a one-line
@@ -54,27 +62,43 @@ func Usage(subcommands []Subcommand) string {
 	var b strings.Builder
 	b.WriteString("Usage: cadre <subcommand> [args...]\n\n")
 	b.WriteString("Subcommands:\n")
+	listed := make(map[string]bool, len(subcommands))
 	for _, row := range subcommands {
+		listed[row.Name] = true
 		fmt.Fprintf(&b, "  %-16s %s\n", row.Name, row.Description)
 	}
-	// Go-implemented subcommands (not in subcommands.tsv)
-	fmt.Fprintf(&b, "  %-16s %s\n", "generate-plugin", "Regenerate a deagy/cadre-lifecycle checkout (requires --output)")
-	fmt.Fprintf(&b, "  %-16s %s\n", "generate-role-metadata", "Regenerate roster/catalog.yaml and routing.json from role metadata")
-	fmt.Fprintf(&b, "  %-16s %s\n", "generate-authority-aides", "Regenerate roster/authority/*-aide AGENT.md files")
-	fmt.Fprintf(&b, "  %-16s %s\n", "upgrade", "Check for Cadre updates and upgrade the CLI (--check, --force, --help)")
-	fmt.Fprintf(&b, "  %-16s %s\n", "mcp-dispatch-server", "Run the Codex MCP dispatch server (stdio; requires the mcp package)")
-	fmt.Fprintf(&b, "  %-16s %s\n", "knowledge", "Vectorized knowledge store (init, stats, search, context)")
-	fmt.Fprintf(&b, "  %-16s %s\n", "doctor", "Report which cadre binary is running, what kind of install it is, and warn on a cwd/checkout mismatch")
-	fmt.Fprintf(&b, "  %-16s %s\n", "selection-telemetry", "Summarize opt-in, local cadre select telemetry")
-	fmt.Fprintf(&b, "  %-16s %s\n", "schema-validate", "Strict JSON Schema validation for roster/catalog.yaml and routing.json")
-	fmt.Fprintf(&b, "  %-16s %s\n", "role-fidelity", "Measure whether role briefs survive a given model: context-budget analysis, or live probes")
-	fmt.Fprintf(&b, "  %-16s %s\n", "gitlab-evidence", "Non-MCP CLI over the GitLab evidence tools (create-review-subtask/write-wiki-page/write-evidence-comment)")
-	fmt.Fprintf(&b, "  %-16s %s\n", "config", "Show resolved operator settings, config file paths, or resolve one setting")
-	fmt.Fprintf(&b, "  %-16s %s\n", "resolve-shared", "Resolve effective shared config for the current project")
-	fmt.Fprintf(&b, "  %-16s %s\n", "init", "Guide a project through generating .agents/shared/ overlays (init_project.py)")
-	fmt.Fprintf(&b, "  %-16s %s\n", "context", "Local agent context store: put/get/list/search/export/promote/drop (context-store/src/cli.py)")
-	fmt.Fprintf(&b, "  %-16s %s\n", "bootstrap-codex", "Safely install namespaced Codex role wrappers (sync_codex_agents.py)")
-	fmt.Fprintf(&b, "  %-16s %s\n", "profile", "Read-only provider/profile drift report against a consuming project's copy (profile_diff.py)")
+	// Subcommands this binary serves that bin/subcommands.tsv does not
+	// describe. The table is the single source of truth for a subcommand's
+	// public name and description wherever it has a row (it is also what
+	// the packaged plugin's own generated wrapper is built from), so a name
+	// already listed above is never repeated here -- the fallback text
+	// below exists for the rows the table does not carry, not as a second,
+	// competing description of the ones it does.
+	for _, row := range []Subcommand{
+		{Name: "generate-plugin", Description: "Regenerate a deagy/cadre-lifecycle checkout (requires --output)"},
+		{Name: "generate-role-metadata", Description: "Regenerate roster/catalog.yaml and routing.json from role metadata"},
+		{Name: "generate-authority-aides", Description: "Regenerate roster/authority/*-aide AGENT.md files"},
+		{Name: "upgrade", Description: "Check for Cadre updates and upgrade the CLI (--check, --force, --help)"},
+		{Name: "mcp-dispatch-server", Description: "Run the Codex MCP dispatch server (stdio; requires the mcp package)"},
+		{Name: "knowledge", Description: "Vectorized knowledge store (init, stats, search, context)"},
+		{Name: "doctor", Description: "Report which cadre binary is running, what kind of install it is, and warn on a cwd/checkout mismatch"},
+		{Name: "selection-telemetry", Description: "Summarize opt-in, local cadre select telemetry"},
+		{Name: "schema-validate", Description: "Strict JSON Schema validation for roster/catalog.yaml and routing.json"},
+		{Name: "role-fidelity", Description: "Measure whether role briefs survive a given model: context-budget analysis, or live probes"},
+		{Name: "gitlab-evidence", Description: "Non-MCP CLI over the GitLab evidence tools (create-review-subtask/write-wiki-page/write-evidence-comment)"},
+		{Name: "config", Description: "Show resolved operator settings, config file paths, or resolve one setting"},
+		{Name: "resolve-shared", Description: "Resolve effective shared config for the current project"},
+		{Name: "init", Description: "Guide a project through generating .agents/shared/ overlays (init_project.py)"},
+		{Name: "context", Description: "Local agent context store: put/get/list/search/export/promote/drop (context-store/src/cli.py)"},
+		{Name: "bootstrap-codex", Description: "Safely install namespaced Codex role wrappers (sync_codex_agents.py)"},
+		{Name: "profile", Description: "Read-only provider/profile drift report against a consuming project's copy (profile_diff.py)"},
+		{Name: "select", Description: "Deterministic agent/gate selection (select_agents.py)"},
+	} {
+		if listed[row.Name] {
+			continue
+		}
+		fmt.Fprintf(&b, "  %-16s %s\n", row.Name, row.Description)
+	}
 	fmt.Fprintf(&b, "  %-16s %s\n", "sdlc", sdlcDescription)
 	fmt.Fprintf(&b, "  %-16s %s\n", "help", "Show this message")
 	b.WriteString("\n")
@@ -127,14 +151,34 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 		argv = argv[1:]
 	}
 
+	// The subcommand table belongs to this CLI's own installation, not to
+	// whatever project the caller happens to be standing in. Resolving it
+	// from deps.RepoRoot alone -- an upward .git walk from the working
+	// directory -- meant that running `cadre select --root <elsewhere>`
+	// from any other repository failed with "bin/subcommands.tsv: no such
+	// file or directory" before it had parsed a single argument, which is
+	// how the Cline plugin's whole target-workspace surface broke.
+	derived := deps.SubcommandsPath == ""
 	subcommandsPath := deps.SubcommandsPath
-	if subcommandsPath == "" {
-		subcommandsPath = filepath.Join(deps.RepoRoot, "bin", "subcommands.tsv")
+	if derived {
+		found, findErr := FindCadreFile(SubcommandsTableRelativePath)
+		if findErr != nil {
+			found = filepath.Join(deps.RepoRoot, filepath.FromSlash(SubcommandsTableRelativePath))
+		}
+		subcommandsPath = found
 	}
 	subcommands, err := LoadSubcommands(subcommandsPath)
 	if err != nil {
-		writef(deps.Stderr, "cadre: %s\n", err)
-		return 1
+		// A table this dispatcher went looking for and could not find is
+		// survivable: every subcommand it serves is built in, and the table
+		// only supplies usage text plus the Python-script fallback. A table
+		// the *caller* named explicitly is not -- that is a configuration
+		// error, and silently continuing without it would hide a typo.
+		if !derived || !errors.Is(err, fs.ErrNotExist) {
+			writef(deps.Stderr, "cadre: %s\n", err)
+			return 1
+		}
+		subcommands = nil
 	}
 
 	command := "help"
@@ -166,7 +210,7 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 
 	// Route Go-implemented orchestration
 	if command == "select" {
-		return SelectAgents(rest)
+		return SelectAgentsWithOptions(ctx, rest, interactive)
 	}
 	if command == "selection-telemetry" {
 		return SelectionTelemetryCmd(rest)

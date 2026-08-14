@@ -75,7 +75,17 @@ jobs:
           fi
       - run: pip install --no-cache-dir --require-hashes -r ${{ steps.lockfile.outputs.path }}
       - run: python -B -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
-      - run: python -B -m unittest discover -b -s roster/knowledge-store/test -p "test_*.py"
+      # The knowledge-store leg that used to run here is gone. Commit
+      # b418031e deleted roster/knowledge-store/src and its Python tests
+      # (the Go store under internal/knowledge replaces them), which left
+      # `unittest discover -s roster/knowledge-store/test` reporting
+      # "Ran 0 tests / NO TESTS RAN" and exiting 0 -- a step that passed
+      # while asserting nothing, which is worse than no step at all.
+      # The scope, classification, embedding-identity, retrieval-audit and
+      # deletion-evidence guarantees it used to cover are now guarded by
+      # internal/knowledge/scope_enforcement_test.go and
+      # internal/contextstore/boundary_test.go, run by the `go` job below.
+      # Do not re-add a discover leg here without test files behind it.
       - run: python -B -m unittest discover -b -s roster/shared/test -p "test_*.py"
       - run: ./bin/cadre help
       - run: ./bin/cadre select --task "CI wrapper smoke test" --files README.md --classification internal --task-id CI-SMOKE-1 >/dev/null

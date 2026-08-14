@@ -32,6 +32,10 @@ func (s *Store) Search(opts SearchOptions) ([]*SearchResult, error) {
 		return nil, fmt.Errorf("embedding provider is required")
 	}
 
+	if err := requireExplicitSourceScope(opts.AllSources, opts.SourceFilters); err != nil {
+		return nil, err
+	}
+
 	// Compute embedding for query
 	queryEmbedding, err := opts.EmbeddingProvider.Embed([]string{opts.Query})
 	if err != nil {
@@ -65,8 +69,10 @@ func (s *Store) Search(opts SearchOptions) ([]*SearchResult, error) {
 
 	args := []interface{}{opts.Classification}
 
-	// Add source filter if specified
-	if !opts.AllSources && len(opts.SourceFilters) > 0 {
+	// Add source filter unless the caller explicitly asked to span every
+	// source. requireExplicitSourceScope above guarantees exactly one of
+	// these two branches describes a deliberate caller choice.
+	if !opts.AllSources {
 		placeholders := make([]string, len(opts.SourceFilters))
 		for i, src := range opts.SourceFilters {
 			placeholders[i] = "?"
@@ -75,9 +81,18 @@ func (s *Store) Search(opts SearchOptions) ([]*SearchResult, error) {
 		query += " AND m.source IN (" + strings.Join(placeholders, ", ") + ")"
 	}
 
-	// Add embedding provider filter
-	query += " AND c.embedding_provider = ?"
-	args = append(args, opts.EmbeddingProvider.Name())
+	// Only compare vectors produced by the same provider, model and
+	// dimension. SECURITY.md: "Re-ingest after provider/model/dimension
+	// changes and record exact model identity because the demo cannot safely
+	// distinguish reused names; mismatched stored dimensions are excluded."
+	// Excluding them in SQL (rather than scoring them as 0.0 and letting
+	// top-k decide) keeps a differently-embedded corpus from surfacing at
+	// all on a sparse store.
+	query += " AND c.embedding_provider = ? AND c.embedding_model = ? AND c.embedding_dimensions = ?"
+	args = append(args,
+		opts.EmbeddingProvider.Name(),
+		opts.EmbeddingProvider.Model(),
+		opts.EmbeddingProvider.Dimensions())
 
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
@@ -225,13 +240,16 @@ func (s *Store) recordRetrievalRun(opts SearchOptions, resultCount int) error {
 	runID := generateUUID()
 	queryHash := hashQueryString(opts.Query)
 	sourceFilterJSON := ""
-	if !opts.AllSources && len(opts.SourceFilters) > 0 {
+	if !opts.AllSources {
 		sourceFilterJSON = strings.Join(opts.SourceFilters, ",")
 	}
 
-	// For now, we don't have a task_id or agent, so use defaults
-	taskID := "unknown"
-	agent := "unknown"
+	// Caller attribution is recorded exactly as supplied. An absent value is
+	// stored empty rather than as a plausible-looking placeholder: an audit
+	// row that reads "unknown" is indistinguishable from one where an agent
+	// genuinely called itself that, which is worse than a visibly blank field.
+	taskID := opts.TaskID
+	agent := opts.Agent
 
 	_, err := s.db.Exec(`
 		INSERT INTO retrieval_runs (
@@ -277,6 +295,35 @@ func (s *Store) GetSearchStats(classification string) (map[string]int64, error) 
 }
 
 // helper functions
+
+// requireExplicitSourceScope refuses a retrieval whose source scope was left
+// to inference.
+//
+// The knowledge store defaults to a single shared database for every project
+// that has not created its own partition, so "no source filter" is not a
+// neutral default -- it is a cross-project read. roster/knowledge-store/
+// SECURITY.md requires that such a read be an explicit caller choice
+// (--all-sources) rather than the consequence of omitting --source, and that
+// supplying both be refused as ambiguous rather than silently resolved.
+func requireExplicitSourceScope(allSources bool, sourceFilters []string) error {
+	if allSources && len(sourceFilters) > 0 {
+		return fmt.Errorf(
+			"source scope is ambiguous: pass source filters or all-sources, not both")
+	}
+	if !allSources {
+		if len(sourceFilters) == 0 {
+			return fmt.Errorf(
+				"source scope is required: pass at least one source filter, " +
+					"or set AllSources to deliberately span every source in the store")
+		}
+		for _, src := range sourceFilters {
+			if strings.TrimSpace(src) == "" {
+				return fmt.Errorf("source filter entries must be non-empty")
+			}
+		}
+	}
+	return nil
+}
 
 // sortByScore sorts results in descending order by similarity score.
 func sortByScore(results []resultWithScore) {

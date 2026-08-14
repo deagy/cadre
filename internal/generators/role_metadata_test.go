@@ -228,40 +228,4 @@ func TestLoadAllRolesReal(t *testing.T) {
 			break
 		}
 	}
-
-	t.Logf("loaded %d roles with full validation", len(roles))
-}
-
-func TestBuildKnowledgeFocus(t *testing.T) {
-	roles := []RoleMetadata{
-		{ID: "role1", KnowledgeFocus: "focus1"},
-		{ID: "role2", KnowledgeFocus: "focus2"},
-		{ID: "role3", KnowledgeFocus: "focus3"},
-	}
-
-	kf := BuildKnowledgeFocus(roles)
-
-	if len(kf) != 3 {
-		t.Errorf("expected 3 entries, got %d", len(kf))
-	}
-	if kf["role1"] != "focus1" {
-		t.Errorf("role1 focus mismatch: %s", kf["role1"])
-	}
-}
-
-func TestSortedRoleIDs(t *testing.T) {
-	roles := []RoleMetadata{
-		{ID: "zebra"},
-		{ID: "apple"},
-		{ID: "middle"},
-	}
-
-	sorted := SortedRoleIDs(roles)
-
-	if len(sorted) != 3 {
-		t.Errorf("expected 3 ids, got %d", len(sorted))
-	}
-	if sorted[0] != "apple" || sorted[1] != "middle" || sorted[2] != "zebra" {
-		t.Errorf("not sorted correctly: %v", sorted)
-	}
 }

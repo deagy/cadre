@@ -7,12 +7,14 @@
 // is the entire point -- see roster/context-store/README.md's comparison
 // table. Content here is agent-written working material, never
 // steward-dispositioned, always expires (there is no indefinite entry),
-// and this package must never import internal/knowledge or vice versa
-// (mirroring roster/orchestration/test/test_context_boundary.py's
-// structural assertion on the Python side, which this Go port has no
-// equivalent automated guard for yet -- the separation is preserved here by
-// convention: grep internal/contextstore for "internal/knowledge" before
-// merging any change to this package).
+// and this package must never import internal/knowledge or vice versa.
+//
+// That separation used to be preserved here by convention ("grep before
+// merging"); it is now asserted structurally by boundary_test.go, which
+// also pins the two remaining invariants
+// roster/orchestration/test/test_context_boundary.py covered on the Python
+// side: the two stores cannot share a database, and this one cannot embed
+// remotely.
 //
 // Read roster/context-store/SECURITY.md before trusting any filter this
 // package applies as an access-control mechanism: scope, classification,

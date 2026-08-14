@@ -21,8 +21,21 @@ func main() {
 func run() int {
 	repoRoot, err := platform.RepoRoot()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cadre: could not resolve repository root: %s\n", err)
-		return 1
+		// platform.RepoRoot() answers "which project is the caller working
+		// on", and legitimately has no answer when `cadre` is invoked from
+		// a directory that is not a checkout at all -- `cadre select --root
+		// <elsewhere>` run from a scratch directory, which
+		// test_repository_health.py's symlink case does deliberately.
+		// $CADRE_REPO_ROOT, exported by bin/cadre and bin/cadre.ps1, names
+		// the checkout that produced this binary and is the right fallback:
+		// it is where this CLI's own resources live, and it is never
+		// consulted while the working-directory walk succeeds, so it cannot
+		// redirect a caller who is inside a project.
+		repoRoot = os.Getenv("CADRE_REPO_ROOT")
+		if repoRoot == "" {
+			fmt.Fprintf(os.Stderr, "cadre: could not resolve repository root: %s\n", err)
+			return 1
+		}
 	}
 
 	deps := cli.Deps{
