@@ -19,11 +19,14 @@ func KnowledgeCmd(args []string) int {
 		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge <subcommand> [options]
 
 Subcommands:
-  init           Initialize or verify the knowledge store
-  stats          Display knowledge store statistics
-  ingest         Ingest messages into the knowledge store
-  search         Search the knowledge store by content or vector similarity
-  delete         Delete messages or run retention policies
+  init               Initialize or verify the knowledge store
+  stats              Display knowledge store statistics
+  ingest             Ingest messages into the knowledge store
+  search             Search the knowledge store by content or vector similarity
+  delete             Delete messages or run retention policies
+  shards             Display shard distribution and statistics
+  federated-search   Search across multiple shards (requires multi-store setup)
+  federated-delete   Delete across multiple shards (requires multi-store setup)
 
 Options:
 `)
@@ -76,6 +79,12 @@ Options:
 		return knowledgeSearch(dbPath, subArgs)
 	case "delete":
 		return knowledgeDelete(dbPath, subArgs)
+	case "shards":
+		return knowledgeShards(dbPath, subArgs)
+	case "federated-search":
+		return knowledgeFederatedSearch(dbPath, subArgs)
+	case "federated-delete":
+		return knowledgeFederatedDelete(dbPath, subArgs)
 	case "help", "-h", "--help":
 		fs.Usage()
 		return 0
@@ -621,7 +630,430 @@ Options:
 	return 0
 }
 
+// knowledgeShards displays shard distribution and statistics.
+func knowledgeShards(dbPath string, args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge shards", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: cadre knowledge shards [options]\n\nOptions:\n")
+		fs.PrintDefaults()
+	}
+
+	strategy := fs.String("strategy", "classification", "Sharding strategy: classification, source, conversation, or composite")
+	jsonOutput := fs.Bool("json", false, "Output stats as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if fs.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge shards: unexpected argument '%s'\n", fs.Arg(0))
+		return 2
+	}
+
+	// Discover and load stores
+	shards, err := discoverShards(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge shards: %v\n", err)
+		return 1
+	}
+
+	if len(shards) == 0 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge shards: no shards found (single-store mode)\n")
+		return 1
+	}
+
+	// Create registry with chosen strategy
+	var strat knowledge.ShardingStrategy
+	switch *strategy {
+	case "classification":
+		strat = &knowledge.ClassificationShardingStrategy{}
+	case "source":
+		strat = &knowledge.SourceShardingStrategy{}
+	case "conversation":
+		strat = &knowledge.ConversationShardingStrategy{}
+	case "composite":
+		strat = &knowledge.CompositeShardingStrategy{}
+	default:
+		fmt.Fprintf(os.Stderr, "cadre knowledge shards: unknown strategy '%s'\n", *strategy)
+		return 2
+	}
+
+	registry := knowledge.NewStoreRegistry(strat)
+	for name, store := range shards {
+		registry.AddStore(name, store)
+	}
+
+	federated := knowledge.NewFederatedStore(registry)
+
+	// Get sharding stats
+	stats, err := federated.ShardingStats()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge shards: cannot get stats: %v\n", err)
+		return 1
+	}
+
+	// Close all stores
+	for _, store := range shards {
+		store.Close()
+	}
+
+	// Calculate total messages across shards
+	var totalMessages int64
+	for _, count := range stats.Distribution {
+		totalMessages += count
+	}
+
+	if *jsonOutput {
+		data := map[string]interface{}{
+			"total_shards":    stats.TotalShards,
+			"active_shards":   stats.ActiveShards,
+			"shard_strategy":  stats.ShardStrategy,
+			"distribution":    stats.Distribution,
+			"total_messages":  totalMessages,
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		encoder.Encode(data)
+	} else {
+		fmt.Printf("Shard Distribution\n")
+		fmt.Printf("═══════════════════════════════════════\n")
+		fmt.Printf("Total shards: %d\n", stats.TotalShards)
+		fmt.Printf("Active shards: %d\n", stats.ActiveShards)
+		fmt.Printf("Shard strategy: %s\n", stats.ShardStrategy)
+		fmt.Printf("Total messages across shards: %d\n", totalMessages)
+		fmt.Printf("\nPer-shard distribution:\n")
+		for shardName := range stats.Distribution {
+			count := stats.Distribution[shardName]
+			pct := 0.0
+			if totalMessages > 0 {
+				pct = (float64(count) / float64(totalMessages)) * 100
+			}
+			fmt.Printf("  %s: %d messages (%.1f%%)\n", shardName, count, pct)
+		}
+	}
+
+	return 0
+}
+
+// knowledgeFederatedSearch performs federated search across multiple shards.
+func knowledgeFederatedSearch(dbPath string, args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge federated-search", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge federated-search [options] <query>
+
+Performs vector search across multiple shards in parallel.
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
+
+	classification := fs.String("classification", "", "Classification filter (required)")
+	sources := fs.String("sources", "", "Comma-separated source filters (optional)")
+	topK := fs.Int("top", 10, "Number of results per shard")
+	strategy := fs.String("strategy", "classification", "Sharding strategy")
+	parallelism := fs.Int("parallel", 4, "Number of concurrent shard queries")
+	embeddingModel := fs.String("embedding", "local-hashing", "Embedding model")
+	jsonOutput := fs.Bool("json", false, "Output results as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if fs.NArg() < 1 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge federated-search: query is required\n")
+		return 2
+	}
+
+	if *classification == "" {
+		fmt.Fprintf(os.Stderr, "cadre knowledge federated-search: --classification is required\n")
+		return 2
+	}
+
+	query := fs.Arg(0)
+
+	// Discover and load stores
+	shards, err := discoverShards(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge federated-search: %v\n", err)
+		return 1
+	}
+
+	if len(shards) == 0 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge federated-search: no shards found (single-store mode)\n")
+		return 1
+	}
+
+	// Create registry
+	var strat knowledge.ShardingStrategy
+	switch *strategy {
+	case "classification":
+		strat = &knowledge.ClassificationShardingStrategy{}
+	case "source":
+		strat = &knowledge.SourceShardingStrategy{}
+	case "conversation":
+		strat = &knowledge.ConversationShardingStrategy{}
+	case "composite":
+		strat = &knowledge.CompositeShardingStrategy{}
+	default:
+		fmt.Fprintf(os.Stderr, "cadre knowledge federated-search: unknown strategy '%s'\n", *strategy)
+		return 2
+	}
+
+	registry := knowledge.NewStoreRegistry(strat)
+	for name, store := range shards {
+		registry.AddStore(name, store)
+	}
+
+	federated := knowledge.NewFederatedStore(registry)
+
+	// Create embedder
+	var embedder knowledge.EmbeddingProvider
+	if *embeddingModel == "openai-compatible" {
+		remoteEmbedder, err := knowledge.NewRemoteEmbedderFromEnv()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cadre knowledge federated-search: cannot create remote embedder: %v\n", err)
+			return 1
+		}
+		embedder = remoteEmbedder
+	} else {
+		embedder = knowledge.NewLocalHashingEmbedder(128)
+	}
+
+	sourceFilters := []string{}
+	if *sources != "" {
+		sourceFilters = strings.Split(*sources, ",")
+		for i := range sourceFilters {
+			sourceFilters[i] = strings.TrimSpace(sourceFilters[i])
+		}
+	}
+
+	// Perform federated search
+	result, err := federated.FederatedSearch(knowledge.FederatedSearchOptions{
+		SearchOptions: knowledge.SearchOptions{
+			Query:             query,
+			Classification:    *classification,
+			SourceFilters:     sourceFilters,
+			AllSources:        *sources == "",
+			EmbeddingProvider: embedder,
+			Top:               *topK,
+		},
+		ParallelShards: *parallelism,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge federated-search: cannot search: %v\n", err)
+		return 1
+	}
+
+	// Close all stores
+	for _, store := range shards {
+		store.Close()
+	}
+
+	if *jsonOutput {
+		data := map[string]interface{}{
+			"query":          query,
+			"classification": *classification,
+			"shards_queried": result.TotalQueried,
+			"shards_failed":  result.TotalFailed,
+			"count":          len(result.Results),
+			"results":        result.Results,
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		encoder.Encode(data)
+	} else {
+		fmt.Printf("Federated Search Results (%d)\n", len(result.Results))
+		fmt.Printf("═════════════════════════════════════════════\n")
+		fmt.Printf("Query: %s\n", query)
+		fmt.Printf("Shards queried: %d, Failed: %d\n\n", result.TotalQueried, result.TotalFailed)
+		for i, res := range result.Results {
+			fmt.Printf("%d. %s (source: %s) - Similarity: %.4f\n",
+				i+1, res.Message.ConversationID, res.Message.Source,
+				res.CosineSimilarity)
+			fmt.Printf("   Role: %s\n", res.Message.Role)
+			fmt.Printf("   Content: %s...\n", truncate(res.Message.Content, 100))
+		}
+	}
+
+	return 0
+}
+
+// knowledgeFederatedDelete deletes messages across multiple shards.
+func knowledgeFederatedDelete(dbPath string, args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge federated-delete", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge federated-delete [options]
+
+Deletes messages across multiple shards.
+
+Deletion modes:
+  --expired               Delete expired messages from all shards
+  --classification <cls>  Delete by classification from all shards
+  --source <src>          Delete by source from all shards
+  --age <days>            Delete by age from all shards
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
+
+	deleteExpired := fs.Bool("expired", false, "Delete expired messages")
+	classification := fs.String("classification", "", "Delete by classification")
+	source := fs.String("source", "", "Delete by source")
+	ageDays := fs.Int("age", 0, "Delete by age (days)")
+	strategy := fs.String("strategy", "classification", "Sharding strategy")
+	authorizedBy := fs.String("authorized-by", "cli-user", "Authorization user")
+	jsonOutput := fs.Bool("json", false, "Output stats as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	// Validate that exactly one deletion mode is specified
+	modeCount := 0
+	if *deleteExpired {
+		modeCount++
+	}
+	if *classification != "" {
+		modeCount++
+	}
+	if *source != "" {
+		modeCount++
+	}
+	if *ageDays > 0 {
+		modeCount++
+	}
+
+	if modeCount != 1 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge federated-delete: must specify exactly one deletion mode\n")
+		return 2
+	}
+
+	// Discover and load stores
+	shards, err := discoverShards(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge federated-delete: %v\n", err)
+		return 1
+	}
+
+	if len(shards) == 0 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge federated-delete: no shards found (single-store mode)\n")
+		return 1
+	}
+
+	// Create registry
+	var strat knowledge.ShardingStrategy
+	switch *strategy {
+	case "classification":
+		strat = &knowledge.ClassificationShardingStrategy{}
+	case "source":
+		strat = &knowledge.SourceShardingStrategy{}
+	case "conversation":
+		strat = &knowledge.ConversationShardingStrategy{}
+	case "composite":
+		strat = &knowledge.CompositeShardingStrategy{}
+	default:
+		fmt.Fprintf(os.Stderr, "cadre knowledge federated-delete: unknown strategy '%s'\n", *strategy)
+		return 2
+	}
+
+	registry := knowledge.NewStoreRegistry(strat)
+	for name, store := range shards {
+		registry.AddStore(name, store)
+	}
+
+	federated := knowledge.NewFederatedStore(registry)
+
+	// Perform federated delete
+	var deleteOpts knowledge.FederatedDeleteOptions
+	if *deleteExpired {
+		deleteOpts.Mode = "expired"
+	} else if *classification != "" {
+		deleteOpts.Mode = "classification"
+		deleteOpts.Classification = classification
+	} else if *source != "" {
+		deleteOpts.Mode = "source"
+		deleteOpts.Source = source
+	} else if *ageDays > 0 {
+		deleteOpts.Mode = "age"
+		deleteOpts.AgeDays = *ageDays
+	}
+	deleteOpts.AuthorizedBy = *authorizedBy
+
+	result, err := federated.FederatedDelete(deleteOpts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge federated-delete: cannot delete: %v\n", err)
+		return 1
+	}
+
+	// Close all stores
+	for _, store := range shards {
+		store.Close()
+	}
+
+	if *jsonOutput {
+		data := map[string]interface{}{
+			"total_deleted":   result.TotalDeleted,
+			"total_queried":   result.TotalQueried,
+			"total_failed":    result.TotalFailed,
+			"authorized_by":   *authorizedBy,
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		encoder.Encode(data)
+	} else {
+		fmt.Printf("Federated Deletion Results\n")
+		fmt.Printf("══════════════════════════════════════════════\n")
+		fmt.Printf("Total deleted: %d\n", result.TotalDeleted)
+		fmt.Printf("Shards queried: %d\n", result.TotalQueried)
+		if result.TotalFailed > 0 {
+			fmt.Printf("Shards failed: %d\n", result.TotalFailed)
+		}
+		fmt.Printf("Authorized by: %s\n", *authorizedBy)
+	}
+
+	return 0
+}
+
 // Helper functions
+
+func discoverShards(dbPath string) (map[string]*knowledge.Store, error) {
+	// Get directory containing the database
+	dir := filepath.Dir(dbPath)
+
+	// List files in directory looking for shard-*.db files
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read shard directory: %v", err)
+	}
+
+	shards := make(map[string]*knowledge.Store)
+
+	// Look for shard files
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasPrefix(name, "shard-") && strings.HasSuffix(name, ".db") {
+			shardPath := filepath.Join(dir, name)
+			store, err := knowledge.Open(shardPath)
+			if err != nil {
+				continue // Skip shards that can't be opened
+			}
+			shardName := strings.TrimSuffix(strings.TrimPrefix(name, "shard-"), ".db")
+			shards[shardName] = store
+		}
+	}
+
+	// If no shard-*.db files found, this is single-store mode
+	if len(shards) == 0 {
+		return nil, fmt.Errorf("no multi-shard configuration found (looking for shard-*.db files)")
+	}
+
+	return shards, nil
+}
 
 func getString(data map[string]interface{}, key, defaultVal string) string {
 	if val, ok := data[key]; ok {
