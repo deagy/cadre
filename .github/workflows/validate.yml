@@ -182,6 +182,64 @@ jobs:
             exit 1
           fi
       - run: go tool golangci-lint run ./...
+      - name: Verify release.yml CLI cross-compile matrix matches binary contract
+        run: |
+          set -eu
+          python3 - <<'VERIFY'
+          import sys
+          import yaml
+
+          # Read the release.yml workflow
+          try:
+              with open('.github/workflows/release.yml') as f:
+                  workflow = yaml.safe_load(f)
+          except Exception as e:
+              print(f'ERROR: Could not parse release.yml: {e}', file=sys.stderr)
+              sys.exit(1)
+
+          # Extract the CLI build matrix from the workflow
+          try:
+              cli_job = workflow['jobs']['cli']
+              if 'strategy' not in cli_job or 'matrix' not in cli_job['strategy']:
+                  print('ERROR: cli job has no strategy.matrix defined', file=sys.stderr)
+                  sys.exit(1)
+
+              matrix_platforms = set()
+              for item in cli_job['strategy']['matrix']['include']:
+                  goos = item['goos']
+                  goarch = item['goarch']
+                  matrix_platforms.add((goos, goarch))
+          except Exception as e:
+              print(f'ERROR: Could not extract matrix from release.yml: {e}', file=sys.stderr)
+              sys.exit(1)
+
+          # Import the contract constant from test_binary_shim_contract.py
+          try:
+              sys.path.insert(0, 'plugin/tools')
+              from test_binary_shim_contract import SUPPORTED_PLATFORMS
+          except ImportError as e:
+              print(f'ERROR: Could not import SUPPORTED_PLATFORMS from test_binary_shim_contract.py: {e}', file=sys.stderr)
+              sys.exit(1)
+
+          contracted_platforms = set(SUPPORTED_PLATFORMS)
+
+          print(f'Platforms in release.yml matrix: {sorted(matrix_platforms)}')
+          print(f'Platforms in contract (SUPPORTED_PLATFORMS): {sorted(contracted_platforms)}')
+
+          # Check for divergence
+          missing_in_matrix = contracted_platforms - matrix_platforms
+          extra_in_matrix = matrix_platforms - contracted_platforms
+
+          if missing_in_matrix:
+              print(f'ERROR: Contract requires {missing_in_matrix} but they are not in the release.yml matrix', file=sys.stderr)
+              sys.exit(1)
+
+          if extra_in_matrix:
+              print(f'WARNING: release.yml builds {extra_in_matrix} but contract does not require them')
+              # Don't fail on this; it's OK to build more than contracted
+
+          print('✓ Matrix drift check PASSED: release.yml matrix matches SUPPORTED_PLATFORMS contract')
+          VERIFY
 
   plugin-tools:
     name: plugin/tools (packaging, docs guards, kernel bootstrap)
