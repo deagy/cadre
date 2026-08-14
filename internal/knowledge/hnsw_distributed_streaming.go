@@ -21,17 +21,17 @@ type DistributedStreamingNode struct {
 
 // RemoteNode represents a peer node.
 type RemoteNode struct {
-	NodeID    string
-	Address   string
-	LastSeen  time.Time
-	Status    string // "healthy", "degraded", "offline"
-	Latency   int64  // milliseconds
+	NodeID   string
+	Address  string
+	LastSeen time.Time
+	Status   string // "healthy", "degraded", "offline"
+	Latency  int64  // milliseconds
 }
 
 // StreamingMessage is the distributed message format.
 type StreamingMessage struct {
-	ID            string    // Unique message ID
-	NodeID        string    // Originating node
+	ID            string // Unique message ID
+	NodeID        string // Originating node
 	Operation     StreamingOperation
 	Timestamp     time.Time
 	ReplicationID int // Which replica
@@ -41,14 +41,14 @@ type StreamingMessage struct {
 
 // DistributedStreamingStats provides network-wide statistics.
 type DistributedStreamingStats struct {
-	NodeID               string
-	ActivePeers          int
-	TotalMessagesLogged  int64
-	MessagesReplicated   int64
-	ReplicationLatency   int64 // milliseconds
-	NetworkHealthScore   float64 // 0-100
-	PartitionDetected    bool
-	ReplicationFactor    int
+	NodeID              string
+	ActivePeers         int
+	TotalMessagesLogged int64
+	MessagesReplicated  int64
+	ReplicationLatency  int64   // milliseconds
+	NetworkHealthScore  float64 // 0-100
+	PartitionDetected   bool
+	ReplicationFactor   int
 }
 
 // NewDistributedStreamingNode creates a node in the distributed network.
@@ -172,9 +172,9 @@ func (dsn *DistributedStreamingNode) GetReplicationStatus() *DistributedStreamin
 	defer dsn.mu.RUnlock()
 
 	stats := &DistributedStreamingStats{
-		NodeID:             dsn.nodeID,
+		NodeID:              dsn.nodeID,
 		TotalMessagesLogged: int64(len(dsn.messageLog)),
-		ReplicationFactor:  dsn.replicationFactor,
+		ReplicationFactor:   dsn.replicationFactor,
 	}
 
 	// Count active peers
@@ -393,10 +393,9 @@ func (cdc *CrossDatacenterCoordinator) GetCoordinationStatus() map[string]*Coord
 
 // ConsensusEngine implements Raft-like consensus.
 type ConsensusEngine struct {
-	mu       sync.RWMutex
-	voters   []string
-	terms    map[string]int64
-	leader   string
+	mu     sync.RWMutex
+	voters []string
+	terms  map[string]int64
 }
 
 // NewConsensusEngine creates a consensus engine.

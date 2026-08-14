@@ -19,34 +19,34 @@ type ShardImbalance struct {
 
 // RebalanceMetrics tracks rebalancing progress.
 type RebalanceMetrics struct {
-	TotalMessagesToMove    int64
-	MessagesMovedSucceed   int64
-	MessagesMovedFailed    int64
-	SourceShard            string
-	DestinationShard       string
-	StartedAt              time.Time
-	CompletedAt            *time.Time
-	Status                 string // "pending", "in_progress", "completed", "failed", "rolled_back"
-	ErrorMessage           string
+	TotalMessagesToMove  int64
+	MessagesMovedSucceed int64
+	MessagesMovedFailed  int64
+	SourceShard          string
+	DestinationShard     string
+	StartedAt            time.Time
+	CompletedAt          *time.Time
+	Status               string // "pending", "in_progress", "completed", "failed", "rolled_back"
+	ErrorMessage         string
 }
 
 // RebalanceAnalysis analyzes shard distribution and identifies imbalances.
 type RebalanceAnalysis struct {
-	IsBalanced       bool
-	HotShards        []ShardImbalance
-	ColdShards       []ShardImbalance
-	TotalMessages    int64
-	AveragePerShard  float64
+	IsBalanced        bool
+	HotShards         []ShardImbalance
+	ColdShards        []ShardImbalance
+	TotalMessages     int64
+	AveragePerShard   float64
 	StandardDeviation float64
-	Timestamp        time.Time
+	Timestamp         time.Time
 }
 
 // ShardRebalancer handles rebalancing operations across shards.
 type ShardRebalancer struct {
-	registry  *StoreRegistry
-	mu        sync.RWMutex
-	metrics   map[string]*RebalanceMetrics // migration ID → metrics
-	strategy  ShardingStrategy
+	registry *StoreRegistry
+	mu       sync.RWMutex
+	metrics  map[string]*RebalanceMetrics // migration ID → metrics
+	strategy ShardingStrategy
 }
 
 // NewShardRebalancer creates a new rebalancer for the given registry.
@@ -77,8 +77,8 @@ func (sr *ShardRebalancer) AnalyzeShard() (*RebalanceAnalysis, error) {
 		if err != nil {
 			continue // Skip shards with errors
 		}
-		shardStats[shardID] = int64(stats.TotalMessages)
-		totalMessages += int64(stats.TotalMessages)
+		shardStats[shardID] = stats.TotalMessages
+		totalMessages += stats.TotalMessages
 	}
 
 	// Calculate percentages and identify hot/cold shards
@@ -239,11 +239,12 @@ func (sr *ShardRebalancer) GetRebalancingStats() *RebalancingStats {
 	}
 
 	for _, metrics := range sr.metrics {
-		if metrics.Status == "pending" || metrics.Status == "in_progress" {
+		switch metrics.Status {
+		case "pending", "in_progress":
 			stats.ActiveMigrations++
-		} else if metrics.Status == "completed" {
+		case "completed":
 			stats.CompletedMigrations++
-		} else if metrics.Status == "failed" {
+		case "failed":
 			stats.FailedMigrations++
 		}
 		stats.TotalMessagesMoved += metrics.MessagesMovedSucceed

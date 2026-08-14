@@ -19,14 +19,13 @@ type StreamingBatchWriter struct {
 	failureCount      int64
 	lastFlushTime     time.Time
 	autoFlushInterval time.Duration
-	flushTimer        *time.Timer
 }
 
 // StreamingOperation represents a single operation in a batch.
 type StreamingOperation struct {
-	Type      string            // "delete", "undelete", "update"
+	Type      string // "delete", "undelete", "update"
 	MessageID string
-	Embedding []float32         // For update operations
+	Embedding []float32 // For update operations
 	Timestamp time.Time
 }
 
@@ -39,12 +38,12 @@ type StreamingError struct {
 
 // StreamingStats provides metrics for streaming operations.
 type StreamingStats struct {
-	TotalOperations  int64
-	SuccessCount     int64
-	FailureCount     int64
-	SuccessRate      float64
-	AvgLatencyMs     float64
-	ThroughputPerSec float64
+	TotalOperations   int64
+	SuccessCount      int64
+	FailureCount      int64
+	SuccessRate       float64
+	AvgLatencyMs      float64
+	ThroughputPerSec  float64
 	BufferUtilization float64
 }
 
@@ -226,10 +225,10 @@ func (sbw *StreamingBatchWriter) GetStats() *StreamingStats {
 	defer sbw.mu.Unlock()
 
 	stats := &StreamingStats{
-		TotalOperations:    sbw.operationCount,
-		SuccessCount:       sbw.successCount,
-		FailureCount:       sbw.failureCount,
-		BufferUtilization:  float64(len(sbw.buffer)) / float64(sbw.bufferSize) * 100,
+		TotalOperations:   sbw.operationCount,
+		SuccessCount:      sbw.successCount,
+		FailureCount:      sbw.failureCount,
+		BufferUtilization: float64(len(sbw.buffer)) / float64(sbw.bufferSize) * 100,
 	}
 
 	if sbw.operationCount > 0 {
@@ -259,10 +258,10 @@ func (sbw *StreamingBatchWriter) ClearErrors() {
 
 // StreamingIterator provides streaming read access to operations.
 type StreamingIterator struct {
-	mu        sync.RWMutex
+	mu         sync.RWMutex
 	operations chan StreamingOperation
-	closed    bool
-	count     int64
+	closed     bool
+	count      int64
 }
 
 // NewStreamingIterator creates a streaming iterator.

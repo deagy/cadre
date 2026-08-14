@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -12,7 +9,7 @@ func TestShardCompactorCreation(t *testing.T) {
 	compactor := NewShardCompactor(4)
 
 	if compactor == nil {
-		t.Error("Failed to create compactor")
+		t.Fatal("Failed to create compactor")
 	}
 
 	if compactor.maxConcurrent != 4 {
@@ -81,7 +78,7 @@ func TestAnalyzeShardsForCompaction(t *testing.T) {
 
 		// Insert vectors
 		for j := 0; j < 100; j++ {
-			idx.Insert(fmt.Sprintf("msg-%d", j+1), []float32{float32(j) / 100.0, float32((j + 1) % 100) / 100.0})
+			idx.Insert(fmt.Sprintf("msg-%d", j+1), []float32{float32(j) / 100.0, float32((j+1)%100) / 100.0})
 		}
 
 		// Delete proportional number
@@ -118,7 +115,7 @@ func TestCompactShardNow(t *testing.T) {
 
 	// Setup shard
 	for i := 1; i <= 10; i++ {
-		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 10.0, float32((i + 1) % 10) / 10.0})
+		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 10.0, float32((i+1)%10) / 10.0})
 	}
 
 	// Delete half
@@ -156,7 +153,7 @@ func TestCompactShardsAsync(t *testing.T) {
 		idx := NewHSNWIndex(16, 200)
 
 		for j := 0; j < 10; j++ {
-			idx.Insert(fmt.Sprintf("msg-%d", j+1), []float32{float32(j) / 10.0, float32((j + 1) % 10) / 10.0})
+			idx.Insert(fmt.Sprintf("msg-%d", j+1), []float32{float32(j) / 10.0, float32((j+1)%10) / 10.0})
 		}
 
 		// Delete some
@@ -173,12 +170,12 @@ func TestCompactShardsAsync(t *testing.T) {
 	job := compactor.CompactShardsAsync(shardIDs)
 
 	if job == nil {
-		t.Error("Expected job")
+		t.Fatal("Expected job")
 	}
 
 	// Initial state should be pending or in_progress
-	if job.State != "pending" && job.State != "in_progress" {
-		t.Errorf("Expected pending/in_progress state, got %s", job.State)
+	if state := job.State(); state != "pending" && state != "in_progress" {
+		t.Errorf("Expected pending/in_progress state, got %s", state)
 	}
 
 	// Job ID should be set
@@ -187,8 +184,8 @@ func TestCompactShardsAsync(t *testing.T) {
 	}
 
 	// After completion, should have results
-	if job.State == "complete" && len(job.Results) != len(shardIDs) {
-		t.Errorf("Expected %d results, got %d", len(shardIDs), len(job.Results))
+	if results := job.Results(); job.State() == "complete" && len(results) != len(shardIDs) {
+		t.Errorf("Expected %d results, got %d", len(shardIDs), len(results))
 	}
 }
 
@@ -386,13 +383,13 @@ func TestConcurrencyControl(t *testing.T) {
 	job := compactor.CompactShardsAsync(shardIDs)
 
 	if job == nil {
-		t.Error("Expected job")
+		t.Fatal("Expected job")
 	}
 
 	// Job should be created and in pending or progress state
 	// (async operations may not be complete immediately)
-	if job.State != "pending" && job.State != "in_progress" && job.State != "complete" {
-		t.Errorf("Expected valid state, got %s", job.State)
+	if state := job.State(); state != "pending" && state != "in_progress" && state != "complete" {
+		t.Errorf("Expected valid state, got %s", state)
 	}
 
 	// Verify job ID is set

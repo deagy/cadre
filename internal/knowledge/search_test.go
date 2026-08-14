@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -10,6 +7,7 @@ import (
 // Search tests. Require CGO_ENABLED=1 due to SQLite.
 
 func TestVectorSearch(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -79,6 +77,7 @@ func TestVectorSearch(t *testing.T) {
 }
 
 func TestSearchWithSourceFilter(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -127,6 +126,7 @@ func TestSearchWithSourceFilter(t *testing.T) {
 }
 
 func TestSearchWithMultipleSources(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -166,6 +166,7 @@ func TestSearchWithMultipleSources(t *testing.T) {
 }
 
 func TestSearchByContent(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -202,6 +203,7 @@ func TestSearchByContent(t *testing.T) {
 }
 
 func TestSearchClassificationFilter(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -249,6 +251,7 @@ func TestSearchClassificationFilter(t *testing.T) {
 }
 
 func TestSearchTopK(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -288,6 +291,7 @@ func TestSearchTopK(t *testing.T) {
 }
 
 func TestSearchDefaultTopK(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -325,6 +329,7 @@ func TestSearchDefaultTopK(t *testing.T) {
 }
 
 func TestSearchAllSources(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -364,6 +369,7 @@ func TestSearchAllSources(t *testing.T) {
 }
 
 func TestSearchErrorMissingQuery(t *testing.T) {
+	requireSQLite(t)
 	store := setupTestDB(t)
 	defer store.Close()
 
@@ -381,6 +387,7 @@ func TestSearchErrorMissingQuery(t *testing.T) {
 }
 
 func TestSearchErrorMissingClassification(t *testing.T) {
+	requireSQLite(t)
 	store := setupTestDB(t)
 	defer store.Close()
 
@@ -398,6 +405,7 @@ func TestSearchErrorMissingClassification(t *testing.T) {
 }
 
 func TestSearchErrorMissingProvider(t *testing.T) {
+	requireSQLite(t)
 	store := setupTestDB(t)
 	defer store.Close()
 

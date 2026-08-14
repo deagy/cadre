@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -171,7 +168,7 @@ func TestCompactIncremental(t *testing.T) {
 
 	// Insert 10 vectors
 	for i := 1; i <= 10; i++ {
-		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 10.0, float32((i + 1) % 10) / 10.0})
+		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 10.0, float32((i+1)%10) / 10.0})
 	}
 
 	// Delete 5
@@ -200,7 +197,7 @@ func TestCompactIncrementalComplete(t *testing.T) {
 
 	// Insert vectors
 	for i := 1; i <= 20; i++ {
-		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 20.0, float32((i + 1) % 20) / 20.0})
+		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 20.0, float32((i+1)%20) / 20.0})
 	}
 
 	// Delete 10
@@ -261,7 +258,7 @@ func TestBatchOperationsPerformance(t *testing.T) {
 
 	// Insert 100 vectors
 	for i := 1; i <= 100; i++ {
-		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 100.0, float32((i + 1) % 100) / 100.0})
+		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 100.0, float32((i+1)%100) / 100.0})
 	}
 
 	// Batch delete 30
@@ -305,7 +302,7 @@ func TestIncrementalCompactionProgression(t *testing.T) {
 
 	// Insert 50 vectors
 	for i := 1; i <= 50; i++ {
-		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 50.0, float32((i + 1) % 50) / 50.0})
+		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 50.0, float32((i+1)%50) / 50.0})
 	}
 
 	// Delete 30

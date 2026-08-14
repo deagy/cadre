@@ -1,4 +1,3 @@
-//nolint:errcheck
 package knowledge
 
 import (
@@ -25,9 +24,9 @@ type RemoteEmbedderConfig struct {
 // RemoteEmbedder calls an OpenAI-compatible embeddings API.
 // Implements EmbeddingProvider interface.
 type RemoteEmbedder struct {
-	config    *RemoteEmbedderConfig
-	client    *http.Client
-	fallback  EmbeddingProvider // Local embedder as fallback
+	config   *RemoteEmbedderConfig
+	client   *http.Client
+	fallback EmbeddingProvider // Local embedder as fallback
 }
 
 // embeddingRequest is the request payload for embeddings API.
@@ -205,7 +204,7 @@ func (r *RemoteEmbedder) embedOnce(texts []string) ([][]float64, error) {
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response body (with size limit)
 	bodyReader := io.LimitReader(resp.Body, 100*1024*1024) // 100MB limit
@@ -265,7 +264,7 @@ func validateConfig(config *RemoteEmbedderConfig) error {
 
 	// Validate timeout is positive if set
 	if config.Timeout < 0 {
-		return fmt.Errorf("Timeout must be non-negative")
+		return fmt.Errorf("timeout must be non-negative")
 	}
 
 	// Validate retry counts

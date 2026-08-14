@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -204,6 +201,7 @@ func TestConsistentHashRingDuplicateAdd(t *testing.T) {
 // Store registry tests
 
 func TestStoreRegistryBasic(t *testing.T) {
+	requireSQLite(t)
 	strategy := &SourceShardingStrategy{}
 	registry := NewStoreRegistry(strategy)
 
@@ -241,6 +239,7 @@ func TestStoreRegistryBasic(t *testing.T) {
 }
 
 func TestStoreRegistryConsistency(t *testing.T) {
+	requireSQLite(t)
 	strategy := &SourceShardingStrategy{}
 	registry := NewStoreRegistry(strategy)
 
@@ -263,6 +262,7 @@ func TestStoreRegistryConsistency(t *testing.T) {
 }
 
 func TestStoreRegistryGetAll(t *testing.T) {
+	requireSQLite(t)
 	strategy := &SourceShardingStrategy{}
 	registry := NewStoreRegistry(strategy)
 
@@ -287,6 +287,7 @@ func TestStoreRegistryGetAll(t *testing.T) {
 }
 
 func TestStoreRegistryRemove(t *testing.T) {
+	requireSQLite(t)
 	strategy := &SourceShardingStrategy{}
 	registry := NewStoreRegistry(strategy)
 
@@ -339,6 +340,7 @@ func TestStoreRegistryAddNilStore(t *testing.T) {
 // Sharding strategy with registry integration
 
 func TestRegistryWithClassificationSharding(t *testing.T) {
+	requireSQLite(t)
 	strategy := NewClassificationShardingStrategy("public", "secret")
 	registry := NewStoreRegistry(strategy)
 
@@ -394,8 +396,6 @@ func TestHashConsistent(t *testing.T) {
 		t.Error("Consistent hash not deterministic")
 	}
 
-	// Should be valid uint32
-	if hash1 > 0xFFFFFFFF {
-		t.Errorf("Hash exceeds uint32 range: %d", hash1)
-	}
+	// hashConsistent returns uint32, so an explicit upper-bound assertion here
+	// is vacuously true; the determinism check above is the real invariant.
 }

@@ -141,9 +141,7 @@ var FIELDS = map[string]FieldSpec{
 		// caller with a different repo-root discovery strategy.
 		Key: "roster.root", EnvVar: "CADRE_ROSTER_ROOT",
 		Scope: ScopeGlobalOnly, Kind: "path",
-		ComputedDefault: func() (any, bool) {
-			return computeRosterRoot()
-		},
+		ComputedDefault: computeRosterRoot,
 	},
 }
 

@@ -1,4 +1,3 @@
-//nolint:errcheck
 package knowledge
 
 import (
@@ -24,12 +23,12 @@ func NewCLIPersistence(dbPath string) (*CLIPersistence, error) {
 
 	// Enable pragmas for consistency
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 
 	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 
@@ -37,7 +36,7 @@ func NewCLIPersistence(dbPath string) (*CLIPersistence, error) {
 
 	// Initialize schema
 	if err := cp.initSchema(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 
@@ -124,7 +123,7 @@ func (cp *CLIPersistence) GetReplicas() ([]map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var replicas []map[string]interface{}
 	for rows.Next() {
@@ -203,12 +202,12 @@ func (cp *CLIPersistence) GetReplicationStatus() (map[string]interface{}, error)
 	}
 
 	status := map[string]interface{}{
-		"node_id":             "primary",
-		"total_replicas":      totalReplicas,
-		"healthy_replicas":    healthyCount,
-		"max_sync_lag_ms":     maxSyncLag,
-		"consistent":          healthyCount >= (totalReplicas/2 + 1) || totalReplicas == 0,
-		"consistency_level":   "eventual",
+		"node_id":           "primary",
+		"total_replicas":    totalReplicas,
+		"healthy_replicas":  healthyCount,
+		"max_sync_lag_ms":   maxSyncLag,
+		"consistent":        healthyCount >= (totalReplicas/2+1) || totalReplicas == 0,
+		"consistency_level": "eventual",
 	}
 
 	return status, nil
@@ -237,7 +236,7 @@ func (cp *CLIPersistence) GetFaultToleranceStats() (map[string]interface{}, erro
 
 	if err == sql.ErrNoRows {
 		// Initialize if not exists
-		cp.db.Exec(`
+		_, _ = cp.db.Exec(`
 			INSERT INTO cli_fault_tolerance (key, total_errors, circuit_state)
 			VALUES ('primary', 0, 'closed')
 		`)
@@ -264,7 +263,7 @@ func (cp *CLIPersistence) RecordFaultToleranceEvent(eventType string) error {
 	var totalErrors, successfulRetries, failedRetries, circuitBreaks int
 
 	// Get current stats
-	cp.db.QueryRow(`
+	_ = cp.db.QueryRow(`
 		SELECT COALESCE(total_errors, 0), COALESCE(successful_retries, 0),
 		       COALESCE(failed_retries, 0), COALESCE(circuit_breaks, 0)
 		FROM cli_fault_tolerance
@@ -403,7 +402,7 @@ func (cp *CLIPersistence) GetOperationsLog(limit int) ([]map[string]interface{},
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var operations []map[string]interface{}
 	for rows.Next() {
@@ -431,24 +430,24 @@ func (cp *CLIPersistence) GetOperationsLog(limit int) ([]map[string]interface{},
 // GetSystemStats returns system-wide statistics.
 func (cp *CLIPersistence) GetSystemStats() (map[string]interface{}, error) {
 	cp.mu.RLock()
-	defer cp.mu.Unlock()
+	defer cp.mu.RUnlock()
 
 	var totalOps, successfulOps, failedOps int
 	var uptime int64
 
 	// Get operation counts
-	cp.db.QueryRow("SELECT COUNT(*) FROM cli_operations_log").Scan(&totalOps)
-	cp.db.QueryRow("SELECT COUNT(*) FROM cli_operations_log WHERE status = 'completed'").Scan(&successfulOps)
-	cp.db.QueryRow("SELECT COUNT(*) FROM cli_operations_log WHERE status LIKE 'error%'").Scan(&failedOps)
+	_ = cp.db.QueryRow("SELECT COUNT(*) FROM cli_operations_log").Scan(&totalOps)
+	_ = cp.db.QueryRow("SELECT COUNT(*) FROM cli_operations_log WHERE status = 'completed'").Scan(&successfulOps)
+	_ = cp.db.QueryRow("SELECT COUNT(*) FROM cli_operations_log WHERE status LIKE 'error%'").Scan(&failedOps)
 
 	// Estimate uptime from oldest operation (placeholder: assume 24 hours)
 	uptime = 86400
 
 	stats := map[string]interface{}{
-		"total_operations":    totalOps,
-		"successful_ops":      successfulOps,
-		"failed_ops":          failedOps,
-		"uptime_seconds":      uptime,
+		"total_operations":     totalOps,
+		"successful_ops":       successfulOps,
+		"failed_ops":           failedOps,
+		"uptime_seconds":       uptime,
 		"estimated_uptime_pct": 99.99,
 	}
 

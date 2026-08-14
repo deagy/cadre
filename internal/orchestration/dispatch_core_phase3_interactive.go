@@ -34,7 +34,7 @@ func PromptForConfirmation(
 	// Display the prompt
 	prompt := DisplayConfirmationPrompt(data)
 	if _, err := fmt.Fprint(os.Stderr, prompt); err != nil {
-		return false, fmt.Errorf("failed to write prompt: %v", err)
+		return false, fmt.Errorf("failed to write prompt: %w", err)
 	}
 
 	// Set up timeout for reading response
@@ -48,7 +48,7 @@ func PromptForConfirmation(
 			responseChan <- strings.ToLower(strings.TrimSpace(scanner.Text()))
 		}
 		if err := scanner.Err(); err != nil {
-			errorChan <- fmt.Errorf("failed to read response: %v", err)
+			errorChan <- fmt.Errorf("failed to read response: %w", err)
 		}
 	}()
 
@@ -81,23 +81,23 @@ func DisplayConfirmationPrompt(data map[string]any) string {
 
 	// Display operation details
 	if roleID, ok := data["role_id"].(string); ok && roleID != "" {
-		prompt.WriteString(fmt.Sprintf("Role:             %s\n", roleID))
+		fmt.Fprintf(&prompt, "Role:             %s\n", roleID)
 	}
 
 	if mode, ok := data["mode"].(string); ok && mode != "" {
-		prompt.WriteString(fmt.Sprintf("Dispatch Mode:    %s\n", mode))
+		fmt.Fprintf(&prompt, "Dispatch Mode:    %s\n", mode)
 	}
 
 	if sandboxMode, ok := data["sandbox_mode"].(string); ok && sandboxMode != "" {
-		prompt.WriteString(fmt.Sprintf("Sandbox:          %s\n", sandboxMode))
+		fmt.Fprintf(&prompt, "Sandbox:          %s\n", sandboxMode)
 	}
 
 	if classification, ok := data["classification"].(string); ok && classification != "" {
-		prompt.WriteString(fmt.Sprintf("Classification:   %s\n", classification))
+		fmt.Fprintf(&prompt, "Classification:   %s\n", classification)
 	}
 
 	if taskID, ok := data["task_id"].(string); ok && taskID != "" {
-		prompt.WriteString(fmt.Sprintf("Task ID:          %s\n", taskID))
+		fmt.Fprintf(&prompt, "Task ID:          %s\n", taskID)
 	}
 
 	// Display sandbox implications
@@ -159,7 +159,7 @@ func RecordConfirmationDecision(
 	})
 
 	if err != nil {
-		return fmt.Errorf("failed to build audit record: %v", err)
+		return fmt.Errorf("failed to build audit record: %w", err)
 	}
 
 	return WriteAuditLog(record)

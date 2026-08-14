@@ -61,11 +61,12 @@ func lcsDiff(a, b []string) []diffOp {
 	}
 	for i := n - 1; i >= 0; i-- {
 		for j := m - 1; j >= 0; j-- {
-			if a[i] == b[j] {
+			switch {
+			case a[i] == b[j]:
 				dp[i][j] = dp[i+1][j+1] + 1
-			} else if dp[i+1][j] >= dp[i][j+1] {
+			case dp[i+1][j] >= dp[i][j+1]:
 				dp[i][j] = dp[i+1][j]
-			} else {
+			default:
 				dp[i][j] = dp[i][j+1]
 			}
 		}
@@ -73,14 +74,15 @@ func lcsDiff(a, b []string) []diffOp {
 	var ops []diffOp
 	i, j := 0, 0
 	for i < n && j < m {
-		if a[i] == b[j] {
+		switch {
+		case a[i] == b[j]:
 			ops = append(ops, diffOp{' ', a[i]})
 			i++
 			j++
-		} else if dp[i+1][j] >= dp[i][j+1] {
+		case dp[i+1][j] >= dp[i][j+1]:
 			ops = append(ops, diffOp{'-', a[i]})
 			i++
-		} else {
+		default:
 			ops = append(ops, diffOp{'+', b[j]})
 			j++
 		}

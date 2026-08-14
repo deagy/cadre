@@ -27,12 +27,12 @@ type FederatedSearchOptions struct {
 
 // FederatedSearchResult represents results from multiple shards.
 type FederatedSearchResult struct {
-	Results       []*SearchResult
-	ShardResults  map[string][]*SearchResult // Shard ID → results from that shard
-	ShardErrors   map[string]error           // Shard ID → error (if any)
-	TotalQueried  int                        // Number of shards queried
-	TotalFailed   int                        // Number of shards that failed
-	TotalTime     int64                      // Total time in nanoseconds
+	Results      []*SearchResult
+	ShardResults map[string][]*SearchResult // Shard ID → results from that shard
+	ShardErrors  map[string]error           // Shard ID → error (if any)
+	TotalQueried int                        // Number of shards queried
+	TotalFailed  int                        // Number of shards that failed
+	TotalTime    int64                      // Total time in nanoseconds
 }
 
 // FederatedSearch performs a search across all shards in parallel.
@@ -100,27 +100,27 @@ func (f *FederatedStore) FederatedSearch(opts FederatedSearchOptions) (*Federate
 	wg.Wait()
 
 	// Aggregate results from all shards
-	aggregateSearchResults(result, opts.SearchOptions.Top)
+	aggregateSearchResults(result, opts.Top)
 
 	return result, nil
 }
 
 // FederatedDeleteOptions specifies deletion across shards.
 type FederatedDeleteOptions struct {
-	Mode          string // "expired", "classification", "source", "age"
+	Mode           string // "expired", "classification", "source", "age"
 	Classification *string
-	Source        *string
-	AgeDays       int
-	AuthorizedBy  string
+	Source         *string
+	AgeDays        int
+	AuthorizedBy   string
 }
 
 // FederatedDeleteResult summarizes deletions across shards.
 type FederatedDeleteResult struct {
-	TotalDeleted   int64              // Total messages deleted
-	ShardDeleted   map[string]int64   // Shard ID → deleted count
-	ShardErrors    map[string]error   // Shard ID → error (if any)
-	TotalQueried   int                // Number of shards queried
-	TotalFailed    int                // Number of shards that failed
+	TotalDeleted int64            // Total messages deleted
+	ShardDeleted map[string]int64 // Shard ID → deleted count
+	ShardErrors  map[string]error // Shard ID → error (if any)
+	TotalQueried int              // Number of shards queried
+	TotalFailed  int              // Number of shards that failed
 }
 
 // FederatedDelete performs a deletion operation across all shards.
@@ -205,13 +205,13 @@ func (f *FederatedStore) FederatedDelete(opts FederatedDeleteOptions) (*Federate
 
 // FederatedStats collects statistics from all shards.
 type FederatedStats struct {
-	TotalMessages       int64
-	TotalChunks         int64
-	TotalIngestionRuns  int64
-	TotalRetrievalRuns  int64
-	TotalDatabaseSize   int64
-	ShardStats          map[string]*StoreStats
-	ShardErrors         map[string]error
+	TotalMessages      int64
+	TotalChunks        int64
+	TotalIngestionRuns int64
+	TotalRetrievalRuns int64
+	TotalDatabaseSize  int64
+	ShardStats         map[string]*StoreStats
+	ShardErrors        map[string]error
 }
 
 // FederatedStats collects statistics from all shards.
@@ -323,10 +323,10 @@ func aggregateSearchResults(result *FederatedSearchResult, topK int) {
 
 // ShardingStats returns information about current sharding configuration.
 type ShardingStats struct {
-	TotalShards    int
-	ActiveShards   int
-	ShardStrategy  string
-	Distribution   map[string]int64 // Shard ID → message count
+	TotalShards   int
+	ActiveShards  int
+	ShardStrategy string
+	Distribution  map[string]int64 // Shard ID → message count
 }
 
 // ShardingStats returns sharding configuration and distribution.

@@ -80,11 +80,9 @@ func tokenize(text string) []string {
 	for _, ch := range text {
 		if ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' {
 			word += string(ch)
-		} else {
-			if word != "" {
-				tokens = append(tokens, word)
-				word = ""
-			}
+		} else if word != "" {
+			tokens = append(tokens, word)
+			word = ""
 		}
 	}
 	if word != "" {

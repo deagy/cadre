@@ -1,4 +1,3 @@
-//nolint:errcheck
 package knowledge
 
 import (
@@ -135,7 +134,7 @@ func (s *Store) SaveChunks(
 	if err != nil {
 		return fmt.Errorf("cannot begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Write each chunk
 	for ordinal, content := range contents {
@@ -231,7 +230,7 @@ func (s *Store) GetChunks(messageID string) ([]*Chunk, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot query chunks: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var chunks []*Chunk
 	for rows.Next() {

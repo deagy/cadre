@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package cli
 
 import (
@@ -116,7 +113,7 @@ func TestHSNWDeletionStatusCommand(t *testing.T) {
 
 	// Insert 20 vectors
 	for i := 1; i <= 20; i++ {
-		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 20.0, float32((i + 1) % 20) / 20.0})
+		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 20.0, float32((i+1)%20) / 20.0})
 	}
 
 	// Delete 5
@@ -151,7 +148,7 @@ func TestHSNWDeletionRecommendation(t *testing.T) {
 
 	// Insert 100 vectors
 	for i := 1; i <= 100; i++ {
-		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 100.0, float32((i + 1) % 100) / 100.0})
+		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 100.0, float32((i+1)%100) / 100.0})
 	}
 
 	// Delete to cross 10% threshold
@@ -211,7 +208,7 @@ func TestHSNWBatchDelete(t *testing.T) {
 
 	// Insert 10
 	for i := 1; i <= 10; i++ {
-		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 10.0, float32((i + 1) % 10) / 10.0})
+		idx.Insert(fmt.Sprintf("msg-%d", i), []float32{float32(i) / 10.0, float32((i+1)%10) / 10.0})
 	}
 
 	// Delete batch
@@ -317,13 +314,13 @@ func TestHSNWIncrementalPerformance(t *testing.T) {
 
 	// Build initial index
 	for i := 0; i < 50; i++ {
-		embedding := []float32{float32(i) / 50.0, float32((i + 1) % 50) / 50.0}
+		embedding := []float32{float32(i) / 50.0, float32((i+1)%50) / 50.0}
 		idx.Insert(fmt.Sprintf("msg-%d", i+1), embedding)
 	}
 
 	// Update half
 	for i := 0; i < 25; i++ {
-		newEmb := []float32{float32(i) / 100.0, float32((i + 50) % 100) / 100.0}
+		newEmb := []float32{float32(i) / 100.0, float32((i+50)%100) / 100.0}
 		idx.Update(fmt.Sprintf("msg-%d", i+1), newEmb)
 	}
 

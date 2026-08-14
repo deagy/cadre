@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -104,6 +101,7 @@ func TestRecordReplication(t *testing.T) {
 }
 
 func TestGetFaultToleranceStats(t *testing.T) {
+	requireSQLite(t)
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
@@ -121,6 +119,7 @@ func TestGetFaultToleranceStats(t *testing.T) {
 }
 
 func TestRecordFaultToleranceEvent(t *testing.T) {
+	requireSQLite(t)
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
@@ -145,6 +144,7 @@ func TestRecordFaultToleranceEvent(t *testing.T) {
 }
 
 func TestResetFaultTolerance(t *testing.T) {
+	requireSQLite(t)
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
@@ -174,6 +174,7 @@ func TestResetFaultTolerance(t *testing.T) {
 }
 
 func TestScheduleMaintenanceTask(t *testing.T) {
+	requireSQLite(t)
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
@@ -192,6 +193,7 @@ func TestScheduleMaintenanceTask(t *testing.T) {
 }
 
 func TestCompleteMaintenanceTask(t *testing.T) {
+	requireSQLite(t)
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
@@ -212,6 +214,7 @@ func TestCompleteMaintenanceTask(t *testing.T) {
 }
 
 func TestRecordOperation(t *testing.T) {
+	requireSQLite(t)
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
@@ -234,6 +237,7 @@ func TestRecordOperation(t *testing.T) {
 }
 
 func TestGetSystemStats(t *testing.T) {
+	requireSQLite(t)
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
@@ -256,6 +260,7 @@ func TestGetSystemStats(t *testing.T) {
 }
 
 func TestCLIPersistenceConcurrency(t *testing.T) {
+	requireSQLite(t)
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
@@ -290,6 +295,7 @@ func TestCLIPersistenceConcurrency(t *testing.T) {
 }
 
 func TestCLIPersistenceMultipleInstances(t *testing.T) {
+	requireSQLite(t)
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 

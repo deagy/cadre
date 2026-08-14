@@ -1,4 +1,3 @@
-//nolint:errcheck
 package knowledge
 
 import (
@@ -9,41 +8,41 @@ import (
 
 // RebalancingPolicy defines when and how to trigger rebalancing.
 type RebalancingPolicy struct {
-	Enabled                bool
-	CheckIntervalSeconds   int       // How often to check (default: 3600 = 1 hour)
-	ImbalanceThreshold     float64   // Trigger if std dev > this (default: 20%)
-	MinimumHotShardPercent float64   // Min % for hot shard (default: 60%)
-	MaxConcurrentMigrations int       // Max parallel migrations (default: 2)
-	MaintenanceWindowStart string    // Time window start (HH:MM UTC, optional)
-	MaintenanceWindowEnd   string    // Time window end (HH:MM UTC, optional)
-	MaxMessagesPerMigration int       // Batch size (default: 1000)
-	NotifyOnCompletion     bool      // Send notifications
+	Enabled                 bool
+	CheckIntervalSeconds    int     // How often to check (default: 3600 = 1 hour)
+	ImbalanceThreshold      float64 // Trigger if std dev > this (default: 20%)
+	MinimumHotShardPercent  float64 // Min % for hot shard (default: 60%)
+	MaxConcurrentMigrations int     // Max parallel migrations (default: 2)
+	MaintenanceWindowStart  string  // Time window start (HH:MM UTC, optional)
+	MaintenanceWindowEnd    string  // Time window end (HH:MM UTC, optional)
+	MaxMessagesPerMigration int     // Batch size (default: 1000)
+	NotifyOnCompletion      bool    // Send notifications
 }
 
 // DefaultRebalancingPolicy returns sensible defaults.
 func DefaultRebalancingPolicy() *RebalancingPolicy {
 	return &RebalancingPolicy{
-		Enabled:                true,
-		CheckIntervalSeconds:   3600,    // 1 hour
-		ImbalanceThreshold:     20.0,    // 20% std dev
-		MinimumHotShardPercent: 60.0,    // 60% capacity
-		MaxConcurrentMigrations: 2,      // 2 parallel
-		MaxMessagesPerMigration: 1000,   // 1000 msgs per batch
-		NotifyOnCompletion:     false,
+		Enabled:                 true,
+		CheckIntervalSeconds:    3600, // 1 hour
+		ImbalanceThreshold:      20.0, // 20% std dev
+		MinimumHotShardPercent:  60.0, // 60% capacity
+		MaxConcurrentMigrations: 2,    // 2 parallel
+		MaxMessagesPerMigration: 1000, // 1000 msgs per batch
+		NotifyOnCompletion:      false,
 	}
 }
 
 // ScheduledMigrationJob represents a scheduled migration task.
 type ScheduledMigrationJob struct {
-	ID                string
-	ScheduledTime     time.Time
-	ExecutedTime      *time.Time
-	Status            string // scheduled, executing, completed, failed, cancelled
-	SourceShardID     string
-	DestShardID       string
-	MessageCount      int
-	ErrorReason       string
-	Duration          time.Duration
+	ID            string
+	ScheduledTime time.Time
+	ExecutedTime  *time.Time
+	Status        string // scheduled, executing, completed, failed, cancelled
+	SourceShardID string
+	DestShardID   string
+	MessageCount  int
+	ErrorReason   string
+	Duration      time.Duration
 }
 
 // RebalancingScheduler manages automatic rebalancing operations.
@@ -72,11 +71,11 @@ func NewRebalancingScheduler(
 	}
 
 	return &RebalancingScheduler{
-		policy:    policy,
+		policy:     policy,
 		rebalancer: rebalancer,
-		executor:  executor,
-		stopChan:  make(chan struct{}),
-		jobs:      make(map[string]*ScheduledMigrationJob),
+		executor:   executor,
+		stopChan:   make(chan struct{}),
+		jobs:       make(map[string]*ScheduledMigrationJob),
 	}
 }
 
@@ -244,7 +243,7 @@ func (rs *RebalancingScheduler) ExecuteScheduledJob(jobID string) error {
 	// Execute migration
 	err = rs.executor.ExecuteMigration(txID)
 	if err != nil {
-		rs.executor.RollbackMigration(txID)
+		_ = rs.executor.RollbackMigration(txID)
 		rs.mu.Lock()
 		job.Status = "failed"
 		job.ErrorReason = err.Error()
@@ -257,7 +256,7 @@ func (rs *RebalancingScheduler) ExecuteScheduledJob(jobID string) error {
 	// Commit migration
 	err = rs.executor.CommitMigration(txID)
 	if err != nil {
-		rs.executor.RollbackMigration(txID)
+		_ = rs.executor.RollbackMigration(txID)
 		rs.mu.Lock()
 		job.Status = "failed"
 		job.ErrorReason = err.Error()

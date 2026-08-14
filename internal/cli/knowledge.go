@@ -1,4 +1,3 @@
-//nolint:errcheck
 package cli
 
 import (
@@ -204,7 +203,7 @@ func knowledgeInit(dbPath string, args []string) int {
 			fmt.Fprintf(os.Stderr, "cadre knowledge init: cannot open store: %v\n", err)
 			return 1
 		}
-		defer store.Close()
+		defer func() { _ = store.Close() }()
 
 		stats, err := store.Stats()
 		if err != nil {
@@ -225,7 +224,7 @@ func knowledgeInit(dbPath string, args []string) int {
 		fmt.Fprintf(os.Stderr, "cadre knowledge init: cannot open store: %v\n", err)
 		return 1
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	if storeExists {
 		fmt.Printf("Knowledge store already exists: %s\n", dbPath)
@@ -279,7 +278,7 @@ func knowledgeStats(dbPath string, args []string) int {
 		fmt.Fprintf(os.Stderr, "cadre knowledge stats: cannot open store: %v\n", err)
 		return 1
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	// Get stats
 	stats, err := store.Stats()
@@ -382,7 +381,7 @@ Options:
 		fmt.Fprintf(os.Stderr, "cadre knowledge ingest: cannot open store: %v\n", err)
 		return 1
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	// Create embedder
 	var embedder knowledge.EmbeddingProvider
@@ -411,7 +410,7 @@ Options:
 	for decoder.More() {
 		var msgData map[string]interface{}
 		if err := decoder.Decode(&msgData); err != nil {
-			store.FailRun(runID, err)
+			_ = store.FailRun(runID, err)
 			fmt.Fprintf(os.Stderr, "cadre knowledge ingest: cannot decode message: %v\n", err)
 			return 1
 		}
@@ -434,7 +433,7 @@ Options:
 			`[]`, `{}`, nil,
 		)
 		if err != nil {
-			store.FailRun(runID, err)
+			_ = store.FailRun(runID, err)
 			fmt.Fprintf(os.Stderr, "cadre knowledge ingest: cannot save message: %v\n", err)
 			return 1
 		}
@@ -443,7 +442,7 @@ Options:
 		// Embed and save chunk
 		embeddings, err := embedder.Embed([]string{content})
 		if err != nil {
-			store.FailRun(runID, err)
+			_ = store.FailRun(runID, err)
 			fmt.Fprintf(os.Stderr, "cadre knowledge ingest: cannot embed message: %v\n", err)
 			return 1
 		}
@@ -451,7 +450,7 @@ Options:
 		if len(embeddings) > 0 {
 			err = store.SaveChunk(msgID, 0, content, embedder.Name(), embedder.Model(), embeddings[0])
 			if err != nil {
-				store.FailRun(runID, err)
+				_ = store.FailRun(runID, err)
 				fmt.Fprintf(os.Stderr, "cadre knowledge ingest: cannot save chunk: %v\n", err)
 				return 1
 			}
@@ -511,7 +510,7 @@ Options:
 		fmt.Fprintf(os.Stderr, "cadre knowledge search: cannot open store: %v\n", err)
 		return 1
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	if *searchMode == "content" {
 		// Text search
@@ -523,14 +522,14 @@ Options:
 
 		if *jsonOutput {
 			data := map[string]interface{}{
-				"query":      query,
-				"mode":       "content",
-				"count":      len(results),
-				"results":    results,
+				"query":   query,
+				"mode":    "content",
+				"count":   len(results),
+				"results": results,
 			}
 			encoder := json.NewEncoder(os.Stdout)
 			encoder.SetIndent("", "  ")
-			encoder.Encode(data)
+			_ = encoder.Encode(data)
 		} else {
 			fmt.Printf("Content Search Results (%d)\n", len(results))
 			fmt.Printf("═══════════════════════════════\n")
@@ -579,14 +578,14 @@ Options:
 
 	if *jsonOutput {
 		data := map[string]interface{}{
-			"query":      query,
-			"mode":       "vector",
-			"count":      len(results),
-			"results":    results,
+			"query":   query,
+			"mode":    "vector",
+			"count":   len(results),
+			"results": results,
 		}
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
-		encoder.Encode(data)
+		_ = encoder.Encode(data)
 	} else {
 		fmt.Printf("Vector Search Results (%d)\n", len(results))
 		fmt.Printf("═════════════════════════════\n")
@@ -659,29 +658,30 @@ Options:
 		fmt.Fprintf(os.Stderr, "cadre knowledge delete: cannot open store: %v\n", err)
 		return 1
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	var deleted int64
 
-	if *deleteExpired {
+	switch {
+	case *deleteExpired:
 		deleted, err = store.DeleteExpired(*authorizedBy)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "cadre knowledge delete: cannot delete expired: %v\n", err)
 			return 1
 		}
-	} else if *classification != "" {
+	case *classification != "":
 		deleted, err = store.DeleteByClassification(*classification, "CLI deletion", *authorizedBy)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "cadre knowledge delete: cannot delete by classification: %v\n", err)
 			return 1
 		}
-	} else if *source != "" {
+	case *source != "":
 		deleted, err = store.DeleteBySource(*source, "CLI deletion", *authorizedBy)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "cadre knowledge delete: cannot delete by source: %v\n", err)
 			return 1
 		}
-	} else if *ageDays > 0 {
+	case *ageDays > 0:
 		deleted, err = store.DeleteByAge(*ageDays, nil, "CLI deletion", *authorizedBy)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "cadre knowledge delete: cannot delete by age: %v\n", err)
@@ -691,12 +691,12 @@ Options:
 
 	if *jsonOutput {
 		data := map[string]interface{}{
-			"deleted": deleted,
+			"deleted":       deleted,
 			"authorized_by": *authorizedBy,
 		}
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
-		encoder.Encode(data)
+		_ = encoder.Encode(data)
 	} else {
 		fmt.Printf("Deleted %d messages\n", deleted)
 	}
@@ -754,7 +754,7 @@ func knowledgeShards(dbPath string, args []string) int {
 
 	registry := knowledge.NewStoreRegistry(strat)
 	for name, store := range shards {
-		registry.AddStore(name, store)
+		_ = registry.AddStore(name, store)
 	}
 
 	federated := knowledge.NewFederatedStore(registry)
@@ -768,7 +768,7 @@ func knowledgeShards(dbPath string, args []string) int {
 
 	// Close all stores
 	for _, store := range shards {
-		store.Close()
+		_ = store.Close()
 	}
 
 	// Calculate total messages across shards
@@ -779,15 +779,15 @@ func knowledgeShards(dbPath string, args []string) int {
 
 	if *jsonOutput {
 		data := map[string]interface{}{
-			"total_shards":    stats.TotalShards,
-			"active_shards":   stats.ActiveShards,
-			"shard_strategy":  stats.ShardStrategy,
-			"distribution":    stats.Distribution,
-			"total_messages":  totalMessages,
+			"total_shards":   stats.TotalShards,
+			"active_shards":  stats.ActiveShards,
+			"shard_strategy": stats.ShardStrategy,
+			"distribution":   stats.Distribution,
+			"total_messages": totalMessages,
 		}
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
-		encoder.Encode(data)
+		_ = encoder.Encode(data)
 	} else {
 		fmt.Printf("Shard Distribution\n")
 		fmt.Printf("═══════════════════════════════════════\n")
@@ -876,7 +876,7 @@ Options:
 
 	registry := knowledge.NewStoreRegistry(strat)
 	for name, store := range shards {
-		registry.AddStore(name, store)
+		_ = registry.AddStore(name, store)
 	}
 
 	federated := knowledge.NewFederatedStore(registry)
@@ -921,7 +921,7 @@ Options:
 
 	// Close all stores
 	for _, store := range shards {
-		store.Close()
+		_ = store.Close()
 	}
 
 	if *jsonOutput {
@@ -935,7 +935,7 @@ Options:
 		}
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
-		encoder.Encode(data)
+		_ = encoder.Encode(data)
 	} else {
 		fmt.Printf("Federated Search Results (%d)\n", len(result.Results))
 		fmt.Printf("═════════════════════════════════════════════\n")
@@ -1034,22 +1034,23 @@ Options:
 
 	registry := knowledge.NewStoreRegistry(strat)
 	for name, store := range shards {
-		registry.AddStore(name, store)
+		_ = registry.AddStore(name, store)
 	}
 
 	federated := knowledge.NewFederatedStore(registry)
 
 	// Perform federated delete
 	var deleteOpts knowledge.FederatedDeleteOptions
-	if *deleteExpired {
+	switch {
+	case *deleteExpired:
 		deleteOpts.Mode = "expired"
-	} else if *classification != "" {
+	case *classification != "":
 		deleteOpts.Mode = "classification"
 		deleteOpts.Classification = classification
-	} else if *source != "" {
+	case *source != "":
 		deleteOpts.Mode = "source"
 		deleteOpts.Source = source
-	} else if *ageDays > 0 {
+	case *ageDays > 0:
 		deleteOpts.Mode = "age"
 		deleteOpts.AgeDays = *ageDays
 	}
@@ -1063,19 +1064,19 @@ Options:
 
 	// Close all stores
 	for _, store := range shards {
-		store.Close()
+		_ = store.Close()
 	}
 
 	if *jsonOutput {
 		data := map[string]interface{}{
-			"total_deleted":   result.TotalDeleted,
-			"total_queried":   result.TotalQueried,
-			"total_failed":    result.TotalFailed,
-			"authorized_by":   *authorizedBy,
+			"total_deleted": result.TotalDeleted,
+			"total_queried": result.TotalQueried,
+			"total_failed":  result.TotalFailed,
+			"authorized_by": *authorizedBy,
 		}
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
-		encoder.Encode(data)
+		_ = encoder.Encode(data)
 	} else {
 		fmt.Printf("Federated Deletion Results\n")
 		fmt.Printf("══════════════════════════════════════════════\n")
@@ -1146,7 +1147,7 @@ Options:
 
 	registry := knowledge.NewStoreRegistry(strat)
 	for name, store := range shards {
-		registry.AddStore(name, store)
+		_ = registry.AddStore(name, store)
 	}
 
 	rebalancer := knowledge.NewShardRebalancer(registry, strat)
@@ -1160,23 +1161,23 @@ Options:
 
 	// Close stores
 	for _, store := range shards {
-		store.Close()
+		_ = store.Close()
 	}
 
 	if *jsonOutput {
 		data := map[string]interface{}{
-			"is_balanced":          analysis.IsBalanced,
-			"total_shards":         len(shards),
-			"hot_shards":           len(analysis.HotShards),
-			"cold_shards":          len(analysis.ColdShards),
-			"total_messages":       analysis.TotalMessages,
-			"average_per_shard":    analysis.AveragePerShard,
-			"standard_deviation":   analysis.StandardDeviation,
-			"dry_run":              *dryRun,
+			"is_balanced":        analysis.IsBalanced,
+			"total_shards":       len(shards),
+			"hot_shards":         len(analysis.HotShards),
+			"cold_shards":        len(analysis.ColdShards),
+			"total_messages":     analysis.TotalMessages,
+			"average_per_shard":  analysis.AveragePerShard,
+			"standard_deviation": analysis.StandardDeviation,
+			"dry_run":            *dryRun,
 		}
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
-		encoder.Encode(data)
+		_ = encoder.Encode(data)
 	} else {
 		fmt.Printf("Shard Rebalance Analysis\n")
 		fmt.Printf("════════════════════════════════════════════\n")
@@ -1199,11 +1200,12 @@ Options:
 			}
 		}
 
-		if *dryRun {
+		switch {
+		case *dryRun:
 			fmt.Printf("\nDRY RUN: No rebalancing performed\n")
-		} else if !analysis.IsBalanced {
+		case !analysis.IsBalanced:
 			fmt.Printf("\nRebalancing required. Run without --dry-run to proceed.\n")
-		} else {
+		default:
 			fmt.Printf("\nNo rebalancing needed.\n")
 		}
 	}
@@ -1266,7 +1268,7 @@ Options:
 
 	registry := knowledge.NewStoreRegistry(strat)
 	for name, store := range shards {
-		registry.AddStore(name, store)
+		_ = registry.AddStore(name, store)
 	}
 
 	rebalancer := knowledge.NewShardRebalancer(registry, strat)
@@ -1276,7 +1278,7 @@ Options:
 
 	// Close stores
 	for _, store := range shards {
-		store.Close()
+		_ = store.Close()
 	}
 
 	if *jsonOutput {
@@ -1289,7 +1291,7 @@ Options:
 		}
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
-		encoder.Encode(data)
+		_ = encoder.Encode(data)
 	} else {
 		fmt.Printf("Rebalancing Status\n")
 		fmt.Printf("═════════════════════════════════════════════\n")
@@ -1314,7 +1316,7 @@ func discoverShards(dbPath string) (map[string]*knowledge.Store, error) {
 	// List files in directory looking for shard-*.db files
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, fmt.Errorf("cannot read shard directory: %v", err)
+		return nil, fmt.Errorf("cannot read shard directory: %w", err)
 	}
 
 	shards := make(map[string]*knowledge.Store)
@@ -1418,7 +1420,7 @@ func knowledgeFTS5IndexInitialize(dbPath string, args []string) int {
 		fmt.Fprintf(os.Stderr, "cadre knowledge fts5-index initialize: cannot open database: %v\n", err)
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create and initialize FTS5 index
 	fts5 := knowledge.NewFTS5Index(db)
@@ -1494,11 +1496,11 @@ Options:
 		fmt.Fprintf(os.Stderr, "cadre knowledge fts5-index document add: cannot open database: %v\n", err)
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create and initialize FTS5 index
 	fts5 := knowledge.NewFTS5Index(db)
-	fts5.Initialize()
+	_ = fts5.Initialize()
 
 	// Index document
 	doc := &knowledge.DocumentMetadata{
@@ -1551,11 +1553,11 @@ Options:
 		fmt.Fprintf(os.Stderr, "cadre knowledge fts5-index document delete: cannot open database: %v\n", err)
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create and initialize FTS5 index
 	fts5 := knowledge.NewFTS5Index(db)
-	fts5.Initialize()
+	_ = fts5.Initialize()
 
 	// Delete document
 	if err := fts5.DeleteDocument(*msgID); err != nil {
@@ -1593,11 +1595,11 @@ Options:
 		fmt.Fprintf(os.Stderr, "cadre knowledge fts5-index stats: cannot open database: %v\n", err)
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create and initialize FTS5 index
 	fts5 := knowledge.NewFTS5Index(db)
-	fts5.Initialize()
+	_ = fts5.Initialize()
 
 	count := fts5.GetDocumentCount()
 
@@ -1660,11 +1662,11 @@ Options:
 		fmt.Fprintf(os.Stderr, "cadre knowledge fts5-search: cannot open database: %v\n", err)
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Initialize FTS5 index
 	fts5 := knowledge.NewFTS5Index(db)
-	fts5.Initialize()
+	_ = fts5.Initialize()
 
 	// Perform search
 	var results []knowledge.FTS5SearchResult
@@ -1683,9 +1685,9 @@ Options:
 
 	if *jsonOutput {
 		output := map[string]interface{}{
-			"query":         *query,
-			"results":       results,
-			"count":         len(results),
+			"query":          *query,
+			"results":        results,
+			"count":          len(results),
 			"classification": *classification,
 		}
 		data, _ := json.MarshalIndent(output, "", "  ")
@@ -1778,7 +1780,7 @@ Options:
 		fmt.Fprintf(os.Stderr, "cadre knowledge hybrid-search: cannot open database: %v\n", err)
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Parse vector embedding if provided
 	var embedding []float32
@@ -1787,26 +1789,26 @@ Options:
 		embedding = make([]float32, len(parts))
 		for i, part := range parts {
 			var val float32
-			fmt.Sscanf(strings.TrimSpace(part), "%f", &val)
+			_, _ = fmt.Sscanf(strings.TrimSpace(part), "%f", &val)
 			embedding[i] = val
 		}
 	}
 
 	// Initialize FTS5 and create searcher
 	fts5 := knowledge.NewFTS5Index(db)
-	fts5.Initialize()
+	_ = fts5.Initialize()
 
 	// Note: In a real implementation, this would use actual HNSW index
 	// For now, we'll show how the search would work with FTS5
 	if *jsonOutput {
 		output := map[string]interface{}{
-			"query_text":      *text,
-			"has_embedding":   len(embedding) > 0,
-			"vector_weight":   *vectorWeight,
-			"text_weight":     *textWeight,
-			"classification":  *classification,
-			"results":         []interface{}{},
-			"count":           0,
+			"query_text":        *text,
+			"has_embedding":     len(embedding) > 0,
+			"vector_weight":     *vectorWeight,
+			"text_weight":       *textWeight,
+			"classification":    *classification,
+			"results":           []interface{}{},
+			"count":             0,
 			"documents_indexed": fts5.GetDocumentCount(),
 		}
 		data, _ := json.MarshalIndent(output, "", "  ")
@@ -1858,11 +1860,11 @@ Options:
 		fmt.Fprintf(os.Stderr, "cadre knowledge hybrid-search text-only: cannot open database: %v\n", err)
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Initialize FTS5 and search
 	fts5 := knowledge.NewFTS5Index(db)
-	fts5.Initialize()
+	_ = fts5.Initialize()
 
 	var results []knowledge.FTS5SearchResult
 	var searchErr error
@@ -1936,7 +1938,7 @@ Options:
 	embedding := make([]float32, len(parts))
 	for i, part := range parts {
 		var val float32
-		fmt.Sscanf(strings.TrimSpace(part), "%f", &val)
+		_, _ = fmt.Sscanf(strings.TrimSpace(part), "%f", &val)
 		embedding[i] = val
 	}
 
@@ -1990,11 +1992,11 @@ Options:
 	if *jsonOutput {
 		output := map[string]interface{}{
 			"strategy": map[string]interface{}{
-				"name":                  "custom-reranking",
-				"vector_weight":         *vectorWeight,
-				"text_weight":           *textWeight,
-				"boost_classification":  *boostClass,
-				"boost_factor":          *boostFactor,
+				"name":                 "custom-reranking",
+				"vector_weight":        *vectorWeight,
+				"text_weight":          *textWeight,
+				"boost_classification": *boostClass,
+				"boost_factor":         *boostFactor,
 			},
 			"note": "Reranking applied to results",
 		}
@@ -2093,7 +2095,7 @@ Options:
 		fmt.Fprintf(os.Stderr, "cadre knowledge fault-tolerance: cannot access state database: %v\n", err)
 		return 1
 	}
-	defer persist.Close()
+	defer func() { _ = persist.Close() }()
 
 	subcommand := args[0]
 	subArgs := args[1:]
@@ -2173,7 +2175,7 @@ Options:
 		fmt.Fprintf(os.Stderr, "cadre knowledge replication: cannot access state database: %v\n", err)
 		return 1
 	}
-	defer persist.Close()
+	defer func() { _ = persist.Close() }()
 
 	subcommand := args[0]
 	subArgs := args[1:]
@@ -2344,11 +2346,11 @@ Options:
 
 		if len(args) > 1 && args[1] == "--json" {
 			output := map[string]interface{}{
-				"backup_id":   backupID,
-				"status":      "completed",
+				"backup_id":     backupID,
+				"status":        "completed",
 				"message_count": 1000,
-				"chunk_count":  500,
-				"duration_ms": 245,
+				"chunk_count":   500,
+				"duration_ms":   245,
 			}
 			data, _ := json.MarshalIndent(output, "", "  ")
 			fmt.Printf("%s\n", data)
@@ -2464,11 +2466,11 @@ Options:
 
 		if *jsonOutput {
 			output := map[string]interface{}{
-				"backup_id":    *backupID,
-				"status":       backup.Status,
-				"verified":     true,
+				"backup_id":     *backupID,
+				"status":        backup.Status,
+				"verified":      true,
 				"message_count": backup.MessageCount,
-				"chunk_count":  backup.ChunkCount,
+				"chunk_count":   backup.ChunkCount,
 			}
 			data, _ := json.MarshalIndent(output, "", "  ")
 			fmt.Printf("%s\n", data)
@@ -2588,7 +2590,7 @@ func knowledgeHealthCheck(args []string) int {
 		fmt.Fprintf(os.Stderr, "cadre knowledge health-check: cannot access state database: %v\n", err)
 		return 1
 	}
-	defer persist.Close()
+	defer func() { _ = persist.Close() }()
 
 	// Perform health checks using real state
 	components := []map[string]interface{}{}
@@ -2651,9 +2653,9 @@ func knowledgeHealthCheck(args []string) int {
 
 	if *jsonOutput {
 		data, _ := json.MarshalIndent(map[string]interface{}{
-			"status":      overallStatus,
-			"timestamp":   time.Now(),
-			"components":  components,
+			"status":     overallStatus,
+			"timestamp":  time.Now(),
+			"components": components,
 		}, "", "  ")
 		fmt.Println(string(data))
 	} else {
@@ -2695,7 +2697,7 @@ func knowledgeDiagnostics(args []string) int {
 		fmt.Fprintf(os.Stderr, "cadre knowledge diagnostics: cannot access state database: %v\n", err)
 		return 1
 	}
-	defer persist.Close()
+	defer func() { _ = persist.Close() }()
 
 	// Get real diagnostic data
 	stats, _ := persist.GetSystemStats()
@@ -2703,16 +2705,16 @@ func knowledgeDiagnostics(args []string) int {
 	repStatus, _ := persist.GetReplicationStatus()
 
 	report := map[string]interface{}{
-		"uptime_seconds":      stats["uptime_seconds"],
-		"operations":          stats["total_operations"],
-		"successful_ops":      stats["successful_ops"],
-		"failed_ops":          stats["failed_ops"],
+		"uptime_seconds":       stats["uptime_seconds"],
+		"operations":           stats["total_operations"],
+		"successful_ops":       stats["successful_ops"],
+		"failed_ops":           stats["failed_ops"],
 		"estimated_uptime_pct": stats["estimated_uptime_pct"],
-		"total_errors":        ftStats["total_errors"],
-		"circuit_state":       ftStats["circuit_state"],
-		"replicas":            repStatus["total_replicas"],
-		"healthy_replicas":    repStatus["healthy_replicas"],
-		"max_sync_lag_ms":     repStatus["max_sync_lag_ms"],
+		"total_errors":         ftStats["total_errors"],
+		"circuit_state":        ftStats["circuit_state"],
+		"replicas":             repStatus["total_replicas"],
+		"healthy_replicas":     repStatus["healthy_replicas"],
+		"max_sync_lag_ms":      repStatus["max_sync_lag_ms"],
 	}
 
 	if *jsonOutput {
@@ -2761,7 +2763,7 @@ func knowledgeMetrics(args []string) int {
 		fmt.Fprintf(os.Stderr, "cadre knowledge metrics: cannot access state database: %v\n", err)
 		return 1
 	}
-	defer persist.Close()
+	defer func() { _ = persist.Close() }()
 
 	// Get real metrics
 	stats, _ := persist.GetSystemStats()
@@ -2774,7 +2776,7 @@ func knowledgeMetrics(args []string) int {
 	}
 
 	snapshot := map[string]interface{}{
-		"timestamp":        time.Now(),
+		"timestamp":         time.Now(),
 		"search_latency_ms": 2.5,
 		"replica_lag_ms":    repStatus["max_sync_lag_ms"],
 		"error_rate":        errorRate,
@@ -2837,7 +2839,7 @@ Subcommands:
 		fmt.Fprintf(os.Stderr, "cadre knowledge maintenance: cannot access state database: %v\n", err)
 		return 1
 	}
-	defer persist.Close()
+	defer func() { _ = persist.Close() }()
 
 	switch subcommand {
 	case "vacuum":
@@ -2848,7 +2850,7 @@ Subcommands:
 		}
 		// Simulate vacuum execution
 		time.Sleep(100 * time.Millisecond)
-		persist.CompleteMaintenanceTask(taskID)
+		_ = persist.CompleteMaintenanceTask(taskID)
 
 		if *jsonOutput {
 			data, _ := json.Marshal(map[string]string{"task_id": taskID, "status": "completed"})
@@ -2866,7 +2868,7 @@ Subcommands:
 		}
 		// Simulate optimize execution
 		time.Sleep(100 * time.Millisecond)
-		persist.CompleteMaintenanceTask(taskID)
+		_ = persist.CompleteMaintenanceTask(taskID)
 
 		if *jsonOutput {
 			data, _ := json.Marshal(map[string]string{"task_id": taskID, "status": "completed"})
@@ -2930,7 +2932,7 @@ func knowledgeExport(args []string) int {
 		fmt.Fprintf(os.Stderr, "cadre knowledge export: cannot access state database: %v\n", err)
 		return 1
 	}
-	defer persist.Close()
+	defer func() { _ = persist.Close() }()
 
 	// Get operation log for export
 	ops, err := persist.GetOperationsLog(1000)
@@ -2962,7 +2964,7 @@ func knowledgeExport(args []string) int {
 	}
 
 	// Record operation in persistence
-	persist.RecordOperation("export", "knowledge-store", "completed", map[string]interface{}{
+	_ = persist.RecordOperation("export", "knowledge-store", "completed", map[string]interface{}{
 		"export_id": exportID,
 		"format":    *format,
 		"items":     len(ops),
@@ -2998,17 +3000,17 @@ func knowledgeImport(args []string) int {
 		fmt.Fprintf(os.Stderr, "cadre knowledge import: cannot access state database: %v\n", err)
 		return 1
 	}
-	defer persist.Close()
+	defer func() { _ = persist.Close() }()
 
 	// Simulate import (in real implementation, would read from file)
 	itemCount := int64(1000)
 
 	if *jsonOutput {
 		output := map[string]interface{}{
-			"status":       "completed",
+			"status":         "completed",
 			"items_imported": itemCount,
-			"format":       *format,
-			"merge_mode":   *merge,
+			"format":         *format,
+			"merge_mode":     *merge,
 		}
 		data, _ := json.MarshalIndent(output, "", "  ")
 		fmt.Println(string(data))
@@ -3025,8 +3027,8 @@ func knowledgeImport(args []string) int {
 	}
 
 	// Record operation in persistence
-	persist.RecordOperation("import", "knowledge-store", "completed", map[string]interface{}{
-		"items": itemCount,
+	_ = persist.RecordOperation("import", "knowledge-store", "completed", map[string]interface{}{
+		"items":  itemCount,
 		"format": *format,
 	})
 
@@ -3279,7 +3281,7 @@ func knowledgeCheckIntegrity(args []string) int {
 		fmt.Fprintf(os.Stderr, "cadre knowledge check-integrity: cannot open database: %v\n", err)
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	dr := knowledge.NewDatabaseRepair(db)
 	result, _ := dr.CheckIntegrity(*detailed)
@@ -3339,7 +3341,7 @@ func knowledgeRepair(args []string) int {
 		fmt.Fprintf(os.Stderr, "cadre knowledge repair: cannot open database: %v\n", err)
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	dr := knowledge.NewDatabaseRepair(db)
 	result, err := dr.Repair(*aggressive, *dryRun)
@@ -3350,11 +3352,11 @@ func knowledgeRepair(args []string) int {
 
 	if *jsonOutput {
 		output := map[string]interface{}{
-			"database_valid":     result.DatabaseValid,
-			"actions_performed":  len(result.ActionsPerformed),
-			"total_fixed":        result.TotalFixed,
-			"total_errors":       result.TotalErrors,
-			"dry_run":            result.DryRun,
+			"database_valid":    result.DatabaseValid,
+			"actions_performed": len(result.ActionsPerformed),
+			"total_fixed":       result.TotalFixed,
+			"total_errors":      result.TotalErrors,
+			"dry_run":           result.DryRun,
 		}
 		data, _ := json.MarshalIndent(output, "", "  ")
 		fmt.Println(string(data))
@@ -3394,7 +3396,7 @@ func knowledgeRebuildIndexes(args []string) int {
 		fmt.Fprintf(os.Stderr, "cadre knowledge rebuild-indexes: cannot open database: %v\n", err)
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	dr := knowledge.NewDatabaseRepair(db)
 	result, _ := dr.RebuildIndexes(*dryRun)
@@ -3444,15 +3446,15 @@ func knowledgeDefragment(args []string) int {
 		fmt.Fprintf(os.Stderr, "cadre knowledge defragment: cannot open database: %v\n", err)
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	dr := knowledge.NewDatabaseRepair(db)
 	result, _ := dr.Defragment(*dryRun)
 
 	if *jsonOutput {
 		output := map[string]interface{}{
-			"status":   "completed",
-			"dry_run":  result.DryRun,
+			"status":  "completed",
+			"dry_run": result.DryRun,
 		}
 		data, _ := json.MarshalIndent(output, "", "  ")
 		fmt.Println(string(data))
@@ -3476,12 +3478,12 @@ func openDatabase(dbPath string) (*sql.DB, error) {
 
 	// Set pragmas for consistency
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 
 	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 

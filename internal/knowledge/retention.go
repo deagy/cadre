@@ -1,4 +1,3 @@
-//nolint:errcheck
 package knowledge
 
 import (
@@ -8,35 +7,35 @@ import (
 
 // RetentionPolicy defines data retention rules.
 type RetentionPolicy struct {
-	Type          string        // "expiration", "classification", "source", "age"
-	Reason        string        // Why deletion is occurring
-	Classification *string      // For classification-based deletion
-	Source        *string       // For source-based deletion
-	MinAgeDays    int           // For age-based deletion
-	AuthorizedBy  string        // Person/system authorizing deletion
+	Type           string  // "expiration", "classification", "source", "age"
+	Reason         string  // Why deletion is occurring
+	Classification *string // For classification-based deletion
+	Source         *string // For source-based deletion
+	MinAgeDays     int     // For age-based deletion
+	AuthorizedBy   string  // Person/system authorizing deletion
 }
 
 // DeletionRun represents a deletion operation.
 type DeletionRun struct {
-	ID           string
-	Reason       string
-	PolicyType   string
-	TargetCount  int64
-	DeletedCount int64
-	Status       string
-	AuthorizedBy *string
+	ID             string
+	Reason         string
+	PolicyType     string
+	TargetCount    int64
+	DeletedCount   int64
+	Status         string
+	AuthorizedBy   *string
 	Classification *string
-	Source       *string
-	MinAgeDays   *int
-	StartedAt    string
-	CompletedAt  *string
-	Error        *string
+	Source         *string
+	MinAgeDays     *int
+	StartedAt      string
+	CompletedAt    *string
+	Error          *string
 }
 
 // ExpiredMessage represents a message that has passed its retention_until date.
 type ExpiredMessage struct {
-	ID            string
-	Source        string
+	ID             string
+	Source         string
 	ConversationID string
 	Classification string
 	RetentionUntil string
@@ -56,7 +55,7 @@ func (s *Store) GetExpiredMessages() ([]*ExpiredMessage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot query expired messages: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var expired []*ExpiredMessage
 	for rows.Next() {
@@ -110,7 +109,7 @@ func (s *Store) DeleteExpired(authorizedBy string) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("cannot begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	var deletedCount int64
 	for _, msg := range expired {
@@ -187,7 +186,7 @@ func (s *Store) DeleteByClassification(classification, reason, authorizedBy stri
 	if err != nil {
 		return 0, fmt.Errorf("cannot begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	result, err := tx.Exec("DELETE FROM messages WHERE classification = ?", classification)
 	if err != nil {
@@ -260,7 +259,7 @@ func (s *Store) DeleteBySource(source, reason, authorizedBy string) (int64, erro
 	if err != nil {
 		return 0, fmt.Errorf("cannot begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	result, err := tx.Exec("DELETE FROM messages WHERE source = ?", source)
 	if err != nil {
@@ -346,7 +345,7 @@ func (s *Store) DeleteByAge(minAgeDays int, classification *string, reason, auth
 	if err != nil {
 		return 0, fmt.Errorf("cannot begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	result, err := tx.Exec(deleteQuery, args...)
 	if err != nil {
@@ -401,7 +400,7 @@ func (s *Store) GetDeletionHistory(statusFilter *string) ([]*DeletionRun, error)
 	if err != nil {
 		return nil, fmt.Errorf("cannot query deletion history: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var deletions []*DeletionRun
 	for rows.Next() {
@@ -437,7 +436,7 @@ func (s *Store) GetDeletionStats() (map[string]int64, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot query deletion stats: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var policyType string

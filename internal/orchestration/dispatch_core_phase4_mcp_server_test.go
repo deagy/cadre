@@ -14,7 +14,7 @@ func TestNewDispatchMCPServer(t *testing.T) {
 
 	server := NewDispatchMCPServer(config)
 	if server == nil {
-		t.Errorf("NewDispatchMCPServer returned nil")
+		t.Fatalf("NewDispatchMCPServer returned nil")
 	}
 
 	if server.projectRoot != "/project" {

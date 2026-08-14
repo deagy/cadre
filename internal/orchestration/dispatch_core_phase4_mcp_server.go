@@ -3,7 +3,6 @@ package orchestration
 import (
 	"encoding/json"
 	"fmt"
-	"sync"
 )
 
 // Phase 4.1: MCP Dispatch Server
@@ -12,14 +11,12 @@ import (
 
 // DispatchMCPServer provides MCP tool interface for dispatch operations
 type DispatchMCPServer struct {
-	mu                  sync.RWMutex
-	projectRoot         string
-	globalRoot          string
-	pluginRoot          string
-	jobStore            *DispatchJobStore
-	teamJobStore        *TeamDispatchJobStore
-	confirmationGates   map[string]*ConfirmationGate
-	gatesMu             sync.Mutex
+	projectRoot       string
+	globalRoot        string
+	pluginRoot        string
+	jobStore          *DispatchJobStore
+	teamJobStore      *TeamDispatchJobStore
+	confirmationGates map[string]*ConfirmationGate
 }
 
 // DispatchMCPServerConfig holds configuration for the MCP server
@@ -49,24 +46,24 @@ type MCPToolRequest struct {
 
 // MCPToolResponse represents the response to an MCP tool call
 type MCPToolResponse struct {
-	Status   string
-	Result   map[string]any
-	Error    string
-	IsError  bool
+	Status  string
+	Result  map[string]any
+	Error   string
+	IsError bool
 }
 
 // DispatchSecureCloudRoleRequest is the MCP tool arguments for dispatch_secure_cloud_role
 type DispatchSecureCloudRoleRequest struct {
-	RoleID                  string `json:"role_id"`
-	Brief                   string `json:"brief"`
-	Mode                    string `json:"mode"`
-	Classification          string `json:"classification"`
-	ConfirmationToken       string `json:"confirmation_token,omitempty"`
-	TaskID                  string `json:"task_id,omitempty"`
-	SessionID               string `json:"session_id,omitempty"`
-	ParentClassification    string `json:"parent_classification,omitempty"`
-	Runner                  string `json:"runner,omitempty"`
-	Wait                    bool   `json:"wait"`
+	RoleID               string `json:"role_id"`
+	Brief                string `json:"brief"`
+	Mode                 string `json:"mode"`
+	Classification       string `json:"classification"`
+	ConfirmationToken    string `json:"confirmation_token,omitempty"`
+	TaskID               string `json:"task_id,omitempty"`
+	SessionID            string `json:"session_id,omitempty"`
+	ParentClassification string `json:"parent_classification,omitempty"`
+	Runner               string `json:"runner,omitempty"`
+	Wait                 bool   `json:"wait"`
 }
 
 // DispatchTeamRequest is the MCP tool arguments for dispatch_team
@@ -125,9 +122,9 @@ func (server *DispatchMCPServer) HandleDispatchSecureCloudRole(req *DispatchSecu
 	isError := status == "error" || status == "denied"
 
 	return &MCPToolResponse{
-		Status:   status,
-		Result:   result,
-		IsError:  isError,
+		Status:  status,
+		Result:  result,
+		IsError: isError,
 	}
 }
 
@@ -163,9 +160,9 @@ func (server *DispatchMCPServer) HandleDispatchTeam(req *DispatchTeamRequest) *M
 	isError := status == "error" || status == "denied"
 
 	return &MCPToolResponse{
-		Status:   status,
-		Result:   result,
-		IsError:  isError,
+		Status:  status,
+		Result:  result,
+		IsError: isError,
 	}
 }
 
@@ -199,9 +196,9 @@ func (server *DispatchMCPServer) HandlePollDispatchStatus(req *PollDispatchStatu
 	isError := status == "error"
 
 	return &MCPToolResponse{
-		Status:   status,
-		Result:   result,
-		IsError:  isError,
+		Status:  status,
+		Result:  result,
+		IsError: isError,
 	}
 }
 
@@ -235,9 +232,9 @@ func (server *DispatchMCPServer) HandlePollTeamStatus(req *PollTeamStatusRequest
 	isError := status == "error"
 
 	return &MCPToolResponse{
-		Status:   status,
-		Result:   result,
-		IsError:  isError,
+		Status:  status,
+		Result:  result,
+		IsError: isError,
 	}
 }
 

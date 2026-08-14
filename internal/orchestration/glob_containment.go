@@ -179,25 +179,6 @@ func (n *containmentNFA) allocate() int {
 	return s
 }
 
-func (n *containmentNFA) closure(states []int) string {
-	seen := map[int]bool{}
-	pending := append([]int{}, states...)
-	for _, s := range states {
-		seen[s] = true
-	}
-	for len(pending) > 0 {
-		s := pending[0]
-		pending = pending[1:]
-		for _, t := range n.epsilon[s] {
-			if !seen[t] {
-				seen[t] = true
-				pending = append(pending, t)
-			}
-		}
-	}
-	return stateSetKey(seen)
-}
-
 func (n *containmentNFA) closureSet(states map[int]bool) (string, map[int]bool) {
 	seen := map[int]bool{}
 	pending := []int{}

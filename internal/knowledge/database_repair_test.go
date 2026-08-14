@@ -1,10 +1,6 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
-	"database/sql"
 	"testing"
 )
 

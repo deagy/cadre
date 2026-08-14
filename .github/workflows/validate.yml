@@ -470,6 +470,24 @@ jobs:
       # a Claude Code user never executes.
       - run: npm ci
         working-directory: cline-plugins
+      # Every one of these packages shells out to `bin/cadre`, and since the
+      # Python-to-Go migration that script *compiles* the CLI on first use
+      # instead of exec'ing an interpreter. On a cold runner that means a
+      # toolchain download plus a cgo build of go-sqlite3 -- far past the 5s
+      # vitest default -- and because vitest runs test files concurrently,
+      # every parallel `bin/cadre` invocation races into its own unlocked
+      # build of the same cache. That is what turned this job into a wall of
+      # "Test timed out in 5000ms" with orphaned cadre/go/gcc/cc1 processes.
+      # Building once here makes every later invocation a cache hit.
+      # setup-go is explicit rather than leaning on the runner image's
+      # preinstalled Go, so the go.mod `toolchain` line is satisfied from the
+      # action's cache instead of a download inside a timed test.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Pre-build the Go CLI so bin/cadre never compiles inside a timed test
+        run: ./bin/cadre help >/dev/null
       - run: npm test
         working-directory: cline-plugins/${{ matrix.package }}
       - run: npm run typecheck

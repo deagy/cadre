@@ -11,30 +11,30 @@ import (
 type ARIMAPredictor struct {
 	mu              sync.RWMutex
 	shardID         string
-	observations    []float64  // Historical deletion ratios
-	predictions     []float64  // Forecasted values
-	p               int        // AR order
-	d               int        // Differencing order
-	q               int        // MA order
-	arCoeffs        []float64  // AR coefficients
-	maCoeffs        []float64  // MA coefficients
+	observations    []float64 // Historical deletion ratios
+	predictions     []float64 // Forecasted values
+	p               int       // AR order
+	d               int       // Differencing order
+	q               int       // MA order
+	arCoeffs        []float64 // AR coefficients
+	maCoeffs        []float64 // MA coefficients
 	lastUpdateTime  time.Time
 	forecastHorizon int
 }
 
 // AdaptiveThresholdCalculator adjusts compaction thresholds based on observed patterns.
 type AdaptiveThresholdCalculator struct {
-	mu                       sync.RWMutex
-	shardID                  string
-	baseThreshold            float64 // Default 10%
-	currentThreshold         float64 // Adaptive threshold
-	deletionHistory          []float64
-	compactionHistory        []time.Time
-	compactionInterval       time.Duration
-	learningRate             float64
-	minThreshold             float64  // Floor: 5%
-	maxThreshold             float64  // Ceiling: 30%
-	volatilityMultiplier     float64
+	mu                   sync.RWMutex
+	shardID              string
+	baseThreshold        float64 // Default 10%
+	currentThreshold     float64 // Adaptive threshold
+	deletionHistory      []float64
+	compactionHistory    []time.Time
+	compactionInterval   time.Duration
+	learningRate         float64
+	minThreshold         float64 // Floor: 5%
+	maxThreshold         float64 // Ceiling: 30%
+	volatilityMultiplier float64
 }
 
 // PredictionResult contains forecast data.
@@ -46,7 +46,7 @@ type PredictionResult struct {
 	Confidence           float64   // 0-1
 	TimeToThreshold      int64     // Minutes
 	RecommendedThreshold float64
-	ModelAccuracy        float64   // MAPE
+	ModelAccuracy        float64 // MAPE
 }
 
 // NewARIMAPredictor creates an ARIMA predictor.
@@ -55,9 +55,9 @@ func NewARIMAPredictor(shardID string) *ARIMAPredictor {
 		shardID:         shardID,
 		observations:    make([]float64, 0),
 		predictions:     make([]float64, 0),
-		p:               2,  // AR order: use last 2 observations
-		d:               1,  // Differencing: first difference
-		q:               1,  // MA order: moving average of last error
+		p:               2, // AR order: use last 2 observations
+		d:               1, // Differencing: first difference
+		q:               1, // MA order: moving average of last error
 		arCoeffs:        make([]float64, 0),
 		maCoeffs:        make([]float64, 0),
 		forecastHorizon: 10, // 10 steps ahead
@@ -231,11 +231,12 @@ func (atc *AdaptiveThresholdCalculator) adaptThreshold() {
 	variance := calculateVariance(atc.deletionHistory)
 
 	// Adjust volatility multiplier based on variance
-	if variance > 50.0 {
+	switch {
+	case variance > 50.0:
 		atc.volatilityMultiplier = 1.5 // High volatility: higher threshold
-	} else if variance > 20.0 {
+	case variance > 20.0:
 		atc.volatilityMultiplier = 1.2
-	} else {
+	default:
 		atc.volatilityMultiplier = 1.0
 	}
 
@@ -243,7 +244,7 @@ func (atc *AdaptiveThresholdCalculator) adaptThreshold() {
 	newThreshold := atc.baseThreshold * atc.volatilityMultiplier
 
 	// Apply learning rate smoothing
-	atc.currentThreshold = atc.currentThreshold + atc.learningRate*(newThreshold-atc.currentThreshold)
+	atc.currentThreshold += atc.learningRate * (newThreshold - atc.currentThreshold)
 
 	// Enforce bounds
 	if atc.currentThreshold < atc.minThreshold {
@@ -355,23 +356,10 @@ func findMax(data []float64) float64 {
 	return max
 }
 
-func findMin(data []float64) float64 {
-	if len(data) == 0 {
-		return 0
-	}
-	min := data[0]
-	for _, v := range data {
-		if v < min {
-			min = v
-		}
-	}
-	return min
-}
-
 // MLBasedPriorityScorer uses predictions to score priorities.
 type MLBasedPriorityScorer struct {
-	mu        sync.RWMutex
-	predictors map[string]*ARIMAPredictor
+	mu          sync.RWMutex
+	predictors  map[string]*ARIMAPredictor
 	calculators map[string]*AdaptiveThresholdCalculator
 }
 
@@ -421,13 +409,14 @@ func (mbps *MLBasedPriorityScorer) CalculatePriority(shardID string, currentRati
 	priority := 1
 	reason := "low_deletion_ratio"
 
-	if currentRatio >= adaptiveThreshold {
+	switch {
+	case currentRatio >= adaptiveThreshold:
 		priority = 7
 		reason = fmt.Sprintf("at_or_above_threshold_%.1f%%", adaptiveThreshold)
-	} else if forecast.TimeToThreshold > 0 && forecast.TimeToThreshold < 120 { // < 2 hours
+	case forecast.TimeToThreshold > 0 && forecast.TimeToThreshold < 120: // < 2 hours
 		priority = 9
 		reason = fmt.Sprintf("will_exceed_threshold_in_%d_minutes", forecast.TimeToThreshold)
-	} else if currentRatio >= adaptiveThreshold*0.8 {
+	case currentRatio >= adaptiveThreshold*0.8:
 		priority = 5
 		reason = fmt.Sprintf("approaching_threshold_%.1f%%", adaptiveThreshold)
 	}

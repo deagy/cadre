@@ -1,4 +1,3 @@
-//nolint:errcheck
 package knowledge
 
 import (
@@ -20,13 +19,13 @@ type FTS5Index struct {
 
 // DocumentMetadata holds searchable text metadata.
 type DocumentMetadata struct {
-	MessageID   string
-	Title       string
-	Content     string
+	MessageID      string
+	Title          string
+	Content        string
 	Classification string
-	Source      string
-	Timestamp   time.Time
-	Embedding   []float32
+	Source         string
+	Timestamp      time.Time
+	Embedding      []float32
 }
 
 // FTS5SearchResult represents a full-text search result.
@@ -43,42 +42,42 @@ type FTS5SearchResult struct {
 
 // HybridSearchQuery combines vector and text search.
 type HybridSearchQuery struct {
-	QueryEmbedding    []float32 // Vector for semantic search
-	QueryText         string    // Text for full-text search
-	Classification    string    // Filter by classification
-	MinVectorScore    float64   // Minimum vector similarity
-	MinTextScore      float64   // Minimum text score
-	VectorWeight      float64   // 0-1 weight for vector results
-	TextWeight        float64   // 0-1 weight for text results
-	TopK              int       // Number of results
-	IncludeScores     bool      // Include similarity scores
+	QueryEmbedding []float32 // Vector for semantic search
+	QueryText      string    // Text for full-text search
+	Classification string    // Filter by classification
+	MinVectorScore float64   // Minimum vector similarity
+	MinTextScore   float64   // Minimum text score
+	VectorWeight   float64   // 0-1 weight for vector results
+	TextWeight     float64   // 0-1 weight for text results
+	TopK           int       // Number of results
+	IncludeScores  bool      // Include similarity scores
 }
 
 // HybridSearchResult represents combined search result.
 type HybridSearchResult struct {
-	MessageID         string
-	VectorSimilarity  float64 // From HNSW search
-	TextRelevance     float64 // From FTS5 search
-	CombinedScore     float64 // Weighted combination
-	Title             string
-	Content           string
-	Classification    string
-	Source            string
-	Timestamp         time.Time
-	RankPosition      int     // Position in final ranking
+	MessageID        string
+	VectorSimilarity float64 // From HNSW search
+	TextRelevance    float64 // From FTS5 search
+	CombinedScore    float64 // Weighted combination
+	Title            string
+	Content          string
+	Classification   string
+	Source           string
+	Timestamp        time.Time
+	RankPosition     int // Position in final ranking
 }
 
 // HybridSearchStats tracks search performance.
 type HybridSearchStats struct {
-	TotalQueries       int64
-	VectorQueries      int64
-	TextQueries        int64
-	HybridQueries      int64
-	AverageLatencyMs   float64
-	CacheHitRate       float64
-	DocumentsIndexed   int64
-	IndexSizeBytes     int64
-	LastUpdateTime     time.Time
+	TotalQueries     int64
+	VectorQueries    int64
+	TextQueries      int64
+	HybridQueries    int64
+	AverageLatencyMs float64
+	CacheHitRate     float64
+	DocumentsIndexed int64
+	IndexSizeBytes   int64
+	LastUpdateTime   time.Time
 }
 
 // NewFTS5Index creates a new full-text search index.
@@ -205,7 +204,7 @@ func (fi *FTS5Index) FullTextSearch(query string, limit int) ([]FTS5SearchResult
 					&rank,
 				)
 				if err != nil {
-					rows.Close()
+					_ = rows.Close()
 					return nil, fmt.Errorf("failed to scan result: %w", err)
 				}
 
@@ -217,7 +216,7 @@ func (fi *FTS5Index) FullTextSearch(query string, limit int) ([]FTS5SearchResult
 
 				results = append(results, result)
 			}
-			rows.Close()
+			_ = rows.Close()
 			return results, rows.Err()
 		}
 		// Fall through to in-memory if SQLite fails
@@ -294,7 +293,7 @@ func (fi *FTS5Index) FilteredSearch(query, classification string, limit int) ([]
 					&rank,
 				)
 				if err != nil {
-					rows.Close()
+					_ = rows.Close()
 					return nil, fmt.Errorf("failed to scan result: %w", err)
 				}
 
@@ -306,7 +305,7 @@ func (fi *FTS5Index) FilteredSearch(query, classification string, limit int) ([]
 
 				results = append(results, result)
 			}
-			rows.Close()
+			_ = rows.Close()
 			return results, rows.Err()
 		}
 		// Fall through to in-memory if SQLite fails
@@ -428,14 +427,12 @@ func (hs *HybridSearcher) Search(q *HybridSearchQuery) ([]HybridSearchResult, er
 	// Perform vector search
 	vectorResults := make(map[string]float64)
 	vectorDetails := make(map[string]*HSNWSearchResult)
-	if q.QueryEmbedding != nil && len(q.QueryEmbedding) > 0 {
+	if len(q.QueryEmbedding) > 0 {
 		results := hs.hnsw.Search(q.QueryEmbedding, q.TopK*2)
-		if results != nil {
-			for _, result := range results {
-				if float64(result.Distance) >= q.MinVectorScore {
-					vectorResults[result.MessageID] = float64(result.Distance)
-					vectorDetails[result.MessageID] = result
-				}
+		for _, result := range results {
+			if float64(result.Distance) >= q.MinVectorScore {
+				vectorResults[result.MessageID] = float64(result.Distance)
+				vectorDetails[result.MessageID] = result
 			}
 		}
 		hs.stats.VectorQueries++
@@ -535,13 +532,13 @@ func (hs *HybridSearcher) ClearCache() {
 
 // RankingStrategy defines how to combine vector and text scores.
 type RankingStrategy struct {
-	Name            string
-	VectorWeight    float64
-	TextWeight      float64
-	VectorPower     float64 // For non-linear weighting
-	TextPower       float64
+	Name                string
+	VectorWeight        float64
+	TextWeight          float64
+	VectorPower         float64 // For non-linear weighting
+	TextPower           float64
 	BoostClassification string
-	BoostFactor     float64
+	BoostFactor         float64
 }
 
 // ApplyRankingStrategy reranks results with strategy.

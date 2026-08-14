@@ -44,7 +44,7 @@ const (
 	RunnerAPI        = "api"
 
 	// Environment
-	DepthEnvVar               = "SECURE_CLOUD_AGENTS_DISPATCH_DEPTH"
+	DepthEnvVar              = "SECURE_CLOUD_AGENTS_DISPATCH_DEPTH"
 	ParentClassificationVar  = "SECURE_CLOUD_AGENTS_PARENT_CLASSIFICATION"
 	FinalHandoffResultEnvVar = "SECURE_CLOUD_AGENTS_FINAL_HANDOFF_PATH"
 )
@@ -97,14 +97,14 @@ func (e DispatchUnavailable) Error() string {
 
 // ResolvedRole represents a role after file resolution and validation
 type ResolvedRole struct {
-	ID                   string
-	FilePath             string
-	DeveloperInstructs   string
-	Model                string
-	SandboxMode          string
-	CoexecProfile        string
-	CodrayTemplate       string
-	ReadonlyWhenStarved  string
+	ID                  string
+	FilePath            string
+	DeveloperInstructs  string
+	Model               string
+	SandboxMode         string
+	CoexecProfile       string
+	CodrayTemplate      string
+	ReadonlyWhenStarved string
 }
 
 // ValidateRoleID checks that a role_id matches the required pattern
@@ -165,8 +165,8 @@ func ComputeEffectiveSandbox(mode, fileSandboxMode string) (string, string, erro
 
 // ConfirmationGate manages confirmation tokens for write-capable operations
 type ConfirmationGate struct {
-	mu            sync.Mutex
-	pending       map[string]*PendingConfirmation // token -> confirmation
+	mu             sync.Mutex
+	pending        map[string]*PendingConfirmation // token -> confirmation
 	confirmationID int64
 }
 

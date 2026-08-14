@@ -19,35 +19,35 @@ const (
 
 // MigrationStep represents a single message migration operation.
 type MigrationStep struct {
-	MessageID        string
-	SourceShardID    string
-	DestShardID      string
-	MessageData      *Message
-	ChunkData        []*Chunk
-	Timestamp        time.Time
-	Status           string // pending, moved, committed, rolled_back
+	MessageID     string
+	SourceShardID string
+	DestShardID   string
+	MessageData   *Message
+	ChunkData     []*Chunk
+	Timestamp     time.Time
+	Status        string // pending, moved, committed, rolled_back
 }
 
 // MigrationTransaction manages a single migration operation with consistency.
 type MigrationTransaction struct {
-	ID               string
-	SourceShardID    string
-	DestShardID      string
-	State            MigrationState
-	Steps            []*MigrationStep
-	StartedAt        time.Time
-	CompletedAt      *time.Time
-	FailureReason    string
-	mu               sync.Mutex
+	ID            string
+	SourceShardID string
+	DestShardID   string
+	State         MigrationState
+	Steps         []*MigrationStep
+	StartedAt     time.Time
+	CompletedAt   *time.Time
+	FailureReason string
+	mu            sync.Mutex
 }
 
 // MigrationExecutor executes migrations between shards with ACID properties.
 type MigrationExecutor struct {
-	registry    *StoreRegistry
-	mu          sync.RWMutex
+	registry     *StoreRegistry
+	mu           sync.RWMutex
 	transactions map[string]*MigrationTransaction // migration ID → transaction
-	redo        map[string][]*MigrationStep        // migration ID → redo log
-	undo        map[string][]*MigrationStep        // migration ID → undo log
+	redo         map[string][]*MigrationStep      // migration ID → redo log
+	undo         map[string][]*MigrationStep      // migration ID → undo log
 }
 
 // NewMigrationExecutor creates a new migration executor.
@@ -206,15 +206,32 @@ func (me *MigrationExecutor) GetMigrationStatus(txID string) (*MigrationTransact
 		return nil, fmt.Errorf("migration transaction not found: %s", txID)
 	}
 
-	// Return copy to prevent external mutation
-	copy := *tx
-	copy.Steps = make([]*MigrationStep, len(tx.Steps))
+	// Return a copy to prevent external mutation. The fields are copied one
+	// at a time rather than with `snapshot := *tx`: MigrationTransaction
+	// carries its own sync.Mutex, and a struct-wide copy would duplicate that
+	// lock's state, handing the caller a mutex that looks held (or unheld)
+	// independently of the real transaction's.
+	tx.mu.Lock()
+	snapshot := &MigrationTransaction{
+		ID:            tx.ID,
+		SourceShardID: tx.SourceShardID,
+		DestShardID:   tx.DestShardID,
+		State:         tx.State,
+		StartedAt:     tx.StartedAt,
+		FailureReason: tx.FailureReason,
+		Steps:         make([]*MigrationStep, len(tx.Steps)),
+	}
+	if tx.CompletedAt != nil {
+		completedAt := *tx.CompletedAt
+		snapshot.CompletedAt = &completedAt
+	}
 	for i, step := range tx.Steps {
 		stepCopy := *step
-		copy.Steps[i] = &stepCopy
+		snapshot.Steps[i] = &stepCopy
 	}
+	tx.mu.Unlock()
 
-	return &copy, nil
+	return snapshot, nil
 }
 
 // GetMigrationProgress returns detailed progress of a migration.
@@ -243,32 +260,32 @@ func (me *MigrationExecutor) GetMigrationProgress(txID string) (*MigrationProgre
 	}
 
 	return &MigrationProgress{
-		TransactionID:     txID,
-		State:             string(tx.State),
-		TotalSteps:        int64(len(tx.Steps)),
-		PendingSteps:      pending,
-		MovedSteps:        moved,
-		CommittedSteps:    committed,
-		RolledBackSteps:   rolled,
-		PercentComplete:   float64(moved) / float64(len(tx.Steps)) * 100,
-		StartedAt:         tx.StartedAt,
-		CompletedAt:       tx.CompletedAt,
+		TransactionID:      txID,
+		State:              string(tx.State),
+		TotalSteps:         int64(len(tx.Steps)),
+		PendingSteps:       pending,
+		MovedSteps:         moved,
+		CommittedSteps:     committed,
+		RolledBackSteps:    rolled,
+		PercentComplete:    float64(moved) / float64(len(tx.Steps)) * 100,
+		StartedAt:          tx.StartedAt,
+		CompletedAt:        tx.CompletedAt,
 		EstimatedRemaining: calculateRemainingTime(tx.StartedAt, pending, moved),
 	}, nil
 }
 
 // MigrationProgress provides progress information for a migration.
 type MigrationProgress struct {
-	TransactionID     string
-	State             string
-	TotalSteps        int64
-	PendingSteps      int64
-	MovedSteps        int64
-	CommittedSteps    int64
-	RolledBackSteps   int64
-	PercentComplete   float64
-	StartedAt         time.Time
-	CompletedAt       *time.Time
+	TransactionID      string
+	State              string
+	TotalSteps         int64
+	PendingSteps       int64
+	MovedSteps         int64
+	CommittedSteps     int64
+	RolledBackSteps    int64
+	PercentComplete    float64
+	StartedAt          time.Time
+	CompletedAt        *time.Time
 	EstimatedRemaining time.Duration
 }
 

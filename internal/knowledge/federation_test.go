@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -10,6 +7,7 @@ import (
 // Federation tests
 
 func TestFederatedStoreBasic(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping federation test in short mode")
 	}
@@ -31,12 +29,12 @@ func TestFederatedStoreBasic(t *testing.T) {
 
 	// Ingest test data to both shards
 	msg := &Message{
-		Source:       "app-1",
-		ConversationID: "conv-1",
+		Source:          "app-1",
+		ConversationID:  "conv-1",
 		SourceMessageID: "msg-1",
-		Role:         "user",
-		Content:      "test content",
-		Classification: "general",
+		Role:            "user",
+		Content:         "test content",
+		Classification:  "general",
 	}
 
 	err := federated.FederatedIngest("app-1", "general", "conv-1", msg)
@@ -46,6 +44,7 @@ func TestFederatedStoreBasic(t *testing.T) {
 }
 
 func TestFederatedSearch(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping federation test in short mode")
 	}
@@ -115,6 +114,7 @@ func TestFederatedSearch(t *testing.T) {
 }
 
 func TestFederatedSearchResultAggregation(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping federation test in short mode")
 	}
@@ -184,6 +184,7 @@ func TestFederatedSearchResultAggregation(t *testing.T) {
 }
 
 func TestFederatedDelete(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping federation test in short mode")
 	}
@@ -236,6 +237,7 @@ func TestFederatedDelete(t *testing.T) {
 }
 
 func TestFederatedStats(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping federation test in short mode")
 	}
@@ -282,6 +284,7 @@ func TestFederatedStats(t *testing.T) {
 }
 
 func TestFederatedShardingStats(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping federation test in short mode")
 	}
@@ -343,6 +346,7 @@ func TestFederatedShardingStats(t *testing.T) {
 }
 
 func TestFederatedDeleteWithErrors(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping federation test in short mode")
 	}

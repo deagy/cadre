@@ -55,12 +55,12 @@ func ValidateResolvedRole(role *ResolvedRole, classification, mode string) error
 
 	// Validate model tier (opus/sonnet/haiku)
 	validModels := map[string]bool{
-		"claude-opus-5":      true,
-		"claude-sonnet-5":    true,
-		"claude-haiku-4.5":   true,
-		"claude-opus-4.1":    true,
-		"claude-sonnet-4":    true,
-		"claude-haiku-4":     true,
+		"claude-opus-5":    true,
+		"claude-sonnet-5":  true,
+		"claude-haiku-4.5": true,
+		"claude-opus-4.1":  true,
+		"claude-sonnet-4":  true,
+		"claude-haiku-4":   true,
 	}
 
 	if !validModels[role.Model] {
@@ -189,19 +189,19 @@ func BuildDispatchContext(
 
 	// Validate role
 	if err := ValidateResolvedRole(role, "", mode); err != nil {
-		return nil, fmt.Errorf("role validation failed: %v", err)
+		return nil, fmt.Errorf("role validation failed: %w", err)
 	}
 
 	// Build prompt
 	prompt, err := BuildDispatchPrompt(role, brief)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build prompt: %v", err)
+		return nil, fmt.Errorf("failed to build prompt: %w", err)
 	}
 
 	// Compute effective sandbox
 	sandbox, err := EffectiveSandboxForDispatch(role, mode)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute sandbox: %v", err)
+		return nil, fmt.Errorf("failed to compute sandbox: %w", err)
 	}
 
 	// Extract model tier

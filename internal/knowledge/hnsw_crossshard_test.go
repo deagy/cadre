@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -12,7 +9,7 @@ func TestCrossShardCompactorCreation(t *testing.T) {
 	compactor := NewCrossShardCompactor()
 
 	if compactor == nil {
-		t.Error("Failed to create cross-shard compactor")
+		t.Fatal("Failed to create cross-shard compactor")
 	}
 
 	if compactor.predictor == nil {
@@ -56,7 +53,7 @@ func TestCrossShardPlanCompaction(t *testing.T) {
 	plan := compactor.PlanCompaction("sequential")
 
 	if plan == nil {
-		t.Error("Expected compaction plan")
+		t.Fatal("Expected compaction plan")
 	}
 
 	if plan.Strategy != "sequential" {

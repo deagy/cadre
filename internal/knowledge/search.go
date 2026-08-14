@@ -1,4 +1,3 @@
-//nolint:errcheck
 package knowledge
 
 import (
@@ -84,7 +83,7 @@ func (s *Store) Search(opts SearchOptions) ([]*SearchResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot query messages: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	// Pre-allocate results with reasonable capacity (topK is default 10, but can be larger)
 	// Most searches return fewer results, so cap initial allocation
@@ -192,7 +191,7 @@ func (s *Store) SearchByContent(query string, classification string, limit int) 
 	if err != nil {
 		return nil, fmt.Errorf("cannot query by content: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var messages []*Message
 	for rows.Next() {
@@ -262,7 +261,7 @@ func (s *Store) GetSearchStats(classification string) (map[string]int64, error) 
 	if err != nil {
 		return nil, fmt.Errorf("cannot query search stats: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	stats := make(map[string]int64)
 	for rows.Next() {

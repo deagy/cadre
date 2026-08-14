@@ -128,12 +128,11 @@ func TestPromptWithContextNilData(t *testing.T) {
 func TestPromptWithContextDefaultTimeout(t *testing.T) {
 	data := map[string]any{"role_id": "test-role"}
 
-	// Use zero timeout to trigger default
-	_, err := PromptWithContext(data, 0)
-	if err == nil {
-		// No error expected when data is valid
-		// But actual prompt may fail in test environment (no stdin)
-	}
+	// Use zero timeout to trigger default. Either outcome is acceptable: the
+	// data is valid, but there is no stdin to read a response from under
+	// `go test`, so the prompt may still fail. The assertion is only that
+	// PromptWithContext returns rather than blocking on the zero timeout.
+	_, _ = PromptWithContext(data, 0)
 }
 
 func TestIsInteractiveModeNonTerminal(t *testing.T) {
@@ -224,7 +223,7 @@ func TestNewInteractiveConfirmationFlow(t *testing.T) {
 	flow := NewInteractiveConfirmationFlow(data, time.Second, false)
 
 	if flow == nil {
-		t.Errorf("NewInteractiveConfirmationFlow should not return nil")
+		t.Fatalf("NewInteractiveConfirmationFlow should not return nil")
 	}
 
 	if flow.data == nil {
@@ -302,7 +301,9 @@ func TestInteractiveConfirmationFlowExecuteDefaultApprove(t *testing.T) {
 
 func TestPromptForConfirmationNilContext(t *testing.T) {
 	data := map[string]any{"role_id": "test-role"}
-	_, err := PromptForConfirmation(nil, data, time.Second)
+	// Deliberately nil: this test asserts PromptForConfirmation's own
+	// fail-closed guard for a nil context, which context.TODO() would bypass.
+	_, err := PromptForConfirmation(nil, data, time.Second) //nolint:staticcheck // SA1012: nil ctx is the subject under test
 
 	if err == nil {
 		t.Errorf("nil context should error")

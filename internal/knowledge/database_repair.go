@@ -9,9 +9,9 @@ import (
 
 // IntegrityIssue represents a database integrity problem found.
 type IntegrityIssue struct {
-	IssueType   string    // "orphaned_chunk", "missing_chunk", "corrupt_index", etc.
+	IssueType   string // "orphaned_chunk", "missing_chunk", "corrupt_index", etc.
 	Description string
-	Severity    string    // "info", "warning", "error"
+	Severity    string // "info", "warning", "error"
 	AffectedIDs []string
 	Timestamp   time.Time
 }
@@ -31,7 +31,7 @@ type IntegrityCheckResult struct {
 
 // RepairAction represents a repair operation performed.
 type RepairAction struct {
-	ActionType  string    // "rebuild_index", "remove_orphan", "fix_chunk", etc.
+	ActionType  string // "rebuild_index", "remove_orphan", "fix_chunk", etc.
 	Description string
 	ItemsFixed  int64
 	Success     bool
@@ -143,9 +143,8 @@ func (dr *DatabaseRepair) CheckIntegrity(detailed bool) (*IntegrityCheckResult, 
 
 	// Check for corrupt indices
 	if detailed {
-		var corruptCount int64
 		// Simulate checking indices - in real implementation would verify actual indices
-		corruptCount = 0
+		var corruptCount int64
 
 		if corruptCount > 0 {
 			result.CorruptIndices = corruptCount

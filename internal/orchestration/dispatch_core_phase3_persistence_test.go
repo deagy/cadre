@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package orchestration
 
 import (
@@ -45,6 +42,7 @@ func TestNewPersistentJobStoreNoDatabase(t *testing.T) {
 }
 
 func TestNewPersistentJobStore(t *testing.T) {
+	requireSQLite(t)
 	db := newTestDB(t)
 	defer db.Close()
 
@@ -58,6 +56,7 @@ func TestNewPersistentJobStore(t *testing.T) {
 }
 
 func TestRecordAndRetrieveJob(t *testing.T) {
+	requireSQLite(t)
 	db := newTestDB(t)
 	defer db.Close()
 
@@ -95,6 +94,7 @@ func TestRecordAndRetrieveJob(t *testing.T) {
 }
 
 func TestJobNotFound(t *testing.T) {
+	requireSQLite(t)
 	db := newTestDB(t)
 	defer db.Close()
 
@@ -107,6 +107,7 @@ func TestJobNotFound(t *testing.T) {
 }
 
 func TestJobTTLExpiry(t *testing.T) {
+	requireSQLite(t)
 	db := newTestDB(t)
 	defer db.Close()
 
@@ -146,6 +147,7 @@ func TestJobTTLExpiry(t *testing.T) {
 }
 
 func TestCleanupExpiredJobs(t *testing.T) {
+	requireSQLite(t)
 	db := newTestDB(t)
 	defer db.Close()
 
@@ -181,13 +183,16 @@ func TestCleanupExpiredJobs(t *testing.T) {
 	// Verify jobs are gone
 	const countQuery = `SELECT COUNT(*) FROM dispatch_jobs`
 	var count int
-	err = db.QueryRow(countQuery).Scan(&count)
+	if err := db.QueryRow(countQuery).Scan(&count); err != nil {
+		t.Fatalf("count query after cleanup: %v", err)
+	}
 	if count != 0 {
 		t.Errorf("after cleanup, job count = %d, want 0", count)
 	}
 }
 
 func TestRecordAndRetrieveTeamJob(t *testing.T) {
+	requireSQLite(t)
 	db := newTestDB(t)
 	defer db.Close()
 
@@ -226,6 +231,7 @@ func TestRecordAndRetrieveTeamJob(t *testing.T) {
 }
 
 func TestTeamJobNotFound(t *testing.T) {
+	requireSQLite(t)
 	db := newTestDB(t)
 	defer db.Close()
 
@@ -238,6 +244,7 @@ func TestTeamJobNotFound(t *testing.T) {
 }
 
 func TestRecoverPendingJobs(t *testing.T) {
+	requireSQLite(t)
 	db := newTestDB(t)
 	defer db.Close()
 
@@ -251,11 +258,15 @@ func TestRecoverPendingJobs(t *testing.T) {
 	}
 
 	// Mark one as pending (set to pending status)
+	// LIMIT on UPDATE needs SQLITE_ENABLE_UPDATE_DELETE_LIMIT, which the
+	// bundled mattn/go-sqlite3 amalgamation is not compiled with, so scope the
+	// single-row update with a subselect instead.
 	const updateQuery = `
 	UPDATE dispatch_jobs
 	SET status = ?, created_at = ?
-	WHERE job_id LIKE 'job_pending_%'
-	LIMIT 1
+	WHERE job_id IN (
+		SELECT job_id FROM dispatch_jobs WHERE job_id LIKE 'job_pending_%' LIMIT 1
+	)
 	`
 	_, err := db.Exec(updateQuery, JobStatusPending, time.Now().UTC().Add(-2*time.Duration(DefaultTimeoutSeconds)*time.Second))
 	if err != nil {
@@ -275,6 +286,7 @@ func TestRecoverPendingJobs(t *testing.T) {
 }
 
 func TestListJobs(t *testing.T) {
+	requireSQLite(t)
 	db := newTestDB(t)
 	defer db.Close()
 
@@ -309,6 +321,7 @@ func TestListJobs(t *testing.T) {
 }
 
 func TestConcurrentJobAccess(t *testing.T) {
+	requireSQLite(t)
 	db := newTestDB(t)
 	defer db.Close()
 
@@ -348,6 +361,7 @@ func TestConcurrentJobAccess(t *testing.T) {
 }
 
 func TestJobPersistenceAcrossConnections(t *testing.T) {
+	requireSQLite(t)
 	// Use file-based database to test persistence
 	db, path := newTestFileDB(t)
 	defer os.Remove(path)
@@ -384,6 +398,7 @@ func TestJobPersistenceAcrossConnections(t *testing.T) {
 }
 
 func TestCleanupExpiredTeamJobs(t *testing.T) {
+	requireSQLite(t)
 	db := newTestDB(t)
 	defer db.Close()
 
@@ -415,6 +430,7 @@ func TestCleanupExpiredTeamJobs(t *testing.T) {
 }
 
 func TestJobUpdateOnDuplicate(t *testing.T) {
+	requireSQLite(t)
 	db := newTestDB(t)
 	defer db.Close()
 

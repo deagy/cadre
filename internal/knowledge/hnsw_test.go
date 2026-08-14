@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -294,10 +291,23 @@ func TestHSNWStats(t *testing.T) {
 func TestHSNWLayerAssignment(t *testing.T) {
 	idx := NewHSNWIndex(16, 200)
 
-	// Insert many vectors to statistically check layer distribution
+	// Insert many vectors to statistically check layer distribution.
+	//
+	// assignLayer draws int(-ln(U) * mL) with mL = 1/ln(2), so a node lands
+	// on layer 0 exactly when -ln(U) < ln(2), i.e. U > 0.5 -- p = 0.5 on the
+	// nose. The count is therefore Binomial(nodeCount, 0.5).
+	//
+	// The bound below has to clear that distribution's noise by a wide
+	// margin, because the global RNG is unseeded and so this test draws a
+	// different sample on every run. At the original nodeCount=50 the mean
+	// was 25 with sd 3.54, and the old `< 20` bound sat 1.4 sd out -- it
+	// failed a few percent of runs (measured: 1 in 40). At 400 the mean is
+	// 200 with sd 10, so `< 150` is 5 sd out and effectively never trips
+	// while still catching a genuinely broken assignLayer.
+	const nodeCount = 400
 	layerDistribution := make(map[int]int)
 
-	for i := 0; i < 50; i++ {
+	for i := 0; i < nodeCount; i++ {
 		embedding := []float32{float32(i), float32(i + 1)}
 		msgID := fmt.Sprintf("msg-%d", i+1)
 		err := idx.Insert(msgID, embedding)
@@ -314,9 +324,9 @@ func TestHSNWLayerAssignment(t *testing.T) {
 		t.Errorf("Expected multiple layers, got %d", len(layerDistribution))
 	}
 
-	// Most nodes should be at layer 0
-	if layerDistribution[0] < 20 {
-		t.Errorf("Expected many nodes at layer 0, got %d", layerDistribution[0])
+	// Most nodes should be at layer 0 (see the binomial reasoning above).
+	if layerDistribution[0] < 150 {
+		t.Errorf("Expected many nodes at layer 0, got %d of %d", layerDistribution[0], nodeCount)
 	}
 }
 
@@ -407,7 +417,7 @@ func TestHSNWPerformanceMetrics(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		embedding := make([]float32, 5)
 		for j := 0; j < 5; j++ {
-			embedding[j] = float32((i+1) * (j+1))
+			embedding[j] = float32((i + 1) * (j + 1))
 		}
 		msgID := fmt.Sprintf("msg-%d", i+1)
 		idx.Insert(msgID, embedding)

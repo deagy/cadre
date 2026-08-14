@@ -24,6 +24,7 @@ package orchestration
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -88,8 +89,8 @@ func schemaErrors(instance any, schemaPath string) ([]string, error) {
 	if err == nil {
 		return nil, nil
 	}
-	ve, ok := err.(*jsonschema.ValidationError)
-	if !ok {
+	var ve *jsonschema.ValidationError
+	if !errors.As(err, &ve) {
 		return []string{err.Error()}, nil
 	}
 	var findings []string

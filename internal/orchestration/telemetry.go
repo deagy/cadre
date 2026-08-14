@@ -1,4 +1,3 @@
-//nolint:errcheck
 // telemetry.go ports roster/orchestration/src/selection_telemetry.py:
 // opt-in, local-only telemetry for `cadre select` outcomes.
 //
@@ -197,7 +196,7 @@ func RecordSelection(plan *DispatchPlan, repositoryRoot, telemetryPathOverride s
 	if err != nil {
 		return "", err
 	}
-	line := append(data, '\n')
+	data = append(data, '\n')
 
 	// A single Write call, not two: under concurrent invocations (e.g. a
 	// busy CI environment), two separate writes have no atomicity guarantee
@@ -207,8 +206,8 @@ func RecordSelection(plan *DispatchPlan, repositoryRoot, telemetryPathOverride s
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
-	if _, err := f.Write(line); err != nil {
+	defer func() { _ = f.Close() }()
+	if _, err := f.Write(data); err != nil {
 		return "", err
 	}
 	return path, nil

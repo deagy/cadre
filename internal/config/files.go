@@ -350,9 +350,10 @@ func loadConfigFile(path string) (map[string]any, error) {
 		return nil, err
 	}
 	var data map[string]any
-	if strings.TrimSpace(string(text)) == "" {
+	switch {
+	case strings.TrimSpace(string(text)) == "":
 		data = map[string]any{}
-	} else if strings.EqualFold(filepath.Ext(path), ".json") {
+	case strings.EqualFold(filepath.Ext(path), ".json"):
 		var parsed any
 		if err := json.Unmarshal(text, &parsed); err != nil {
 			return nil, settingsErrorf("%s: not valid JSON", path)
@@ -362,7 +363,7 @@ func loadConfigFile(path string) (map[string]any, error) {
 			return nil, settingsErrorf("%s: root of a cadre config file must be a mapping", path)
 		}
 		data = m
-	} else {
+	default:
 		var parsed any
 		if err := yaml.Unmarshal(text, &parsed); err != nil {
 			return nil, settingsErrorf("%s: not valid YAML", path)

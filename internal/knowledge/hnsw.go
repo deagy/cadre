@@ -11,44 +11,43 @@ import (
 // HSNWIndex implements a Hierarchical Navigable Small World graph for approximate nearest neighbor search.
 // See: https://arxiv.org/abs/1802.02413
 type HSNWIndex struct {
-	mu              sync.RWMutex
-	nodes           map[string]*HSNWNode    // messageID -> node
-	tombstones      map[string]bool         // deleted nodes (lazy deletion)
-	entryPoint      *HSNWNode               // entry point for search
-	layers          map[int][]*HSNWNode     // layer -> nodes
-	maxLayer        int
-	M               int                     // max connections per node
-	EfConstruction  int                     // ef during construction
-	EfSearch        int                     // ef for queries
-	EfDefault       int
-	mL              float64                 // 1/ln(2)
-	indexSize       int64                   // number of vectors indexed
-	buildTimeMs     int64
-	deletedCount    int64                   // number of deleted vectors (tombstones)
+	mu             sync.RWMutex
+	nodes          map[string]*HSNWNode // messageID -> node
+	tombstones     map[string]bool      // deleted nodes (lazy deletion)
+	entryPoint     *HSNWNode            // entry point for search
+	layers         map[int][]*HSNWNode  // layer -> nodes
+	maxLayer       int
+	M              int // max connections per node
+	EfConstruction int // ef during construction
+	EfSearch       int // ef for queries
+	EfDefault      int
+	mL             float64 // 1/ln(2)
+	indexSize      int64   // number of vectors indexed
+	deletedCount   int64   // number of deleted vectors (tombstones)
 }
 
 // HSNWNode represents a node in the HNSW graph.
 type HSNWNode struct {
-	MessageID  string
-	Embedding  []float32
-	Layer      int
-	Neighbors  map[int][]*HSNWNode // layer -> list of neighbors
+	MessageID string
+	Embedding []float32
+	Layer     int
+	Neighbors map[int][]*HSNWNode // layer -> list of neighbors
 }
 
 // HSNWSearchResult represents a search result with distance.
 type HSNWSearchResult struct {
-	MessageID  string
-	Distance   float32
-	Embedding  []float32
+	MessageID string
+	Distance  float32
+	Embedding []float32
 }
 
 // NewHSNWIndex creates a new HNSW index.
-func NewHSNWIndex(M int, efConstruction int) *HSNWIndex {
+func NewHSNWIndex(m int, efConstruction int) *HSNWIndex {
 	return &HSNWIndex{
 		nodes:          make(map[string]*HSNWNode),
 		tombstones:     make(map[string]bool),
 		layers:         make(map[int][]*HSNWNode),
-		M:              M,
+		M:              m,
 		EfConstruction: efConstruction,
 		EfSearch:       efConstruction,
 		EfDefault:      efConstruction,
@@ -116,7 +115,13 @@ func (idx *HSNWIndex) insertNode(newNode *HSNWNode) {
 			entryPoints = candidates
 		}
 
-		if lc < newNode.Layer {
+		// `lc <= newNode.Layer`, not `<`: a node must be linked at every layer
+		// from its own assigned layer down to 0. With `<`, any node whose
+		// assigned layer is 0 -- roughly half of them, given assignLayer's
+		// exponential draw -- was inserted with empty neighbour lists and was
+		// therefore unreachable from the entry point, so Search silently
+		// omitted it. Node.Neighbors is already allocated for 0..Layer.
+		if lc <= newNode.Layer {
 			// Insert into layer and find neighbors
 			M := idx.M
 			if lc == 0 {
@@ -260,10 +265,10 @@ func (idx *HSNWIndex) searchLayer(query []float32, entryPoints []*HSNWNode, ef i
 }
 
 // pruneConnections selects M neighbors from candidates.
-func (idx *HSNWIndex) pruneConnections(node *HSNWNode, candidates []*HSNWNode, M int, layer int) {
-	// Simple heuristic: keep M closest neighbors
-	if len(candidates) > M {
-		candidates = candidates[:M]
+func (idx *HSNWIndex) pruneConnections(node *HSNWNode, candidates []*HSNWNode, m int, layer int) {
+	// Simple heuristic: keep m closest neighbors
+	if len(candidates) > m {
+		candidates = candidates[:m]
 	}
 
 	node.Neighbors[layer] = make([]*HSNWNode, len(candidates))
@@ -290,23 +295,23 @@ func (idx *HSNWIndex) GetStats() *HSNWStats {
 	}
 
 	return &HSNWStats{
-		IndexSize:           idx.indexSize,
-		MaxLayer:            idx.maxLayer,
-		TotalConnections:    totalConnections,
-		AverageConnections:  float64(totalConnections) / float64(idx.indexSize),
-		M:                   idx.M,
-		EfSearch:            idx.EfSearch,
+		IndexSize:          idx.indexSize,
+		MaxLayer:           idx.maxLayer,
+		TotalConnections:   totalConnections,
+		AverageConnections: float64(totalConnections) / float64(idx.indexSize),
+		M:                  idx.M,
+		EfSearch:           idx.EfSearch,
 	}
 }
 
 // HSNWStats provides index statistics.
 type HSNWStats struct {
-	IndexSize           int64
-	MaxLayer            int
-	TotalConnections    int64
-	AverageConnections  float64
-	M                   int
-	EfSearch            int
+	IndexSize          int64
+	MaxLayer           int
+	TotalConnections   int64
+	AverageConnections float64
+	M                  int
+	EfSearch           int
 }
 
 // cosineSimilarityDistance computes 1 - cosine_similarity.
@@ -488,10 +493,10 @@ func (idx *HSNWIndex) GetDeletionStatus() *DeletionStatus {
 	}
 
 	return &DeletionStatus{
-		TotalEntries:  totalEntries,
-		LiveEntries:   liveEntries,
-		DeletedCount:  idx.deletedCount,
-		DeletionRatio: deletionRatio,
+		TotalEntries:    totalEntries,
+		LiveEntries:     liveEntries,
+		DeletedCount:    idx.deletedCount,
+		DeletionRatio:   deletionRatio,
 		NeedsCompaction: idx.deletedCount > 0 && deletionRatio > 10,
 	}
 }
@@ -507,30 +512,30 @@ type DeletionStatus struct {
 
 // BatchDeleteResult tracks result of batch delete operation.
 type BatchDeleteResult struct {
-	Successful  int
-	Failed      int
-	Errors      map[string]string
-	TotalTime   int64
+	Successful int
+	Failed     int
+	Errors     map[string]string
+	TotalTime  int64
 }
 
 // BatchUpdateResult tracks result of batch update operation.
 type BatchUpdateResult struct {
-	Successful  int
-	Failed      int
-	Errors      map[string]string
-	TotalTime   int64
+	Successful int
+	Failed     int
+	Errors     map[string]string
+	TotalTime  int64
 }
 
 // CompactionProgress tracks incremental compaction state.
 type CompactionProgress struct {
-	State              string // "pending", "in_progress", "complete", "failed"
-	EntriesProcessed   int64
-	EntriesRemaining   int64
-	EntriesRemoved     int64
-	PercentComplete    float64
-	EstimatedTimeMs    int64
-	StartTimeUnix      int64
-	LastUpdateUnix     int64
+	State            string // "pending", "in_progress", "complete", "failed"
+	EntriesProcessed int64
+	EntriesRemaining int64
+	EntriesRemoved   int64
+	PercentComplete  float64
+	EstimatedTimeMs  int64
+	StartTimeUnix    int64
+	LastUpdateUnix   int64
 }
 
 // BatchDelete deletes multiple vectors atomically.
@@ -629,9 +634,9 @@ func (idx *HSNWIndex) CompactIncremental(batchSize int64) *CompactionProgress {
 	defer idx.mu.Unlock()
 
 	progress := &CompactionProgress{
-		State:           "pending",
+		State:            "pending",
 		EntriesRemaining: idx.deletedCount,
-		StartTimeUnix:   int64(0), // Would be time.Now().Unix() in production
+		StartTimeUnix:    int64(0), // Would be time.Now().Unix() in production
 	}
 
 	if idx.deletedCount == 0 {
@@ -717,7 +722,7 @@ func (idx *HSNWIndex) GetCompactionProgress() *CompactionProgress {
 	defer idx.mu.RUnlock()
 
 	return &CompactionProgress{
-		State:           "idle",
+		State:            "idle",
 		EntriesRemaining: idx.deletedCount,
 		EntriesRemoved:   0,
 	}

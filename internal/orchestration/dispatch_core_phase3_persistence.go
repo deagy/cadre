@@ -1,4 +1,3 @@
-//nolint:errcheck
 package orchestration
 
 import (
@@ -13,10 +12,6 @@ import (
 // Manages dispatch job lifecycle with TTL-based expiry across process restarts
 
 const (
-	// Job store schema
-	jobTableName     = "dispatch_jobs"
-	teamJobTableName = "dispatch_team_jobs"
-
 	// Job status values
 	JobStatusPending   = "pending"
 	JobStatusRunning   = "running"
@@ -33,10 +28,10 @@ type PersistentDispatchJobStore struct {
 
 // DispatchJobRow represents a persisted job record
 type DispatchJobRow struct {
-	JobID     string
-	CreatedAt time.Time
-	ExpiresAt time.Time
-	Status    string
+	JobID      string
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	Status     string
 	ResultJSON string
 }
 
@@ -50,7 +45,7 @@ func NewPersistentDispatchJobStore(db *sql.DB) (*PersistentDispatchJobStore, err
 
 	// Create tables if they don't exist
 	if err := store.createJobTables(); err != nil {
-		return nil, fmt.Errorf("failed to create job tables: %v", err)
+		return nil, fmt.Errorf("failed to create job tables: %w", err)
 	}
 
 	return store, nil
@@ -91,15 +86,15 @@ func (pjs *PersistentDispatchJobStore) createJobTables() error {
 	`
 
 	if _, err := pjs.db.Exec(jobTableSchema); err != nil {
-		return fmt.Errorf("failed to create dispatch_jobs table: %v", err)
+		return fmt.Errorf("failed to create dispatch_jobs table: %w", err)
 	}
 
 	if _, err := pjs.db.Exec(teamJobTableSchema); err != nil {
-		return fmt.Errorf("failed to create dispatch_team_jobs table: %v", err)
+		return fmt.Errorf("failed to create dispatch_team_jobs table: %w", err)
 	}
 
 	if _, err := pjs.db.Exec(indexes); err != nil {
-		return fmt.Errorf("failed to create indexes: %v", err)
+		return fmt.Errorf("failed to create indexes: %w", err)
 	}
 
 	return nil
@@ -112,7 +107,7 @@ func (pjs *PersistentDispatchJobStore) RecordJob(jobID string, result map[string
 
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return fmt.Errorf("failed to marshal job result: %v", err)
+		return fmt.Errorf("failed to marshal job result: %w", err)
 	}
 
 	now := time.Now().UTC()
@@ -129,7 +124,7 @@ func (pjs *PersistentDispatchJobStore) RecordJob(jobID string, result map[string
 
 	_, err = pjs.db.Exec(query, jobID, now, expiresAt, JobStatusCompleted, resultJSON, now)
 	if err != nil {
-		return fmt.Errorf("failed to record job %q: %v", jobID, err)
+		return fmt.Errorf("failed to record job %q: %w", jobID, err)
 	}
 
 	return nil
@@ -185,7 +180,7 @@ func (pjs *PersistentDispatchJobStore) CleanupExpiredJobs() (int, error) {
 	const query = `DELETE FROM dispatch_jobs WHERE expires_at < ?`
 	result, err := pjs.db.Exec(query, now)
 	if err != nil {
-		return 0, fmt.Errorf("failed to cleanup jobs: %v", err)
+		return 0, fmt.Errorf("failed to cleanup jobs: %w", err)
 	}
 
 	affected, err := result.RowsAffected()
@@ -206,7 +201,7 @@ func (pjs *PersistentDispatchJobStore) CleanupExpiredTeamJobs() (int, error) {
 	const query = `DELETE FROM dispatch_team_jobs WHERE expires_at < ?`
 	result, err := pjs.db.Exec(query, now)
 	if err != nil {
-		return 0, fmt.Errorf("failed to cleanup team jobs: %v", err)
+		return 0, fmt.Errorf("failed to cleanup team jobs: %w", err)
 	}
 
 	affected, err := result.RowsAffected()
@@ -224,7 +219,7 @@ func (pjs *PersistentDispatchJobStore) RecordTeamJob(teamID string, result map[s
 
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return fmt.Errorf("failed to marshal team result: %v", err)
+		return fmt.Errorf("failed to marshal team result: %w", err)
 	}
 
 	now := time.Now().UTC()
@@ -248,7 +243,7 @@ func (pjs *PersistentDispatchJobStore) RecordTeamJob(teamID string, result map[s
 
 	_, err = pjs.db.Exec(query, teamID, now, expiresAt, JobStatusCompleted, resultJSON, memberCount, now)
 	if err != nil {
-		return fmt.Errorf("failed to record team job %q: %v", teamID, err)
+		return fmt.Errorf("failed to record team job %q: %w", teamID, err)
 	}
 
 	return nil
@@ -314,9 +309,9 @@ func (pjs *PersistentDispatchJobStore) RecoverPendingJobs() ([]string, error) {
 
 	rows, err := pjs.db.Query(query, JobStatusPending, JobStatusRunning, timeoutThreshold, time.Now().UTC())
 	if err != nil {
-		return nil, fmt.Errorf("failed to query pending jobs: %v", err)
+		return nil, fmt.Errorf("failed to query pending jobs: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var jobIDs []string
 	for rows.Next() {
@@ -360,9 +355,9 @@ func (pjs *PersistentDispatchJobStore) ListJobs(status string) ([]DispatchJobRow
 
 	rows, err := pjs.db.Query(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query jobs: %v", err)
+		return nil, fmt.Errorf("failed to query jobs: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var jobs []DispatchJobRow
 	for rows.Next() {

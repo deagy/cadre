@@ -8,13 +8,13 @@ import (
 
 // FaultTolerance provides fault tolerance mechanisms for knowledge store operations.
 type FaultTolerance struct {
-	mu              sync.RWMutex
-	maxRetries      int
-	retryDelay      time.Duration
-	circuitBreaker  *CircuitBreaker
-	errorLog        []ErrorEvent
-	maxErrorLog     int
-	recoveryStats   *RecoveryStats
+	mu             sync.RWMutex
+	maxRetries     int
+	retryDelay     time.Duration
+	circuitBreaker *CircuitBreaker
+	errorLog       []ErrorEvent
+	maxErrorLog    int
+	recoveryStats  *RecoveryStats
 }
 
 // ErrorEvent tracks error occurrences.
@@ -27,33 +27,33 @@ type ErrorEvent struct {
 
 // RecoveryStats tracks recovery attempts and success rates.
 type RecoveryStats struct {
-	TotalErrors      int64
+	TotalErrors       int64
 	SuccessfulRetries int64
-	FailedRetries    int64
-	CircuitBreaks    int64
-	LastRecoveryTime time.Time
+	FailedRetries     int64
+	CircuitBreaks     int64
+	LastRecoveryTime  time.Time
 }
 
 // CircuitBreaker implements circuit breaker pattern for failure handling.
 type CircuitBreaker struct {
-	mu              sync.RWMutex
-	state           string // "closed", "open", "half-open"
-	failureCount    int
+	mu               sync.RWMutex
+	state            string // "closed", "open", "half-open"
+	failureCount     int
 	failureThreshold int
-	successCount    int
+	successCount     int
 	successThreshold int
-	lastFailureTime time.Time
-	resetTimeout    time.Duration
+	lastFailureTime  time.Time
+	resetTimeout     time.Duration
 }
 
 // NewFaultTolerance creates a fault tolerance manager.
 func NewFaultTolerance() *FaultTolerance {
 	return &FaultTolerance{
-		maxRetries:    3,
-		retryDelay:    100 * time.Millisecond,
+		maxRetries:     3,
+		retryDelay:     100 * time.Millisecond,
 		circuitBreaker: NewCircuitBreaker(5, 3, 30*time.Second),
-		errorLog:      make([]ErrorEvent, 0),
-		maxErrorLog:   1000,
+		errorLog:       make([]ErrorEvent, 0),
+		maxErrorLog:    1000,
 		recoveryStats: &RecoveryStats{
 			LastRecoveryTime: time.Now(),
 		},
@@ -63,10 +63,10 @@ func NewFaultTolerance() *FaultTolerance {
 // NewCircuitBreaker creates a new circuit breaker.
 func NewCircuitBreaker(failureThreshold, successThreshold int, resetTimeout time.Duration) *CircuitBreaker {
 	return &CircuitBreaker{
-		state:              "closed",
-		failureThreshold:   failureThreshold,
-		successThreshold:   successThreshold,
-		resetTimeout:       resetTimeout,
+		state:            "closed",
+		failureThreshold: failureThreshold,
+		successThreshold: successThreshold,
+		resetTimeout:     resetTimeout,
 	}
 }
 
@@ -195,17 +195,17 @@ type ReplicaNode struct {
 	Address  string
 	Status   string // "healthy", "lagging", "offline"
 	LastSync time.Time
-	SyncLag  int64  // milliseconds
+	SyncLag  int64 // milliseconds
 }
 
 // ReplicationEvent tracks replication operations.
 type ReplicationEvent struct {
-	Timestamp   time.Time
-	MessageID   string
-	Operation   string
-	ReplicaID   string
-	Status      string // "pending", "synced", "failed"
-	RetryCount  int
+	Timestamp  time.Time
+	MessageID  string
+	Operation  string
+	ReplicaID  string
+	Status     string // "pending", "synced", "failed"
+	RetryCount int
 }
 
 // NewReplication creates a replication manager.
@@ -297,25 +297,25 @@ func (r *Replication) VerifyConsistency() (bool, map[string]interface{}) {
 
 // DisasterRecovery handles backup and restore operations.
 type DisasterRecovery struct {
-	mu               sync.RWMutex
-	backupLocation   string
-	backupSchedule   time.Duration
-	lastBackupTime   time.Time
-	backupHistory    []BackupMetadata
-	maxHistorySize   int
-	recoveryPoints   map[string]*RecoveryPoint
+	mu             sync.RWMutex
+	backupLocation string
+	backupSchedule time.Duration
+	lastBackupTime time.Time
+	backupHistory  []BackupMetadata
+	maxHistorySize int
+	recoveryPoints map[string]*RecoveryPoint
 }
 
 // BackupMetadata tracks backup information.
 type BackupMetadata struct {
-	BackupID      string
-	Timestamp     time.Time
-	DatabaseSize  int64
-	MessageCount  int64
-	ChunkCount    int64
-	Status        string // "in_progress", "completed", "failed"
-	DurationMs    int64
-	ErrorMessage  string
+	BackupID     string
+	Timestamp    time.Time
+	DatabaseSize int64
+	MessageCount int64
+	ChunkCount   int64
+	Status       string // "in_progress", "completed", "failed"
+	DurationMs   int64
+	ErrorMessage string
 }
 
 // RecoveryPoint represents a point in time for recovery.

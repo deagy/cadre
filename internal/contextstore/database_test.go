@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package contextstore
 
 import (
@@ -10,6 +7,7 @@ import (
 )
 
 func TestSweepExpiredDeletesAndRecordsEvidence(t *testing.T) {
+	requireSQLite(t)
 	db, cfg := newTestStore(t)
 	past := -1
 	put, err := PutEntry(db, cfg, basicPutOptions(func(o *PutOptions) { o.TTLDaysOverride = nil }))
@@ -40,6 +38,7 @@ func TestSweepExpiredDeletesAndRecordsEvidence(t *testing.T) {
 }
 
 func TestExpiredRowsDryRunDoesNotDelete(t *testing.T) {
+	requireSQLite(t)
 	db, cfg := newTestStore(t)
 	put, err := PutEntry(db, cfg, basicPutOptions(nil))
 	if err != nil {
@@ -63,6 +62,7 @@ func TestExpiredRowsDryRunDoesNotDelete(t *testing.T) {
 }
 
 func TestOpenStoreSweepsExpiredEntriesOnOpen(t *testing.T) {
+	requireSQLite(t)
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "context.db")
 	db, err := OpenStore(dbPath, true)
@@ -111,6 +111,7 @@ func TestOpenStoreSweepsExpiredEntriesOnOpen(t *testing.T) {
 }
 
 func TestPutEntryAtomicityRollsBackOnFailure(t *testing.T) {
+	requireSQLite(t)
 	// insert_entry and replace_chunks share one transaction so an
 	// interruption cannot leave a committed entry with no chunks. We can't
 	// easily force a mid-transaction failure without touching internals, so
@@ -139,6 +140,7 @@ func TestPutEntryAtomicityRollsBackOnFailure(t *testing.T) {
 }
 
 func TestPruneAuditRecordsRejectsNonPositiveDays(t *testing.T) {
+	requireSQLite(t)
 	db, _ := newTestStore(t)
 	if _, err := PruneAuditRecords(db, 0); err == nil {
 		t.Fatal("expected rejection of older_than_days=0")
@@ -149,6 +151,7 @@ func TestPruneAuditRecordsRejectsNonPositiveDays(t *testing.T) {
 }
 
 func TestGetStoreStatsCounts(t *testing.T) {
+	requireSQLite(t)
 	db, cfg := newTestStore(t)
 	if _, err := PutEntry(db, cfg, basicPutOptions(nil)); err != nil {
 		t.Fatal(err)

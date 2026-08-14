@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package cli
 
 import (
@@ -78,6 +75,7 @@ func TestKnowledgeShardsNoShards(t *testing.T) {
 }
 
 func TestKnowledgeShardsBasic(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -89,6 +87,7 @@ func TestKnowledgeShardsBasic(t *testing.T) {
 }
 
 func TestKnowledgeSharedsWithStrategy(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -102,6 +101,7 @@ func TestKnowledgeSharedsWithStrategy(t *testing.T) {
 }
 
 func TestKnowledgeSharedsInvalidStrategy(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -112,6 +112,7 @@ func TestKnowledgeSharedsInvalidStrategy(t *testing.T) {
 }
 
 func TestKnowledgeFederatedSearchSingleStore(t *testing.T) {
+	requireSQLite(t)
 	// Single-store mode (store.db exists but no shard-*.db files)
 	// Federated commands should fail gracefully since they require multi-shard setup
 	tmpDir := t.TempDir()
@@ -137,6 +138,7 @@ func TestKnowledgeFederatedSearchSingleStore(t *testing.T) {
 }
 
 func TestKnowledgeFederatedSearchMissingClassification(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -147,6 +149,7 @@ func TestKnowledgeFederatedSearchMissingClassification(t *testing.T) {
 }
 
 func TestKnowledgeFederatedSearchMissingQuery(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -157,6 +160,7 @@ func TestKnowledgeFederatedSearchMissingQuery(t *testing.T) {
 }
 
 func TestKnowledgeFederatedSearchBasic(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -171,6 +175,7 @@ func TestKnowledgeFederatedSearchBasic(t *testing.T) {
 }
 
 func TestKnowledgeFederatedSearchWithParallelism(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -185,6 +190,7 @@ func TestKnowledgeFederatedSearchWithParallelism(t *testing.T) {
 }
 
 func TestKnowledgeFederatedSearchWithStrategy(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -202,6 +208,7 @@ func TestKnowledgeFederatedSearchWithStrategy(t *testing.T) {
 }
 
 func TestKnowledgeFederatedSearchInvalidStrategy(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -216,6 +223,7 @@ func TestKnowledgeFederatedSearchInvalidStrategy(t *testing.T) {
 }
 
 func TestKnowledgeFederatedDeleteSingleStore(t *testing.T) {
+	requireSQLite(t)
 	// Single-store mode (store.db exists but no shard-*.db files)
 	// Federated commands should fail gracefully since they require multi-shard setup
 	tmpDir := t.TempDir()
@@ -240,6 +248,7 @@ func TestKnowledgeFederatedDeleteSingleStore(t *testing.T) {
 }
 
 func TestKnowledgeFederatedDeleteNoMode(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -251,6 +260,7 @@ func TestKnowledgeFederatedDeleteNoMode(t *testing.T) {
 }
 
 func TestKnowledgeFederatedDeleteMultipleModes(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -265,6 +275,7 @@ func TestKnowledgeFederatedDeleteMultipleModes(t *testing.T) {
 }
 
 func TestKnowledgeFederatedDeleteByClassification(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -278,6 +289,7 @@ func TestKnowledgeFederatedDeleteByClassification(t *testing.T) {
 }
 
 func TestKnowledgeFederatedDeleteBySource(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -291,6 +303,7 @@ func TestKnowledgeFederatedDeleteBySource(t *testing.T) {
 }
 
 func TestKnowledgeFederatedDeleteByAge(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -304,6 +317,7 @@ func TestKnowledgeFederatedDeleteByAge(t *testing.T) {
 }
 
 func TestKnowledgeFederatedDeleteByExpired(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -317,6 +331,7 @@ func TestKnowledgeFederatedDeleteByExpired(t *testing.T) {
 }
 
 func TestKnowledgeFederatedDeleteWithStrategy(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -333,6 +348,7 @@ func TestKnowledgeFederatedDeleteWithStrategy(t *testing.T) {
 }
 
 func TestKnowledgeFederatedDeleteInvalidStrategy(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -346,6 +362,7 @@ func TestKnowledgeFederatedDeleteInvalidStrategy(t *testing.T) {
 }
 
 func TestDiscoverShardsMultipleShards(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
@@ -366,6 +383,7 @@ func TestDiscoverShardsMultipleShards(t *testing.T) {
 }
 
 func TestDiscoverShardsSingleStore(t *testing.T) {
+	requireSQLite(t)
 	tmpDir := t.TempDir()
 	shardDir := filepath.Join(tmpDir, ".agents", "knowledge-store")
 	os.MkdirAll(shardDir, 0755)

@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -9,6 +6,7 @@ import (
 )
 
 func TestOpenStore(t *testing.T) {
+	requireSQLite(t)
 	tmpDir := t.TempDir()
 	dbPath := tmpDir + "/test.db"
 
@@ -31,6 +29,7 @@ func TestOpenStore(t *testing.T) {
 }
 
 func TestBeginCompleteRun(t *testing.T) {
+	requireSQLite(t)
 	store := setupTestStore(t)
 	defer store.Close()
 
@@ -52,6 +51,7 @@ func TestBeginCompleteRun(t *testing.T) {
 }
 
 func TestFailRun(t *testing.T) {
+	requireSQLite(t)
 	store := setupTestStore(t)
 	defer store.Close()
 
@@ -69,6 +69,7 @@ func TestFailRun(t *testing.T) {
 }
 
 func TestStatsEmpty(t *testing.T) {
+	requireSQLite(t)
 	store := setupTestStore(t)
 	defer store.Close()
 

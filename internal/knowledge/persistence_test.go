@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -12,6 +9,7 @@ import (
 // Skipped in CGO_ENABLED=0 builds; run with: CGO_ENABLED=1 go test ./internal/knowledge/...
 
 func TestSaveAndGetMessage(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -64,6 +62,7 @@ func TestSaveAndGetMessage(t *testing.T) {
 }
 
 func TestSaveAndGetChunk(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -116,6 +115,7 @@ func TestSaveAndGetChunk(t *testing.T) {
 }
 
 func TestUPSERTMessage(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -158,6 +158,7 @@ func TestUPSERTMessage(t *testing.T) {
 }
 
 func TestSaveChunks(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -211,6 +212,7 @@ func TestSaveChunks(t *testing.T) {
 }
 
 func TestCascadeDelete(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -252,6 +254,7 @@ func TestCascadeDelete(t *testing.T) {
 }
 
 func TestMessageCounts(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -303,6 +306,7 @@ func TestMessageCounts(t *testing.T) {
 }
 
 func TestMultipleEmbeddingModels(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -333,6 +337,7 @@ func TestMultipleEmbeddingModels(t *testing.T) {
 }
 
 func TestEmptyChunkError(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -352,6 +357,7 @@ func TestEmptyChunkError(t *testing.T) {
 }
 
 func TestNegativeOrdinalError(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}

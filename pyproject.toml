@@ -49,8 +49,8 @@ pattern = "VERSION = \"(?P<version>[^\"]+)\""
 [tool.hatch.build.targets.wheel]
 packages = ["cadre_cli"]
 
-# roster/, .agents/skills/, and bin/cadre.py + bin/subcommands.tsv stay a
-# single source of truth at their existing top-level checkout locations
+# roster/ and .agents/skills/ stay a single source of truth at their existing
+# top-level checkout locations
 # (not duplicated under cadre_cli/ in the source tree) -- hatchling's
 # force-include copies each of them into the built wheel only, at build
 # time, so an installed/pipx distribution carries its own bundled copy
@@ -67,9 +67,16 @@ packages = ["cadre_cli"]
 # simply never listed here. `__pycache__`/`*.pyc` are skipped by hatchling
 # by default even under force-include.
 #
-# NOTE: bin/cadre.py has been removed (deprecated in favor of Go CLI).
-# bin/cadre and bin/cadre.ps1 are shell wrappers for the Go binary and are
-# not needed in the Python distribution.
+# NOTE: bin/ is no longer vendored at all. The Python-to-Go migration
+# (ADR-001-CLI-GO-REFACTOR.md) deleted bin/cadre.py, emptied
+# bin/subcommands.tsv, and turned bin/cadre / bin/cadre.ps1 into shims that
+# build and exec the Go binary -- none of which a pure-Python wheel can use.
+# The subcommand table therefore lives in cadre_cli/__init__.py's
+# _SUBCOMMANDS, and this table vendors only the roster/ Python
+# implementations those rows dispatch to. Shipping the Go binary through PyPI
+# instead is DISTRIBUTION.md's "PyPI (Backward Compatibility)" roadmap item
+# (v0.24.0+), which needs platform-tagged wheels and cross-compilation and is
+# not what this pure-Python target builds.
 [tool.hatch.build.targets.wheel.force-include]
 
 "roster/catalog.yaml" = "cadre_cli/_vendor/roster/catalog.yaml"
@@ -131,7 +138,24 @@ packages = ["cadre_cli"]
 "roster/knowledge-store/agent-context.schema.json" = "cadre_cli/_vendor/roster/knowledge-store/agent-context.schema.json"
 "roster/knowledge-store/canonical-message.schema.json" = "cadre_cli/_vendor/roster/knowledge-store/canonical-message.schema.json"
 "roster/knowledge-store/config.example.json" = "cadre_cli/_vendor/roster/knowledge-store/config.example.json"
-"roster/knowledge-store/src" = "cadre_cli/_vendor/roster/knowledge-store/src"
+# NOTE: roster/knowledge-store/src/ is deliberately absent. The Python
+# knowledge-store implementation was deleted by the Python-to-Go migration
+# (commit b418031e) and replaced by internal/knowledge/ in the Go CLI, which
+# a pure-Python wheel cannot carry -- `cadre knowledge` is therefore not a
+# subcommand of this distribution (see cadre_cli/__init__.py's
+# _UNSHIPPED_SUBCOMMANDS, which recognises the name and says so rather than
+# reporting it as unknown). The sibling files above stay vendored because
+# build_dispatch_plan.py anchors on the roster/knowledge-store/ directory and
+# `cadre select` reads the schemas/policy docs there.
+
+# The agent context store's implementation, backing `cadre context`. Vendored
+# for exactly the same reason as roster/orchestration/src below: cli.py and
+# its sibling modules resolve roster/shared/src via
+# `Path(__file__).resolve().parents[2]`, so they only work when the vendored
+# tree preserves the checkout's relative layout. Only src/ is a runtime
+# dependency -- test/, data/, and the JSON schema are dev-time artifacts no
+# dispatched subcommand reads.
+"roster/context-store/src" = "cadre_cli/_vendor/roster/context-store/src"
 
 "roster/orchestration/escalation-policy.md" = "cadre_cli/_vendor/roster/orchestration/escalation-policy.md"
 "roster/orchestration/handoff-contracts.md" = "cadre_cli/_vendor/roster/orchestration/handoff-contracts.md"
@@ -173,8 +197,8 @@ packages = ["cadre_cli"]
 
 ".agents/skills" = "cadre_cli/_vendor/.agents/skills"
 
-# The whole provider bundle. Needed for `cadre sdlc` (bin/cadre.py's
-# dispatch_sdlc() passes --provider REPO_ROOT/provider/provider.json to the
+# The whole provider bundle. Needed for `cadre sdlc` (cadre_cli/__init__.py's
+# dispatch_sdlc() passes --provider VENDOR_ROOT/provider/provider.json to the
 # externally installed `agentic-sdlc` binary) and for `cadre bootstrap-codex`
 # (sync_codex_agents.py's DEFAULT_SOURCE reads provider/codex-agents/ as the
 # default set of wrappers to install into the caller's own ~/.codex/ config).
@@ -199,7 +223,6 @@ packages = ["cadre_cli"]
 [tool.hatch.build.targets.sdist]
 include = [
     "cadre_cli/**",
-    "bin/subcommands.tsv",
     "roster/**",
     ".agents/skills/**",
     "provider/**",

@@ -360,9 +360,9 @@ func TestPhase3AuditLogging(t *testing.T) {
 	// Test: Audit record building with forbidden keys
 
 	validRecord, err := BuildAuditRecord(map[string]any{
-		"role_id":    "test-role",
-		"task_id":    "task_123",
-		"exit_code":  0,
+		"role_id":   "test-role",
+		"task_id":   "task_123",
+		"exit_code": 0,
 	})
 
 	if err != nil {

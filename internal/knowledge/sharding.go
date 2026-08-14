@@ -282,7 +282,7 @@ func (r *StoreRegistry) GetStore(source, classification, convID string) (*Store,
 		shardID := r.strategy.GetShardID(shardKey, len(r.stores))
 		shardIDs := r.GetShardIDs()
 		if shardID < 0 || shardID >= len(shardIDs) {
-			shardID = shardID % len(shardIDs)
+			shardID %= len(shardIDs)
 		}
 		shard := shardIDs[shardID]
 		store := r.stores[shard]

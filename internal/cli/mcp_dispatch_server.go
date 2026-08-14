@@ -1,4 +1,3 @@
-//nolint:errcheck
 package cli
 
 import (
@@ -39,26 +38,26 @@ func MCPDispatchServerCmd(args []string, stdout, stderr io.Writer) int {
 	for _, arg := range args {
 		switch arg {
 		case "--help", "-h":
-			fmt.Fprintf(stdout, "usage: cadre mcp-dispatch-server [options]\n\n")
-			fmt.Fprintf(stdout, "Run the MCP dispatch server on stdio, exposing dispatch tools to MCP clients.\n\n")
-			fmt.Fprintf(stdout, "Tools exposed:\n")
-			fmt.Fprintf(stdout, "  dispatch_secure_cloud_role  - Dispatch a secure cloud role with confirmation\n")
-			fmt.Fprintf(stdout, "  dispatch_team               - Dispatch multiple roles as a team\n")
-			fmt.Fprintf(stdout, "  poll_dispatch_status        - Poll async dispatch job status\n")
-			fmt.Fprintf(stdout, "  poll_team_status            - Poll team dispatch status\n\n")
-			fmt.Fprintf(stdout, "Environment variables:\n")
-			fmt.Fprintf(stdout, "  CADRE_PROJECT_ROOT     Project root directory (default: .)\n")
-			fmt.Fprintf(stdout, "  CADRE_GLOBAL_ROOT      Global config directory (default: ~/.config/cadre)\n")
-			fmt.Fprintf(stdout, "  CADRE_PLUGIN_ROOT      Plugin directory (default: ~/.claude/agents)\n")
+			_, _ = fmt.Fprintf(stdout, "usage: cadre mcp-dispatch-server [options]\n\n")
+			_, _ = fmt.Fprintf(stdout, "Run the MCP dispatch server on stdio, exposing dispatch tools to MCP clients.\n\n")
+			_, _ = fmt.Fprintf(stdout, "Tools exposed:\n")
+			_, _ = fmt.Fprintf(stdout, "  dispatch_secure_cloud_role  - Dispatch a secure cloud role with confirmation\n")
+			_, _ = fmt.Fprintf(stdout, "  dispatch_team               - Dispatch multiple roles as a team\n")
+			_, _ = fmt.Fprintf(stdout, "  poll_dispatch_status        - Poll async dispatch job status\n")
+			_, _ = fmt.Fprintf(stdout, "  poll_team_status            - Poll team dispatch status\n\n")
+			_, _ = fmt.Fprintf(stdout, "Environment variables:\n")
+			_, _ = fmt.Fprintf(stdout, "  CADRE_PROJECT_ROOT     Project root directory (default: .)\n")
+			_, _ = fmt.Fprintf(stdout, "  CADRE_GLOBAL_ROOT      Global config directory (default: ~/.config/cadre)\n")
+			_, _ = fmt.Fprintf(stdout, "  CADRE_PLUGIN_ROOT      Plugin directory (default: ~/.claude/agents)\n")
 			return 0
 
 		case "--version":
 			version, err := CLIVersion(".")
 			if err != nil {
-				fmt.Fprintf(stderr, "cadre: failed to get version: %v\n", err)
+				_, _ = fmt.Fprintf(stderr, "cadre: failed to get version: %v\n", err)
 				return 1
 			}
-			fmt.Fprintf(stdout, "cadre mcp-dispatch-server %s\n", version)
+			_, _ = fmt.Fprintf(stdout, "cadre mcp-dispatch-server %s\n", version)
 			return 0
 		}
 	}
@@ -66,13 +65,13 @@ func MCPDispatchServerCmd(args []string, stdout, stderr io.Writer) int {
 	// Create and validate server
 	server := orchestration.NewDispatchMCPServer(config)
 	if err := server.ValidateConfig(); err != nil {
-		fmt.Fprintf(stderr, "cadre: invalid server configuration: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "cadre: invalid server configuration: %v\n", err)
 		return 1
 	}
 
 	// Run the MCP server loop on stdio
 	if err := runMCPDispatchServer(ctx, server, os.Stdin, os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintf(stderr, "cadre: mcp-dispatch-server error: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "cadre: mcp-dispatch-server error: %v\n", err)
 		return 1
 	}
 
@@ -96,7 +95,7 @@ func runMCPDispatchServer(
 			if err == io.EOF {
 				break
 			}
-			return fmt.Errorf("failed to read MCP message: %v", err)
+			return fmt.Errorf("failed to read MCP message: %w", err)
 		}
 
 		// Process message based on type
@@ -112,7 +111,7 @@ func runMCPDispatchServer(
 				},
 			}
 			if err := json.NewEncoder(stdout).Encode(response); err != nil {
-				return fmt.Errorf("failed to write initialize response: %v", err)
+				return fmt.Errorf("failed to write initialize response: %w", err)
 			}
 
 		case "call_tool":
@@ -129,7 +128,7 @@ func runMCPDispatchServer(
 			}
 
 			if err := json.NewEncoder(stdout).Encode(response); err != nil {
-				return fmt.Errorf("failed to write tool response: %v", err)
+				return fmt.Errorf("failed to write tool response: %w", err)
 			}
 
 		case "close":

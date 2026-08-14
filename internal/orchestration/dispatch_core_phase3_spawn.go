@@ -2,6 +2,7 @@ package orchestration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -142,12 +143,12 @@ func ExecuteDispatchChild(
 func SafelyKillProcess(pid int, timeout time.Duration) error {
 	process, err := os.FindProcess(pid)
 	if err != nil {
-		return fmt.Errorf("failed to find process %d: %v", pid, err)
+		return fmt.Errorf("failed to find process %d: %w", pid, err)
 	}
 
 	// Attempt graceful SIGTERM
 	if err := process.Signal(os.Interrupt); err != nil {
-		return fmt.Errorf("failed to send SIGTERM to %d: %v", pid, err)
+		return fmt.Errorf("failed to send SIGTERM to %d: %w", pid, err)
 	}
 
 	// Wait with timeout, then force SIGKILL if needed
@@ -161,7 +162,7 @@ func SafelyKillProcess(pid int, timeout time.Duration) error {
 	case <-time.After(timeout):
 		// Process didn't exit gracefully, force kill
 		if err := process.Kill(); err != nil {
-			return fmt.Errorf("failed to force kill process %d: %v", pid, err)
+			return fmt.Errorf("failed to force kill process %d: %w", pid, err)
 		}
 		<-done
 		return nil
@@ -174,12 +175,12 @@ func SafelyKillProcess(pid int, timeout time.Duration) error {
 func validateClaudeCodeExecution(model, sandboxMode string) error {
 	// Check model is valid
 	validModels := map[string]bool{
-		"claude-opus-5":      true,
-		"claude-sonnet-5":    true,
-		"claude-haiku-4.5":   true,
-		"claude-opus-4.1":    true,
-		"claude-sonnet-4":    true,
-		"claude-haiku-4":     true,
+		"claude-opus-5":    true,
+		"claude-sonnet-5":  true,
+		"claude-haiku-4.5": true,
+		"claude-opus-4.1":  true,
+		"claude-sonnet-4":  true,
+		"claude-haiku-4":   true,
 	}
 
 	if !validModels[model] {
@@ -205,7 +206,8 @@ func parseCommandOutput(state *os.ProcessState, output []byte, err error) map[st
 		errorMsg = err.Error()
 
 		// Extract exit code if available
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			exitCode = exitErr.ExitCode()
 			status = "failed"
 		}
@@ -217,9 +219,9 @@ func parseCommandOutput(state *os.ProcessState, output []byte, err error) map[st
 	}
 
 	result := map[string]any{
-		"status":     status,
-		"exit_code":  exitCode,
-		"output":     string(output),
+		"status":    status,
+		"exit_code": exitCode,
+		"output":    string(output),
 	}
 
 	if errorMsg != "" {
@@ -258,9 +260,20 @@ func SpawnWithContextTimeout(
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// Attach context to command
-	cmd = exec.CommandContext(ctx, cmd.Path, cmd.Args[1:]...)
-	cmd.Env = cmd.Env
+	// Attach the context by rebuilding the command: exec.Cmd has no way to
+	// bind a context after construction. CommandContext returns a *fresh*
+	// Cmd, so every caller-supplied field has to be carried across
+	// explicitly or the timeout wrapper silently discards it. Stdout/Stderr
+	// are deliberately *not* copied -- CombinedOutput below rejects a Cmd
+	// that already has them set.
+	original := cmd
+	cmd = exec.CommandContext(ctx, original.Path)
+	cmd.Args = original.Args // preserves argv[0] even when it differs from Path
+	cmd.Env = original.Env
+	cmd.Dir = original.Dir
+	cmd.Stdin = original.Stdin
+	cmd.ExtraFiles = original.ExtraFiles
+	cmd.SysProcAttr = original.SysProcAttr
 
 	// Execute and capture output
 	output, err := cmd.CombinedOutput()

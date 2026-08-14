@@ -1,4 +1,3 @@
-//nolint:errcheck
 package knowledge
 
 import (
@@ -17,7 +16,7 @@ import (
 // Store manages persistent knowledge store operations via SQLite.
 // Equivalent to Python's database.py open_store() context manager.
 type Store struct {
-	db *sql.DB
+	db   *sql.DB
 	path string
 }
 
@@ -125,13 +124,13 @@ func Open(dbPath string) (*Store, error) {
 
 	// Configure SQLite
 	if err := configureDB(db); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 
 	// Initialize schema
 	if err := initSchema(db); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 
@@ -184,10 +183,10 @@ func (s *Store) Close() error {
 // Stats returns summary statistics about the store.
 func (s *Store) Stats() (*StoreStats, error) {
 	stats := &StoreStats{
-		CreatedAt:        time.Now(),
-		Sources:          make(map[string]int64),
-		Classifications:  make(map[string]int64),
-		EmbeddingModels:  make(map[string]int64),
+		CreatedAt:       time.Now(),
+		Sources:         make(map[string]int64),
+		Classifications: make(map[string]int64),
+		EmbeddingModels: make(map[string]int64),
 	}
 
 	// Total messages, chunks, runs
@@ -222,7 +221,7 @@ func (s *Store) Stats() (*StoreStats, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot query sources: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var source string
 		var count int64
@@ -236,7 +235,7 @@ func (s *Store) Stats() (*StoreStats, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot query classifications: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var classification string
 		var count int64
@@ -250,7 +249,7 @@ func (s *Store) Stats() (*StoreStats, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot query embedding models: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var model string
 		var count int64

@@ -1,6 +1,7 @@
 package orchestration
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -22,7 +23,8 @@ func TestResolveRoleForDispatchDefaultRunner(t *testing.T) {
 		t.Errorf("expected error for non-existent role files")
 	}
 	// Should be an "unavailable" error, not a validation error
-	if _, ok := err.(*DispatchUnavailable); !ok {
+	var unavailable *DispatchUnavailable
+	if !errors.As(err, &unavailable) {
 		t.Errorf("expected DispatchUnavailable error for missing role, got %T", err)
 	}
 }
@@ -32,7 +34,8 @@ func TestResolveRoleForDispatchUnknownRunner(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected error for unknown runner")
 	}
-	if _, ok := err.(*DispatchDenied); !ok {
+	var denied *DispatchDenied
+	if !errors.As(err, &denied) {
 		t.Errorf("expected DispatchDenied error, got %T", err)
 	}
 }
@@ -42,7 +45,8 @@ func TestResolveRoleForDispatchAPIRunner(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected error for unimplemented API runner")
 	}
-	if _, ok := err.(*DispatchUnavailable); !ok {
+	var unavailable *DispatchUnavailable
+	if !errors.As(err, &unavailable) {
 		t.Errorf("expected DispatchUnavailable error, got %T", err)
 	}
 }
@@ -347,9 +351,9 @@ func TestValidateDispatchContextValid(t *testing.T) {
 
 func TestEffectiveSandboxForDispatch(t *testing.T) {
 	tests := []struct {
-		mode       string
-		fileSand   string
-		expected   string
+		mode     string
+		fileSand string
+		expected string
 	}{
 		{ModePlanningOnly, "", SandboxReadOnly},
 		{ModePlanningOnly, SandboxWorkspaceWrite, SandboxReadOnly},

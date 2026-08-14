@@ -1,4 +1,3 @@
-//nolint:errcheck
 // write.go ports settings.py's write_setting: atomic, containment-checked
 // writes to the project-local or user-global config file, preserving
 // unrecognized existing keys.
@@ -189,20 +188,20 @@ func writeAtomic(path, content string, mode os.FileMode) error {
 	}
 	tmpName := tmp.Name()
 	if _, err := tmp.WriteString(content); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
 		return err
 	}
 	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName)
 		return err
 	}
 	if err := os.Chmod(tmpName, mode); err != nil {
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName)
 		return err
 	}
 	if err := os.Rename(tmpName, path); err != nil {
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName)
 		return err
 	}
 	return nil

@@ -1,48 +1,48 @@
-//nolint:errcheck
 package knowledge
 
 import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 // CrossShardCompactor manages incremental compaction across multiple shards.
 type CrossShardCompactor struct {
-	mu                sync.RWMutex
-	shards            map[string]*HSNWIndex
-	compactionPlan    *CompactionPlan
-	executionHistory  []CompactionExecution
-	predictor         *PriorityPredictor
-	currentExecution  *CompactionExecution
-	metrics           *CrossShardMetrics
+	mu               sync.RWMutex
+	shards           map[string]*HSNWIndex
+	compactionPlan   *CompactionPlan
+	executionHistory []CompactionExecution
+	predictor        *PriorityPredictor
+	currentExecution *CompactionExecution
+	metrics          *CrossShardMetrics
 }
 
 // CompactionPlan defines strategy for cross-shard compaction.
 type CompactionPlan struct {
-	Strategy          string // "sequential", "interleaved", "parallel"
-	MaxConcurrent     int64
-	BatchesPerShard   int64
-	BatchSize         int64
-	TimeoutSeconds    int64
-	PreferredWindow   string // HH:MM-HH:MM
-	EstimatedTimeMs   int64
-	Priority          []string // Ordered shard IDs
+	Strategy        string // "sequential", "interleaved", "parallel"
+	MaxConcurrent   int64
+	BatchesPerShard int64
+	BatchSize       int64
+	TimeoutSeconds  int64
+	PreferredWindow string // HH:MM-HH:MM
+	EstimatedTimeMs int64
+	Priority        []string // Ordered shard IDs
 }
 
 // CompactionExecution tracks execution of a compaction plan.
 type CompactionExecution struct {
-	ID                string
-	Plan              *CompactionPlan
-	StartTime         time.Time
-	EndTime           time.Time
-	State             string // "pending", "running", "complete", "failed"
-	ShardsCompleted   int64
-	TotalShards       int64
-	EntriesRemoved    int64
-	Duration          int64
-	ErrorMessage      string
+	ID              string
+	Plan            *CompactionPlan
+	StartTime       time.Time
+	EndTime         time.Time
+	State           string // "pending", "running", "complete", "failed"
+	ShardsCompleted int64
+	TotalShards     int64
+	EntriesRemoved  int64
+	Duration        int64
+	ErrorMessage    string
 }
 
 // CrossShardMetrics aggregates metrics across shards.
@@ -59,11 +59,11 @@ type CrossShardMetrics struct {
 
 // PriorityPredictor predicts compaction urgency based on patterns.
 type PriorityPredictor struct {
-	mu                   sync.RWMutex
-	history              map[string][]PredictionDataPoint // Shard -> history
-	deletionTrend        map[string]float64               // Shard -> deletion rate
-	compactionFrequency  map[string]int64                 // Shard -> times compacted
-	timesSinceCompact    map[string]int64                 // Shard -> seconds
+	mu                  sync.RWMutex
+	history             map[string][]PredictionDataPoint // Shard -> history
+	deletionTrend       map[string]float64               // Shard -> deletion rate
+	compactionFrequency map[string]int64                 // Shard -> times compacted
+	timesSinceCompact   map[string]int64                 // Shard -> seconds
 }
 
 // PredictionDataPoint represents a historical data point.
@@ -76,13 +76,13 @@ type PredictionDataPoint struct {
 
 // PriorityPrediction predicts when compaction is needed.
 type PriorityPrediction struct {
-	ShardID              string
-	CurrentDeletionRatio float64
-	PredictedDeletionRatio float64
-	TrendSlope           float64 // Deletion rate (% per hour)
+	ShardID                     string
+	CurrentDeletionRatio        float64
+	PredictedDeletionRatio      float64
+	TrendSlope                  float64 // Deletion rate (% per hour)
 	EstimatedCompactTimeMinutes int64
-	RecommendedPriority  int     // 1-10
-	Reason               string
+	RecommendedPriority         int // 1-10
+	Reason                      string
 }
 
 // NewCrossShardCompactor creates a cross-shard compaction manager.
@@ -112,13 +112,9 @@ func (csc *CrossShardCompactor) PlanCompaction(strategy string) *CompactionPlan 
 	// Get current state
 	csc.updateMetrics()
 
-	// Calculate priorities
+	// Calculate priorities. PredictAll already returns them most-urgent-first
+	// with a deterministic tie-break, so no second sort is needed here.
 	priorities := csc.predictor.PredictAll(csc.shards)
-
-	// Sort by priority (highest first)
-	sort.Slice(priorities, func(i, j int) bool {
-		return priorities[i].RecommendedPriority > priorities[j].RecommendedPriority
-	})
 
 	shardOrder := make([]string, len(priorities))
 	for i, p := range priorities {
@@ -134,13 +130,13 @@ func (csc *CrossShardCompactor) PlanCompaction(strategy string) *CompactionPlan 
 	}
 
 	plan := &CompactionPlan{
-		Strategy:       strategy,
-		MaxConcurrent:  4,
+		Strategy:        strategy,
+		MaxConcurrent:   4,
 		BatchesPerShard: 10,
-		BatchSize:      5000,
-		TimeoutSeconds: 300,
+		BatchSize:       5000,
+		TimeoutSeconds:  300,
 		EstimatedTimeMs: estimatedMs,
-		Priority:       shardOrder,
+		Priority:        shardOrder,
 	}
 
 	csc.compactionPlan = plan
@@ -202,7 +198,7 @@ func (csc *CrossShardCompactor) executeSequential(exec *CompactionExecution) err
 
 		err := idx.Compact()
 		if err != nil {
-			return fmt.Errorf("shard %s failed: %v", shardID, err)
+			return fmt.Errorf("shard %s failed: %w", shardID, err)
 		}
 
 		status := idx.GetDeletionStatus()
@@ -254,8 +250,11 @@ func (csc *CrossShardCompactor) executeParallel(exec *CompactionExecution) error
 				return
 			}
 
-			idx.Compact()
-			exec.ShardsCompleted++
+			_ = idx.Compact()
+			// Every worker increments the same counter, so it needs an atomic
+			// read-modify-write; a plain `++` here is a data race (and loses
+			// completions) under concurrent shards.
+			atomic.AddInt64(&exec.ShardsCompleted, 1)
 		}(shardID)
 	}
 
@@ -266,9 +265,9 @@ func (csc *CrossShardCompactor) executeParallel(exec *CompactionExecution) error
 // updateMetrics refreshes cross-shard metrics.
 func (csc *CrossShardCompactor) updateMetrics() {
 	metrics := &CrossShardMetrics{
-		TotalShards:        int64(len(csc.shards)),
+		TotalShards:         int64(len(csc.shards)),
 		CompactionFrequency: make(map[string]int64),
-		LastCompactionTime: make(map[string]time.Time),
+		LastCompactionTime:  make(map[string]time.Time),
 	}
 
 	var deletionRatios []float64
@@ -397,18 +396,31 @@ func (pp *PriorityPredictor) PredictAll(shards map[string]*HSNWIndex) []*Priorit
 			pred.EstimatedCompactTimeMinutes = timeToThreshold
 		}
 
-		if status.DeletionRatio > 20 {
+		switch {
+		case status.DeletionRatio > 20:
 			pred.Reason = "HIGH: deletion > 20%, immediate action needed"
-		} else if status.DeletionRatio > 15 {
+		case status.DeletionRatio > 15:
 			pred.Reason = "MEDIUM: deletion 15-20%, compact soon"
-		} else if status.DeletionRatio > 10 {
+		case status.DeletionRatio > 10:
 			pred.Reason = "LOW: deletion 10-15%, monitor"
-		} else {
+		default:
 			pred.Reason = "OK: deletion < 10%"
 		}
 
 		predictions = append(predictions, pred)
 	}
+
+	// Ranging over a map yields a random order, so sort before returning:
+	// callers (and the compaction plan built from this list) depend on
+	// most-urgent-first, and an unordered result would also make the same
+	// inputs produce a different plan on every run. ShardID breaks ties so
+	// the ordering is total.
+	sort.Slice(predictions, func(i, j int) bool {
+		if predictions[i].RecommendedPriority != predictions[j].RecommendedPriority {
+			return predictions[i].RecommendedPriority > predictions[j].RecommendedPriority
+		}
+		return predictions[i].ShardID < predictions[j].ShardID
+	})
 
 	return predictions
 }

@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -14,7 +11,7 @@ func TestStreamingBatchWriterCreation(t *testing.T) {
 	writer := NewStreamingBatchWriter(idx, 1000)
 
 	if writer == nil {
-		t.Error("Failed to create streaming writer")
+		t.Fatal("Failed to create streaming writer")
 	}
 
 	if writer.bufferSize != 1000 {

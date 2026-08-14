@@ -4,6 +4,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -155,7 +156,8 @@ func resolveCore(key string, opts resolveOptions) (*Resolved, error) {
 	if err != nil {
 		return nil, err
 	}
-	if projectPath != "" {
+	switch {
+	case projectPath != "":
 		data, err := loadConfigFile(projectPath)
 		if err != nil {
 			return nil, err
@@ -176,10 +178,10 @@ func resolveCore(key string, opts resolveOptions) (*Resolved, error) {
 		} else {
 			checks = append(checks, fmt.Sprintf("%s -> found, key absent", projectPath))
 		}
-	} else if opts.start == "" && projectTierCWDFallbackDisabled() {
+	case opts.start == "" && projectTierCWDFallbackDisabled():
 		checks = append(checks, "project-local config -> not consulted (no project anchor supplied and "+
 			"this process does not treat its working directory as one)")
-	} else {
+	default:
 		yamlCandidate, _, _ := projectConfigCandidates(opts.start)
 		expected := yamlCandidate
 		if expected == "" {
@@ -304,10 +306,12 @@ func ResolveSetting(key string, start string) (any, error) {
 func ResolveOptional(key string, start string) (any, error) {
 	value, err := ResolveSetting(key, start)
 	if err != nil {
-		if _, ok := err.(*SettingsScopeError); ok {
+		var scopeErr *SettingsScopeError
+		if errors.As(err, &scopeErr) {
 			return nil, err
 		}
-		if _, ok := err.(*SettingsError); ok {
+		var settingsErr *SettingsError
+		if errors.As(err, &settingsErr) {
 			return nil, nil
 		}
 		return nil, err
@@ -323,10 +327,12 @@ func ResolveOptional(key string, start string) (any, error) {
 func ResolveOptionalWithIO(key, start string, inputFunc func(string) (string, error), outputFunc func(string)) (any, error) {
 	r, err := resolveCore(key, resolveOptions{start: start, allowPrompt: true, inputFunc: inputFunc, outputFunc: outputFunc})
 	if err != nil {
-		if _, ok := err.(*SettingsScopeError); ok {
+		var scopeErr *SettingsScopeError
+		if errors.As(err, &scopeErr) {
 			return nil, err
 		}
-		if _, ok := err.(*SettingsError); ok {
+		var settingsErr *SettingsError
+		if errors.As(err, &settingsErr) {
 			return nil, nil
 		}
 		return nil, err

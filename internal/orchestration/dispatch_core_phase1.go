@@ -2,6 +2,7 @@ package orchestration
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -100,11 +101,11 @@ func ResolveRoleFileCodex(
 		// Create resolved role
 		_ = sha256.Sum256([]byte(developerInstructions)) // digest computed but not used in stub
 		role := &ResolvedRole{
-			ID:                developerInstructions,
-			FilePath:          candidate,
+			ID:                 developerInstructions,
+			FilePath:           candidate,
 			DeveloperInstructs: developerInstructions,
-			Model:             model,
-			SandboxMode:       fields["sandbox_mode"],
+			Model:              model,
+			SandboxMode:        fields["sandbox_mode"],
 		}
 		return role, nil
 	}
@@ -203,11 +204,11 @@ func ResolveClaudeCodeRoleFile(
 func ensureContained(path, root string) error {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return fmt.Errorf("cannot resolve path %s: %v", path, err)
+		return fmt.Errorf("cannot resolve path %s: %w", path, err)
 	}
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
-		return fmt.Errorf("cannot resolve root %s: %v", root, err)
+		return fmt.Errorf("cannot resolve root %s: %w", root, err)
 	}
 
 	// Ensure path is under root
@@ -360,20 +361,21 @@ func SpawnAndWait(
 	output, err := command.CombinedOutput()
 	if err != nil {
 		exitCode := 1
-		if ee, ok := err.(*exec.ExitError); ok {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
 			exitCode = ee.ExitCode()
 		}
 		return map[string]any{
-			"status":     "error",
-			"exit_code":  exitCode,
-			"error":      err.Error(),
-			"output":     string(output),
+			"status":    "error",
+			"exit_code": exitCode,
+			"error":     err.Error(),
+			"output":    string(output),
 		}, nil
 	}
 
 	return map[string]any{
-		"status":     "success",
-		"exit_code":  0,
-		"output":     string(output),
+		"status":    "success",
+		"exit_code": 0,
+		"output":    string(output),
 	}, nil
 }

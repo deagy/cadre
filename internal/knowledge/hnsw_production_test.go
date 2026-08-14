@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -12,7 +9,7 @@ import (
 func TestFaultToleranceCreation(t *testing.T) {
 	ft := NewFaultTolerance()
 	if ft == nil {
-		t.Error("Failed to create fault tolerance manager")
+		t.Fatal("Failed to create fault tolerance manager")
 	}
 
 	if ft.maxRetries != 3 {
@@ -152,7 +149,7 @@ func TestRecoveryStats(t *testing.T) {
 func TestReplicationCreation(t *testing.T) {
 	rep := NewReplication("primary-node")
 	if rep == nil {
-		t.Error("Failed to create replication manager")
+		t.Fatal("Failed to create replication manager")
 	}
 
 	if rep.nodeID != "primary-node" {
@@ -226,7 +223,7 @@ func TestVerifyConsistency(t *testing.T) {
 func TestDisasterRecoveryCreation(t *testing.T) {
 	dr := NewDisasterRecovery("/backups")
 	if dr == nil {
-		t.Error("Failed to create disaster recovery manager")
+		t.Fatal("Failed to create disaster recovery manager")
 	}
 
 	if dr.backupLocation != "/backups" {

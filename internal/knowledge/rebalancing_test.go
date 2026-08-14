@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -9,6 +6,7 @@ import (
 )
 
 func TestRebalancerAnalyzeShard(t *testing.T) {
+	requireSQLite(t)
 	// Setup test stores
 	store0 := setupTestDB(t)
 	defer store0.Close()
@@ -63,6 +61,7 @@ func TestRebalancerAnalyzeShard(t *testing.T) {
 }
 
 func TestRebalancerNoImbalance(t *testing.T) {
+	requireSQLite(t)
 	// Setup balanced stores
 	store0 := setupTestDB(t)
 	defer store0.Close()
@@ -108,6 +107,7 @@ func TestRebalancerNoImbalance(t *testing.T) {
 }
 
 func TestRebalancerStartRebalance(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -151,6 +151,7 @@ func TestRebalancerStartRebalance(t *testing.T) {
 }
 
 func TestRebalancerStartRebalanceSameShard(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -168,6 +169,7 @@ func TestRebalancerStartRebalanceSameShard(t *testing.T) {
 }
 
 func TestRebalancerStartRebalanceMissingShard(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -185,6 +187,7 @@ func TestRebalancerStartRebalanceMissingShard(t *testing.T) {
 }
 
 func TestRebalancerCancelRebalance(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -215,6 +218,7 @@ func TestRebalancerCancelRebalance(t *testing.T) {
 }
 
 func TestRebalancerCancelNonexistent(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -232,6 +236,7 @@ func TestRebalancerCancelNonexistent(t *testing.T) {
 }
 
 func TestRebalancerGetStats(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -284,6 +289,7 @@ func TestRebalancerAnalyzeEmptyRegistry(t *testing.T) {
 }
 
 func TestRebalancerMultipleShards(t *testing.T) {
+	requireSQLite(t)
 	// Create 3 shards with different loads
 	stores := make(map[string]*Store)
 	for i := 0; i < 3; i++ {
@@ -329,6 +335,7 @@ func TestRebalancerMultipleShards(t *testing.T) {
 }
 
 func TestRebalancerGetStatusNonexistent(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -346,6 +353,7 @@ func TestRebalancerGetStatusNonexistent(t *testing.T) {
 }
 
 func TestRebalancerHotShardDetection(t *testing.T) {
+	requireSQLite(t)
 	// Create heavily imbalanced shards
 	store0 := setupTestDB(t)
 	defer store0.Close()

@@ -18,16 +18,16 @@ func NewConfigManager() *ConfigManager {
 	return &ConfigManager{
 		config: make(map[string]interface{}),
 		defaults: map[string]interface{}{
-			"backup_location":              "/backups",
-			"backup_schedule_hours":        24,
-			"replication_consistency":      "eventual",
-			"fault_tolerance_max_retries":  3,
-			"circuit_breaker_threshold":    5,
-			"circuit_breaker_reset_sec":    30,
-			"max_replication_lag_ms":       1000,
-			"enable_metrics":               true,
-			"metrics_retention_days":       30,
-			"enable_diagnostics":           true,
+			"backup_location":             "/backups",
+			"backup_schedule_hours":       24,
+			"replication_consistency":     "eventual",
+			"fault_tolerance_max_retries": 3,
+			"circuit_breaker_threshold":   5,
+			"circuit_breaker_reset_sec":   30,
+			"max_replication_lag_ms":      1000,
+			"enable_metrics":              true,
+			"metrics_retention_days":      30,
+			"enable_diagnostics":          true,
 		},
 	}
 }
@@ -83,17 +83,17 @@ type HealthChecker struct {
 
 // ComponentHealth represents health of a component.
 type ComponentHealth struct {
-	Name    string
-	Status  string // "healthy", "degraded", "unhealthy"
-	Message string
+	Name      string
+	Status    string // "healthy", "degraded", "unhealthy"
+	Message   string
 	LastCheck time.Time
 }
 
 // HealthReport contains overall health information.
 type HealthReport struct {
-	OverallStatus string
-	Timestamp     time.Time
-	Components    []ComponentHealth
+	OverallStatus  string
+	Timestamp      time.Time
+	Components     []ComponentHealth
 	ChecksDuration int64 // milliseconds
 }
 
@@ -145,18 +145,20 @@ func (hc *HealthChecker) Check() *HealthReport {
 	unhealthy := 0
 	degraded := 0
 	for _, comp := range hc.componentStatus {
-		if comp.Status == "unhealthy" {
+		switch comp.Status {
+		case "unhealthy":
 			unhealthy++
-		} else if comp.Status == "degraded" {
+		case "degraded":
 			degraded++
 		}
 	}
 
-	if unhealthy > 0 {
+	switch {
+	case unhealthy > 0:
 		hc.overallStatus = "unhealthy"
-	} else if degraded > 0 {
+	case degraded > 0:
 		hc.overallStatus = "degraded"
-	} else {
+	default:
 		hc.overallStatus = "healthy"
 	}
 
@@ -178,29 +180,29 @@ func (hc *HealthChecker) Check() *HealthReport {
 
 // Diagnostics provides system diagnostics.
 type Diagnostics struct {
-	mu              sync.RWMutex
-	ft              *FaultTolerance
-	rep             *Replication
-	dr              *DisasterRecovery
-	config          *ConfigManager
-	startTime       time.Time
-	messageCount    int64
-	chunkCount      int64
-	operationCount  int64
+	mu             sync.RWMutex
+	ft             *FaultTolerance
+	rep            *Replication
+	dr             *DisasterRecovery
+	config         *ConfigManager
+	startTime      time.Time
+	messageCount   int64
+	chunkCount     int64
+	operationCount int64
 }
 
 // DiagnosticsReport contains diagnostic information.
 type DiagnosticsReport struct {
-	Uptime          int64 // seconds
-	MessageCount    int64
-	ChunkCount      int64
-	OperationCount  int64
-	ErrorCount      int64
-	AverageLatency  float64 // milliseconds
-	Replicas        int
-	BackupCount     int
-	CircuitState    string
-	LastError       string
+	Uptime         int64 // seconds
+	MessageCount   int64
+	ChunkCount     int64
+	OperationCount int64
+	ErrorCount     int64
+	AverageLatency float64 // milliseconds
+	Replicas       int
+	BackupCount    int
+	CircuitState   string
+	LastError      string
 }
 
 // NewDiagnostics creates a diagnostics system.
@@ -223,11 +225,12 @@ func (d *Diagnostics) GetReport() *DiagnosticsReport {
 
 	var circuitState string
 	if d.ft.circuitBreaker.CanExecute() {
-		if d.ft.circuitBreaker.state == "open" {
+		switch d.ft.circuitBreaker.state {
+		case "open":
 			circuitState = "open"
-		} else if d.ft.circuitBreaker.state == "half-open" {
+		case "half-open":
 			circuitState = "half-open"
-		} else {
+		default:
 			circuitState = "closed"
 		}
 	} else {
@@ -251,10 +254,9 @@ func (d *Diagnostics) GetReport() *DiagnosticsReport {
 
 // MetricsCollector collects system metrics.
 type MetricsCollector struct {
-	mu              sync.RWMutex
-	metrics         map[string]MetricValue
-	retentionDays   int
-	lastCollectTime time.Time
+	mu            sync.RWMutex
+	metrics       map[string]MetricValue
+	retentionDays int
 }
 
 // MetricValue represents a collected metric.

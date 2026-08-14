@@ -1,4 +1,3 @@
-//nolint:errcheck
 // gitlab.go ports roster/orchestration/mcp/gitlab_core.py: a small,
 // deliberately create-only set of GitLab operations (a review-subtask
 // issue, a wiki page, an evidence comment) so any agent can record
@@ -145,6 +144,20 @@ func gitlabValidationError(format string, args ...any) *GitLabError {
 	return &GitLabError{Kind: GitLabKindDenied, Message: fmt.Sprintf(format, args...)}
 }
 
+// asGitLabError recovers the *GitLabError that every error-producing helper
+// in this file constructs. It replaces a bare `err.(*GitLabError)` assertion:
+// that form panics on any error this file did not build itself, and it also
+// misses a *GitLabError that some future caller has wrapped with %w. The
+// fallback classifies an unrecognised error as unavailable rather than
+// crashing the tool mid-audit-record.
+func asGitLabError(err error) *GitLabError {
+	var gErr *GitLabError
+	if errors.As(err, &gErr) {
+		return gErr
+	}
+	return gitlabConfigError("%s", err.Error())
+}
+
 // resolveGitLabToken resolves GITLAB_SVC_TOKEN lazily. Fails closed on
 // unset/empty/whitespace-only. Callers must never log the returned token.
 func resolveGitLabToken() (string, error) {
@@ -169,7 +182,8 @@ func resolveGitLabConfig() (GitLabConfig, error) {
 	values, err := cadreconfig.ResolveMany(
 		[]string{"gitlab.base_url", "gitlab.project_id", "gitlab.supports_work_item_hierarchy"}, "")
 	if err != nil {
-		if scopeErr, ok := err.(*cadreconfig.SettingsScopeError); ok {
+		var scopeErr *cadreconfig.SettingsScopeError
+		if errors.As(err, &scopeErr) {
 			return GitLabConfig{}, gitlabConfigError("%s", scopeErr.Error())
 		}
 		return GitLabConfig{}, gitlabConfigError("%s", err.Error())
@@ -244,7 +258,7 @@ func writeGitLabAuditRecord(path, tool, taskID, decision string, extra map[strin
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	_, err = f.Write(append(data, '\n'))
 	return err
 }
@@ -352,7 +366,10 @@ func gitlabRequestJSON(client *http.Client, method, path string, config GitLabCo
 			req.Header.Set("Content-Type", "application/json")
 		}
 
-		resp, err := client.Do(req)
+		// bodyclose cannot follow the body across a call boundary:
+		// readGitLabResponse below owns resp and closes its body via defer on
+		// every path, including the size-cap and decode-failure returns.
+		resp, err := client.Do(req) //nolint:bodyclose // closed by readGitLabResponse
 		if err != nil {
 			if !gitlabShouldRetry(attempt, started) {
 				return nil, &GitLabError{
@@ -393,7 +410,7 @@ func bytesReader(b []byte) *strings.Reader {
 // readGitLabResponse reads and classifies one HTTP response. retryable is
 // true for 429/5xx; err is nil only on 2xx success.
 func readGitLabResponse(resp *http.Response, method, path string) (result any, retryable bool, err *GitLabError) {
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw := make([]byte, 0, 4096)
 	buf := make([]byte, 4096)
 	total := 0
@@ -501,11 +518,11 @@ func gitlabErrorResult(err *GitLabError) map[string]any {
 func resolveGitLabTokenAndConfig() (string, GitLabConfig, map[string]any) {
 	token, err := resolveGitLabToken()
 	if err != nil {
-		return "", GitLabConfig{}, gitlabErrorResult(err.(*GitLabError))
+		return "", GitLabConfig{}, gitlabErrorResult(asGitLabError(err))
 	}
 	config, err := resolveGitLabConfig()
 	if err != nil {
-		return "", GitLabConfig{}, gitlabErrorResult(err.(*GitLabError))
+		return "", GitLabConfig{}, gitlabErrorResult(asGitLabError(err))
 	}
 	return token, config, nil
 }
@@ -608,44 +625,44 @@ func CreateGitLabReviewSubtask(client *http.Client, parentIssueIID int, title, d
 
 	if parentIssueIID <= 0 {
 		err := gitlabValidationError("parent_issue_iid must be a positive integer: %d", parentIssueIID)
-		writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, "denied", withReason(auditFields, err))
+		_ = writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, "denied", withReason(auditFields, err))
 		return gitlabErrorResult(err)
 	}
 	if strings.TrimSpace(title) == "" {
 		err := gitlabValidationError("title must be a non-empty string")
-		writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, "denied", withReason(auditFields, err))
+		_ = writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, "denied", withReason(auditFields, err))
 		return gitlabErrorResult(err)
 	}
 	if err := rejectQuickActionSyntax(description, "description"); err != nil {
-		gErr := err.(*GitLabError)
-		writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, "denied", withReason(auditFields, gErr))
+		gErr := asGitLabError(err)
+		_ = writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, "denied", withReason(auditFields, gErr))
 		return gitlabErrorResult(gErr)
 	}
 	if err := validateLabelComponent(gateID, "gate_id", gateIDPattern); err != nil {
-		gErr := err.(*GitLabError)
-		writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, "denied", withReason(auditFields, gErr))
+		gErr := asGitLabError(err)
+		_ = writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, "denied", withReason(auditFields, gErr))
 		return gitlabErrorResult(gErr)
 	}
 	if err := validateLabelComponent(taskID, "task_id", taskIDPattern); err != nil {
-		gErr := err.(*GitLabError)
-		writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, "denied", withReason(auditFields, gErr))
+		gErr := asGitLabError(err)
+		_ = writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, "denied", withReason(auditFields, gErr))
 		return gitlabErrorResult(gErr)
 	}
 
 	token, config, errResult := resolveGitLabTokenAndConfig()
 	if errResult != nil {
-		writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, fmt.Sprintf("%v", errResult["status"]), auditFields)
+		_ = writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, fmt.Sprintf("%v", errResult["status"]), auditFields)
 		return errResult
 	}
 
 	existing, err := findExistingGitLabSubtask(client, config, token, parentIssueIID, gateID, taskID)
 	if err != nil {
-		gErr := err.(*GitLabError)
-		writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, string(gErr.Kind), withReason(auditFields, gErr))
+		gErr := asGitLabError(err)
+		_ = writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, string(gErr.Kind), withReason(auditFields, gErr))
 		return gitlabErrorResult(gErr)
 	}
 	if existing != nil {
-		writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, "ok", mergeMap(auditFields, map[string]any{"created": false, "issue_iid": existing["iid"]}))
+		_ = writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, "ok", mergeMap(auditFields, map[string]any{"created": false, "issue_iid": existing["iid"]}))
 		return map[string]any{
 			"status": "ok", "created": false,
 			"hierarchy_supported": config.SupportsWorkItemHierarchy,
@@ -663,12 +680,12 @@ func CreateGitLabReviewSubtask(client *http.Client, parentIssueIID int, title, d
 	}
 	created, err := gitlabRequestJSON(client, http.MethodPost, fmt.Sprintf("/projects/%s/issues", quoteGitLabProjectID(config)), config, token, nil, payload, time.Sleep)
 	if err != nil {
-		gErr := err.(*GitLabError)
-		writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, string(gErr.Kind), withReason(auditFields, gErr))
+		gErr := asGitLabError(err)
+		_ = writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, string(gErr.Kind), withReason(auditFields, gErr))
 		return gitlabErrorResult(gErr)
 	}
 	createdMap, _ := created.(map[string]any)
-	writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, "ok", mergeMap(auditFields, map[string]any{"created": true, "issue_iid": createdMap["iid"]}))
+	_ = writeGitLabAuditRecord(auditPath, "create_review_subtask", taskID, "ok", mergeMap(auditFields, map[string]any{"created": true, "issue_iid": createdMap["iid"]}))
 	return map[string]any{
 		"status": "ok", "created": true,
 		"hierarchy_supported": config.SupportsWorkItemHierarchy,
@@ -713,30 +730,30 @@ func WriteGitLabEvidenceComment(client *http.Client, issueIID int, content, task
 
 	if issueIID <= 0 {
 		err := gitlabValidationError("issue_iid must be a positive integer: %d", issueIID)
-		writeGitLabAuditRecord(auditPath, "write_evidence_comment", taskID, "denied", withReason(auditFields, err))
+		_ = writeGitLabAuditRecord(auditPath, "write_evidence_comment", taskID, "denied", withReason(auditFields, err))
 		return gitlabErrorResult(err)
 	}
 	if strings.TrimSpace(taskID) == "" {
 		err := gitlabValidationError("task_id must be a non-empty string")
-		writeGitLabAuditRecord(auditPath, "write_evidence_comment", taskID, "denied", withReason(auditFields, err))
+		_ = writeGitLabAuditRecord(auditPath, "write_evidence_comment", taskID, "denied", withReason(auditFields, err))
 		return gitlabErrorResult(err)
 	}
 	if err := rejectQuickActionSyntax(content, "content"); err != nil {
-		gErr := err.(*GitLabError)
-		writeGitLabAuditRecord(auditPath, "write_evidence_comment", taskID, "denied", withReason(auditFields, gErr))
+		gErr := asGitLabError(err)
+		_ = writeGitLabAuditRecord(auditPath, "write_evidence_comment", taskID, "denied", withReason(auditFields, gErr))
 		return gitlabErrorResult(gErr)
 	}
 	if len(content) > MaxEvidenceCommentBytes {
 		err := gitlabValidationError(
 			"content exceeds the %d-byte UTF-8-encoded cap for write_evidence_comment (%d bytes); "+
 				"shorten the content, do not truncate it here", MaxEvidenceCommentBytes, len(content))
-		writeGitLabAuditRecord(auditPath, "write_evidence_comment", taskID, "denied", withReason(auditFields, err))
+		_ = writeGitLabAuditRecord(auditPath, "write_evidence_comment", taskID, "denied", withReason(auditFields, err))
 		return gitlabErrorResult(err)
 	}
 
 	token, config, errResult := resolveGitLabTokenAndConfig()
 	if errResult != nil {
-		writeGitLabAuditRecord(auditPath, "write_evidence_comment", taskID, fmt.Sprintf("%v", errResult["status"]), auditFields)
+		_ = writeGitLabAuditRecord(auditPath, "write_evidence_comment", taskID, fmt.Sprintf("%v", errResult["status"]), auditFields)
 		return errResult
 	}
 
@@ -744,12 +761,12 @@ func WriteGitLabEvidenceComment(client *http.Client, issueIID int, content, task
 		fmt.Sprintf("/projects/%s/issues/%d/notes", quoteGitLabProjectID(config), issueIID), config, token, nil,
 		map[string]any{"body": content}, time.Sleep)
 	if err != nil {
-		gErr := err.(*GitLabError)
-		writeGitLabAuditRecord(auditPath, "write_evidence_comment", taskID, string(gErr.Kind), withReason(auditFields, gErr))
+		gErr := asGitLabError(err)
+		_ = writeGitLabAuditRecord(auditPath, "write_evidence_comment", taskID, string(gErr.Kind), withReason(auditFields, gErr))
 		return gitlabErrorResult(gErr)
 	}
 	createdMap, _ := created.(map[string]any)
-	writeGitLabAuditRecord(auditPath, "write_evidence_comment", taskID, "ok", mergeMap(auditFields, map[string]any{"comment_id": createdMap["id"]}))
+	_ = writeGitLabAuditRecord(auditPath, "write_evidence_comment", taskID, "ok", mergeMap(auditFields, map[string]any{"comment_id": createdMap["id"]}))
 	return map[string]any{"status": "ok", "comment": wrapUntrustedGitLabPayload(createdMap)}
 }
 
@@ -852,30 +869,30 @@ func WriteGitLabWikiPage(client *http.Client, slug, title, content, format, conf
 
 	if strings.TrimSpace(slug) == "" {
 		err := gitlabValidationError("slug must be a non-empty string")
-		writeGitLabAuditRecord(auditPath, "write_wiki_page", "", "denied", withReason(auditFields, err))
+		_ = writeGitLabAuditRecord(auditPath, "write_wiki_page", "", "denied", withReason(auditFields, err))
 		return gitlabErrorResult(err)
 	}
 	if strings.TrimSpace(title) == "" {
 		err := gitlabValidationError("title must be a non-empty string")
-		writeGitLabAuditRecord(auditPath, "write_wiki_page", "", "denied", withReason(auditFields, err))
+		_ = writeGitLabAuditRecord(auditPath, "write_wiki_page", "", "denied", withReason(auditFields, err))
 		return gitlabErrorResult(err)
 	}
 	if !validWikiFormats[format] {
 		err := gitlabValidationError("format must be one of markdown/rdoc/asciidoc/org: %q", format)
-		writeGitLabAuditRecord(auditPath, "write_wiki_page", "", "denied", withReason(auditFields, err))
+		_ = writeGitLabAuditRecord(auditPath, "write_wiki_page", "", "denied", withReason(auditFields, err))
 		return gitlabErrorResult(err)
 	}
 	if len(content) > MaxWikiPageContentBytes {
 		err := gitlabValidationError(
 			"content exceeds the %d-byte UTF-8-encoded cap for write_wiki_page (%d bytes); shorten the "+
 				"content, do not truncate it here", MaxWikiPageContentBytes, len(content))
-		writeGitLabAuditRecord(auditPath, "write_wiki_page", "", "denied", withReason(auditFields, err))
+		_ = writeGitLabAuditRecord(auditPath, "write_wiki_page", "", "denied", withReason(auditFields, err))
 		return gitlabErrorResult(err)
 	}
 
 	token, config, errResult := resolveGitLabTokenAndConfig()
 	if errResult != nil {
-		writeGitLabAuditRecord(auditPath, "write_wiki_page", "", fmt.Sprintf("%v", errResult["status"]), auditFields)
+		_ = writeGitLabAuditRecord(auditPath, "write_wiki_page", "", fmt.Sprintf("%v", errResult["status"]), auditFields)
 		return errResult
 	}
 
@@ -887,13 +904,13 @@ func WriteGitLabWikiPage(client *http.Client, slug, title, content, format, conf
 	if confirmationToken == "" {
 		existingBefore, err := getGitLabWikiPage(client, config, token, slug)
 		if err != nil {
-			gErr := err.(*GitLabError)
-			writeGitLabAuditRecord(auditPath, "write_wiki_page", "", string(gErr.Kind), withReason(auditFields, gErr))
+			gErr := asGitLabError(err)
+			_ = writeGitLabAuditRecord(auditPath, "write_wiki_page", "", string(gErr.Kind), withReason(auditFields, gErr))
 			return gitlabErrorResult(gErr)
 		}
 		willOverwrite := existingBefore != nil
 		issued := issueGitLabConfirmationToken(brief)
-		writeGitLabAuditRecord(auditPath, "write_wiki_page", "", "confirmation-required", mergeMap(auditFields, map[string]any{"will_overwrite_existing": willOverwrite}))
+		_ = writeGitLabAuditRecord(auditPath, "write_wiki_page", "", "confirmation-required", mergeMap(auditFields, map[string]any{"will_overwrite_existing": willOverwrite}))
 		return map[string]any{
 			"status":                  "confirmation_required",
 			"confirmation_token":      issued,
@@ -905,15 +922,15 @@ func WriteGitLabWikiPage(client *http.Client, slug, title, content, format, conf
 	}
 
 	if err := consumeGitLabConfirmationToken(confirmationToken, brief); err != nil {
-		gErr := err.(*GitLabError)
-		writeGitLabAuditRecord(auditPath, "write_wiki_page", "", "denied", withReason(auditFields, gErr))
+		gErr := asGitLabError(err)
+		_ = writeGitLabAuditRecord(auditPath, "write_wiki_page", "", "denied", withReason(auditFields, gErr))
 		return gitlabErrorResult(gErr)
 	}
 
 	existing, err := getGitLabWikiPage(client, config, token, slug)
 	if err != nil {
-		gErr := err.(*GitLabError)
-		writeGitLabAuditRecord(auditPath, "write_wiki_page", "", string(gErr.Kind), withReason(auditFields, gErr))
+		gErr := asGitLabError(err)
+		_ = writeGitLabAuditRecord(auditPath, "write_wiki_page", "", string(gErr.Kind), withReason(auditFields, gErr))
 		return gitlabErrorResult(gErr)
 	}
 	payload := map[string]any{"title": title, "content": content, "format": format}
@@ -925,10 +942,10 @@ func WriteGitLabWikiPage(client *http.Client, slug, title, content, format, conf
 			fmt.Sprintf("/projects/%s/wikis/%s", quoteGitLabProjectID(config), url.PathEscape(slug)), config, token, nil, payload, time.Sleep)
 	}
 	if err != nil {
-		gErr := err.(*GitLabError)
-		writeGitLabAuditRecord(auditPath, "write_wiki_page", "", string(gErr.Kind), withReason(auditFields, gErr))
+		gErr := asGitLabError(err)
+		_ = writeGitLabAuditRecord(auditPath, "write_wiki_page", "", string(gErr.Kind), withReason(auditFields, gErr))
 		return gitlabErrorResult(gErr)
 	}
-	writeGitLabAuditRecord(auditPath, "write_wiki_page", "", "ok", mergeMap(auditFields, map[string]any{"created": existing == nil}))
+	_ = writeGitLabAuditRecord(auditPath, "write_wiki_page", "", "ok", mergeMap(auditFields, map[string]any{"created": existing == nil}))
 	return map[string]any{"status": "ok", "created": existing == nil, "page": wrapUntrustedGitLabPayload(result)}
 }

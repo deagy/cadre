@@ -18,23 +18,23 @@ type ShardCompactor struct {
 
 // CompactionState tracks compaction for a shard.
 type CompactionState struct {
-	ShardID          string
-	State            string // "idle", "pending", "in_progress", "complete", "failed"
-	Progress         *CompactionProgress
-	StartTime        time.Time
-	EndTime          time.Time
-	ErrorMessage     string
+	ShardID      string
+	State        string // "idle", "pending", "in_progress", "complete", "failed"
+	Progress     *CompactionProgress
+	StartTime    time.Time
+	EndTime      time.Time
+	ErrorMessage string
 }
 
 // CompactionPolicy defines distributed compaction rules.
 type CompactionPolicy struct {
-	DeletionThreshold    float64       // Compact when ratio > threshold (0-100)
-	MaxConcurrentShards  int64         // Max shards compacting simultaneously
-	BatchSize            int64         // Entries per batch
-	TimeoutSeconds       int64         // Max time per shard
-	PreferredTimeWindow  string        // HH:MM-HH:MM
-	CompactSmallShards   bool          // Compact even if < threshold
-	SmallShardThreshold  int64         // Consider shard small if < this
+	DeletionThreshold   float64 // Compact when ratio > threshold (0-100)
+	MaxConcurrentShards int64   // Max shards compacting simultaneously
+	BatchSize           int64   // Entries per batch
+	TimeoutSeconds      int64   // Max time per shard
+	PreferredTimeWindow string  // HH:MM-HH:MM
+	CompactSmallShards  bool    // Compact even if < threshold
+	SmallShardThreshold int64   // Consider shard small if < this
 }
 
 // NewShardCompactor creates a distributed compaction coordinator.
@@ -122,13 +122,13 @@ func (sc *ShardCompactor) AnalyzeShardsForCompaction() map[string]*CompactionAna
 		}
 
 		analysis[shardID] = &CompactionAnalysis{
-			ShardID:          shardID,
-			TotalEntries:     status.TotalEntries,
-			DeletedCount:     status.DeletedCount,
-			DeletionRatio:    status.DeletionRatio,
-			NeedsCompaction:  needsCompaction,
-			Priority:         calculatePriority(status),
-			Reason:           reason,
+			ShardID:         shardID,
+			TotalEntries:    status.TotalEntries,
+			DeletedCount:    status.DeletedCount,
+			DeletionRatio:   status.DeletionRatio,
+			NeedsCompaction: needsCompaction,
+			Priority:        calculatePriority(status),
+			Reason:          reason,
 		}
 	}
 
@@ -180,11 +180,11 @@ func (sc *ShardCompactor) CompactShardsAsync(shardIDs []string) *AsyncCompaction
 	sc.mu.Lock()
 
 	job := &AsyncCompactionJob{
-		ID:         fmt.Sprintf("job-%d", time.Now().UnixNano()),
-		ShardIDs:   shardIDs,
-		Results:    make(map[string]*CompactionState),
-		StartTime:  time.Now(),
-		State:      "pending",
+		ID:        fmt.Sprintf("job-%d", time.Now().UnixNano()),
+		ShardIDs:  shardIDs,
+		results:   make(map[string]*CompactionState),
+		startTime: time.Now(),
+		state:     "pending",
 	}
 
 	sc.mu.Unlock()
@@ -197,9 +197,9 @@ func (sc *ShardCompactor) CompactShardsAsync(shardIDs []string) *AsyncCompaction
 
 // runAsyncCompaction executes async compaction with concurrency control.
 func (sc *ShardCompactor) runAsyncCompaction(job *AsyncCompactionJob) {
-	sc.mu.Lock()
-	job.State = "in_progress"
-	sc.mu.Unlock()
+	job.mu.Lock()
+	job.state = "in_progress"
+	job.mu.Unlock()
 
 	semaphore := make(chan struct{}, sc.globalPolicy.MaxConcurrentShards)
 	var wg sync.WaitGroup
@@ -217,10 +217,10 @@ func (sc *ShardCompactor) runAsyncCompaction(job *AsyncCompactionJob) {
 			// Perform compaction
 			err := sc.CompactShardNow(sid)
 
-			// Store result
+			// Snapshot the shard's state under the compactor's lock...
 			sc.mu.Lock()
 			state := sc.compactionState[sid]
-			job.Results[sid] = &CompactionState{
+			result := &CompactionState{
 				ShardID:      sid,
 				State:        state.State,
 				ErrorMessage: state.ErrorMessage,
@@ -229,21 +229,28 @@ func (sc *ShardCompactor) runAsyncCompaction(job *AsyncCompactionJob) {
 			}
 			sc.mu.Unlock()
 
+			// ...then publish it under the job's own lock, which is what
+			// readers outside this package can synchronise against. The
+			// counters below are incremented by every worker, so they belong
+			// inside the same critical section rather than being bare `++`.
+			job.mu.Lock()
+			job.results[sid] = result
 			if err != nil {
-				job.FailureCount++
+				job.failureCount++
 			} else {
-				job.SuccessCount++
+				job.successCount++
 			}
+			job.mu.Unlock()
 		}(shardID)
 	}
 
 	// Wait for all to complete
 	wg.Wait()
 
-	sc.mu.Lock()
-	job.State = "complete"
-	job.EndTime = time.Now()
-	sc.mu.Unlock()
+	job.mu.Lock()
+	job.state = "complete"
+	job.endTime = time.Now()
+	job.mu.Unlock()
 }
 
 // CompactAllNeeded compacts all shards requiring compaction.
@@ -284,11 +291,11 @@ func (sc *ShardCompactor) GetGlobalStats() *GlobalCompactionStats {
 	defer sc.mu.RUnlock()
 
 	stats := &GlobalCompactionStats{
-		TotalShards:    int64(len(sc.shards)),
-		TotalEntries:   0,
-		TotalDeleted:   0,
+		TotalShards:     int64(len(sc.shards)),
+		TotalEntries:    0,
+		TotalDeleted:    0,
 		AverageDeletion: 0.0,
-		ActiveJobs:     sc.activeJobs,
+		ActiveJobs:      sc.activeJobs,
 	}
 
 	var deletionSum float64
@@ -323,20 +330,64 @@ type CompactionAnalysis struct {
 	DeletedCount    int64
 	DeletionRatio   float64
 	NeedsCompaction bool
-	Priority        int   // 1-10, higher = more urgent
+	Priority        int // 1-10, higher = more urgent
 	Reason          string
 }
 
 // AsyncCompactionJob tracks async compaction progress.
 type AsyncCompactionJob struct {
-	ID           string
-	ShardIDs     []string
-	State        string // "pending", "in_progress", "complete"
-	Results      map[string]*CompactionState
-	SuccessCount int64
-	FailureCount int64
-	StartTime    time.Time
-	EndTime      time.Time
+	// ID and ShardIDs are set once, before the background goroutine starts,
+	// and never mutated afterwards, so they need no lock.
+	ID       string
+	ShardIDs []string
+
+	// mu guards everything below. runAsyncCompaction mutates these from its
+	// own goroutine and from one worker goroutine per shard while the caller
+	// that received the job is still holding a reference to it. The
+	// compactor's sc.mu cannot serve here: a caller has no way to take it,
+	// so reading job.State directly was an unsynchronised read of a field
+	// being written concurrently.
+	mu           sync.RWMutex
+	state        string // "pending", "in_progress", "complete"
+	results      map[string]*CompactionState
+	successCount int64
+	failureCount int64
+	startTime    time.Time
+	endTime      time.Time
+}
+
+// State returns the job's current lifecycle state.
+func (j *AsyncCompactionJob) State() string {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+	return j.state
+}
+
+// Results returns a snapshot of the per-shard compaction results recorded so
+// far. The map is a copy; the *CompactionState values it holds are written
+// once by the worker that created them and are not mutated afterwards.
+func (j *AsyncCompactionJob) Results() map[string]*CompactionState {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+	snapshot := make(map[string]*CompactionState, len(j.results))
+	for k, v := range j.results {
+		snapshot[k] = v
+	}
+	return snapshot
+}
+
+// Counts returns the number of shards that have succeeded and failed so far.
+func (j *AsyncCompactionJob) Counts() (success, failure int64) {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+	return j.successCount, j.failureCount
+}
+
+// Times returns the job's start time and, once complete, its end time.
+func (j *AsyncCompactionJob) Times() (start, end time.Time) {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+	return j.startTime, j.endTime
 }
 
 // GlobalCompactionStats provides cross-shard statistics.

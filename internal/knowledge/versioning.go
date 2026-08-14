@@ -8,19 +8,19 @@ import (
 
 // EmbeddingModelVersion tracks a specific version of an embedding model.
 type EmbeddingModelVersion struct {
-	Name        string
-	Version     string
-	Dimensions  int
-	Provider    string
-	CreatedAt   time.Time
-	Deprecated  bool
+	Name         string
+	Version      string
+	Dimensions   int
+	Provider     string
+	CreatedAt    time.Time
+	Deprecated   bool
 	DeprecatedAt *time.Time
 }
 
 // ModelVersionRegistry manages multiple versions of embedding models.
 type ModelVersionRegistry struct {
 	versions map[string]*EmbeddingModelVersion // name:version → EmbeddingModelVersion
-	current  map[string]string                // model name → current version
+	current  map[string]string                 // model name → current version
 }
 
 // NewModelVersionRegistry creates a new model version registry.
@@ -141,20 +141,20 @@ func (r *ModelVersionRegistry) DeprecateVersion(modelName, version string) error
 
 // MessageMutation tracks an edit or modification to a message.
 type MessageMutation struct {
-	ID              string
-	MessageID       string
-	MutationType    string    // "edit", "delete", "restore", "redact"
-	FieldChanged    string    // Which field was changed
-	OldValue        string    // Previous value
-	NewValue        string    // New value
-	MutatedBy       string    // User/system that made the change
-	MutatedAt       time.Time
-	Reason          string    // Why the mutation occurred
+	ID           string
+	MessageID    string
+	MutationType string // "edit", "delete", "restore", "redact"
+	FieldChanged string // Which field was changed
+	OldValue     string // Previous value
+	NewValue     string // New value
+	MutatedBy    string // User/system that made the change
+	MutatedAt    time.Time
+	Reason       string // Why the mutation occurred
 }
 
 // MutationLog tracks all mutations for audit and recovery.
 type MutationLog struct {
-	mutations map[string]*MessageMutation // mutation ID → MessageMutation
+	mutations map[string]*MessageMutation   // mutation ID → MessageMutation
 	byMessage map[string][]*MessageMutation // message ID → mutations
 }
 
@@ -286,9 +286,9 @@ func (ml *MutationLog) RecoverMessage(messageID string, targetTime time.Time) (m
 
 // MutationStats provides statistics about mutations.
 type MutationStats struct {
-	TotalMutations   int64
-	MutationsByType  map[string]int64
-	MutationsByUser  map[string]int64
+	TotalMutations     int64
+	MutationsByType    map[string]int64
+	MutationsByUser    map[string]int64
 	AverageMutationAge time.Duration
 }
 

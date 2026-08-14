@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -279,7 +276,7 @@ func TestHSNWDeletionStatusNeedsCompaction(t *testing.T) {
 	// Insert 100 vectors
 	for i := 0; i < 100; i++ {
 		msgID := fmt.Sprintf("msg-%d", i+1)
-		embedding := []float32{float32(i) / 100.0, float32((i + 1) % 100) / 100.0}
+		embedding := []float32{float32(i) / 100.0, float32((i+1)%100) / 100.0}
 		idx.Insert(msgID, embedding)
 	}
 
@@ -318,10 +315,10 @@ func TestHSNWSearchWithDeletions(t *testing.T) {
 	idx := NewHSNWIndex(16, 200)
 
 	embeddings := map[string][]float32{
-		"msg-exact":   {1.0, 0.5, 0.2},
-		"msg-close1":  {0.99, 0.51, 0.21},
-		"msg-close2":  {0.98, 0.52, 0.22},
-		"msg-far":     {0.5, 0.5, 0.5},
+		"msg-exact":  {1.0, 0.5, 0.2},
+		"msg-close1": {0.99, 0.51, 0.21},
+		"msg-close2": {0.98, 0.52, 0.22},
+		"msg-far":    {0.5, 0.5, 0.5},
 	}
 
 	for msgID, emb := range embeddings {
@@ -410,7 +407,7 @@ func TestHSNWIncrementalWorkflow(t *testing.T) {
 
 	// Phase 1: Initial inserts
 	for i := 1; i <= 10; i++ {
-		embedding := []float32{float32(i) / 10.0, float32((i + 1) % 10) / 10.0}
+		embedding := []float32{float32(i) / 10.0, float32((i+1)%10) / 10.0}
 		idx.Insert(fmt.Sprintf("msg-%d", i), embedding)
 	}
 

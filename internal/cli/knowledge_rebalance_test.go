@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package cli
 
 import (
@@ -57,6 +54,7 @@ func setupImbalancedShards(t *testing.T) (string, func()) {
 }
 
 func TestKnowledgeRebalanceAnalyze(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupImbalancedShards(t)
 	defer cleanup()
 
@@ -68,6 +66,7 @@ func TestKnowledgeRebalanceAnalyze(t *testing.T) {
 }
 
 func TestKnowledgeRebalanceDryRun(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupImbalancedShards(t)
 	defer cleanup()
 
@@ -79,6 +78,7 @@ func TestKnowledgeRebalanceDryRun(t *testing.T) {
 }
 
 func TestKnowledgeRebalanceJSON(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupImbalancedShards(t)
 	defer cleanup()
 
@@ -90,6 +90,7 @@ func TestKnowledgeRebalanceJSON(t *testing.T) {
 }
 
 func TestKnowledgeRebalanceWithStrategy(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupImbalancedShards(t)
 	defer cleanup()
 
@@ -103,6 +104,7 @@ func TestKnowledgeRebalanceWithStrategy(t *testing.T) {
 }
 
 func TestKnowledgeRebalanceInvalidStrategy(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupImbalancedShards(t)
 	defer cleanup()
 
@@ -113,6 +115,7 @@ func TestKnowledgeRebalanceInvalidStrategy(t *testing.T) {
 }
 
 func TestKnowledgeRebalanceNoShards(t *testing.T) {
+	requireSQLite(t)
 	tmpDir := t.TempDir()
 	shardDir := filepath.Join(tmpDir, ".agents", "knowledge-store")
 	os.MkdirAll(shardDir, 0755)
@@ -133,6 +136,7 @@ func TestKnowledgeRebalanceNoShards(t *testing.T) {
 }
 
 func TestKnowledgeRebalanceUnexpectedArg(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupImbalancedShards(t)
 	defer cleanup()
 
@@ -143,6 +147,7 @@ func TestKnowledgeRebalanceUnexpectedArg(t *testing.T) {
 }
 
 func TestKnowledgeRebalanceStatus(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupImbalancedShards(t)
 	defer cleanup()
 
@@ -154,6 +159,7 @@ func TestKnowledgeRebalanceStatus(t *testing.T) {
 }
 
 func TestKnowledgeRebalanceStatusJSON(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupImbalancedShards(t)
 	defer cleanup()
 
@@ -165,6 +171,7 @@ func TestKnowledgeRebalanceStatusJSON(t *testing.T) {
 }
 
 func TestKnowledgeRebalanceStatusWithStrategy(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupImbalancedShards(t)
 	defer cleanup()
 
@@ -178,6 +185,7 @@ func TestKnowledgeRebalanceStatusWithStrategy(t *testing.T) {
 }
 
 func TestKnowledgeRebalanceStatusInvalidStrategy(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupImbalancedShards(t)
 	defer cleanup()
 
@@ -188,6 +196,7 @@ func TestKnowledgeRebalanceStatusInvalidStrategy(t *testing.T) {
 }
 
 func TestKnowledgeRebalanceStatusNoShards(t *testing.T) {
+	requireSQLite(t)
 	tmpDir := t.TempDir()
 	shardDir := filepath.Join(tmpDir, ".agents", "knowledge-store")
 	os.MkdirAll(shardDir, 0755)
@@ -208,6 +217,7 @@ func TestKnowledgeRebalanceStatusNoShards(t *testing.T) {
 }
 
 func TestKnowledgeRebalanceStatusUnexpectedArg(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupImbalancedShards(t)
 	defer cleanup()
 
@@ -218,6 +228,7 @@ func TestKnowledgeRebalanceStatusUnexpectedArg(t *testing.T) {
 }
 
 func TestKnowledgeRebalanceCombined(t *testing.T) {
+	requireSQLite(t)
 	dbPath, cleanup := setupImbalancedShards(t)
 	defer cleanup()
 

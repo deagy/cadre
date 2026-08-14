@@ -1,4 +1,3 @@
-//nolint:errcheck
 package knowledge
 
 import (
@@ -7,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -23,45 +21,45 @@ type BatchMessage struct {
 
 // BatchImportResult tracks import progress and results.
 type BatchImportResult struct {
-	TotalRead      int64
-	SuccessCount   int64
-	FailureCount   int64
-	SkippedCount   int64
-	StartTime      time.Time
-	EndTime        time.Time
-	Errors         []string
-	BatchSize      int
-	DryRun         bool
+	TotalRead    int64
+	SuccessCount int64
+	FailureCount int64
+	SkippedCount int64
+	StartTime    time.Time
+	EndTime      time.Time
+	Errors       []string
+	BatchSize    int
+	DryRun       bool
 }
 
 // BulkDeleteResult tracks deletion progress and results.
 type BulkDeleteResult struct {
-	TotalMatched   int64
-	DeletedCount   int64
-	FailureCount   int64
-	StartTime      time.Time
-	EndTime        time.Time
-	Errors         []string
-	DryRun         bool
-	FilterUsed     string
+	TotalMatched int64
+	DeletedCount int64
+	FailureCount int64
+	StartTime    time.Time
+	EndTime      time.Time
+	Errors       []string
+	DryRun       bool
+	FilterUsed   string
 }
 
 // BulkUpdateResult tracks update progress and results.
 type BulkUpdateResult struct {
-	TotalMatched   int64
-	UpdatedCount   int64
-	FailureCount   int64
-	StartTime      time.Time
-	EndTime        time.Time
-	Errors         []string
-	DryRun         bool
-	ChangeCount    int // Number of fields changed per message
+	TotalMatched int64
+	UpdatedCount int64
+	FailureCount int64
+	StartTime    time.Time
+	EndTime      time.Time
+	Errors       []string
+	DryRun       bool
+	ChangeCount  int // Number of fields changed per message
 }
 
-// BatchOperations provides bulk operation capabilities.
-type BatchOperations struct {
-	mu sync.RWMutex
-}
+// BatchOperations provides bulk operation capabilities. It holds no state
+// today -- every method operates purely on its arguments -- so it needs no
+// lock; add one alongside the first shared field.
+type BatchOperations struct{}
 
 // NewBatchOperations creates a batch operations manager.
 func NewBatchOperations() *BatchOperations {
@@ -118,12 +116,10 @@ func (bo *BatchOperations) ImportFromFile(filepath string, format string, batchS
 				continue
 			}
 
-			if !dryRun {
-				// In real implementation, would insert into database
-				result.SuccessCount++
-			} else {
-				result.SuccessCount++
-			}
+			// A dry run and a real run both count the message as a success
+			// today: the database insert this branch is meant to guard is not
+			// implemented yet, so there is nothing for dryRun to skip.
+			result.SuccessCount++
 		}
 	}
 
@@ -218,7 +214,7 @@ func (bo *BatchOperations) readJSONLFile(filepath string) ([]BatchMessage, error
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var messages []BatchMessage
 	decoder := json.NewDecoder(file)
@@ -226,7 +222,7 @@ func (bo *BatchOperations) readJSONLFile(filepath string) ([]BatchMessage, error
 	for decoder.More() {
 		var msg BatchMessage
 		if err := decoder.Decode(&msg); err != nil {
-			return messages, fmt.Errorf("error decoding line: %v", err)
+			return messages, fmt.Errorf("error decoding line: %w", err)
 		}
 		messages = append(messages, msg)
 	}
@@ -239,7 +235,7 @@ func (bo *BatchOperations) readCSVFile(filepath string) ([]BatchMessage, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	reader := csv.NewReader(file)
 	records, err := reader.ReadAll()

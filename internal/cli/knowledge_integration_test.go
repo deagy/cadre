@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package cli
 
 import (
@@ -78,11 +75,11 @@ func TestPythonInteropJSONIngestion(t *testing.T) {
 
 	// Create test messages in various formats that Python might generate
 	type PyMessage struct {
-		MessageID      string `json:"message_id"`
-		ConversationID string `json:"conversation_id"`
+		MessageID         string  `json:"message_id"`
+		ConversationID    string  `json:"conversation_id"`
 		ConversationTitle *string `json:"conversation_title,omitempty"`
-		Role           string `json:"role"`
-		Content        string `json:"content"`
+		Role              string  `json:"role"`
+		Content           string  `json:"content"`
 	}
 
 	messages := []PyMessage{
@@ -99,11 +96,11 @@ func TestPythonInteropJSONIngestion(t *testing.T) {
 			Content:        "Response from Python-managed conversation",
 		},
 		{
-			MessageID:      "py-3",
-			ConversationID: "py-conv-2",
+			MessageID:         "py-3",
+			ConversationID:    "py-conv-2",
 			ConversationTitle: strPtr("Python Conversation 2"),
-			Role:           "user",
-			Content:        "Another message from Python script",
+			Role:              "user",
+			Content:           "Another message from Python script",
 		},
 	}
 

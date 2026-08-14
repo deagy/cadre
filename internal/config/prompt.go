@@ -1,4 +1,3 @@
-//nolint:errcheck
 // prompt.go ports settings.py's interactive-prompt path: the gate that
 // decides whether prompting may happen at all, and the prompt loop itself.
 package config
@@ -204,13 +203,13 @@ func OpenTTYIO() (input func(string) (string, error), output func(string), ok bo
 	}
 	writer, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
 	if err != nil {
-		reader.Close()
+		_ = reader.Close()
 		return nil, nil, false
 	}
 	bufReader := bufio.NewReader(reader)
 
 	input = func(prompt string) (string, error) {
-		writer.WriteString(prompt)
+		_, _ = writer.WriteString(prompt)
 		line, err := bufReader.ReadString('\n')
 		if err != nil && line == "" {
 			return "", fmt.Errorf("controlling terminal closed during prompt")
@@ -218,7 +217,7 @@ func OpenTTYIO() (input func(string) (string, error), output func(string), ok bo
 		return trimNewline(line), nil
 	}
 	output = func(text string) {
-		writer.WriteString(text + "\n")
+		_, _ = writer.WriteString(text + "\n")
 	}
 	return input, output, true
 }

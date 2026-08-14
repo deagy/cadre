@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -8,6 +5,7 @@ import (
 )
 
 func TestMigrationExecutorPrepareMigration(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -47,6 +45,7 @@ func TestMigrationExecutorPrepareMigration(t *testing.T) {
 }
 
 func TestMigrationExecutorPrepareSameShard(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -64,6 +63,7 @@ func TestMigrationExecutorPrepareSameShard(t *testing.T) {
 }
 
 func TestMigrationExecutorPrepareNoMessages(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -85,6 +85,7 @@ func TestMigrationExecutorPrepareNoMessages(t *testing.T) {
 }
 
 func TestMigrationExecutorExecuteMigration(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -131,6 +132,7 @@ func TestMigrationExecutorExecuteMigration(t *testing.T) {
 }
 
 func TestMigrationExecutorRollback(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -162,6 +164,7 @@ func TestMigrationExecutorRollback(t *testing.T) {
 }
 
 func TestMigrationExecutorRollbackNotExecuting(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -186,6 +189,7 @@ func TestMigrationExecutorRollbackNotExecuting(t *testing.T) {
 }
 
 func TestMigrationExecutorProgress(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -227,6 +231,7 @@ func TestMigrationExecutorProgress(t *testing.T) {
 }
 
 func TestMigrationExecutorStats(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -265,6 +270,7 @@ func TestMigrationExecutorStats(t *testing.T) {
 }
 
 func TestMigrationExecutorCanRollback(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -306,6 +312,7 @@ func TestMigrationExecutorCanRollback(t *testing.T) {
 }
 
 func TestMigrationExecutorStatusNotFound(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -323,6 +330,7 @@ func TestMigrationExecutorStatusNotFound(t *testing.T) {
 }
 
 func TestMigrationExecutorProgressNotFound(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -340,6 +348,7 @@ func TestMigrationExecutorProgressNotFound(t *testing.T) {
 }
 
 func TestMigrationExecutorMultipleMigrations(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -383,6 +392,7 @@ func TestMigrationExecutorMultipleMigrations(t *testing.T) {
 }
 
 func TestMigrationExecutorLargeMessageSet(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -426,6 +436,7 @@ func TestMigrationExecutorLargeMessageSet(t *testing.T) {
 }
 
 func TestMigrationExecutorTimingEstimate(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 

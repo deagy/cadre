@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -11,6 +8,7 @@ import (
 // Retention and deletion tests. Require CGO_ENABLED=1 due to SQLite.
 
 func TestGetExpiredMessages(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -57,6 +55,7 @@ func TestGetExpiredMessages(t *testing.T) {
 }
 
 func TestDeleteExpired(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -102,6 +101,7 @@ func TestDeleteExpired(t *testing.T) {
 }
 
 func TestDeleteExpiredWithChunks(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -153,6 +153,7 @@ func TestDeleteExpiredWithChunks(t *testing.T) {
 }
 
 func TestDeleteByClassification(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -201,6 +202,7 @@ func TestDeleteByClassification(t *testing.T) {
 }
 
 func TestDeleteByClassificationEmpty(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -220,6 +222,7 @@ func TestDeleteByClassificationEmpty(t *testing.T) {
 }
 
 func TestDeleteBySource(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -268,6 +271,7 @@ func TestDeleteBySource(t *testing.T) {
 }
 
 func TestDeleteByAge(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -309,6 +313,7 @@ func TestDeleteByAge(t *testing.T) {
 }
 
 func TestDeleteByAgeWithClassification(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -360,6 +365,7 @@ func TestDeleteByAgeWithClassification(t *testing.T) {
 }
 
 func TestGetDeletionHistory(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -403,6 +409,7 @@ func TestGetDeletionHistory(t *testing.T) {
 }
 
 func TestGetDeletionHistoryFilterByStatus(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -445,6 +452,7 @@ func TestGetDeletionHistoryFilterByStatus(t *testing.T) {
 }
 
 func TestGetDeletionStats(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -487,6 +495,7 @@ func TestGetDeletionStats(t *testing.T) {
 }
 
 func TestDeletionRunTracking(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -547,6 +556,7 @@ func TestDeletionRunTracking(t *testing.T) {
 }
 
 func TestDeleteBySourceError(t *testing.T) {
+	requireSQLite(t)
 	store := setupTestDB(t)
 	defer store.Close()
 
@@ -558,6 +568,7 @@ func TestDeleteBySourceError(t *testing.T) {
 }
 
 func TestDeleteByAgeNegative(t *testing.T) {
+	requireSQLite(t)
 	store := setupTestDB(t)
 	defer store.Close()
 
@@ -569,6 +580,7 @@ func TestDeleteByAgeNegative(t *testing.T) {
 }
 
 func TestDeleteMultipleSources(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}
@@ -607,6 +619,7 @@ func TestDeleteMultipleSources(t *testing.T) {
 }
 
 func TestCascadeDeleteOnDeletion(t *testing.T) {
+	requireSQLite(t)
 	if testing.Short() {
 		t.Skip("skipping database test in short mode")
 	}

@@ -1,6 +1,7 @@
 package orchestration
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -300,6 +301,11 @@ func TestTeamDispatchJobStore(t *testing.T) {
 func TestConcurrencyLimiter(t *testing.T) {
 	limiter := NewConcurrencyLimiter(2)
 
+	// acquired/maxConcurrent are written from every spawned goroutine, so they
+	// need their own lock: the limiter bounds how many goroutines run at once,
+	// it does not serialise their access to the test's own counters, and
+	// unguarded ints here fail `go test -race` (which CI runs).
+	var mu sync.Mutex
 	acquired := 0
 	maxConcurrent := 0
 
@@ -308,14 +314,18 @@ func TestConcurrencyLimiter(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		go func() {
 			limiter.Acquire()
+			mu.Lock()
 			acquired++
 			if acquired > maxConcurrent {
 				maxConcurrent = acquired
 			}
+			mu.Unlock()
 
 			time.Sleep(10 * time.Millisecond)
 
+			mu.Lock()
 			acquired--
+			mu.Unlock()
 			limiter.Release()
 			done <- true
 		}()
@@ -326,8 +336,11 @@ func TestConcurrencyLimiter(t *testing.T) {
 		<-done
 	}
 
-	if maxConcurrent > 2 {
-		t.Errorf("max concurrent goroutines %d, want <= 2", maxConcurrent)
+	mu.Lock()
+	observed := maxConcurrent
+	mu.Unlock()
+	if observed > 2 {
+		t.Errorf("max concurrent goroutines %d, want <= 2", observed)
 	}
 }
 

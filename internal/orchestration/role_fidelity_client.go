@@ -1,4 +1,3 @@
-//nolint:errcheck
 // role_fidelity_client.go: the OpenAI-compatible chat client, probe-run
 // orchestration, condensed-brief comparison, and attestation writing for
 // role_fidelity.go's probe mode.
@@ -92,7 +91,7 @@ func (c *FidelityChatClient) Complete(systemPrompt, userPrompt string) (string, 
 	if err != nil {
 		return "", fidelityErrorf("%s: cannot reach endpoint: %v", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

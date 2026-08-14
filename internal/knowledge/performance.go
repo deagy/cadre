@@ -1,4 +1,3 @@
-//nolint:errcheck
 package knowledge
 
 import (
@@ -10,14 +9,14 @@ import (
 
 // QueryCache provides LRU caching for search results.
 type QueryCache struct {
-	mu              sync.RWMutex
-	cache           map[string]*CachedResult
-	accessOrder     []*CacheEntry
-	maxSize         int
-	defaultTTL      time.Duration
-	hits            int64
-	misses          int64
-	evictions       int64
+	mu          sync.RWMutex
+	cache       map[string]*CachedResult
+	accessOrder []*CacheEntry
+	maxSize     int
+	defaultTTL  time.Duration
+	hits        int64
+	misses      int64
+	evictions   int64
 }
 
 // CacheEntry tracks cache entry metadata.
@@ -28,29 +27,29 @@ type CacheEntry struct {
 
 // CachedResult wraps a search result with metadata.
 type CachedResult struct {
-	Results       []*SearchResult
-	MessageCount  int64
-	SearchTimeMs  int64
-	CachedAt      time.Time
-	ExpiresAt     time.Time
+	Results      []*SearchResult
+	MessageCount int64
+	SearchTimeMs int64
+	CachedAt     time.Time
+	ExpiresAt    time.Time
 }
 
 // NewQueryCache creates a new query cache.
 func NewQueryCache(maxSize int, defaultTTLMinutes int) *QueryCache {
 	return &QueryCache{
-		cache:      make(map[string]*CachedResult),
+		cache:       make(map[string]*CachedResult),
 		accessOrder: make([]*CacheEntry, 0, maxSize),
-		maxSize:    maxSize,
-		defaultTTL: time.Duration(defaultTTLMinutes) * time.Minute,
+		maxSize:     maxSize,
+		defaultTTL:  time.Duration(defaultTTLMinutes) * time.Minute,
 	}
 }
 
 // QueryKey generates a cache key from search options.
 func (qc *QueryCache) QueryKey(query, classification string, sourceFilters []string) string {
 	h := md5.New()
-	fmt.Fprintf(h, "%s:%s:", query, classification)
+	_, _ = fmt.Fprintf(h, "%s:%s:", query, classification)
 	for _, s := range sourceFilters {
-		fmt.Fprintf(h, "%s,", s)
+		_, _ = fmt.Fprintf(h, "%s,", s)
 	}
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
@@ -152,13 +151,13 @@ func (qc *QueryCache) GetStats() *CacheStats {
 	}
 
 	return &CacheStats{
-		Size:        len(qc.cache),
-		Hits:        qc.hits,
-		Misses:      qc.misses,
-		Evictions:   qc.evictions,
-		HitRate:     hitRate,
-		MaxSize:     qc.maxSize,
-		TTLMinutes:  int(qc.defaultTTL.Minutes()),
+		Size:       len(qc.cache),
+		Hits:       qc.hits,
+		Misses:     qc.misses,
+		Evictions:  qc.evictions,
+		HitRate:    hitRate,
+		MaxSize:    qc.maxSize,
+		TTLMinutes: int(qc.defaultTTL.Minutes()),
 	}
 }
 
@@ -175,13 +174,13 @@ type CacheStats struct {
 
 // PerformanceMetrics tracks query performance across the system.
 type PerformanceMetrics struct {
-	mu                  sync.RWMutex
-	totalQueries        int64
-	totalQueryTimeMs    int64
-	minQueryTimeMs      int64
-	maxQueryTimeMs      int64
-	vectorSearchQueries int64
-	textSearchQueries   int64
+	mu                   sync.RWMutex
+	totalQueries         int64
+	totalQueryTimeMs     int64
+	minQueryTimeMs       int64
+	maxQueryTimeMs       int64
+	vectorSearchQueries  int64
+	textSearchQueries    int64
 	totalResultsReturned int64
 }
 
@@ -226,33 +225,32 @@ func (pm *PerformanceMetrics) GetMetrics() *PerformanceStats {
 	}
 
 	return &PerformanceStats{
-		TotalQueries:          pm.totalQueries,
-		AverageQueryTimeMs:    avgQueryTimeMs,
-		MinQueryTimeMs:        pm.minQueryTimeMs,
-		MaxQueryTimeMs:        pm.maxQueryTimeMs,
-		VectorSearchQueries:   pm.vectorSearchQueries,
-		TextSearchQueries:     pm.textSearchQueries,
-		TotalResultsReturned:  pm.totalResultsReturned,
+		TotalQueries:         pm.totalQueries,
+		AverageQueryTimeMs:   avgQueryTimeMs,
+		MinQueryTimeMs:       pm.minQueryTimeMs,
+		MaxQueryTimeMs:       pm.maxQueryTimeMs,
+		VectorSearchQueries:  pm.vectorSearchQueries,
+		TextSearchQueries:    pm.textSearchQueries,
+		TotalResultsReturned: pm.totalResultsReturned,
 	}
 }
 
 // PerformanceStats provides performance statistics.
 type PerformanceStats struct {
-	TotalQueries          int64
-	AverageQueryTimeMs    float64
-	MinQueryTimeMs        int64
-	MaxQueryTimeMs        int64
-	VectorSearchQueries   int64
-	TextSearchQueries     int64
-	TotalResultsReturned  int64
+	TotalQueries         int64
+	AverageQueryTimeMs   float64
+	MinQueryTimeMs       int64
+	MaxQueryTimeMs       int64
+	VectorSearchQueries  int64
+	TextSearchQueries    int64
+	TotalResultsReturned int64
 }
 
 // IndexOptimizer analyzes query patterns to suggest optimizations.
 type IndexOptimizer struct {
-	mu             sync.RWMutex
-	metrics        *PerformanceMetrics
-	slowQueryMs    int64 // Queries slower than this threshold
-	slowQueryCount int64
+	mu          sync.RWMutex
+	metrics     *PerformanceMetrics
+	slowQueryMs int64 // Queries slower than this threshold
 }
 
 // NewIndexOptimizer creates a new optimization analyzer.
@@ -303,10 +301,10 @@ func (io *IndexOptimizer) AnalyzePerformance() *OptimizationReport {
 
 // OptimizationReport provides optimization recommendations.
 type OptimizationReport struct {
-	TotalQueries       int64
-	AvgTimeMs          float64
-	NeedsIndexing      bool
-	NeedsHSNW          bool
-	NeedsCaching       bool
-	Recommendations    []string
+	TotalQueries    int64
+	AvgTimeMs       float64
+	NeedsIndexing   bool
+	NeedsHSNW       bool
+	NeedsCaching    bool
+	Recommendations []string
 }

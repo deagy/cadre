@@ -63,11 +63,10 @@ func replaceManagedBlock(existingText string, hasExisting bool, managedBody stri
 	if !hasExisting {
 		return block + "\n"
 	}
-	if strings.Contains(existingText, ManagedStart) && strings.Contains(existingText, ManagedEnd) {
-		before := existingText[:strings.Index(existingText, ManagedStart)]
-		rest := existingText[strings.Index(existingText, ManagedStart)+len(ManagedStart):]
-		after := rest[strings.Index(rest, ManagedEnd)+len(ManagedEnd):]
-		return before + block + after
+	if before, rest, found := strings.Cut(existingText, ManagedStart); found {
+		if _, after, closed := strings.Cut(rest, ManagedEnd); closed {
+			return before + block + after
+		}
 	}
 	separator := ""
 	if !strings.HasSuffix(existingText, "\n") {
@@ -84,10 +83,10 @@ func extractManagedBlockBody(existingText string, hasExisting bool) (string, boo
 	if !hasExisting || existingText == "" {
 		return "", false
 	}
-	if strings.Contains(existingText, ManagedStart) && strings.Contains(existingText, ManagedEnd) {
-		rest := existingText[strings.Index(existingText, ManagedStart)+len(ManagedStart):]
-		body := rest[:strings.Index(rest, ManagedEnd)]
-		return strings.Trim(body, "\n"), true
+	if _, rest, found := strings.Cut(existingText, ManagedStart); found {
+		if body, _, closed := strings.Cut(rest, ManagedEnd); closed {
+			return strings.Trim(body, "\n"), true
+		}
 	}
 	return "", false
 }

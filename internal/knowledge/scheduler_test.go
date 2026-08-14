@@ -1,6 +1,3 @@
-//go:build cgo
-// +build cgo
-
 package knowledge
 
 import (
@@ -28,6 +25,7 @@ func TestDefaultPolicy(t *testing.T) {
 }
 
 func TestSchedulerCreation(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -59,6 +57,7 @@ func TestSchedulerCreation(t *testing.T) {
 }
 
 func TestSchedulerStart(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -95,6 +94,7 @@ func TestSchedulerStart(t *testing.T) {
 }
 
 func TestSchedulerStartAlreadyRunning(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -122,6 +122,7 @@ func TestSchedulerStartAlreadyRunning(t *testing.T) {
 }
 
 func TestSchedulerStatus(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -156,6 +157,7 @@ func TestSchedulerStatus(t *testing.T) {
 }
 
 func TestSchedulerPolicy(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -167,9 +169,9 @@ func TestSchedulerPolicy(t *testing.T) {
 	executor := NewMigrationExecutor(registry)
 
 	policy := &RebalancingPolicy{
-		Enabled:                true,
-		CheckIntervalSeconds:   1800,
-		ImbalanceThreshold:     15.0,
+		Enabled:                 true,
+		CheckIntervalSeconds:    1800,
+		ImbalanceThreshold:      15.0,
 		MaxConcurrentMigrations: 1,
 	}
 
@@ -185,6 +187,7 @@ func TestSchedulerPolicy(t *testing.T) {
 }
 
 func TestSchedulerWithNilPolicy(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -208,6 +211,7 @@ func TestSchedulerWithNilPolicy(t *testing.T) {
 }
 
 func TestMaintenanceWindow(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -224,8 +228,8 @@ func TestMaintenanceWindow(t *testing.T) {
 
 	// Policy with maintenance window
 	policy := &RebalancingPolicy{
-		Enabled:               true,
-		CheckIntervalSeconds:  3600,
+		Enabled:                true,
+		CheckIntervalSeconds:   3600,
 		MaintenanceWindowStart: "02:00", // 2 AM UTC
 		MaintenanceWindowEnd:   "03:00", // 3 AM UTC
 	}
@@ -268,6 +272,7 @@ func TestParseTimeString(t *testing.T) {
 }
 
 func TestSchedulerGetJobs(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -292,6 +297,7 @@ func TestSchedulerGetJobs(t *testing.T) {
 }
 
 func TestSchedulerStop(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 
@@ -320,6 +326,7 @@ func TestSchedulerStop(t *testing.T) {
 }
 
 func TestSchedulerStopNotRunning(t *testing.T) {
+	requireSQLite(t)
 	store0 := setupTestDB(t)
 	defer store0.Close()
 

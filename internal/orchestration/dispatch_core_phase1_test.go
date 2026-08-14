@@ -155,10 +155,10 @@ func TestReadRoleFileCapped(t *testing.T) {
 
 func TestComputeEffectiveSandbox(t *testing.T) {
 	tests := []struct {
-		mode               string
-		fileSandboxMode    string
-		expectedEffective  string
-		expectedFileSaved  string
+		mode              string
+		fileSandboxMode   string
+		expectedEffective string
+		expectedFileSaved string
 	}{
 		{ModePlanningOnly, SandboxReadOnly, SandboxReadOnly, SandboxReadOnly},
 		{ModePlanningOnly, SandboxWorkspaceWrite, SandboxReadOnly, SandboxWorkspaceWrite},
