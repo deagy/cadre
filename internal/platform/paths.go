@@ -17,6 +17,7 @@ package platform
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -122,5 +123,85 @@ func FindFileAtProjectRoot(relativePath, start string) (string, bool) {
 		}
 		current = parent
 	}
+	return "", false
+}
+
+// FindInstallationRoot locates the root directory of *this CLI's own
+// installation* (where roster/, kernel/, provider/ live), rather than the
+// user's project.
+//
+// This differs from FindProjectRoot, which walks up from cwd to find a .git
+// boundary (the user's project). A packaged plugin install has no .git at all,
+// so FindProjectRoot fails; FindInstallationRoot succeeds by trying
+// CADRE_REPO_ROOT, the executable's directory, and cwd in turn.
+//
+// Resolution order, first hit wins:
+//
+//  1. $CADRE_REPO_ROOT, exported by bin/cadre and bin/cadre.ps1 so the
+//     built binary under .cadre-build-cache/ knows which checkout produced
+//     it without any filesystem guessing.
+//  2. Upward from the running executable's own directory, which covers a
+//     binary built into the checkout (or installed beside a vendored tree)
+//     when no wrapper set the variable.
+//  3. Upward from the working directory, the last resort, which is correct
+//     whenever the caller happens to be inside a Cadre checkout.
+//
+// It verifies each candidate by checking for the existence of roster/
+// (a directory that exists only in the installation, not in user projects).
+func FindInstallationRoot() (string, error) {
+	const markerPath = "roster"
+	const maxWalkDepth = 64
+
+	// Try environment variable first
+	if root := os.Getenv("CADRE_REPO_ROOT"); root != "" {
+		markerDir := filepath.Join(root, markerPath)
+		if _, err := os.Stat(markerDir); err == nil {
+			return root, nil
+		}
+	}
+
+	// Try upward from the executable
+	if executable, err := os.Executable(); err == nil {
+		if resolved, linkErr := filepath.EvalSymlinks(executable); linkErr == nil {
+			executable = resolved
+		}
+		if root, found := findAncestorWith(filepath.Dir(executable), markerPath, maxWalkDepth); found {
+			return root, nil
+		}
+	}
+
+	// Try upward from the working directory
+	if wd, err := os.Getwd(); err == nil {
+		if root, found := findAncestorWith(wd, markerPath, maxWalkDepth); found {
+			return root, nil
+		}
+	}
+
+	return "", fmt.Errorf("cannot locate Cadre installation (roster/ directory); set CADRE_REPO_ROOT to a Cadre checkout, or run from inside one")
+}
+
+// findAncestorWith walks upward from start looking for an ancestor directory
+// containing a specific subdirectory (the markerPath). Returns the ancestor
+// and true if found, or ("", false) if the search exhausts depth or reaches
+// the filesystem root.
+func findAncestorWith(start, markerPath string, maxDepth int) (string, bool) {
+	directory, err := filepath.Abs(start)
+	if err != nil {
+		return "", false
+	}
+
+	for i := 0; i < maxDepth; i++ {
+		candidate := filepath.Join(directory, markerPath)
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			return directory, true
+		}
+
+		parent := filepath.Dir(directory)
+		if parent == directory {
+			break
+		}
+		directory = parent
+	}
+
 	return "", false
 }

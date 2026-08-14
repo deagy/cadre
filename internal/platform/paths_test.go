@@ -139,3 +139,129 @@ func TestRepoRoot_UsesCurrentWorkingDirectory(t *testing.T) {
 		t.Errorf("RepoRoot() = %q, want %q", got, wantAbs)
 	}
 }
+
+func TestFindInstallationRoot_NormalCheckout(t *testing.T) {
+	// Create a fake checkout with roster/ directory
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "roster"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(root, "subdir", "nested")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+
+	if err := os.Chdir(nested); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := FindInstallationRoot()
+	if err != nil {
+		t.Fatalf("FindInstallationRoot() error = %v", err)
+	}
+	wantAbs, _ := filepath.Abs(root)
+	if got != wantAbs {
+		t.Errorf("FindInstallationRoot() = %q, want %q", got, wantAbs)
+	}
+}
+
+func TestFindInstallationRoot_PackagedPluginLayout(t *testing.T) {
+	// Simulate a packaged plugin with suite/roster but no .git
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "suite", "roster"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+
+	if err := os.Chdir(filepath.Join(root, "suite")); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := FindInstallationRoot()
+	if err != nil {
+		t.Fatalf("FindInstallationRoot() error = %v", err)
+	}
+	wantAbs, _ := filepath.Abs(filepath.Join(root, "suite"))
+	if got != wantAbs {
+		t.Errorf("FindInstallationRoot() = %q, want %q", got, wantAbs)
+	}
+}
+
+func TestFindInstallationRoot_UsesCADRERepoRootEnvVar(t *testing.T) {
+	// Test that CADRE_REPO_ROOT environment variable takes precedence
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "roster"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	oldEnv := os.Getenv("CADRE_REPO_ROOT")
+	t.Cleanup(func() {
+		if oldEnv == "" {
+			os.Unsetenv("CADRE_REPO_ROOT")
+		} else {
+			os.Setenv("CADRE_REPO_ROOT", oldEnv)
+		}
+	})
+
+	os.Setenv("CADRE_REPO_ROOT", root)
+
+	// Change to a directory that has no roster/ and no .git
+	tempDir := t.TempDir()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := FindInstallationRoot()
+	if err != nil {
+		t.Fatalf("FindInstallationRoot() error = %v", err)
+	}
+	wantAbs, _ := filepath.Abs(root)
+	if got != wantAbs {
+		t.Errorf("FindInstallationRoot() = %q, want %q", got, wantAbs)
+	}
+}
+
+func TestFindInstallationRoot_FailsWhenNoRosterFound(t *testing.T) {
+	// Test that FindInstallationRoot fails when roster/ is not found anywhere
+	tempDir := t.TempDir()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatal(err)
+	}
+
+	oldEnv := os.Getenv("CADRE_REPO_ROOT")
+	t.Cleanup(func() {
+		if oldEnv == "" {
+			os.Unsetenv("CADRE_REPO_ROOT")
+		} else {
+			os.Setenv("CADRE_REPO_ROOT", oldEnv)
+		}
+	})
+	os.Unsetenv("CADRE_REPO_ROOT")
+
+	_, err = FindInstallationRoot()
+	if err == nil {
+		t.Fatal("expected FindInstallationRoot to fail when roster/ is not found")
+	}
+}
