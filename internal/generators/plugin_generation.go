@@ -263,6 +263,13 @@ var binaryShimFunctions = strings.Join([]string{
 	"  case \"$(uname -s)\" in",
 	"    Linux)  GOOS=linux ;;",
 	"    Darwin) GOOS=darwin ;;",
+	// This POSIX sh shim only ever runs on Windows under Git Bash, MSYS2 or
+	// Cygwin, which is exactly what these uname strings identify
+	// (MINGW64_NT-10.0-19045, MSYS_NT-10.0-19045, CYGWIN_NT-10.0). Without
+	// them the windows/zip/cadre.exe branch below was unreachable, so the
+	// windows-amd64 binary the release pipeline builds and publishes could
+	// never be used by a plugin install.
+	"    MINGW*|MSYS*|CYGWIN*) GOOS=windows ;;",
 	"    *)      return 1 ;;  # Unsupported platform",
 	"  esac",
 	"  ",
@@ -438,7 +445,13 @@ var binaryShimFunctions = strings.Join([]string{
 	"  chmod +x \"$BINARY_TEMP\" || return 1",
 	"  ",
 	"  # H2: Reject pre-existing directory at target path (mv would move file into it).",
-	"  [ ! -d \"$BINARY_CACHE\" ] || return 1",
+	"  # Clean up BINARY_TEMP on the way out: it is created and chmod +x'd above,",
+	"  # so returning here without removing it leaves an executable .tmp.$$ behind",
+	"  # in the cache on every collision.",
+	"  if [ -d \"$BINARY_CACHE\" ]; then",
+	"    rm -f \"$BINARY_TEMP\"",
+	"    return 1",
+	"  fi",
 	"  ",
 	"  if ! mv \"$BINARY_TEMP\" \"$BINARY_CACHE\" 2>/dev/null; then",
 	"    rm -f \"$BINARY_TEMP\"",

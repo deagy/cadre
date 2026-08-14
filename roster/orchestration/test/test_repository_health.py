@@ -96,10 +96,19 @@ def generated_package() -> Path:
         directory = Path(tempfile.mkdtemp(prefix="cadre-health-package-"))
         atexit.register(shutil.rmtree, directory, True)
         target = directory / "cadre-plugin"
+        # Invoke the generator that actually ships, via bin/cadre -> the Go
+        # implementation. This used to run
+        # roster/orchestration/src/generate_global_plugin.py directly, which
+        # meant this guard exercised a *different* generator from the one
+        # producing the committed plugin/ tree -- and the two had drifted:
+        # the Python one emitted a bin/cadre with none of the binary
+        # resolution, checksum verification or cache hardening the shipped
+        # shim carries. A guard that tests the unused implementation is worse
+        # than no guard, because it reports green about code nobody runs.
         generated = subprocess.run(
             [
-                sys.executable,
-                str(REPOSITORY_ROOT / "roster" / "orchestration" / "src" / "generate_global_plugin.py"),
+                str(REPOSITORY_ROOT / "bin" / "cadre"),
+                "generate-plugin",
                 "--output",
                 str(target),
             ],
