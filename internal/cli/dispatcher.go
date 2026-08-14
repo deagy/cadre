@@ -61,6 +61,7 @@ func Usage(subcommands []Subcommand) string {
 	fmt.Fprintf(&b, "  %-16s %s\n", "generate-plugin", "Regenerate a deagy/cadre-lifecycle checkout (requires --output)")
 	fmt.Fprintf(&b, "  %-16s %s\n", "generate-role-metadata", "Regenerate roster/catalog.yaml and routing.json from role metadata")
 	fmt.Fprintf(&b, "  %-16s %s\n", "generate-authority-aides", "Regenerate roster/authority/*-aide AGENT.md files")
+	fmt.Fprintf(&b, "  %-16s %s\n", "knowledge", "Vectorized knowledge store (init, stats, search, context)")
 	fmt.Fprintf(&b, "  %-16s %s\n", "sdlc", sdlcDescription)
 	fmt.Fprintf(&b, "  %-16s %s\n", "help", "Show this message")
 	b.WriteString("\n")
@@ -156,6 +157,11 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 	}
 	if command == "execute" {
 		return ExecuteCmd(context.Background(), rest, deps.Stdout, deps.Stderr)
+	}
+
+	// Route Go-implemented knowledge store
+	if command == "knowledge" {
+		return KnowledgeCmd(rest)
 	}
 
 	var match *Subcommand

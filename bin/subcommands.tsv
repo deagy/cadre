@@ -1,6 +1,5 @@
 select	roster/orchestration/src/select_agents.py	Deterministic agent/gate selection (select_agents.py)
 selection-telemetry	roster/orchestration/src/selection_telemetry.py	Summarize opt-in, local cadre select telemetry (selection_telemetry.py)
-knowledge	roster/knowledge-store/src/cli.py	Vectorized knowledge store CLI (knowledge-store/src/cli.py)
 context	roster/context-store/src/cli.py	Agent context store: park working material outside an agent's context window and get it back by handle (context-store/src/cli.py)
 bootstrap-codex	roster/orchestration/src/sync_codex_agents.py	Safely install namespaced Codex role wrappers
 resolve-shared	roster/shared/src/resolve.py	Resolve effective shared config for the current project (resolve.py)
