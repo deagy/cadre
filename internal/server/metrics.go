@@ -52,8 +52,18 @@ func (mc *MetricsCollector) Record(name string, value float64, labels map[string
 	key := mc.buildKey(name, labels)
 
 	// Infer type from name suffix and record
-	if strings.HasSuffix(name, "_total") {
-		// Counter
+	var metricType string
+	switch {
+	case strings.HasSuffix(name, "_total"):
+		metricType = "counter"
+	case strings.HasSuffix(name, "_ms"), strings.HasSuffix(name, "_duration"):
+		metricType = "histogram"
+	default:
+		metricType = "gauge"
+	}
+
+	switch metricType {
+	case "counter":
 		if _, exists := mc.counterLabels[key]; !exists {
 			mc.counterLabels[key] = make(map[string]float64)
 		}
@@ -61,8 +71,7 @@ func (mc *MetricsCollector) Record(name string, value float64, labels map[string
 		labelKey := mc.labelKey(labels)
 		current[labelKey] += value
 		mc.requestCount++
-	} else if strings.HasSuffix(name, "_ms") || strings.HasSuffix(name, "_duration") {
-		// Histogram (latency)
+	case "histogram":
 		if _, exists := mc.histogramLabels[key]; !exists {
 			mc.histogramLabels[key] = make(map[string]*Histogram)
 		}
@@ -73,8 +82,7 @@ func (mc *MetricsCollector) Record(name string, value float64, labels map[string
 		}
 		histograms[labelKey].Observe(value)
 		mc.totalRequestLatency += int64(value * 1e6) // convert to nanoseconds
-	} else {
-		// Gauge
+	case "gauge":
 		if _, exists := mc.gaugeLabels[key]; !exists {
 			mc.gaugeLabels[key] = make(map[string]float64)
 		}
