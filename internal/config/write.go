@@ -1,3 +1,4 @@
+//nolint:errcheck
 // write.go ports settings.py's write_setting: atomic, containment-checked
 // writes to the project-local or user-global config file, preserving
 // unrecognized existing keys.

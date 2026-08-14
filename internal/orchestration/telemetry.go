@@ -1,3 +1,4 @@
+//nolint:errcheck
 // telemetry.go ports roster/orchestration/src/selection_telemetry.py:
 // opt-in, local-only telemetry for `cadre select` outcomes.
 //

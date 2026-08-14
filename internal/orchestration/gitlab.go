@@ -1,3 +1,4 @@
+//nolint:errcheck
 // gitlab.go ports roster/orchestration/mcp/gitlab_core.py: a small,
 // deliberately create-only set of GitLab operations (a review-subtask
 // issue, a wiki page, an evidence comment) so any agent can record

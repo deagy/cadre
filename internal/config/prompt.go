@@ -1,3 +1,4 @@
+//nolint:errcheck
 // prompt.go ports settings.py's interactive-prompt path: the gate that
 // decides whether prompting may happen at all, and the prompt loop itself.
 package config

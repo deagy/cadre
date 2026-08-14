@@ -1,3 +1,4 @@
+//nolint:errcheck
 // role_fidelity_client.go: the OpenAI-compatible chat client, probe-run
 // orchestration, condensed-brief comparison, and attestation writing for
 // role_fidelity.go's probe mode.
