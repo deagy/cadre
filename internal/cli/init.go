@@ -49,17 +49,12 @@ func InitCmd(args []string) int {
 		return 2
 	}
 
-	wd, err := os.Getwd()
+	installationRoot, err := platform.FindInstallationRoot()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cadre init: cannot get working directory: %v\n", err)
+		fmt.Fprintf(os.Stderr, "cadre init: cannot find installation root: %v\n", err)
 		return 1
 	}
-	repoRoot, err := platform.FindProjectRoot(wd)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "cadre init: cannot find repository root: %v\n", err)
-		return 1
-	}
-	sharedDefaultsDir := filepath.Join(repoRoot, "roster", "shared")
+	sharedDefaultsDir := filepath.Join(installationRoot, "roster", "shared")
 
 	opts := initproject.RunInitOptions{
 		TargetPath:        positional,

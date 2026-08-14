@@ -30,14 +30,9 @@ func ResolveSharedCmd(args []string) int {
 	}
 	filename := fs.Arg(0)
 
-	wd, err := os.Getwd()
+	repoRoot, err := platform.FindInstallationRoot()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cadre: cannot get working directory: %v\n", err)
-		return 1
-	}
-	repoRoot, err := platform.FindProjectRoot(wd)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "cadre: cannot find repository root: %v\n", err)
+		fmt.Fprintf(os.Stderr, "cadre: cannot find installation root: %v\n", err)
 		return 1
 	}
 	sharedDir := filepath.Join(repoRoot, "roster", "shared")
