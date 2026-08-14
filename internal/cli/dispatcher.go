@@ -57,6 +57,10 @@ func Usage(subcommands []Subcommand) string {
 	for _, row := range subcommands {
 		fmt.Fprintf(&b, "  %-16s %s\n", row.Name, row.Description)
 	}
+	// Go-implemented subcommands (not in subcommands.tsv)
+	fmt.Fprintf(&b, "  %-16s %s\n", "generate-plugin", "Regenerate a deagy/cadre-lifecycle checkout (requires --output)")
+	fmt.Fprintf(&b, "  %-16s %s\n", "generate-role-metadata", "Regenerate roster/catalog.yaml and routing.json from role metadata")
+	fmt.Fprintf(&b, "  %-16s %s\n", "generate-authority-aides", "Regenerate roster/authority/*-aide AGENT.md files")
 	fmt.Fprintf(&b, "  %-16s %s\n", "sdlc", sdlcDescription)
 	fmt.Fprintf(&b, "  %-16s %s\n", "help", "Show this message")
 	b.WriteString("\n")
