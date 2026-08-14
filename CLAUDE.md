@@ -14,7 +14,7 @@ A runner-neutral **Cadre** monorepo. Four repositories were merged into this one
 | `provider/` | The `secure-cloud` provider bundle: profiles, extensions, generated Codex wrappers, and `provider.json`'s `kernel_compatibility` window. |
 | `providers/` | The kernel's own example default provider package. |
 | `plugin/` | Hand-authored plugin distribution sources: the marketplace manifest, the three lifecycle plugin manifests, the three Cline plugins, and packaging tools. |
-| `cmd/`, `internal/` | The Go CLI dispatcher (Phase 1 of `ADR-001-CLI-GO-REFACTOR.md`'s Python-to-Go refactor of `bin/cadre`), with a repository-root `go.mod`/`go.sum` and `Makefile`. Phase 1 scope only: dispatcher, version detection, SDLC delegation, and a partial settings resolver (`internal/config/resolver.go` implements only the environment-variable precedence step; see that file's package doc). The Python CLI under `bin/` remains the shipped implementation until later phases land. |
+| `cmd/`, `internal/` | The Go CLI (`ADR-001-CLI-GO-REFACTOR.md`'s Python-to-Go refactor of `bin/cadre`), with a repository-root `go.mod`/`go.sum` and `Makefile`. `bin/cadre.py` is deleted; `bin/cadre` is a shell shim that builds and execs `cmd/cadre`. Most subcommands are fully ported, including a complete settings resolver (`internal/config/`, mirroring `roster/shared/src/settings.py`'s precedence chain in full) and the knowledge store (`internal/knowledge/`). `cadre select` — the flagship command — still dispatches to `roster/orchestration/src/select_agents.py` deliberately, to preserve its byte-level schema-v7 output contract and `dispatch_fingerprint`; see `internal/cli/select_agents.go`'s header and `REMAINING_PYTHON_SCOPE.md` for what remains Python and why. |
 
 **The generated half of `plugin/` is committed, deliberately.** `cadre generate-plugin --output plugin` writes it, and `.github/workflows/validate.yml`'s `generated-content` job re-runs the same command with `--check` so drift cannot outlive a pull request. It is committed because a GitHub-sourced marketplace serves the repository tree: an uncommitted distribution would install a plugin with no roles in it. Never hand-edit it — edit the source and regenerate. This is not the old arrangement returning: before the merge those ~340 files were committed into a *separate* repository and reconciled by `cadre-ref.txt`, `drift-check.yml`, and `regenerate.yml`, all now deleted. Source and output now live in one commit.
 
@@ -66,7 +66,7 @@ python3 -m unittest discover -b -s plugin/tools -p "test_*.py"
 # Produce a deterministic dispatch plan (selection only — no execution, no mutation)
 cadre select --task "..." --files a.tsx,b.go --task-id TASK-42 --classification internal
 
-# Go CLI (Phase 1, cmd/ + internal/ -- see ADR-001-CLI-GO-REFACTOR.md).
+# Go CLI (cmd/ + internal/ -- see ADR-001-CLI-GO-REFACTOR.md).
 # Tools (goimports, golangci-lint) are pinned in go.mod's `tool` block and
 # invoked via `go tool`, never a floating `@latest` install, so a local run
 # and CI resolve the exact same tool binary go.sum already verified.
@@ -87,7 +87,7 @@ Use `./bin/cadre`, not bare `cadre` — bare `cadre` may resolve to a globally i
 
 `bin/cadre` dispatches every subcommand: `select`, `selection-telemetry`, `knowledge`, `sdlc`, `generate-plugin`, `generate-authority-aides`, `generate-role-metadata`, `bootstrap-codex`, `resolve-shared`, `mcp-dispatch-server`, `init`, `profile`, `gitlab-evidence`, `config`, `doctor`. `subcommands.tsv` in `bin/` is the dispatch table (`sdlc` is the one exception — it delegates to the external kernel and has no row there). A leading `cadre --interactive <subcommand>` opts that subcommand into prompting for a missing operator setting; it is distinct from `cadre init --interactive`, which starts the shared-policy overlay questionnaire.
 
-This repository now has one Go module of its own (`cmd/`, `internal/`, repository-root `go.mod`/`go.sum`/`Makefile`/`.golangci.yml` — the Phase 1 CLI dispatcher; see the directory table above and `.github/workflows/validate.yml`'s `go` job). React components referenced in worked examples (e.g. sample services under agent briefs) still belong to *consumer* projects, not this repository — there is no frontend build here to lint/test.
+This repository now has one Go module of its own (`cmd/`, `internal/`, repository-root `go.mod`/`go.sum`/`Makefile`/`.golangci.yml` — the CLI, per the directory table above; see also `.github/workflows/validate.yml`'s `go` job). React components referenced in worked examples (e.g. sample services under agent briefs) still belong to *consumer* projects, not this repository — there is no frontend build here to lint/test.
 
 ## Architecture
 

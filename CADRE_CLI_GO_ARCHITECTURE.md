@@ -6,6 +6,48 @@
 **Scope:** Full CLI refactoring from Python 3.10+ to Go  
 **Constraint:** Agentic SDLC kernel remains Python-based delegation
 
+> **2026-08-14 reconciliation notice.** This document is a pre-implementation
+> design proposal, and the "Document Status: Approved" line above overstates
+> what was actually approved -- `ADR-001-CLI-GO-REFACTOR.md` §8's Decision
+> Log is explicit that only the *initiative* to refactor was human-approved,
+> not this document's specific module layout, phasing, and dependency
+> choices "as independently human-reviewed and approved in its particulars."
+> Treat this line the same way here.
+>
+> More importantly for a reader relying on this document technically: the
+> implementation that actually shipped diverges from what follows in
+> several load-bearing ways, verified against the tree at commit
+> `3dcb3a46` on 2026-08-14:
+> - **§1.1's directory layout did not happen.** There is no
+>   `internal/subcommands/<name>/cmd.go` tree. Commands are flat files
+>   directly under `internal/cli/` (`select_agents.go`, `knowledge.go`,
+>   `doctor.go`, ...), and each non-trivial subsystem got its own top-level
+>   `internal/` package instead (`internal/knowledge/`,
+>   `internal/contextstore/`, `internal/initproject/`, `internal/generators/`,
+>   `internal/mcpserver/`, `internal/orchestration/`).
+> - **§1.1's "knowledge subcommand (initially shells to Python)" did not
+>   happen either.** `cadre knowledge` is a full native Go implementation
+>   (`internal/knowledge/`); the Python source it might have shelled to
+>   (`roster/knowledge-store/src/`) has been deleted from the repository.
+> - **`viper` is not used**, despite being named as the one dependency
+>   throughout this document (§0 summary, §1.2, §8.1). `go.mod` carries it
+>   only as an indirect (transitive) dependency; no shipped `.go` file
+>   imports it directly. `internal/config/` hand-rolls settings resolution
+>   against `gopkg.in/yaml.v3` instead -- see that package's own doc comment
+>   for why.
+> - **`cadre select` was not ported**, deliberately, to preserve a
+>   byte-exact `selection.schema.json` v7 output contract with a
+>   `dispatch_fingerprint`. See `internal/cli/select_agents.go`'s header and
+>   `REMAINING_PYTHON_SCOPE.md`, which this document predates and does not
+>   reference.
+>
+> This notice is a correction pointer, not a line-by-line rewrite of the
+> ~1,050 lines below -- treat everything past this point as a record of the
+> original design intent and cross-check any specific claim (directory
+> paths, dependency list, phase timing) against the current tree before
+> relying on it. See `ADR-001-CLI-GO-REFACTOR.md` §8's 2026-08-14 entry for
+> the fuller as-built picture.
+
 ---
 
 ## Executive Summary
