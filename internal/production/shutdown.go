@@ -81,10 +81,10 @@ func (sm *ShutdownManager) Done() <-chan struct{} {
 
 // ConnectionDrainer helps drain in-flight connections.
 type ConnectionDrainer struct {
-	mu        sync.Mutex
-	active    int
-	done      chan struct{}
-	timeout   time.Duration
+	mu      sync.Mutex
+	active  int
+	done    chan struct{}
+	timeout time.Duration
 }
 
 // NewConnectionDrainer creates a new connection drainer.

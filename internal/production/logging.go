@@ -23,27 +23,27 @@ const (
 
 // LogEntry represents a structured log entry.
 type LogEntry struct {
-	Timestamp   time.Time              `json:"timestamp"`
-	Level       string                 `json:"level"`
-	Message     string                 `json:"message"`
-	Component   string                 `json:"component"`
-	TraceID     string                 `json:"trace_id,omitempty"`
-	RequestID   string                 `json:"request_id,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	Error       string                 `json:"error,omitempty"`
-	StackTrace  string                 `json:"stack_trace,omitempty"`
+	Timestamp  time.Time              `json:"timestamp"`
+	Level      string                 `json:"level"`
+	Message    string                 `json:"message"`
+	Component  string                 `json:"component"`
+	TraceID    string                 `json:"trace_id,omitempty"`
+	RequestID  string                 `json:"request_id,omitempty"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	Error      string                 `json:"error,omitempty"`
+	StackTrace string                 `json:"stack_trace,omitempty"`
 }
 
 // ProductionLogger handles structured logging for production environments.
 type ProductionLogger struct {
-	mu          sync.Mutex
-	writer      io.WriteCloser
-	level       LogLevel
-	format      string // json or text
-	component   string
-	filePath    string
-	maxSize     int64
-	maxBackups  int
+	mu         sync.Mutex
+	writer     io.WriteCloser
+	level      LogLevel
+	format     string // json or text
+	component  string
+	filePath   string
+	maxSize    int64
+	maxBackups int
 }
 
 // NewProductionLogger creates a new production logger.
@@ -143,12 +143,12 @@ func (pl *ProductionLogger) log(level LogLevel, message, errMsg string, metadata
 	levelStr := levelToString(level)
 
 	entry := LogEntry{
-		Timestamp:  time.Now(),
-		Level:      levelStr,
-		Message:    message,
-		Component:  pl.component,
-		Metadata:   metadata,
-		Error:      errMsg,
+		Timestamp: time.Now(),
+		Level:     levelStr,
+		Message:   message,
+		Component: pl.component,
+		Metadata:  metadata,
+		Error:     errMsg,
 	}
 
 	var output string
@@ -244,9 +244,9 @@ type LogContextKey struct {
 
 // StructuredLogger wraps ProductionLogger with context tracking.
 type StructuredLogger struct {
-	logger    *ProductionLogger
-	context   *LogContextKey
-	mu        sync.RWMutex
+	logger  *ProductionLogger
+	context *LogContextKey
+	mu      sync.RWMutex
 }
 
 // NewStructuredLogger creates a new structured logger with context.
