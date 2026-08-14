@@ -51,7 +51,11 @@
 // and a false verdict would be strictly worse than declining to decide.
 package orchestration
 
-import "sort"
+import (
+	"regexp"
+	"sort"
+	"strings"
+)
 
 // Containment verdicts.
 const (
@@ -439,4 +443,63 @@ func CheckRouteExcludeShadowing(route Route) map[string]string {
 		results[path] = GlobContains(path, route.ExcludePaths)
 	}
 	return results
+}
+
+// globToRegex moved here from the removed route_matching.go. It is a
+// general glob-to-regex utility, not part of the divergent selector that
+// file carried, and glob_containment_test.go's assertWitnessIsValid uses
+// it to check a NotContained witness independently rather than trusting
+// the verdict -- the verification property this file exists to provide.
+// globToRegex converts a shell glob pattern to a regex.
+// Supports *, ?, and [...] patterns.
+func globToRegex(glob string) *regexp.Regexp {
+	var pattern strings.Builder
+	pattern.WriteString("^")
+
+	for i := 0; i < len(glob); i++ {
+		c := glob[i]
+		switch c {
+		case '*':
+			if i+1 < len(glob) && glob[i+1] == '*' {
+				// ** matches anything including / (with optional /)
+				// src/**/*.go should match src/main.go and src/cmd/main.go
+				pattern.WriteString("(?:.*/)?")
+				i++ // Skip the next *
+				// Skip any following / character
+				if i+1 < len(glob) && glob[i+1] == '/' {
+					i++
+				}
+			} else {
+				// * matches anything except /
+				pattern.WriteString("[^/]*")
+			}
+		case '?':
+			// ? matches any single character except /
+			pattern.WriteString("[^/]")
+		case '[':
+			// Character class [...] - find the closing ]
+			j := strings.IndexByte(glob[i:], ']')
+			if j == -1 {
+				pattern.WriteByte('[')
+			} else {
+				pattern.WriteString(glob[i : i+j+1])
+				i += j
+			}
+		case '.', '+', '^', '$', '(', ')', '|', '{', '}':
+			// Escape regex special characters
+			pattern.WriteByte('\\')
+			pattern.WriteByte(c)
+		default:
+			pattern.WriteByte(c)
+		}
+	}
+
+	pattern.WriteString("$")
+
+	re, err := regexp.Compile(pattern.String())
+	if err != nil {
+		// Fallback to exact match if regex compilation fails
+		re, _ = regexp.Compile("^" + regexp.QuoteMeta(glob) + "$")
+	}
+	return re
 }

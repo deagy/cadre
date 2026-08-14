@@ -42,7 +42,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // SelectionTelemetrySchemaVersion is bumped whenever the record shape
@@ -113,104 +112,11 @@ func expandHome(path string) string {
 	return path
 }
 
-// SelectionTelemetryRecord is one JSON-lines entry describing a completed
-// `cadre select` outcome.
-type SelectionTelemetryRecord struct {
-	SchemaVersion            int         `json:"schema_version"`
-	RecordedAt               string      `json:"recorded_at"`
-	TaskID                   string      `json:"task_id"`
-	Status                   string      `json:"status"`
-	Workflow                 string      `json:"workflow"`
-	MatchedRoutes            []string    `json:"matched_routes"`
-	Classification           string      `json:"classification"`
-	AgentCounts              AgentCounts `json:"agent_counts"`
-	Teams                    []string    `json:"teams"`
-	RequiredQualityGateCount int         `json:"required_quality_gate_count"`
-	HumanGateCount           int         `json:"human_gate_count"`
-	Task                     string      `json:"task,omitempty"`
-	ChangedFiles             []string    `json:"changed_files,omitempty"`
-}
-
 // AgentCounts is the per-role agent count in a telemetry record.
 type AgentCounts struct {
 	Primary   int `json:"primary"`
 	Reviewers int `json:"reviewers"`
 	Support   int `json:"support"`
-}
-
-// BuildSelectionTelemetryRecord derives a telemetry record from a completed
-// dispatch plan. Deliberately omits Task/ChangedFiles unless includeTask is
-// explicitly set.
-func BuildSelectionTelemetryRecord(plan *DispatchPlan, includeTask bool) SelectionTelemetryRecord {
-	requiredQualityGates := 0
-	for _, gate := range plan.QualityGates {
-		if gate.Required {
-			requiredQualityGates++
-		}
-	}
-
-	teamNames := make([]string, 0, len(plan.Teams))
-	for _, team := range plan.Teams {
-		if team.Name != "" {
-			teamNames = append(teamNames, team.Name)
-		}
-	}
-
-	record := SelectionTelemetryRecord{
-		SchemaVersion:  SelectionTelemetrySchemaVersion,
-		RecordedAt:     time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
-		TaskID:         plan.TaskID,
-		Status:         plan.DispatchDisposition.Status,
-		Workflow:       plan.Workflow,
-		MatchedRoutes:  append([]string{}, plan.MatchedRoutes...),
-		Classification: plan.Classification,
-		AgentCounts: AgentCounts{
-			Primary:   len(plan.Agents.Primary),
-			Reviewers: len(plan.Agents.Reviewers),
-			Support:   len(plan.Agents.Support),
-		},
-		Teams:                    teamNames,
-		RequiredQualityGateCount: requiredQualityGates,
-		HumanGateCount:           len(plan.HumanGates),
-	}
-	if includeTask {
-		record.Task = plan.Task
-		record.ChangedFiles = append([]string{}, plan.ChangedFiles...)
-	}
-	return record
-}
-
-// RecordSelection appends exactly one JSON-lines record for plan to the
-// resolved telemetry file. Callers must gate this behind IsEnabled
-// themselves -- this function always writes when called, by design, so that
-// "off by default" is enforced at the one CLI call site rather than
-// duplicated here. Returns the path written to.
-func RecordSelection(plan *DispatchPlan, repositoryRoot, telemetryPathOverride string, includeTask bool) (string, error) {
-	path := ResolveTelemetryPath(repositoryRoot, telemetryPathOverride)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return "", err
-	}
-
-	record := BuildSelectionTelemetryRecord(plan, includeTask)
-	data, err := json.Marshal(record)
-	if err != nil {
-		return "", err
-	}
-	data = append(data, '\n')
-
-	// A single Write call, not two: under concurrent invocations (e.g. a
-	// busy CI environment), two separate writes have no atomicity guarantee
-	// against each other even though a single write under O_APPEND does
-	// (POSIX, for sizes under PIPE_BUF).
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = f.Close() }()
-	if _, err := f.Write(data); err != nil {
-		return "", err
-	}
-	return path, nil
 }
 
 // SelectionTelemetrySummary is the aggregate report produced by Summarize.

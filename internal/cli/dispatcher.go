@@ -242,9 +242,6 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 	if command == "profile" {
 		return ProfileCmd(rest)
 	}
-	if command == "execute" {
-		return ExecuteCmd(context.Background(), rest, deps.Stdout, deps.Stderr)
-	}
 
 	// Route Go-implemented knowledge store. The staged-record verbs
 	// (propose, show-staged, import-staged, disposition-staged,

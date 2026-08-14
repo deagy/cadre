@@ -66,21 +66,35 @@ behaving differently from the Python original. There is no existing
 terminal-prompt-library precedent in this Go codebase, so a real port needs
 that design decision first, not just a line-by-line translation.
 
-### An open architectural divergence — a finding, not a scope item
+### A resolved architectural divergence
 
 `internal/orchestration/{routing,route_matching,dispatch_plan,workflow}.go`
-build a **second, independent** `DispatchPlan` type. It is schema-v7
-incompatible — it has `created_at` and `quality_gates` fields that v7 does
-not, and no `dispatch_fingerprint` at all. It is reachable through
-`cadre execute`, which `internal/cli/dispatcher.go` intercepts and routes
-to `ExecuteCmd`, but which appears in neither `bin/subcommands.tsv` nor
-`internal/cli/usage.go` — an undocumented, ungated command. This is exactly
-the failure mode `select_agents.go`'s own header warns against: a second
-implementation of the same decision, silently diverging from the one every
-other channel treats as authoritative. It should be resolved — deleted, or
-reconciled with schema v7 and documented — rather than left reachable and
-silent. This document only records the finding; resolving it is separate
-work.
+built a **second, independent** `DispatchPlan` type, reachable through an
+undocumented `cadre execute`. **Removed 2026-08-14.**
+
+It was not merely a different shape. Run against the same task and files as
+`cadre select`, it matched a different route set (`supply-chain` only, where
+the selector matched `backend` and `supply-chain`), emitted no
+`schema_version` and no `dispatch_fingerprint`, invented a `code-review`
+quality gate unrelated to the G1-G10 lifecycle gates, named a retired
+knowledge source (`cadre-agents`), and requested knowledge at classification
+`medium` for a task the caller had classified `internal` -- then executed
+agents against that plan. Documenting it would have blessed those as
+contract, so it was deleted.
+
+The execution engine reachable only through that command went with it
+(executor, agent pool, API and subprocess runners, Claude/OpenAI providers,
+execution context, result cache, result consolidation and formatting,
+structured audit logging, and the workflow-coupled telemetry writers). The
+MCP dispatch path is untouched -- it has its own `WriteAuditLog` and shares
+none of that code.
+
+Deliberately kept: `routing.go`'s `RoutingConfig`/`Route`/`Catalog` types and
+loaders, `routing_overlay.go`, and `glob_containment.go`. Those are ported
+foundations for an eventual `select` port, not part of the divergence;
+`globToRegex` moved from the removed `route_matching.go` into
+`glob_containment.go`, where its remaining user is the test that checks a
+`NotContained` witness independently rather than trusting the verdict.
 
 ---
 
