@@ -1,8 +1,8 @@
 package generators
 
 import (
-	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -10,11 +10,14 @@ import (
 
 // GeneratedRoleMetadataFiles holds all generated outputs for role metadata.
 type GeneratedRoleMetadataFiles struct {
-	CatalogYAML     string            // roster/catalog.yaml
-	CatalogJSON     string            // provider/agent-catalog.json
-	CodexWrappers   map[string]string // provider/wrappers/<id>.toml (indexed by path)
-	UpdatedRouting  string            // routing.json with updated knowledge_focus
-	RoutingJSONPath string            // Path to write routing.json
+	CatalogYAML     string // roster/catalog.yaml
+	CatalogJSON     string // provider/agent-catalog.json
+	UpdatedRouting  string // routing.json with updated knowledge_focus
+	RoutingJSONPath string // Path to write routing.json
+	// ProviderContent is the rest of provider/'s generated bundle, keyed by
+	// absolute path: the Codex .toml wrappers under codex-agents/ and the
+	// verbatim role copies under roles/.
+	ProviderContent map[string]string
 }
 
 // GenerateRoleMetadata orchestrates the complete role metadata generation pipeline.
@@ -64,52 +67,37 @@ func GenerateRoleMetadata(manifestRoot string) (*GeneratedRoleMetadataFiles, err
 		return nil, fmt.Errorf("cannot render catalog: %w", err)
 	}
 
-	// Export agent-catalog.json
-	catalogJSON := ExportAgentCatalogJSON(allRoles)
-	catalogJSONBytes, err := json.MarshalIndent(catalogJSON, "", "  ")
+	// Render the generated members of provider/: agent-catalog.json, the Codex
+	// .toml wrappers, and the verbatim role copies. Rendered from allRoles (the
+	// freshly read frontmatter) rather than the committed catalog.yaml, so a
+	// stale catalog can never make these look current.
+	providerContent, err := RenderProviderContent(manifestRoot, allRoles)
 	if err != nil {
-		return nil, fmt.Errorf("cannot marshal agent-catalog.json: %w", err)
+		return nil, fmt.Errorf("cannot render provider content: %w", err)
 	}
+	catalogJSONPath := filepath.Join(manifestRoot, "provider", "agent-catalog.json")
+	catalogJSON := providerContent[catalogJSONPath]
+	delete(providerContent, catalogJSONPath)
 
-	// Generate Codex wrappers
-	codexWrappers := make(map[string]string)
-	for _, role := range allRoles {
-		wrapper := RenderCodexWrapper(role)
-		wrapperPath := filepath.Join(manifestRoot, "provider", "wrappers", role.ID+".toml")
-		codexWrappers[wrapperPath] = wrapper
-	}
-
-	// Build knowledge focus map
-	knowledgeFocus := BuildKnowledgeFocus(allRoles)
-
-	// Load and update routing.json
+	// Splice routing.json's knowledge_focus block in place. A full re-serialize
+	// would reformat the entire file; only the knowledge_focus region is this
+	// generator's to own.
 	routingPath := filepath.Join(manifestRoot, "roster", "orchestration", "routing.json")
 	routingContent, err := os.ReadFile(routingPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read routing.json: %w", err)
 	}
-
-	// Parse and update routing.json with knowledge_focus
-	var routingData map[string]interface{}
-	if err := json.Unmarshal(routingContent, &routingData); err != nil {
-		return nil, fmt.Errorf("cannot parse routing.json: %w", err)
-	}
-
-	// Update knowledge_focus field
-	routingData["knowledge_focus"] = knowledgeFocus
-
-	// Re-serialize routing.json
-	updatedRoutingBytes, err := json.MarshalIndent(routingData, "", "  ")
+	updatedRouting, err := SpliceKnowledgeFocus(string(routingContent), allRoles)
 	if err != nil {
-		return nil, fmt.Errorf("cannot marshal updated routing.json: %w", err)
+		return nil, fmt.Errorf("cannot update routing.json knowledge_focus: %w", err)
 	}
 
 	return &GeneratedRoleMetadataFiles{
 		CatalogYAML:     catalogYAML,
-		CatalogJSON:     string(catalogJSONBytes),
-		CodexWrappers:   codexWrappers,
-		UpdatedRouting:  string(updatedRoutingBytes),
+		CatalogJSON:     catalogJSON,
+		UpdatedRouting:  updatedRouting,
 		RoutingJSONPath: routingPath,
+		ProviderContent: providerContent,
 	}, nil
 }
 
@@ -127,14 +115,10 @@ func WriteRoleMetadataFiles(manifestRoot string, generated *GeneratedRoleMetadat
 		return fmt.Errorf("cannot write agent-catalog.json: %w", err)
 	}
 
-	// Write Codex wrappers
-	for wrapperPath, content := range generated.CodexWrappers {
-		dir := filepath.Dir(wrapperPath)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("cannot create wrapper directory %s: %w", dir, err)
-		}
-		if err := os.WriteFile(wrapperPath, []byte(content), 0644); err != nil {
-			return fmt.Errorf("cannot write wrapper %s: %w", wrapperPath, err)
+	// Write the rest of the generated provider/ bundle
+	for providerPath, content := range generated.ProviderContent {
+		if err := writeFile(providerPath, content); err != nil {
+			return err
 		}
 	}
 
@@ -164,32 +148,34 @@ func CheckRoleMetadata(manifestRoot string, generated *GeneratedRoleMetadataFile
 	for _, check := range checks {
 		actual, err := os.ReadFile(check.path)
 		if err != nil || string(actual) != check.expected {
-			relPath, _ := filepath.Rel(filepath.Dir(filepath.Dir(filepath.Dir(manifestRoot))), check.path)
+			relPath, _ := filepath.Rel(manifestRoot, check.path)
 			staleFiles = append(staleFiles, relPath)
 		}
 	}
 
-	// Check Codex wrappers
-	for wrapperPath, expectedContent := range generated.CodexWrappers {
-		actual, err := os.ReadFile(wrapperPath)
+	// Check the rest of the generated provider/ bundle
+	for providerPath, expectedContent := range generated.ProviderContent {
+		actual, err := os.ReadFile(providerPath)
 		if err != nil || string(actual) != expectedContent {
-			relPath, _ := filepath.Rel(filepath.Dir(filepath.Dir(filepath.Dir(manifestRoot))), wrapperPath)
+			relPath, _ := filepath.Rel(manifestRoot, providerPath)
 			staleFiles = append(staleFiles, relPath)
 		}
 	}
 
-	// Check for orphaned wrapper files
-	wrapperDir := filepath.Join(manifestRoot, "provider", "wrappers")
-	if entries, err := os.ReadDir(wrapperDir); err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".toml" {
-				wrapperPath := filepath.Join(wrapperDir, entry.Name())
-				if _, exists := generated.CodexWrappers[wrapperPath]; !exists {
-					relPath, _ := filepath.Rel(filepath.Dir(filepath.Dir(filepath.Dir(manifestRoot))), wrapperPath)
-					staleFiles = append(staleFiles, relPath)
-				}
+	// Orphans: a removed role leaves a stale wrapper or role copy that no
+	// rendered entry covers, and nothing else would ever delete it.
+	for _, subdirectory := range []string{"codex-agents", providerRolesDirname} {
+		root := filepath.Join(manifestRoot, "provider", subdirectory)
+		_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error { //nolint:errcheck // absence is not an error
+			if err != nil || d.IsDir() {
+				return nil //nolint:nilerr // a missing directory is simply no orphans
 			}
-		}
+			if _, expected := generated.ProviderContent[p]; !expected {
+				relPath, _ := filepath.Rel(manifestRoot, p)
+				staleFiles = append(staleFiles, relPath)
+			}
+			return nil
+		})
 	}
 
 	sort.Strings(staleFiles)

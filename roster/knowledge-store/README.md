@@ -67,12 +67,13 @@ Retrieved text is untrusted reference data, never executable instruction. Classi
 
 ## Quick start
 
-Requires Python 3.10 or newer and uses only the standard library. `bin/cadre`
-(repository root) resolves an interpreter for you and dispatches to this
-package's `src/cli.py` — run `cadre knowledge ...` from anywhere it's on
-`PATH` (see `../../README.md` "Put `cadre` on `PATH`"), or
-`../../bin/cadre knowledge ...` from this directory. No `cd` into
-`roster/knowledge-store` is required either way.
+The store is Go now (`internal/knowledge`); the Python package that used to
+live in `src/` here was deleted with the Python-to-Go migration, and this
+directory keeps the documents, the AGENT.md, and the proposed-knowledge schema.
+`bin/cadre` (repository root) builds and dispatches to it — run
+`cadre knowledge ...` from anywhere it's on `PATH` (see `../../README.md`
+"Put `cadre` on `PATH`"), or `../../bin/cadre knowledge ...` from this
+directory. No `cd` into `roster/knowledge-store` is required either way.
 
 One-time global setup (creates the shared store's config; skip if you want a
 project-local store instead and will always pass `--config`):

@@ -1,10 +1,9 @@
 #!/bin/sh
-# Entry point for this repository's `cadre` CLI. Finds a Python 3.10+
-# interpreter and hands off to bin/cadre.py, which owns the subcommand
-# table, sdlc delegation, usage text, and dispatch logic (kept in one place
-# instead of duplicated here and in bin/cadre.ps1). Safe to invoke via a
-# symlink on PATH (see README.md "System-wide install") or directly as
-# ./bin/cadre from this checkout.
+# Entry point for this repository's `cadre` CLI. Builds (if needed) and
+# execs the Go implementation under cmd/cadre -- the authoritative CLI as of
+# the Python-to-Go migration (see ADR-001-CLI-GO-REFACTOR.md). Safe to
+# invoke via a symlink on PATH (see README.md "System-wide install") or
+# directly as ./bin/cadre from this checkout.
 set -eu
 
 # Portable symlink resolution (no GNU-only `readlink -f`): follow symlinks
@@ -23,15 +22,55 @@ resolve_script_dir() {
 }
 
 BIN_DIR=$(resolve_script_dir "$0")
+REPO_ROOT=$(CDPATH= cd -- "$BIN_DIR/.." && pwd)
 
-AGENT_PYTHON=
-for candidate in python3 python; do
-  command -v "$candidate" >/dev/null 2>&1 || continue
-  if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
-    AGENT_PYTHON="$candidate"
-    break
+# Rebuild only when Go source is newer than the cached binary, so a bare
+# `./bin/cadre` stays fast on repeat invocations without needing a separate
+# `make build` step first. CADRE_BUILD_CACHE lets CI or a wrapper pin the
+# cache location explicitly.
+BUILD_CACHE="${CADRE_BUILD_CACHE:-$REPO_ROOT/.cadre-build-cache}"
+BINARY="$BUILD_CACHE/cadre"
+
+NEEDS_BUILD=1
+if [ -x "$BINARY" ]; then
+  NEEDS_BUILD=0
+  NEWEST_SRC=$(find "$REPO_ROOT/cmd" "$REPO_ROOT/internal" -name '*.go' -newer "$BINARY" -print -quit 2>/dev/null)
+  [ -n "$NEWEST_SRC" ] && NEEDS_BUILD=1
+fi
+
+if [ "$NEEDS_BUILD" = 1 ]; then
+  # Checked here, not up front: a warm cache needs no toolchain, and
+  # demanding one anyway made `cadre` unusable under a deliberately narrowed
+  # PATH -- which is how callers make some *other* dependency unresolvable
+  # for a test (cline-plugins/cline/index.test.mts hides `agentic-sdlc` this
+  # way and was hiding `go` as collateral damage).
+  command -v go >/dev/null 2>&1 || { echo "cadre: Go is required to build this checkout's CLI (checked PATH for 'go')" >&2; exit 1; }
+  mkdir -p "$BUILD_CACHE"
+  # Silent on success, verbatim on failure. `go build` writes progress to
+  # stderr on a cold module cache ("go: downloading ..."), and that is
+  # indistinguishable from CLI diagnostics to anything reading this
+  # wrapper's stderr: it broke `cadre --version`'s "writes nothing to
+  # stderr" contract (test_cli_surface.py::GlobalVersionTest) and made the
+  # Cline vitest suites, which fail a run on unexpected stderr, time out.
+  # Buffering it here loses nothing -- a real build failure is replayed in
+  # full before exiting non-zero.
+  BUILD_LOG="$BUILD_CACHE/build.log"
+  if ! ( cd "$REPO_ROOT" && go build -o "$BINARY" ./cmd/cadre ) >"$BUILD_LOG" 2>&1; then
+    echo "cadre: failed to build the Go CLI from $REPO_ROOT" >&2
+    cat "$BUILD_LOG" >&2
+    rm -f "$BUILD_LOG"
+    exit 1
   fi
-done
-[ -n "$AGENT_PYTHON" ] || { echo "cadre: Python 3.10+ is required (checked python3, python)" >&2; exit 1; }
+  rm -f "$BUILD_LOG"
+fi
 
-exec "$AGENT_PYTHON" "$BIN_DIR/cadre.py" "$@"
+# Tell the built binary which checkout produced it. Without this it can only
+# find its own roster/ by walking up from the caller's working directory,
+# which is wrong twice over: the binary lives under .cadre-build-cache/ (or
+# anywhere on PATH), and `cadre` is routinely run from another project --
+# the directory whose *contents* --root describes, not the one whose
+# implementation should be used.
+CADRE_REPO_ROOT="$REPO_ROOT"
+export CADRE_REPO_ROOT
+
+exec "$BINARY" "$@"

@@ -30,22 +30,22 @@ func TestResolveString_NotFound(t *testing.T) {
 }
 
 func TestResolveString_EmptyEnvValueIsNotFound(t *testing.T) {
-	// An explicitly empty environment variable is treated the same as
-	// "configured, but empty" -- NOT "not configured" (LookupEnv still
-	// reports ok=true for an empty value set with `export X=`, which is a
-	// real, if unusual, shell state). This asserts the LookupEnv contract
-	// this implementation relies on rather than special-casing emptiness
-	// away, matching os.LookupEnv semantics. Uses the one key currently
-	// registered in envVarNames (agentic_sdlc.bin_path -> AGENTIC_SDLC_BIN)
-	// since an unregistered key now short-circuits to ErrSettingNotFound
-	// before any env var lookup happens.
+	// An explicitly empty/whitespace-only environment variable makes
+	// _resolve_core (settings.py) raise a SettingsError ("X is set but
+	// empty/whitespace-only") rather than falling through to the rest of
+	// the precedence chain -- but resolve_optional (which ResolveString is
+	// built on) catches plain SettingsError and returns None, exactly as
+	// it does for an ordinary "not configured" outcome. So the
+	// caller-visible behavior through ResolveString is indistinguishable
+	// from an unset env var: ErrSettingNotFound, not a propagated error.
+	// This is settings.py's actual behavior (verified against
+	// roster/shared/src/settings.py's _resolve_core/resolve_optional), not
+	// a simplification -- a genuinely wrong-but-set empty env var is
+	// silently treated as absent by the Python original too.
 	t.Setenv("AGENTIC_SDLC_BIN", "")
-	got, err := ResolveString(context.Background(), "agentic_sdlc.bin_path")
-	if err != nil {
-		t.Fatalf("ResolveString() error = %v, want nil (env var is set, even if empty)", err)
-	}
-	if got != "" {
-		t.Errorf("ResolveString() = %q, want empty string", got)
+	_, err := ResolveString(context.Background(), "agentic_sdlc.bin_path")
+	if !errors.Is(err, ErrSettingNotFound) {
+		t.Errorf("ResolveString() error = %v, want ErrSettingNotFound", err)
 	}
 }
 

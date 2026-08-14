@@ -77,3 +77,50 @@ func FindProjectRoot(from string) (string, error) {
 
 	return "", ErrRepoRootNotFound
 }
+
+// FindFileAtProjectRoot walks upward from start (empty string means cwd)
+// looking for a project-local file at relativePath. Stops at the first
+// directory containing that file, or at the first directory containing
+// .git (the project boundary) if no match is found first, so a file above
+// the project root is never picked up.
+//
+// This is the single implementation of the walk-up-to-.git discovery
+// convention shared across this repository's project-local override
+// mechanisms -- mirrors roster/shared/src/resolve.py's
+// find_file_at_project_root exactly (both the algorithm and its "don't
+// introduce a fourth distinct find-the-project-root convention" rule,
+// which applies equally to this Go port: internal/config's project-local
+// .agents/cadre.yaml discovery and internal/orchestration's
+// .agents/orchestration/routing-overlay.json discovery both call this
+// function rather than reimplementing the walk).
+func FindFileAtProjectRoot(relativePath, start string) (string, bool) {
+	current := start
+	if current == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return "", false
+		}
+		current = wd
+	}
+	current, err := filepath.Abs(current)
+	if err != nil {
+		return "", false
+	}
+
+	const maxWalkDepth = 64
+	for i := 0; i < maxWalkDepth; i++ {
+		candidate := filepath.Join(current, relativePath)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, true
+		}
+		if _, err := os.Lstat(filepath.Join(current, ".git")); err == nil {
+			return "", false
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", false
+		}
+		current = parent
+	}
+	return "", false
+}

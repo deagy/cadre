@@ -41,11 +41,14 @@ const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(TEST_DIR, "..");
 // REPO_ROOT above is this *plugin's* own root (cline-plugins/cline-agents/),
 // used throughout this file as the workspace root passed into registerTools --
-// correct for that purpose. The knowledge-store CLI is not here at all: it
-// ships inside the *packaged* plugin, which lives in a sibling top-level
-// directory since the Cline workspaces moved out of plugin/.
+// correct for that purpose. The knowledge CLI is not here at all: it is the
+// `cadre` wrapper at the root of the platform checkout, which is what a plan's
+// `invocation.args[0]` names (platform-anchored, PP-FR-5). It used to be
+// `<packaged plugin>/suite/roster/knowledge-store/src/cli.py`; that Python
+// store was replaced by the Go implementation behind `cadre knowledge` and the
+// script was deleted, so the old constant pointed at nothing.
 const PACKAGED_PLUGIN_ROOT = resolve(REPO_ROOT, "..", "..", "plugin");
-const KNOWLEDGE_STORE_CLI = join(PACKAGED_PLUGIN_ROOT, "suite", "roster", "knowledge-store", "src", "cli.py");
+const CADRE_KNOWLEDGE_CLI = resolve(REPO_ROOT, "..", "..", "bin", "cadre");
 const SOURCE_ROLE_COUNT = 159;
 
 const READ_ONLY_SAMPLE = [
@@ -2495,28 +2498,48 @@ describe("knowledge-store retrieval wiring", () => {
   });
 
   it("returns status: unavailable, not a thrown error, for a failing retrieval invocation", async () => {
-    // Deliberately missing every required argument (--agent, --task-id,
-    // --query, --classification) so the real knowledge-store CLI's own
-    // argparse rejects it (exit 2, confirmed by directly invoking
-    // KNOWLEDGE_STORE_CLI the same way -- see PACKAGED_PLUGIN_ROOT's
-    // comment for why this is NOT under REPO_ROOT) -- this only needs a
-    // real Python interpreter, not a configured knowledge store, and
-    // exercises the same failure path a genuinely unconfigured/
-    // unauthorized retrieval would take.
+    // args[0] is the real `cadre` wrapper and is executed directly, with no
+    // interpreter prepended -- that is the schema_version 8 launcher contract
+    // (launcher.runtime "cadre"), and running it here is what proves the
+    // emitted path is a real executable rather than merely a plausible string.
+    //
+    // `--config` names a file that does not exist, so the CLI's own
+    // fail-closed config resolution rejects the call before it can reach a
+    // store. Chosen over omitting required flags because it is the one
+    // rejection that does not depend on this machine's knowledge-store
+    // configuration: it exercises the same failure path a genuinely
+    // unconfigured or unauthorized retrieval would take, deterministically.
+    const missingConfig = join(PACKAGED_PLUGIN_ROOT, "no-such-knowledge-store", "config.json");
     const request: KnowledgeContextRequest = {
       agent: "backend-engineer",
       query: "irrelevant",
       invocation: {
-        launcher: { runtime: "python", minimum_version: "3.10" },
-        args: [KNOWLEDGE_STORE_CLI, "context"],
+        launcher: { runtime: "cadre", minimum_version: "0.5.0" },
+        args: [
+          CADRE_KNOWLEDGE_CLI,
+          "knowledge",
+          "--config",
+          missingConfig,
+          "search",
+          "--agent",
+          "backend-engineer",
+          "--task-id",
+          "CLINE-RETRIEVAL-1",
+          "--classification",
+          "internal",
+          "--json",
+          "--source",
+          "deagy/cadre",
+          "irrelevant",
+        ],
       },
     };
 
     const result = await retrieveKnowledgeContext(request, PACKAGED_PLUGIN_ROOT);
     expect(result.status).toBe("unavailable");
     expect(result.error).toBeTruthy();
-    // The real argparse rejection, not a "file not found" from a wrong path.
-    expect(result.error).toMatch(/required: --agent, --task-id, --query, --classification/);
+    // The real CLI's own rejection, not a "file not found" from a wrong path.
+    expect(result.error).toMatch(/explicit config file does not exist/);
     expect(result.context).toBeUndefined();
   });
 

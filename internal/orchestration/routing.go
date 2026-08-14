@@ -26,6 +26,7 @@ type Route struct {
 	ID             string   `json:"id"`
 	WorkflowShape  string   `json:"workflow_shape"`
 	Paths          []string `json:"paths"`
+	ExcludePaths   []string `json:"exclude_paths,omitempty"`
 	Keywords       []string `json:"keywords"`
 	Primary        []string `json:"primary"`
 	Reviewers      []string `json:"reviewers"`

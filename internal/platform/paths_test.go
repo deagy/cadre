@@ -27,6 +27,61 @@ func TestFindProjectRoot_FindsGitDirectory(t *testing.T) {
 	}
 }
 
+func TestFindFileAtProjectRoot_FindsFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(root, ".agents", "cadre.yaml")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(root, "a", "b", "c")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got, ok := FindFileAtProjectRoot(filepath.Join(".agents", "cadre.yaml"), nested)
+	if !ok {
+		t.Fatal("expected to find the file")
+	}
+	if got != target {
+		t.Errorf("got %q, want %q", got, target)
+	}
+}
+
+func TestFindFileAtProjectRoot_StopsAtGitBoundary(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(root, "a", "b")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A file with the target name exists ABOVE the .git boundary -- must
+	// not be picked up.
+	outside := filepath.Join(filepath.Dir(root), ".agents", "cadre.yaml")
+	os.MkdirAll(filepath.Dir(outside), 0o755)
+	os.WriteFile(outside, []byte("x"), 0o644)
+
+	_, ok := FindFileAtProjectRoot(filepath.Join(".agents", "cadre.yaml"), nested)
+	if ok {
+		t.Fatal("must not find a file above the .git boundary")
+	}
+}
+
+func TestFindFileAtProjectRoot_NoGitBoundaryNoFile(t *testing.T) {
+	dir := t.TempDir()
+	_, ok := FindFileAtProjectRoot(filepath.Join(".agents", "cadre.yaml"), dir)
+	if ok {
+		t.Fatal("expected no file found")
+	}
+}
+
 func TestFindProjectRoot_GitFileForWorktree(t *testing.T) {
 	// A linked worktree's `.git` is a file containing a `gitdir:` pointer,
 	// not a directory.

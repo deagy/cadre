@@ -38,6 +38,14 @@ type DispatchPlan struct {
 
 	// Knowledge context
 	KnowledgeContext KnowledgeContext `json:"knowledge_context,omitempty"`
+
+	// Provenance binds this plan to the exact catalog.yaml/routing.json
+	// content (and, best-effort, git commit) that produced it. Set by the
+	// caller (SelectAgents) after the plan is built, since it needs the
+	// filesystem paths that were loaded rather than anything BuildDispatchPlan
+	// itself has access to. Absent entirely when it could not be computed
+	// (e.g. catalog.yaml unreadable) -- never fabricated.
+	Provenance *Provenance `json:"provenance,omitempty"`
 }
 
 // AgentGroups organizes agents by role.
