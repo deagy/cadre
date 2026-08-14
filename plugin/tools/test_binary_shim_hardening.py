@@ -203,6 +203,51 @@ class BinaryShimHardeningTest(unittest.TestCase):
             f"mv absorbed the download into the pre-existing directory: {moved_in}",
         )
 
+        # The refusal path returns before the mv, but BINARY_TEMP has already
+        # been created and chmod +x'd by then. Leaving it behind drops an
+        # executable .tmp.$$ into the cache on every collision.
+        strays = [p.name for p in self.cache_dir.iterdir() if ".tmp." in p.name]
+        self.assertEqual(
+            [], strays,
+            f"the refusal path leaked a temporary executable into the cache: {strays}",
+        )
+
+    def test_windows_shells_resolve_the_windows_binary(self) -> None:
+        """Git Bash / MSYS2 / Cygwin must reach the published windows-amd64 asset.
+
+        This POSIX sh shim only runs on Windows under those environments, so
+        their `uname -s` strings are the only way the windows branch is ever
+        reachable. Without them the zip/cadre.exe code below was dead, and the
+        windows-amd64 binary the release pipeline publishes could not be used.
+        """
+        archive = self._payload_archive()
+        curl_log = self.tmpdir / "curl-calls.log"
+        self._install_curl_stub(archive, log=curl_log)
+
+        for uname_s in ("MINGW64_NT-10.0-19045", "MSYS_NT-10.0-19045", "CYGWIN_NT-10.0"):
+            with self.subTest(uname=uname_s):
+                curl_log.unlink(missing_ok=True)
+                stub = self.stub_bin / "uname"
+                stub.write_text(
+                    "#!/bin/sh\n"
+                    'case "$1" in\n'
+                    f'  -s) echo "{uname_s}" ;;\n'
+                    "  -m) echo x86_64 ;;\n"
+                    f'  *) echo "{uname_s} x86_64" ;;\n'
+                    "esac\n",
+                    encoding="utf-8",
+                )
+                stub.chmod(0o755)
+
+                self._run("definitely-not-a-subcommand")
+
+                self.assertTrue(curl_log.exists(), f"no download attempted under {uname_s}")
+                requested = curl_log.read_text(encoding="utf-8")
+                self.assertIn(
+                    f"cadre-v{self.version}-windows-amd64.zip", requested,
+                    f"{uname_s} must resolve the windows-amd64 zip asset; got {requested!r}",
+                )
+
     # -- 2. permission matrix --------------------------------------------
 
     def test_cached_binary_permissions_gate_execution_on_writability(self) -> None:
