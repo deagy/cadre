@@ -81,11 +81,29 @@ CREATE TABLE IF NOT EXISTS retrieval_runs (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS deletion_runs (
+  id TEXT PRIMARY KEY,
+  reason TEXT NOT NULL,
+  policy_type TEXT NOT NULL,
+  target_count INTEGER NOT NULL,
+  deleted_count INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  authorized_by TEXT,
+  classification TEXT,
+  source TEXT,
+  min_age_days INTEGER,
+  started_at TEXT NOT NULL,
+  completed_at TEXT,
+  error TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_messages_source ON messages(source);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_messages_classification ON messages(classification);
+CREATE INDEX IF NOT EXISTS idx_messages_retention ON messages(retention_until);
 CREATE INDEX IF NOT EXISTS idx_chunks_model ON chunks(embedding_provider, embedding_model);
 CREATE INDEX IF NOT EXISTS idx_retrieval_runs_task ON retrieval_runs(task_id, agent);
+CREATE INDEX IF NOT EXISTS idx_deletion_runs_status ON deletion_runs(status);
 `
 
 // Open opens or creates a knowledge store at the given path.
