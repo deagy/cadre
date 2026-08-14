@@ -157,7 +157,7 @@ func TestReplicationCreation(t *testing.T) {
 	}
 }
 
-func TestRegisterReplica(t *testing.T) {
+func TestReplicationRegisterReplica(t *testing.T) {
 	rep := NewReplication("primary")
 
 	err := rep.RegisterReplica("replica-1", "10.0.0.1:8080")

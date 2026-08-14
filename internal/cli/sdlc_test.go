@@ -31,6 +31,22 @@ func writeFakeSDLCBinary(t *testing.T, dir string, exitCode int) string {
 	return path
 }
 
+// isolateSDLCPathLookup ensures DispatchSDLC's config.ResolveString call
+// for agentic_sdlc.bin_path resolves deterministically in these tests,
+// regardless of the host machine's own environment: unsets
+// AGENTIC_SDLC_BIN (in case the test runner's shell exports one) and
+// points PATH at an empty directory so agentic_sdlc.bin_path's computed
+// default (an exec.LookPath("agentic-sdlc") lookup, mirroring settings.py's
+// shutil.which) can never find a real system-installed agentic-sdlc binary
+// and short-circuit past the in-tree-fallback / no-binary-found paths
+// these tests mean to exercise.
+func isolateSDLCPathLookup(t *testing.T) {
+	t.Helper()
+	t.Setenv("AGENTIC_SDLC_BIN", "")
+	os.Unsetenv("AGENTIC_SDLC_BIN")
+	t.Setenv("PATH", t.TempDir())
+}
+
 func itoa(n int) string {
 	if n == 0 {
 		return "0"
@@ -52,6 +68,7 @@ func itoa(n int) string {
 
 func TestDispatchSDLC_UsesInTreeFallback(t *testing.T) {
 	requirePOSIX(t)
+	isolateSDLCPathLookup(t)
 
 	repoRoot := t.TempDir()
 	binDir := filepath.Join(repoRoot, "bin")
@@ -86,6 +103,7 @@ func TestDispatchSDLC_UsesInTreeFallback(t *testing.T) {
 }
 
 func TestDispatchSDLC_NoBinaryFound(t *testing.T) {
+	isolateSDLCPathLookup(t)
 	repoRoot := t.TempDir() // no bin/agentic-sdlc present
 
 	var stdout, stderr bytes.Buffer
@@ -106,6 +124,7 @@ func TestDispatchSDLC_NoBinaryFound(t *testing.T) {
 
 func TestDispatchSDLC_NonzeroExitPropagates(t *testing.T) {
 	requirePOSIX(t)
+	isolateSDLCPathLookup(t)
 
 	repoRoot := t.TempDir()
 	binDir := filepath.Join(repoRoot, "bin")

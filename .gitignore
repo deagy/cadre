@@ -53,6 +53,12 @@ evidence/
 .agents/context-store/config.json
 .agents/context-store/data/
 
+# Opt-in, local-only cadre select telemetry (roster/orchestration/src/
+# selection_telemetry.py; internal/orchestration/telemetry.go). Never
+# written unless a contributor explicitly opts in, and never meant to be
+# committed even then -- it is per-checkout operator data.
+.agents/orchestration/selection-telemetry.jsonl
+
 # Local Claude Code settings (not portable across contributors).
 .claude/settings.local.json
 
@@ -102,6 +108,9 @@ node_modules/
 /engine/.venv/
 cline-plugins/node_modules/
 
-# Go CLI build output (ADR-001-CLI-GO-REFACTOR.md). Never bin/ -- that
-# directory is the existing, committed Python dispatcher.
+# Go CLI build output (ADR-001-CLI-GO-REFACTOR.md).
 /dist/
+
+# bin/cadre and bin/cadre.ps1 self-build the Go CLI into this cache on first
+# run (see those scripts) -- never commit the resulting binary.
+/.cadre-build-cache/

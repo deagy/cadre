@@ -65,7 +65,7 @@ func TestSendOperation(t *testing.T) {
 	}
 }
 
-func TestGetReplicationStatus(t *testing.T) {
+func TestStreamingNodeGetReplicationStatus(t *testing.T) {
 	idx := NewHSNWIndex(16, 200)
 	node := NewDistributedStreamingNode("node-1", idx, 3)
 

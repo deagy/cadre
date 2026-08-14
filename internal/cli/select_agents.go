@@ -22,6 +22,10 @@ func SelectAgents(args []string) int {
 	taskIDFlag := fs.String("task-id", "", "Task identifier (required)")
 	outputFlag := fs.String("output", "text", "Output format: text or json")
 	checkFlag := fs.Bool("check", false, "Validate without executing")
+	recordTelemetryFlag := fs.Bool("record-telemetry", false, "Append an opt-in, local-only outcome record to the selection telemetry log")
+	recordTelemetryIncludeTaskFlag := fs.Bool("record-telemetry-include-task", false, "Additionally record the raw task text and changed files (off even when --record-telemetry is on)")
+	telemetryPathFlag := fs.String("telemetry-path", "", "Override the selection telemetry file path (default: .agents/orchestration/selection-telemetry.jsonl)")
+	overlayFlag := fs.String("overlay", "", "Explicit routing overlay file path, bypassing walk-up discovery of .agents/orchestration/routing-overlay.json")
 
 	if err := fs.Parse(args); err != nil {
 		fmt.Fprintf(os.Stderr, "cadre: %v\n", err)
@@ -65,9 +69,17 @@ func SelectAgents(args []string) int {
 		return 1
 	}
 
-	// Load routing configuration
+	// Load routing configuration, applying a project-local overlay
+	// (.agents/orchestration/routing-overlay.json, discovered by walking up
+	// from cwd, or an explicit --overlay path) if one is present. With no
+	// overlay, this resolves to the base routing.json unchanged.
 	routingPath := filepath.Join(repoRoot, "roster", "orchestration", "routing.json")
-	routing, err := orchestration.LoadRouting(routingPath)
+	effectiveRoutingMap, resolvedOverlayPath, overlayApplied, err := orchestration.ResolveEffectiveRouting(routingPath, wd, *overlayFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre: cannot resolve routing overlay: %v\n", err)
+		return 1
+	}
+	routing, err := orchestration.EffectiveRoutingConfig(effectiveRoutingMap)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "cadre: cannot load routing: %v\n", err)
 		return 1
@@ -98,6 +110,33 @@ func SelectAgents(args []string) int {
 	if plan.DispatchDisposition.Status == "no-agents-selected" {
 		fmt.Fprintf(os.Stderr, "cadre: no agents selected for this task\n")
 		return 1
+	}
+
+	// Bind the plan to the exact catalog.yaml/routing.json content (and,
+	// best-effort, git commit) that produced it. Best-effort by design here
+	// (unlike the Python original, where catalog.yaml is already a
+	// mandatory read): this Go select pipeline does not otherwise require
+	// catalog.yaml to exist, so a missing catalog degrades to an absent
+	// Provenance field rather than failing the whole command.
+	catalogPath := filepath.Join(repoRoot, "roster", "catalog.yaml")
+	provOpts := orchestration.BuildProvenanceOptions{}
+	if overlayApplied {
+		provOpts.OverlayPath = resolvedOverlayPath
+	}
+	if prov, err := orchestration.BuildProvenance(catalogPath, routingPath, provOpts); err == nil {
+		plan.Provenance = prov
+	}
+
+	// Record opt-in, local-only selection telemetry as a side effect. Never
+	// runs unless explicitly enabled via --record-telemetry or
+	// CADRE_SELECTION_TELEMETRY=1 -- see telemetry.go's package doc. This
+	// never changes stdout/--output JSON above; it is a side effect only.
+	if orchestration.IsEnabled(*recordTelemetryFlag) {
+		includeTask := orchestration.IncludeTaskEnabled(*recordTelemetryIncludeTaskFlag)
+		if _, err := orchestration.RecordSelection(plan, repoRoot, *telemetryPathFlag, includeTask); err != nil {
+			fmt.Fprintf(os.Stderr, "cadre select: failed to record telemetry: %v\n", err)
+			return 1
+		}
 	}
 
 	// Output result

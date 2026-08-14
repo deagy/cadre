@@ -61,7 +61,20 @@ func Usage(subcommands []Subcommand) string {
 	fmt.Fprintf(&b, "  %-16s %s\n", "generate-plugin", "Regenerate a deagy/cadre-lifecycle checkout (requires --output)")
 	fmt.Fprintf(&b, "  %-16s %s\n", "generate-role-metadata", "Regenerate roster/catalog.yaml and routing.json from role metadata")
 	fmt.Fprintf(&b, "  %-16s %s\n", "generate-authority-aides", "Regenerate roster/authority/*-aide AGENT.md files")
+	fmt.Fprintf(&b, "  %-16s %s\n", "upgrade", "Check for Cadre updates and upgrade the CLI (--check, --force, --help)")
+	fmt.Fprintf(&b, "  %-16s %s\n", "mcp-dispatch-server", "Run the Codex MCP dispatch server (stdio; requires the mcp package)")
 	fmt.Fprintf(&b, "  %-16s %s\n", "knowledge", "Vectorized knowledge store (init, stats, search, context)")
+	fmt.Fprintf(&b, "  %-16s %s\n", "doctor", "Report which cadre binary is running, what kind of install it is, and warn on a cwd/checkout mismatch")
+	fmt.Fprintf(&b, "  %-16s %s\n", "selection-telemetry", "Summarize opt-in, local cadre select telemetry")
+	fmt.Fprintf(&b, "  %-16s %s\n", "schema-validate", "Strict JSON Schema validation for roster/catalog.yaml and routing.json")
+	fmt.Fprintf(&b, "  %-16s %s\n", "role-fidelity", "Measure whether role briefs survive a given model: context-budget analysis, or live probes")
+	fmt.Fprintf(&b, "  %-16s %s\n", "gitlab-evidence", "Non-MCP CLI over the GitLab evidence tools (create-review-subtask/write-wiki-page/write-evidence-comment)")
+	fmt.Fprintf(&b, "  %-16s %s\n", "config", "Show resolved operator settings, config file paths, or resolve one setting")
+	fmt.Fprintf(&b, "  %-16s %s\n", "resolve-shared", "Resolve effective shared config for the current project")
+	fmt.Fprintf(&b, "  %-16s %s\n", "init", "Guide a project through generating .agents/shared/ overlays (init_project.py)")
+	fmt.Fprintf(&b, "  %-16s %s\n", "context", "Local agent context store: put/get/list/search/export/promote/drop (context-store/src/cli.py)")
+	fmt.Fprintf(&b, "  %-16s %s\n", "bootstrap-codex", "Safely install namespaced Codex role wrappers (sync_codex_agents.py)")
+	fmt.Fprintf(&b, "  %-16s %s\n", "profile", "Read-only provider/profile drift report against a consuming project's copy (profile_diff.py)")
 	fmt.Fprintf(&b, "  %-16s %s\n", "sdlc", sdlcDescription)
 	fmt.Fprintf(&b, "  %-16s %s\n", "help", "Show this message")
 	b.WriteString("\n")
@@ -155,6 +168,36 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 	if command == "select" {
 		return SelectAgents(rest)
 	}
+	if command == "selection-telemetry" {
+		return SelectionTelemetryCmd(rest)
+	}
+	if command == "schema-validate" {
+		return SchemaValidateCmd(rest)
+	}
+	if command == "role-fidelity" {
+		return RoleFidelityCmd(rest)
+	}
+	if command == "gitlab-evidence" {
+		return GitLabEvidenceCmd(rest)
+	}
+	if command == "config" {
+		return ConfigCmd(rest)
+	}
+	if command == "resolve-shared" {
+		return ResolveSharedCmd(rest)
+	}
+	if command == "init" {
+		return InitCmd(rest)
+	}
+	if command == "context" {
+		return ContextCmd(rest)
+	}
+	if command == "bootstrap-codex" {
+		return BootstrapCodexCmd(rest)
+	}
+	if command == "profile" {
+		return ProfileCmd(rest)
+	}
 	if command == "execute" {
 		return ExecuteCmd(context.Background(), rest, deps.Stdout, deps.Stderr)
 	}
@@ -162,6 +205,17 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 	// Route Go-implemented knowledge store
 	if command == "knowledge" {
 		return KnowledgeCmd(rest)
+	}
+	if command == "doctor" {
+		return DoctorCmd(rest)
+	}
+
+	if command == "upgrade" {
+		return UpgradeCmd(rest)
+	}
+
+	if command == "mcp-dispatch-server" {
+		return MCPDispatchServerCmd(rest, deps.Stdout, deps.Stderr)
 	}
 
 	var match *Subcommand

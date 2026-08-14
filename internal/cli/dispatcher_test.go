@@ -109,8 +109,14 @@ func TestRun_UnknownSubcommand(t *testing.T) {
 
 func TestRun_RoutesToSubcommandScript(t *testing.T) {
 	dir := t.TempDir()
+	// "widget" is a synthetic placeholder name for this test's own table
+	// entry, deliberately not any real subcommand name -- both "select"
+	// and "config" (a plausible earlier choice) are now intercepted by
+	// Run() ahead of the subcommands.tsv table, which would make this test
+	// exercise the Go-native command instead of the generic
+	// Python-script-dispatch path it means to test.
 	subPath := writeSubcommandsTSV(t, dir, [][3]string{
-		{"config", "roster/shared/src/settings.py", "Show resolved operator settings"},
+		{"widget", "roster/shared/src/settings.py", "Show resolved operator settings"},
 	})
 
 	var gotScript string
@@ -130,7 +136,7 @@ func TestRun_RoutesToSubcommandScript(t *testing.T) {
 		},
 	}
 
-	code := Run(context.Background(), []string{"config", "--task", "foo"}, deps)
+	code := Run(context.Background(), []string{"widget", "--task", "foo"}, deps)
 	if code != 0 {
 		t.Fatalf("Run() code = %d, want 0", code)
 	}
@@ -148,8 +154,10 @@ func TestRun_RoutesToSubcommandScript(t *testing.T) {
 
 func TestRun_InteractiveFlagSetsChildEnv(t *testing.T) {
 	dir := t.TempDir()
+	// See TestRun_RoutesToSubcommandScript's comment on why this uses a
+	// synthetic "widget" name rather than "config".
 	subPath := writeSubcommandsTSV(t, dir, [][3]string{
-		{"config", "roster/shared/src/settings.py", "Show resolved operator settings"},
+		{"widget", "roster/shared/src/settings.py", "Show resolved operator settings"},
 	})
 
 	var gotEnv []string
@@ -166,7 +174,7 @@ func TestRun_InteractiveFlagSetsChildEnv(t *testing.T) {
 		},
 	}
 
-	code := Run(context.Background(), []string{InteractiveFlag, "config", "show"}, deps)
+	code := Run(context.Background(), []string{InteractiveFlag, "widget", "show"}, deps)
 	if code != 0 {
 		t.Fatalf("Run() code = %d, want 0", code)
 	}
@@ -186,8 +194,10 @@ func TestRun_InteractiveFlagSetsChildEnv(t *testing.T) {
 
 func TestRun_SubcommandExitCodePropagates(t *testing.T) {
 	dir := t.TempDir()
+	// See TestRun_RoutesToSubcommandScript's comment on why this uses a
+	// synthetic "widget" name rather than "config".
 	subPath := writeSubcommandsTSV(t, dir, [][3]string{
-		{"config", "roster/shared/src/settings.py", "desc"},
+		{"widget", "roster/shared/src/settings.py", "desc"},
 	})
 
 	deps := Deps{
@@ -200,7 +210,7 @@ func TestRun_SubcommandExitCodePropagates(t *testing.T) {
 		},
 	}
 
-	code := Run(context.Background(), []string{"config"}, deps)
+	code := Run(context.Background(), []string{"widget"}, deps)
 	if code != 7 {
 		t.Errorf("Run() code = %d, want 7", code)
 	}
@@ -208,8 +218,10 @@ func TestRun_SubcommandExitCodePropagates(t *testing.T) {
 
 func TestRun_SubcommandExecutionErrorReturnsOne(t *testing.T) {
 	dir := t.TempDir()
+	// See TestRun_RoutesToSubcommandScript's comment on why this uses a
+	// synthetic "widget" name rather than "config".
 	subPath := writeSubcommandsTSV(t, dir, [][3]string{
-		{"config", "roster/shared/src/settings.py", "desc"},
+		{"widget", "roster/shared/src/settings.py", "desc"},
 	})
 
 	deps := Deps{
@@ -222,7 +234,7 @@ func TestRun_SubcommandExecutionErrorReturnsOne(t *testing.T) {
 		},
 	}
 
-	code := Run(context.Background(), []string{"config"}, deps)
+	code := Run(context.Background(), []string{"widget"}, deps)
 	if code != 1 {
 		t.Errorf("Run() code = %d, want 1", code)
 	}

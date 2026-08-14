@@ -1,23 +1,36 @@
-# Entry point for this repository's `cadre` CLI. Finds a Python 3.10+
-# interpreter and hands off to bin/cadre.py, which owns the subcommand
-# table, sdlc delegation, usage text, and dispatch logic (kept in one place
-# instead of duplicated here and in bin/cadre). See README.md "System-wide
-# install" for wrapping this in a $PROFILE function so it can be invoked as
-# bare `cadre`.
+# Entry point for this repository's `cadre` CLI. Builds (if needed) and
+# execs the Go implementation under cmd/cadre -- the authoritative CLI as of
+# the Python-to-Go migration (see ADR-001-CLI-GO-REFACTOR.md). See
+# README.md "System-wide install" for wrapping this in a $PROFILE function
+# so it can be invoked as bare `cadre`.
 
-$AgentPython = $null
-foreach ($Candidate in @(
-  [pscustomobject]@{ Name = "python"; Args = @() },
-  [pscustomobject]@{ Name = "python3"; Args = @() },
-  [pscustomobject]@{ Name = "py"; Args = @("-3") }
-)) {
-  $Command = Get-Command $Candidate.Name -ErrorAction SilentlyContinue
-  if ($Command) {
-    & $Command.Source @($Candidate.Args) -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)" 2>$null
-    if ($LASTEXITCODE -eq 0) { $AgentPython = [pscustomobject]@{ Path = $Command.Source; Args = $Candidate.Args }; break }
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+
+$GoCommand = Get-Command go -ErrorAction SilentlyContinue
+if (-not $GoCommand) { throw "cadre: Go is required to build this checkout's CLI (checked PATH for 'go')" }
+
+$BuildCache = if ($env:CADRE_BUILD_CACHE) { $env:CADRE_BUILD_CACHE } else { Join-Path $RepoRoot ".cadre-build-cache" }
+$Binary = Join-Path $BuildCache "cadre.exe"
+
+$NeedsBuild = $true
+if (Test-Path $Binary) {
+  $BinaryTime = (Get-Item $Binary).LastWriteTimeUtc
+  $NewestSource = Get-ChildItem -Path (Join-Path $RepoRoot "cmd"), (Join-Path $RepoRoot "internal") -Filter "*.go" -Recurse -ErrorAction SilentlyContinue |
+    Where-Object { $_.LastWriteTimeUtc -gt $BinaryTime } |
+    Select-Object -First 1
+  if (-not $NewestSource) { $NeedsBuild = $false }
+}
+
+if ($NeedsBuild) {
+  New-Item -ItemType Directory -Force -Path $BuildCache | Out-Null
+  Push-Location $RepoRoot
+  try {
+    & $GoCommand.Source build -o $Binary "./cmd/cadre"
+    if ($LASTEXITCODE -ne 0) { throw "cadre: build failed" }
+  } finally {
+    Pop-Location
   }
 }
-if (-not $AgentPython) { throw "cadre: Python 3.10+ is required (checked python, python3, py -3)" }
 
-& $AgentPython.Path @($AgentPython.Args) (Join-Path $PSScriptRoot "cadre.py") @args
+& $Binary @args
 exit $LASTEXITCODE
