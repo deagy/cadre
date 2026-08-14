@@ -218,6 +218,51 @@ func TestProjectLocalConfigCannotEnableRemoteEmbeddings(t *testing.T) {
 	}
 }
 
+// TestLegacyHashingProviderStillLoads: the Python implementation this package
+// replaced accepted {"hashing", "openai-compatible"}. The port renamed the
+// first to "local-hashing" with no migration, so every config written before
+// it -- including the default the Python implementation itself wrote to
+// ~/.agents/knowledge-store/config.json -- stopped loading, taking every
+// `cadre knowledge` command with it.
+func TestLegacyHashingProviderStillLoads(t *testing.T) {
+	dir := isolatedProject(t)
+	path := writeConfigFile(t, filepath.Join(dir, "explicit"), map[string]any{
+		"embedding": map[string]any{"provider": LegacyLocalEmbeddingProvider},
+	})
+
+	config, _, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("a config naming the legacy provider must still load: %v", err)
+	}
+	if config.Embedding.Provider != "local-hashing" {
+		t.Errorf("Provider = %q, want it normalised to %q",
+			config.Embedding.Provider, "local-hashing")
+	}
+}
+
+// TestLegacyHashingProviderSatisfiesTheProjectLocalTrustGuard is the half
+// that is easy to get wrong. The implicit-project-config guard compares the
+// provider against "local-hashing" exactly. Had the legacy name merely been
+// added to SupportedEmbeddingProviders instead of normalised before that
+// comparison, a project-local config naming "hashing" would have been
+// refused *as though it had asked for remote embeddings* -- the offline
+// provider, rejected with a message about transmitting content off the
+// machine.
+func TestLegacyHashingProviderSatisfiesTheProjectLocalTrustGuard(t *testing.T) {
+	dir := isolatedProject(t)
+	writeConfigFile(t, filepath.Join(dir, ".agents", "knowledge-store"), map[string]any{
+		"embedding": map[string]any{"provider": LegacyLocalEmbeddingProvider},
+	})
+
+	config, _, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("the legacy offline provider must pass the project-local guard: %v", err)
+	}
+	if config.Embedding.Provider != "local-hashing" {
+		t.Errorf("Provider = %q, want %q", config.Embedding.Provider, "local-hashing")
+	}
+}
+
 // TestLoadConfigRefusesAnUnknownEmbeddingProvider closes the obvious retype.
 func TestLoadConfigRefusesAnUnknownEmbeddingProvider(t *testing.T) {
 	dir := isolatedProject(t)
