@@ -69,6 +69,65 @@ func TestDumpMatchesForParityProbe(t *testing.T) {
 		}
 	}
 
+	// Selection layer: catalog order, matched ids, cross-stack, groups and
+	// disposition -- everything built directly on MatchRule.
+	catalogRaw, err := os.ReadFile(filepath.Join(repoRoot, "roster", "catalog.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := ParseCatalogIDs(string(catalogRaw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	results["_catalog"] = catalog
+
+	for _, rawCase := range cases {
+		testCase, _ := rawCase.(map[string]any)
+		caseID, _ := testCase["id"].(string)
+		task, _ := testCase["task"].(string)
+		files, _ := testCase["files"].(string)
+		var changed []string
+		if files != "" {
+			changed = strings.Split(files, ",")
+		}
+
+		routes := MatchRoutes(config, task, changed)
+		risks := ClassifyRisks(config, task, changed)
+		packs := MatchContextPacks(config, task, changed)
+
+		var primary, reviewers, support []string
+		for _, match := range routes {
+			primary = append(primary, stringSlice(match.Rule["primary"])...)
+			reviewers = append(reviewers, stringSlice(match.Rule["reviewers"])...)
+			support = append(support, stringSlice(match.Rule["support"])...)
+		}
+		for _, match := range risks {
+			primary = append(primary, stringSlice(match.Rule["primary"])...)
+			reviewers = append(reviewers, stringSlice(match.Rule["reviewers"])...)
+			support = append(support, stringSlice(match.Rule["support"])...)
+		}
+		support = append(support, ApplyCrossStack(config, routes)...)
+
+		groups := AgentGroups{
+			Primary:   Ordered(primary, catalog),
+			Reviewers: Ordered(reviewers, catalog),
+			Support:   Ordered(support, catalog),
+		}
+		groups.Reviewers = without(groups.Reviewers, groups.Primary)
+		groups.Support = without(groups.Support, groups.Primary, groups.Reviewers)
+
+		results["_selection|"+caseID] = map[string]any{
+			"routes":      ids(routes),
+			"risks":       ids(risks),
+			"packs":       ids(packs),
+			"cross_stack": ApplyCrossStack(config, routes),
+			"primary":     groups.Primary,
+			"reviewers":   groups.Reviewers,
+			"support":     groups.Support,
+			"disposition": BuildDispatchDisposition(groups),
+		}
+	}
+
 	encoded, err := json.MarshalIndent(results, "", " ")
 	if err != nil {
 		t.Fatal(err)
@@ -90,4 +149,28 @@ func readJSONMap(t *testing.T, path string) map[string]any {
 		t.Fatal(err)
 	}
 	return decoded
+}
+
+func ids(matches []Match) []string {
+	out := make([]string, 0, len(matches))
+	for _, match := range matches {
+		out = append(out, match.ID)
+	}
+	return out
+}
+
+func without(values []string, exclusions ...[]string) []string {
+	excluded := map[string]bool{}
+	for _, group := range exclusions {
+		for _, value := range group {
+			excluded[value] = true
+		}
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if !excluded[value] {
+			out = append(out, value)
+		}
+	}
+	return out
 }
