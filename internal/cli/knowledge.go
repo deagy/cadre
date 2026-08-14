@@ -19,14 +19,16 @@ func KnowledgeCmd(args []string) int {
 		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge <subcommand> [options]
 
 Subcommands:
-  init               Initialize or verify the knowledge store
-  stats              Display knowledge store statistics
-  ingest             Ingest messages into the knowledge store
-  search             Search the knowledge store by content or vector similarity
-  delete             Delete messages or run retention policies
-  shards             Display shard distribution and statistics
-  federated-search   Search across multiple shards (requires multi-store setup)
-  federated-delete   Delete across multiple shards (requires multi-store setup)
+  init                 Initialize or verify the knowledge store
+  stats                Display knowledge store statistics
+  ingest               Ingest messages into the knowledge store
+  search               Search the knowledge store by content or vector similarity
+  delete               Delete messages or run retention policies
+  shards               Display shard distribution and statistics
+  federated-search     Search across multiple shards (requires multi-store setup)
+  federated-delete     Delete across multiple shards (requires multi-store setup)
+  rebalance            Analyze and rebalance shards to fix imbalances
+  rebalance-status     Check rebalancing operation status
 
 Options:
 `)
@@ -85,6 +87,10 @@ Options:
 		return knowledgeFederatedSearch(dbPath, subArgs)
 	case "federated-delete":
 		return knowledgeFederatedDelete(dbPath, subArgs)
+	case "rebalance":
+		return knowledgeRebalance(dbPath, subArgs)
+	case "rebalance-status":
+		return knowledgeRebalanceStatus(dbPath, subArgs)
 	case "help", "-h", "--help":
 		fs.Usage()
 		return 0
@@ -1011,6 +1017,221 @@ Options:
 			fmt.Printf("Shards failed: %d\n", result.TotalFailed)
 		}
 		fmt.Printf("Authorized by: %s\n", *authorizedBy)
+	}
+
+	return 0
+}
+
+// knowledgeRebalance analyzes shards and performs rebalancing if needed.
+func knowledgeRebalance(dbPath string, args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge rebalance", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge rebalance [options]
+
+Analyzes shard distribution and initiates rebalancing operations.
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
+
+	dryRun := fs.Bool("dry-run", false, "Analyze without making changes")
+	strategy := fs.String("strategy", "classification", "Sharding strategy")
+	jsonOutput := fs.Bool("json", false, "Output as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if fs.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge rebalance: unexpected argument '%s'\n", fs.Arg(0))
+		return 2
+	}
+
+	// Discover and load stores
+	shards, err := discoverShards(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge rebalance: %v\n", err)
+		return 1
+	}
+
+	if len(shards) == 0 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge rebalance: no shards found (single-store mode)\n")
+		return 1
+	}
+
+	// Create registry
+	var strat knowledge.ShardingStrategy
+	switch *strategy {
+	case "classification":
+		strat = &knowledge.ClassificationShardingStrategy{}
+	case "source":
+		strat = &knowledge.SourceShardingStrategy{}
+	case "conversation":
+		strat = &knowledge.ConversationShardingStrategy{}
+	case "composite":
+		strat = &knowledge.CompositeShardingStrategy{}
+	default:
+		fmt.Fprintf(os.Stderr, "cadre knowledge rebalance: unknown strategy '%s'\n", *strategy)
+		return 2
+	}
+
+	registry := knowledge.NewStoreRegistry(strat)
+	for name, store := range shards {
+		registry.AddStore(name, store)
+	}
+
+	rebalancer := knowledge.NewShardRebalancer(registry, strat)
+
+	// Analyze shards
+	analysis, err := rebalancer.AnalyzeShard()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge rebalance: cannot analyze shards: %v\n", err)
+		return 1
+	}
+
+	// Close stores
+	for _, store := range shards {
+		store.Close()
+	}
+
+	if *jsonOutput {
+		data := map[string]interface{}{
+			"is_balanced":          analysis.IsBalanced,
+			"total_shards":         len(shards),
+			"hot_shards":           len(analysis.HotShards),
+			"cold_shards":          len(analysis.ColdShards),
+			"total_messages":       analysis.TotalMessages,
+			"average_per_shard":    analysis.AveragePerShard,
+			"standard_deviation":   analysis.StandardDeviation,
+			"dry_run":              *dryRun,
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		encoder.Encode(data)
+	} else {
+		fmt.Printf("Shard Rebalance Analysis\n")
+		fmt.Printf("════════════════════════════════════════════\n")
+		fmt.Printf("Balanced: %v\n", analysis.IsBalanced)
+		fmt.Printf("Total messages: %d\n", analysis.TotalMessages)
+		fmt.Printf("Average per shard: %.1f%%\n", analysis.AveragePerShard)
+		fmt.Printf("Std deviation: %.2f\n", analysis.StandardDeviation)
+
+		if len(analysis.HotShards) > 0 {
+			fmt.Printf("\nHot shards (>60%% capacity):\n")
+			for _, hs := range analysis.HotShards {
+				fmt.Printf("  %s: %d messages (%.1f%%)\n", hs.ShardID, hs.MessageCount, hs.Percentage)
+			}
+		}
+
+		if len(analysis.ColdShards) > 0 {
+			fmt.Printf("\nCold shards (<50%% average):\n")
+			for _, cs := range analysis.ColdShards {
+				fmt.Printf("  %s: %d messages (%.1f%%)\n", cs.ShardID, cs.MessageCount, cs.Percentage)
+			}
+		}
+
+		if *dryRun {
+			fmt.Printf("\nDRY RUN: No rebalancing performed\n")
+		} else if !analysis.IsBalanced {
+			fmt.Printf("\nRebalancing required. Run without --dry-run to proceed.\n")
+		} else {
+			fmt.Printf("\nNo rebalancing needed.\n")
+		}
+	}
+
+	return 0
+}
+
+// knowledgeRebalanceStatus displays rebalancing operation status.
+func knowledgeRebalanceStatus(dbPath string, args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge rebalance-status", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge rebalance-status [options]
+
+Display statistics about rebalancing operations.
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
+
+	strategy := fs.String("strategy", "classification", "Sharding strategy")
+	jsonOutput := fs.Bool("json", false, "Output as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if fs.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge rebalance-status: unexpected argument '%s'\n", fs.Arg(0))
+		return 2
+	}
+
+	// Discover and load stores
+	shards, err := discoverShards(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge rebalance-status: %v\n", err)
+		return 1
+	}
+
+	if len(shards) == 0 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge rebalance-status: no shards found (single-store mode)\n")
+		return 1
+	}
+
+	// Create registry
+	var strat knowledge.ShardingStrategy
+	switch *strategy {
+	case "classification":
+		strat = &knowledge.ClassificationShardingStrategy{}
+	case "source":
+		strat = &knowledge.SourceShardingStrategy{}
+	case "conversation":
+		strat = &knowledge.ConversationShardingStrategy{}
+	case "composite":
+		strat = &knowledge.CompositeShardingStrategy{}
+	default:
+		fmt.Fprintf(os.Stderr, "cadre knowledge rebalance-status: unknown strategy '%s'\n", *strategy)
+		return 2
+	}
+
+	registry := knowledge.NewStoreRegistry(strat)
+	for name, store := range shards {
+		registry.AddStore(name, store)
+	}
+
+	rebalancer := knowledge.NewShardRebalancer(registry, strat)
+
+	// Get stats
+	stats := rebalancer.GetRebalancingStats()
+
+	// Close stores
+	for _, store := range shards {
+		store.Close()
+	}
+
+	if *jsonOutput {
+		data := map[string]interface{}{
+			"total_migrations":     stats.TotalMigrations,
+			"active_migrations":    stats.ActiveMigrations,
+			"completed_migrations": stats.CompletedMigrations,
+			"failed_migrations":    stats.FailedMigrations,
+			"total_messages_moved": stats.TotalMessagesMoved,
+		}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		encoder.Encode(data)
+	} else {
+		fmt.Printf("Rebalancing Status\n")
+		fmt.Printf("═════════════════════════════════════════════\n")
+		fmt.Printf("Total migrations: %d\n", stats.TotalMigrations)
+		fmt.Printf("Active migrations: %d\n", stats.ActiveMigrations)
+		fmt.Printf("Completed migrations: %d\n", stats.CompletedMigrations)
+		if stats.FailedMigrations > 0 {
+			fmt.Printf("Failed migrations: %d\n", stats.FailedMigrations)
+		}
+		fmt.Printf("Total messages moved: %d\n", stats.TotalMessagesMoved)
 	}
 
 	return 0
