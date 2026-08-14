@@ -1,6 +1,6 @@
 # ADR-001: Refactor Cadre CLI from Python to Go
 
-**Status:** Initiative ACCEPTED by human authorization; detailed architecture agent-proposed, pending explicit human review of specifics (see §8, Decision Log)
+**Status:** Initiative ACCEPTED by human authorization; detailed architecture agent-proposed, pending explicit human review of specifics (see §8, Decision Log). Implementation has since gone substantially further than the phased plan below anticipated -- see the 2026-08-14 Decision Log entry for what actually shipped and where it diverged from this document's Phase 3/Switchover plan.
 **Date:** 2026-08-13
 **Drafted by:** backend-engineer / go-service-implementer roles, per human-authorized initiative
 **Initiative authorized by:** Daniel Eagy (Human Project Lead)
@@ -74,12 +74,39 @@ The Cadre CLI currently consists of:
 - Knowledge store (`cadre knowledge`) and context store (`cadre context`)
 - Complex interaction subcommands: `init`, `bootstrap-codex`, `mcp-dispatch-server`, `gitlab-evidence`, `role-fidelity`
 
+> **2026-08-14 correction, recorded rather than silently edited above:**
+> every item in this "Will remain Python" list has since been ported to
+> native Go in the checkout CLI. The knowledge store in particular was not
+> kept as a Python fallback -- `roster/knowledge-store/src/` was deleted
+> outright, and `internal/knowledge/` is the only implementation left. Only
+> `cadre select` still runs Python at runtime (deliberately; see
+> `REMAINING_PYTHON_SCOPE.md`), and `cadre init --interactive`'s
+> questionnaire flow was deliberately *not* ported and fails closed rather
+> than falling back to Python. This is a case where the plan changed during
+> implementation, not a case where this document was wrong when written --
+> see §8's 2026-08-14 Decision Log entry for what's known about how and why.
+
 ### Implementation Strategy
 
 **Single monolithic Go binary** (not multiple binaries):
 - Directory structure: `cmd/cadre/main.go`, `internal/cli/`, `internal/config/`, `internal/platform/`, `internal/subcommands/`
 - Minimal dependencies: `viper` only for YAML/JSON config parsing (already preferred in `library-standards.yaml`)
 - Standard library flag parsing (no cobra, urfave/cli — unnecessary overhead for 18 static subcommands)
+
+> **2026-08-14 correction:** the shipped directory structure does not
+> match the layout sketched above -- there is no `internal/subcommands/`
+> tree; commands are flat files under `internal/cli/` (e.g.
+> `select_agents.go`, `knowledge.go`), and package-specific logic lives in
+> its own top-level `internal/` package (`internal/knowledge/`,
+> `internal/contextstore/`, `internal/initproject/`, `internal/generators/`,
+> `internal/mcpserver/`, ...). More significantly, `viper` is **not**
+> actually used: `go.mod` lists it only as an indirect (transitive)
+> dependency, and no shipped `.go` file imports it. `internal/config/`'s
+> own package doc describes a hand-rolled resolver against `gopkg.in/yaml.v3`
+> instead, for reasons that document explains. Whether to update this
+> section's "Rationale" table and dependency claims below, or leave them as
+> a record of the original design intent, is a call for whoever owns this
+> ADR's future revisions -- flagged here, not resolved.
 
 **Incremental 3-phase migration** (not big-bang):
 - **Phase 1 (~2 weeks):** Core infrastructure and lightweight commands (dispatcher, version, config, doctor, upgrade, SDLC)
@@ -186,7 +213,14 @@ The Cadre CLI currently consists of:
    - Blocks engineer for 7 weeks
    - Must maintain two implementations during transition (Python fallback)
 
-2. **Knowledge store stays Python (for now):**
+2. **Knowledge store stays Python (for now):** [2026-08-14: superseded --
+   this did not happen. The knowledge store was reimplemented in Go
+   (`internal/knowledge/`) during what this document's Phase 3 section
+   calls the generator phase, and its Python source
+   (`roster/knowledge-store/src/`) was deleted rather than kept as a
+   fallback. `cadre knowledge` in the checkout CLI has no Python 3.10+
+   dependency. Left below as a record of what was expected at the time this
+   ADR was drafted.]
    - Subcommands like `cadre knowledge` still require Python 3.10+
    - Partial benefit: CLI dispatcher is faster, but knowledge store is slower
    - Future decision: reimplement knowledge store in Go (deferred to Phase 4)
@@ -234,18 +268,44 @@ The Cadre CLI currently consists of:
 
 **Rationale:** Routing overlay (211 lines, 15 validation rules) and dispatch plan builder (572 lines, complex orchestration logic) are security-critical and behaviorally complex. Python versions are proven in production. Hybrid approach prioritizes correctness over 100% Go migration. Users see identical CLI behavior; internals use Python subprocesses via Go dispatcher.
 
-### Phase 3: Generators (Weeks 5-6, ~15-20 hours)
-- Port `cadre generate-role-metadata` (catalog parsing + JSON output)
-- Port `cadre generate-plugin` (packaging logic, procedural)
-- Port `cadre generate-authority-aides` (template rendering)
-- Compatibility tests (Go output vs Python reference)
-- Stress testing (large catalogs)
+### Phase 3: Generators (Weeks 5-6, ~15-20 hours) ✅ DONE
+- ✅ Ported `cadre generate-role-metadata`, `cadre generate-plugin`,
+  `cadre generate-authority-aides` (native Go, `internal/generators/`,
+  `internal/cli/generate_*.go`; no Python interop in any of the three)
+- Went substantially beyond this phase's original generator-only scope: by
+  the same point, `internal/config/` (full settings-resolution precedence
+  chain, not the Phase-1 env-var-only placeholder this document's Phase 1
+  section describes), `internal/initproject/` (non-interactive `init`),
+  `internal/contextstore/`, `internal/knowledge/` (a full, from-scratch
+  knowledge-store implementation -- `roster/knowledge-store/src/` was
+  deleted, not kept as a fallback), `internal/mcpserver/`, and most of
+  `internal/cli/`'s remaining commands (`bootstrap-codex`, `profile`,
+  `resolve-shared`, `doctor`, `upgrade`, `role-fidelity`,
+  `selection-telemetry`, `schema-validate`, `gitlab-evidence`) had also
+  shipped as native Go -- none of that was itemized as Phase 3 scope above.
+- Compatibility tests and stress testing: not tracked as a discrete
+  artifact separate from each package's own Go test suite; not verified
+  against this checklist item specifically.
 
-### Switchover (Week 7, ~3-5 hours)
-- Verify all commands route correctly (Python fallback validated)
-- Update CI: Go CLI is primary, Python fallback is secondary
-- Documentation updated (README, CLAUDE.md, AGENTS.md)
-- Release on release/go-cli branch
+### Switchover ✅ DONE
+- ✅ `bin/cadre.py` deleted; `bin/cadre` is now a shell shim that builds
+  and execs `cmd/cadre` (see `bin/cadre`'s own header comment)
+- ✅ `bin/subcommands.tsv` emptied of the rows now handled by Go --
+  16 rows remain in it, but every one of those 16 names is *also*
+  intercepted earlier in `internal/cli/dispatcher.go`'s command switch, so
+  the TSV-driven Python-fallback code path is dead: it can never be
+  reached for any subcommand name currently in the table. Only `select`
+  actually still runs Python at runtime, and it does so via a direct,
+  named dispatch in `select_agents.go` -- not through this fallback
+  mechanism.
+- Documentation update: **incomplete as of this ADR's 2026-08-14
+  reconciliation** -- this document, `REMAINING_PYTHON_SCOPE.md`, and
+  `CLAUDE.md` had all drifted from the tree above and are being corrected
+  in the same change that adds this Decision Log entry.
+- Release branch: this ADR was drafted and Phase 1/2 recorded on
+  `release/go-cli`, which has since merged to `main` (see this
+  repository's commit history; the switchover described above post-dates
+  that merge).
 
 ### Post-Refactor (Phase 4+, deferred)
 1. Reimplement knowledge store in Go (adds db/x dependencies, larger scope)
@@ -311,6 +371,54 @@ This distinguishes what the human actually decided from what an agent proposed a
 **Rationale:** Routing overlay has 15 security-critical validation rules (RO-FR-3..RO-FR-17). Dispatch plan builder is complex orchestration logic (572 lines). Full port would require 30-35 additional hours. Hybrid approach prioritizes proven correctness (Python reference implementations) over 100% Go migration. Users see identical CLI behavior. Infrastructure (manifest + routing loading) is now in Go for potential Phase 4 expansion.
 
 **Approval status:** Initiative ACCEPTED. Phase 1 complete and merged to release/go-cli. Phase 2 complete (hybrid scope). Phase 3 proceeding with generator porting (generate-role-metadata, generate-plugin, generate-authority-aides).
+
+**Documentation reconciliation (2026-08-14):** Verified against the tree by
+the technical-writer role, task `migration-docs-reconciliation-2026-08-14`,
+on `main` at commit `3dcb3a46`. This is a documentation-accuracy pass, not a
+new human decision -- recorded here because the gap between this ADR and
+the implemented tree had grown large enough to actively mislead a reader,
+and §8 of an ADR is where that kind of drift belongs once discovered.
+
+Findings, by what changed since the "Approval status" line above was
+written:
+- Phase 3 (generators) is done, not "proceeding" -- `generate-role-metadata`,
+  `generate-plugin`, and `generate-authority-aides` are native Go with no
+  Python interop (`internal/generators/`, `internal/cli/generate_*.go`).
+- The Switchover phase (§5) is also done: `bin/cadre.py` is deleted,
+  `bin/cadre` execs the Go binary, and `bin/subcommands.tsv`'s
+  Python-fallback dispatch path in `internal/cli/dispatcher.go` is
+  unreachable dead code -- every name still listed in that TSV is
+  independently intercepted earlier in the same dispatcher.
+- Actual scope delivered went well past this ADR's Phase 1-3 plan: the full
+  settings-resolution precedence chain (not the Phase 1 env-var-only
+  placeholder), `init` (non-interactive surface), the context store, and
+  the knowledge store (with its Python source deleted, not kept as
+  fallback) all shipped as native Go, none of it itemized as in-scope
+  above.
+- One command was never ported and is not merely "not yet done": `cadre
+  select` dispatches to Python by deliberate design, to preserve a
+  byte-exact schema-v7 output contract. See
+  `internal/cli/select_agents.go`'s header and `REMAINING_PYTHON_SCOPE.md`.
+  `cadre init --interactive`'s questionnaire flow is likewise deliberately
+  unported and fails closed rather than silently falling back to Python.
+- A previously-undocumented risk was found during this pass, not created by
+  it: `internal/orchestration/{routing,route_matching,dispatch_plan,
+  workflow}.go` implement a second `DispatchPlan` shape, incompatible with
+  the schema-v7 contract `select_agents.go` preserves, reachable through an
+  undocumented `cadre execute` command absent from both
+  `bin/subcommands.tsv` and `internal/cli/usage.go`. Recorded here as a
+  finding for follow-up, not resolved by this pass.
+- This ADR's dependency claim ("viper only") does not match the shipped
+  code: `viper` is an indirect (transitive) `go.mod` dependency only, never
+  imported directly; `internal/config/` hand-rolls its resolution against
+  `gopkg.in/yaml.v3` instead. Not corrected in §2/§3/§6 above, to avoid
+  rewriting a design-intent record after the fact -- flagged here instead.
+
+No new human authorization was sought or is implied by this entry; it
+records what the tree now contains against what this ADR said would happen.
+Whether the sections above should be edited further, marked historical, or
+left as-is is an editorial question for whoever next revises this ADR, not
+decided here.
 
 ---
 

@@ -1480,7 +1480,20 @@
         "container image",
         "terraform provider",
         "helm dependency",
-        "license"
+        "license",
+        "sha256sums",
+        "release asset",
+        "release assets",
+        "release archive",
+        "release archives",
+        "artifact integrity",
+        "artifact verification",
+        "downloaded binary",
+        "binary distribution",
+        "download-on-first-use",
+        "checksum verification",
+        "checksum mismatch",
+        "verify the checksum"
       ],
       "primary": [
         "supply-chain-security-reviewer"

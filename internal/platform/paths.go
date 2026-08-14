@@ -17,6 +17,7 @@ package platform
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -122,5 +123,116 @@ func FindFileAtProjectRoot(relativePath, start string) (string, bool) {
 		}
 		current = parent
 	}
+	return "", false
+}
+
+// FindInstallationRoot locates the root directory of *this CLI's own
+// installation* (where roster/, kernel/, provider/ live), rather than the
+// user's project.
+//
+// This differs from FindProjectRoot, which walks up from cwd to find a .git
+// boundary (the user's project). A packaged plugin install has no .git at all,
+// so FindProjectRoot fails; FindInstallationRoot succeeds by trying
+// CADRE_REPO_ROOT, the executable's directory, and cwd in turn.
+//
+// Resolution order, first hit wins:
+//
+//  1. $CADRE_REPO_ROOT, exported by bin/cadre and bin/cadre.ps1 so the
+//     built binary under .cadre-build-cache/ knows which checkout produced
+//     it without any filesystem guessing.
+//  2. Upward from the running executable's own directory, which covers a
+//     binary built into the checkout (or installed beside a vendored tree)
+//     when no wrapper set the variable.
+//  3. Upward from the working directory, the last resort, which is correct
+//     whenever the caller happens to be inside a Cadre checkout.
+//
+// It verifies each candidate by checking for the existence of roster/
+// (a directory that exists only in the installation, not in user projects).
+func FindInstallationRoot() (string, error) {
+	const markerPath = "roster"
+	const maxWalkDepth = 64
+
+	// Try environment variable first, validating both direct and plugin layouts
+	if root := os.Getenv("CADRE_REPO_ROOT"); root != "" {
+		// Check direct marker (checkout layout)
+		markerDir := filepath.Join(root, markerPath)
+		if _, err := os.Stat(markerDir); err == nil {
+			return root, nil
+		}
+		// Check plugin layout (suite/<markerPath>)
+		suiteMarkerDir := filepath.Join(root, "suite", markerPath)
+		if _, err := os.Stat(suiteMarkerDir); err == nil {
+			return filepath.Join(root, "suite"), nil
+		}
+	}
+
+	// Try upward from the executable
+	if executable, err := os.Executable(); err == nil {
+		if resolved, linkErr := filepath.EvalSymlinks(executable); linkErr == nil {
+			executable = resolved
+		}
+		if root, found := findAncestorWith(filepath.Dir(executable), markerPath, maxWalkDepth); found {
+			return root, nil
+		}
+	}
+
+	// Try upward from the working directory
+	if wd, err := os.Getwd(); err == nil {
+		if root, found := findAncestorWith(wd, markerPath, maxWalkDepth); found {
+			return root, nil
+		}
+	}
+
+	return "", fmt.Errorf("cannot locate Cadre installation (roster/ directory); set CADRE_REPO_ROOT to a Cadre checkout, or run from inside one")
+}
+
+// findAncestorWith walks upward from start looking for an ancestor directory
+// containing a specific subdirectory (the markerPath). Supports both normal
+// checkout layout (<root>/roster) and packaged plugin layout (<plugin>/suite/roster).
+//
+// Resolution precedence: direct marker paths anywhere in the ascent beat nested
+// marker paths. Two-pass walk ensures this: first pass checks only direct marker,
+// second pass checks only nested marker (suite/<markerPath>).
+//
+// Returns the ancestor (or ancestor/suite if only plugin layout matched) and true
+// if found, or ("", false) if the search exhausts depth or reaches filesystem root.
+func findAncestorWith(start, markerPath string, maxDepth int) (string, bool) {
+	directory, err := filepath.Abs(start)
+	if err != nil {
+		return "", false
+	}
+
+	// First pass: check for direct marker path anywhere in the ascent.
+	// This ensures checkout-style roster/ beats plugin-style suite/roster/ at all levels.
+	curr := directory
+	for i := 0; i < maxDepth; i++ {
+		candidate := filepath.Join(curr, markerPath)
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			return curr, true
+		}
+
+		parent := filepath.Dir(curr)
+		if parent == curr {
+			break
+		}
+		curr = parent
+	}
+
+	// Second pass: check for plugin layout (suite/<markerPath>) only if direct
+	// marker was not found anywhere. This is the fallback for plugin-only installations.
+	curr = directory
+	for i := 0; i < maxDepth; i++ {
+		suiteCandidate := filepath.Join(curr, "suite", markerPath)
+		if info, err := os.Stat(suiteCandidate); err == nil && info.IsDir() {
+			return filepath.Join(curr, "suite"), true
+		}
+
+		parent := filepath.Dir(curr)
+		if parent == curr {
+			break
+		}
+		curr = parent
+	}
+
 	return "", false
 }

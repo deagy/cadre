@@ -52,6 +52,7 @@ on:
       - "plugin/plugins/lifecycle-gitlab/.claude-plugin/plugin.json"
       - "plugin/plugins/lifecycle-gitlab/.codex-plugin/plugin.json"
       - "kernel/agentic_sdlc/__init__.py"
+      - "cadre_cli/_version.py"
   workflow_dispatch:
 
 permissions:
@@ -66,6 +67,7 @@ jobs:
     outputs:
       plugin: ${{ steps.detect.outputs.plugin }}
       kernel: ${{ steps.detect.outputs.kernel }}
+      cli: ${{ steps.detect.outputs.cli }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -108,6 +110,14 @@ jobs:
               match = re.search(r'^VERSION = "(\d+\.\d+\.\d+)"', text, re.MULTILINE)
               return match.group(1) if match else "<unreadable>"
 
+          def cli_version(text):
+              if text is None:
+                  return None
+              match = re.search(r'^VERSION = (?:"([^"]*)"|\'([^\']*)\')', text, re.MULTILINE)
+              if not match:
+                  return "<unreadable>"
+              return match.group(1) if match.group(1) else match.group(2)
+
           # All 8 plugin manifests, not just the first: if a bump lands in
           # only some of them, this must still run so plugin_version.py
           # --check can fail on the disagreement instead of the release
@@ -145,6 +155,7 @@ jobs:
           components = {
               "plugin": (PLUGIN_MANIFESTS, manifest_version),
               "kernel": (["kernel/agentic_sdlc/__init__.py"], kernel_version),
+              "cli": (["cadre_cli/_version.py"], cli_version),
           }
           for name, (paths, read) in components.items():
               if not comparable:
@@ -342,6 +353,303 @@ jobs:
             --notes-file /tmp/release-notes.md \
             --latest \
             dist/cadre-plugin-cline-sbom.spdx.json
+
+  cli:
+    name: Release the Cadre CLI (Go binaries)
+    needs: changed
+    if: needs.changed.outputs.cli == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux AMD64: native build on ubuntu-latest
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            cc: gcc
+          # Linux ARM64: cross-compile with aarch64 toolchain
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            cc: aarch64-linux-gnu-gcc
+            apt-packages: "gcc-aarch64-linux-gnu"
+          # macOS ARM64: native on macos-latest (currently arm64)
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            cc: clang
+          # macOS AMD64: native on macos-13 (Intel x86_64)
+          - os: macos-13
+            goos: darwin
+            goarch: amd64
+            cc: clang
+          # Windows AMD64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            cc: gcc
+            exe-suffix: .exe
+          # NOTE: windows-arm64 is currently unsupported.
+          # windows-latest is x64 with MinGW x86_64 gcc; cannot emit ARM64 objects with CGO_ENABLED=1.
+          # Re-add if/when provisioning windows-11-arm hosted runner with proper cross-toolchain.
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Read CLI version
+        id: version
+        run: |
+          set -eu
+          value=$(grep '^VERSION = ' cadre_cli/_version.py | sed -n 's/^VERSION = "\([^"]*\)".*/\1/p')
+          [ -n "$value" ] || { echo "CLI VERSION not found or not MAJOR.MINOR.PATCH" >&2; exit 1; }
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if this version is already tagged
+        id: tag
+        run: |
+          if git rev-parse "refs/tags/cli-v${{ steps.version.outputs.value }}" >/dev/null 2>&1; then
+            echo "cli-v${{ steps.version.outputs.value }} already tagged; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Linux cross-compilation toolchain
+        if: steps.tag.outputs.skip == 'false' && matrix.apt-packages != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.apt-packages }}
+
+      - name: Build binary
+        if: steps.tag.outputs.skip == 'false'
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+          CC: ${{ matrix.cc }}
+        run: |
+          set -eu
+          mkdir -p dist
+          go build -o "dist/cadre-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.exe-suffix }}" ./cmd/cadre
+
+      - name: Create archive (tar.gz for Unix)
+        if: steps.tag.outputs.skip == 'false' && matrix.goos != 'windows'
+        run: |
+          set -eu
+          cd dist
+          tar czf "cadre-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" \
+            "cadre-${{ matrix.goos }}-${{ matrix.goarch }}"
+          rm "cadre-${{ matrix.goos }}-${{ matrix.goarch }}"
+
+      - name: Create archive (zip for Windows)
+        if: steps.tag.outputs.skip == 'false' && matrix.goos == 'windows'
+        shell: pwsh
+        run: |
+          $binary = "dist\cadre-${{ matrix.goos }}-${{ matrix.goarch }}.exe"
+          $archive = "dist\cadre-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.zip"
+          Compress-Archive -Path $binary -DestinationPath $archive
+          Remove-Item $binary
+
+      - name: Upload artifacts to workflow
+        if: steps.tag.outputs.skip == 'false'
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b122d8733d54848 # v4.5.0
+        with:
+          name: cadre-binaries-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/cadre-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.*
+          retention-days: 1
+
+      - name: Smoke test binary on native platforms
+        # Test the built binary on native (non-cross-compiled) platforms only.
+        # linux-arm64 is cross-compiled and cannot run without emulation, so it is excluded.
+        if: |
+          steps.tag.outputs.skip == 'false' && (
+            (matrix.goos == 'linux' && matrix.goarch == 'amd64') ||
+            (matrix.goos == 'darwin') ||
+            (matrix.goos == 'windows' && matrix.goarch == 'amd64')
+          )
+        shell: bash
+        run: |
+          set -eu
+          binary="dist/cadre-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.exe-suffix }}"
+          echo "Testing $binary..."
+          $binary --version
+          $binary knowledge --help
+
+  cli-publish:
+    name: Publish Cadre CLI release
+    needs: [changed, cli]
+    if: needs.changed.outputs.cli == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Read CLI version
+        id: version
+        run: |
+          set -eu
+          value=$(grep '^VERSION = ' cadre_cli/_version.py | sed -n 's/^VERSION = "\([^"]*\)".*/\1/p')
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if this version is already tagged
+        id: tag
+        run: |
+          if git rev-parse "refs/tags/cli-v${{ steps.version.outputs.value }}" >/dev/null 2>&1; then
+            echo "cli-v${{ steps.version.outputs.value }} already tagged; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download all artifacts
+        if: steps.tag.outputs.skip == 'false'
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          path: dist
+
+      - name: Flatten artifacts directory
+        if: steps.tag.outputs.skip == 'false'
+        run: |
+          set -eu
+          mkdir -p flat-dist
+          find dist -name "cadre-v*.tar.gz" -o -name "cadre-v*.zip" | while read f; do
+            cp "$f" flat-dist/
+          done
+
+      - name: Verify all contracted platforms are present
+        if: steps.tag.outputs.skip == 'false'
+        run: |
+          set -eu
+          python3 << 'VERIFY'
+          import sys, re
+          from pathlib import Path
+
+          # Five platforms: linux-amd64, linux-arm64, darwin-amd64, darwin-arm64, windows-amd64.
+          # windows-arm64 is unsupported (no ARM64 Windows cross-toolchain on windows-latest).
+          contracted = {
+              ('linux', 'amd64'), ('linux', 'arm64'),
+              ('darwin', 'amd64'), ('darwin', 'arm64'),
+              ('windows', 'amd64'),
+          }
+
+          flat_dist = Path('flat-dist')
+          found = set()
+
+          for f in flat_dist.glob('cadre-v*.*'):
+              # Extract goos-goarch from filename cadre-vX.Y.Z-goos-goarch.tar.gz or .zip
+              match = re.search(r'cadre-v[\d.]+-([a-z]+)-([a-z0-9]+)\.(?:tar\.gz|zip)', f.name)
+              if match:
+                  goos, goarch = match.group(1), match.group(2)
+                  found.add((goos, goarch))
+
+          missing = contracted - found
+          if missing:
+              print(f'ERROR: Missing archives for platforms {missing}', file=sys.stderr)
+              sys.exit(1)
+
+          print(f'✓ All {len(contracted)} contracted platforms present')
+          VERIFY
+
+      - name: Install syft
+        if: steps.tag.outputs.skip == 'false'
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+
+      - name: Generate SBOM for CLI Go dependencies
+        if: steps.tag.outputs.skip == 'false'
+        run: |
+          set -eu
+          syft scan dir:. \
+            --select-catalogers go \
+            --source-name cadre-cli \
+            --source-version "${{ steps.version.outputs.value }}" \
+            -o spdx-json=flat-dist/cadre-cli-sbom.spdx.json
+          python3 -c "
+          import json, pathlib
+          d = json.loads(pathlib.Path('flat-dist/cadre-cli-sbom.spdx.json').read_text())
+          names = {p['name'] for p in d.get('packages', []) if p.get('name')}
+          assert len(names) >= 5, f'SBOM has only {len(names)} packages: {sorted(names)}'
+          assert 'github.com/mattn/go-sqlite3' in names, f'go-sqlite3 missing from SBOM'
+          print(f'SBOM lists {len(names)} distinct packages')
+          "
+
+      - name: Checksum the artifacts
+        if: steps.tag.outputs.skip == 'false'
+        working-directory: flat-dist
+        run: sha256sum * > SHA256SUMS
+
+      - name: Attest build provenance
+        if: steps.tag.outputs.skip == 'false'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            flat-dist/cadre-v*.tar.gz
+            flat-dist/cadre-v*.zip
+            flat-dist/cadre-cli-sbom.spdx.json
+            flat-dist/SHA256SUMS
+
+      - name: Set up tag signing
+        if: steps.tag.outputs.skip == 'false'
+        id: signing
+        env:
+          TAG_SIGNING_KEY: ${{ secrets.TAG_SIGNING_KEY }}
+        run: |
+          set -eu
+          if [ -z "${TAG_SIGNING_KEY:-}" ]; then
+            echo "::warning::TAG_SIGNING_KEY is not set; tagging without a signature."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          install -m 700 -d "$RUNNER_TEMP/signing"
+          printf '%s\n' "$TAG_SIGNING_KEY" > "$RUNNER_TEMP/signing/key"
+          chmod 600 "$RUNNER_TEMP/signing/key"
+          ssh-keygen -y -f "$RUNNER_TEMP/signing/key" > "$RUNNER_TEMP/signing/key.pub"
+          git config gpg.format ssh
+          git config user.signingkey "$RUNNER_TEMP/signing/key"
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+      - name: Tag
+        if: steps.tag.outputs.skip == 'false'
+        run: |
+          git config user.name "deagy"
+          git config user.email "48447733+deagy@users.noreply.github.com"
+          if [ "${{ steps.signing.outputs.enabled }}" = "true" ]; then
+            git tag -s "cli-v${{ steps.version.outputs.value }}" \
+              -m "Cadre CLI v${{ steps.version.outputs.value }}"
+            printf 'signer %s\n' "$(cat "$RUNNER_TEMP/signing/key.pub")" > "$RUNNER_TEMP/signing/allowed_signers"
+            git -c gpg.ssh.allowedSignersFile="$RUNNER_TEMP/signing/allowed_signers" \
+              tag -v "cli-v${{ steps.version.outputs.value }}"
+          else
+            git tag -a "cli-v${{ steps.version.outputs.value }}" \
+              -m "Cadre CLI v${{ steps.version.outputs.value }}"
+          fi
+          git push origin "cli-v${{ steps.version.outputs.value }}"
+
+      - name: Publish GitHub Release with artifacts
+        if: steps.tag.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "cli-v${{ steps.version.outputs.value }}" \
+            --title "Cadre CLI v${{ steps.version.outputs.value }}" \
+            --notes "Go-based Cadre CLI v${{ steps.version.outputs.value }} for Linux, macOS, and Windows. Verify downloads against SHA256SUMS." \
+            --latest=false \
+            flat-dist/*
 
   kernel:
     name: Release the lifecycle kernel

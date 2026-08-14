@@ -7,6 +7,34 @@ Every handoff includes:
 - Inputs examined and outputs produced.
 - Assumptions, exclusions, and unresolved questions.
 - Structured findings with evidence and severity.
+- **Falsification evidence for any test offered as regression coverage.** When a
+  handoff claims a test covers a defect — that a bug is now caught, that a
+  regression cannot recur, that a contract is enforced — it states the specific
+  change to the implementation that makes that test fail, and includes the
+  observed failing output from actually running it against that change, followed
+  by the passing output without it. "This test would fail if X were removed" is
+  an assertion, not evidence; a receiving agent treats a handoff carrying only
+  the assertion as unverified and returns it, exactly as it returns an
+  unauditable one.
+
+  This is a required field because the failure it catches is common, invisible,
+  and survives a green test run. A test can pass against the very defect it was
+  written for. The recurring shapes, all observed in this repository: a test that
+  first puts the system into the state it was meant to discover (a `chdir` into
+  the directory whose *discovery* is under test); one that asserts a substring
+  appears in generated output rather than that the output behaves correctly; one
+  that exercises an internal helper instead of the public entry point the defect
+  lives behind; and one that scrapes a value out of prose and silently passes
+  when the prose changes. Each reports success while covering nothing, and none
+  is visible in a summary that says the suite is green.
+
+  A test that cannot be made to fail is a finding, not coverage — report it as
+  one rather than counting it. Where falsification is genuinely impractical
+  (the breaking change is not expressible, or the behaviour only manifests in an
+  environment unavailable to the agent), say so explicitly and name what is left
+  unverified; silence is not an acceptable substitute for either. The broken
+  variant is a probe, never a commit: discard it, and never leave it in a
+  working tree the agent did not create.
 - Knowledge retrieval status, query identifiers, citations used, and stale/conflicting material.
 - `knowledge_steward_handoffs`: a list of durable decisions, findings, lessons,
   root causes, reusable patterns, stale guidance, or other store-worthy

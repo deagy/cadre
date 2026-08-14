@@ -197,6 +197,55 @@ func TestRenderDoctorReport(t *testing.T) {
 	}
 }
 
+// TestRenderDoctorReportKnowledgeStore pins all three states of the
+// knowledge-store line, including the one that is easy to get wrong: an
+// unprobed report must stay silent rather than render as a failure. The
+// probe lives in internal/cli (this package has no sqlite dependency), so a
+// zero-valued DoctorReport reaching the renderer is a normal occurrence, not
+// a bug -- and reporting "unavailable" for it would be a false alarm.
+func TestRenderDoctorReportKnowledgeStore(t *testing.T) {
+	base := DoctorReport{
+		RunningBinary: "/tmp/cadre",
+		GoVersion:     "go1.25.1",
+		GoVersionOK:   true,
+		GoMinVersion:  MinGoVersion,
+		InstallKind:   InstallKindUnknown,
+		InstallRoot:   "/tmp",
+		InstallDetail: "some detail",
+		CWD:           "/home/user/project",
+	}
+
+	unprobed := RenderDoctorReport(base)
+	if contains(unprobed, "knowledge store:") {
+		t.Fatalf("an unprobed report must not render a knowledge-store line:\n%s", unprobed)
+	}
+	if contains(unprobed, "built without cgo") {
+		t.Fatalf("an unprobed report must not warn about cgo:\n%s", unprobed)
+	}
+
+	available := base
+	available.KnowledgeStoreOK = true
+	available.KnowledgeStoreDetail = "available (cgo sqlite3 driver linked)"
+	out := RenderDoctorReport(available)
+	if !contains(out, "knowledge store:    available") {
+		t.Fatalf("expected the available line:\n%s", out)
+	}
+	if contains(out, "built without cgo") {
+		t.Fatalf("must not warn when the driver is available:\n%s", out)
+	}
+
+	degraded := base
+	degraded.KnowledgeStoreOK = false
+	degraded.KnowledgeStoreDetail = "unavailable -- stub driver"
+	out = RenderDoctorReport(degraded)
+	if !contains(out, "knowledge store:    unavailable -- stub driver") {
+		t.Fatalf("expected the unavailable line:\n%s", out)
+	}
+	if !contains(out, "built without cgo") {
+		t.Fatalf("expected the cgo warning when the driver is unavailable:\n%s", out)
+	}
+}
+
 func TestGoVersionOK(t *testing.T) {
 	tests := []struct {
 		version string

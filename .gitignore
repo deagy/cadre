@@ -42,8 +42,16 @@ sample-*/evidence/
 evidence/
 
 # Local knowledge-store configuration and data are operator-controlled.
+# store.db sits beside data/ rather than inside it, so the data/ rule below
+# never covered it and the database was tracked -- contrary to AGENTS.md's
+# "never commit ... databases". Every orchestrated run that ingests a steward-
+# accepted record rewrites it, so a tracked copy dirties the tree on each run
+# and conflicts across any two branches that both ingest.
 .agents/knowledge-store/config.json
 .agents/knowledge-store/data/
+.agents/knowledge-store/store.db
+.agents/knowledge-store/store.db-wal
+.agents/knowledge-store/store.db-shm
 
 # Same for the sibling context store. Its entries are agent-written working
 # material with no steward gate in front of them, so a committed database

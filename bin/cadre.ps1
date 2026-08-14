@@ -26,6 +26,7 @@ if ($NeedsBuild) {
   if (-not $GoCommand) { throw "cadre: Go is required to build this checkout's CLI (checked PATH for 'go')" }
   New-Item -ItemType Directory -Force -Path $BuildCache | Out-Null
   Push-Location $RepoRoot
+  $PreviousCgo = $env:CGO_ENABLED
   try {
     # Silent on success, verbatim on failure. `go build` writes progress to
     # stderr on a cold module cache ("go: downloading ..."), which is
@@ -33,13 +34,34 @@ if ($NeedsBuild) {
     # wrapper's stderr -- it breaks `cadre --version`'s "writes nothing to
     # stderr" contract. Buffering loses nothing: a real build failure is
     # replayed in full before throwing.
+    # cgo first, then a cgo-less retry -- see bin/cadre for the full
+    # reasoning. Short version: `cadre knowledge` needs the cgo-backed
+    # sqlite3 driver, a CGO_ENABLED=0 binary builds fine but fails every
+    # knowledge call at runtime with no build-time signal, and forcing
+    # CGO_ENABLED=1 unconditionally would break the whole build on a machine
+    # with no C toolchain (the common case on Windows). Prefer the full
+    # binary, accept the degraded one, and let `cadre doctor` say which.
+    $env:CGO_ENABLED = "1"
     $BuildOutput = & $GoCommand.Source build -o $Binary "./cmd/cadre" 2>&1
     if ($LASTEXITCODE -ne 0) {
-      $BuildOutput | ForEach-Object { [Console]::Error.WriteLine($_) }
-      throw "cadre: failed to build the Go CLI from $RepoRoot"
+      $env:CGO_ENABLED = "0"
+      $BuildOutput = & $GoCommand.Source build -o $Binary "./cmd/cadre" 2>&1
+      if ($LASTEXITCODE -ne 0) {
+        $BuildOutput | ForEach-Object { [Console]::Error.WriteLine($_) }
+        throw "cadre: failed to build the Go CLI from $RepoRoot"
+      }
     }
   } finally {
     Pop-Location
+    # CGO_ENABLED is a build-time selector, not something the CLI process
+    # should inherit -- restore whatever the caller had (including unset), so
+    # a warm-cache run and a cold-build run hand the binary the same
+    # environment.
+    if ($null -eq $PreviousCgo) {
+      Remove-Item Env:\CGO_ENABLED -ErrorAction SilentlyContinue
+    } else {
+      $env:CGO_ENABLED = $PreviousCgo
+    }
   }
 }
 

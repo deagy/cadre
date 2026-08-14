@@ -29,12 +29,12 @@ func BootstrapCodexCmd(args []string) int {
 
 	resolvedSource := *source
 	if resolvedSource == "" {
-		repoRoot, err := platform.RepoRoot()
+		installationRoot, err := platform.FindInstallationRoot()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "agents: cannot find repository root: %v\n", err)
+			fmt.Fprintf(os.Stderr, "agents: cannot find installation root: %v\n", err)
 			return 1
 		}
-		resolvedSource = filepath.Join(repoRoot, "provider", "codex-agents")
+		resolvedSource = filepath.Join(installationRoot, "provider", "codex-agents")
 	}
 	absSource, err := filepath.Abs(resolvedSource)
 	if err != nil {

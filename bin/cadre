@@ -55,11 +55,31 @@ if [ "$NEEDS_BUILD" = 1 ]; then
   # Buffering it here loses nothing -- a real build failure is replayed in
   # full before exiting non-zero.
   BUILD_LOG="$BUILD_CACHE/build.log"
-  if ! ( cd "$REPO_ROOT" && go build -o "$BINARY" ./cmd/cadre ) >"$BUILD_LOG" 2>&1; then
-    echo "cadre: failed to build the Go CLI from $REPO_ROOT" >&2
-    cat "$BUILD_LOG" >&2
-    rm -f "$BUILD_LOG"
-    exit 1
+  # cgo first, then a cgo-less retry.
+  #
+  # `cadre knowledge` needs the cgo-backed sqlite3 driver (mattn/go-sqlite3).
+  # A CGO_ENABLED=0 binary still builds and links cleanly -- the driver ships
+  # a cgo-less stub -- but every `cadre knowledge` call then fails at runtime
+  # with "Binary was compiled with 'CGO_ENABLED=0'". Nothing warns at build
+  # time. `go env CGO_ENABLED` is 0 on plenty of machines, so this wrapper
+  # was silently producing knowledge-broken binaries.
+  #
+  # Forcing CGO_ENABLED=1 unconditionally is *not* the fix: without a C
+  # toolchain that fails the entire build ("cgo: C compiler not found"),
+  # which would leave `cadre` completely unusable on a machine where today
+  # only `knowledge` is. So prefer the full binary, fall back to the degraded
+  # one, and let `cadre doctor` report which one you ended up with.
+  #
+  # Neither path writes to stderr on success -- both are buffered for the
+  # reason described above, and `cadre --version`'s empty-stderr contract
+  # (test_cli_surface.py) holds whichever branch runs.
+  if ! ( cd "$REPO_ROOT" && CGO_ENABLED=1 go build -o "$BINARY" ./cmd/cadre ) >"$BUILD_LOG" 2>&1; then
+    if ! ( cd "$REPO_ROOT" && CGO_ENABLED=0 go build -o "$BINARY" ./cmd/cadre ) >>"$BUILD_LOG" 2>&1; then
+      echo "cadre: failed to build the Go CLI from $REPO_ROOT" >&2
+      cat "$BUILD_LOG" >&2
+      rm -f "$BUILD_LOG"
+      exit 1
+    fi
   fi
   rm -f "$BUILD_LOG"
 fi

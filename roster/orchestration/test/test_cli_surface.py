@@ -249,5 +249,76 @@ class GlobalVersionTest(unittest.TestCase):
         self.assertEqual(before, after, "plugin `cadre --version` must not mutate the working tree")
 
 
+@unittest.skipIf(sys.platform == "win32", "bin/cadre is a POSIX sh script; bin/cadre.ps1 covers Windows")
+class WrapperCgoBuildTest(unittest.TestCase):
+    """`bin/cadre` must build a knowledge-capable binary, and must not become
+    unbuildable when it cannot.
+
+    The wrapper used to run a bare `go build`, which inherits `go env
+    CGO_ENABLED` -- 0 on plenty of machines. mattn/go-sqlite3 ships a cgo-less
+    stub, so that binary links cleanly and then fails *every* `cadre knowledge`
+    call at runtime with "Binary was compiled with 'CGO_ENABLED=0'". Nothing
+    warned at build time, so a checkout could sit in that state indefinitely.
+
+    Forcing CGO_ENABLED=1 unconditionally trades one failure for a worse one:
+    with no C toolchain the build fails outright and the whole CLI stops
+    working, not just `knowledge`. Hence prefer-then-fall-back, which is what
+    these two tests pin from both directions.
+
+    Each test uses its own CADRE_BUILD_CACHE so it neither reads nor clobbers
+    the developer's real .cadre-build-cache/.
+    """
+
+    def _run(self, args, *, cache, extra_env=None):
+        env = dict(os.environ, CADRE_BUILD_CACHE=str(cache))
+        env.pop("CGO_ENABLED", None)
+        if extra_env:
+            env.update(extra_env)
+        return subprocess.run(
+            [str(REPO_ROOT / "bin" / "cadre"), *args],
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            cwd=REPO_ROOT,
+            timeout=600,
+            env=env,
+        )
+
+    @unittest.skipUnless(shutil.which("cc") or shutil.which("gcc"), "needs a C toolchain to build with cgo")
+    def test_wrapper_builds_a_cgo_binary_when_a_c_toolchain_exists(self) -> None:
+        """Fails if the wrapper stops preferring cgo -- the original defect."""
+        with tempfile.TemporaryDirectory(prefix="cadre-cgo-cache-") as cache:
+            result = self._run(["doctor"], cache=cache)
+            # doctor exits 1 on a cwd/binary mismatch, which is expected here
+            # because the binary lives in a temp cache; the knowledge-store
+            # line is what this test is about.
+            self.assertIn(
+                "knowledge store:    available",
+                result.stdout,
+                "bin/cadre must build with CGO_ENABLED=1 where a C compiler exists, "
+                f"otherwise `cadre knowledge` is dead on arrival.\nstdout:\n{result.stdout}",
+            )
+
+    def test_wrapper_falls_back_and_stays_usable_without_a_c_toolchain(self) -> None:
+        """Fails if the cgo-less fallback is removed, which would make a
+        machine with no C compiler unable to run `cadre` at all."""
+        with tempfile.TemporaryDirectory(prefix="cadre-nocgo-cache-") as cache:
+            result = self._run(
+                ["--version"], cache=cache, extra_env={"CC": "/nonexistent/cc"}
+            )
+            self.assertEqual(
+                0,
+                result.returncode,
+                f"the wrapper must fall back to a cgo-less build rather than failing.\n"
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+            )
+            self.assertRegex(result.stdout, r"^cadre \S+\n$")
+            # The buffering contract still holds on the fallback path: a
+            # cold-cache build writes "go: downloading ..." to stderr, and
+            # anything that leaks breaks `--version` for every stderr-sensitive
+            # caller (this file's GlobalVersionTest, the Cline vitest suites).
+            self.assertEqual("", result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

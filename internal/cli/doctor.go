@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/deagy/cadre/cli/internal/knowledge"
 	"github.com/deagy/cadre/cli/internal/orchestration"
 )
 
@@ -40,6 +41,17 @@ func DoctorCmd(args []string) int {
 	}
 
 	report := orchestration.GatherDoctorReport("", "")
+
+	// Probe the sqlite driver here rather than inside GatherDoctorReport:
+	// this package already imports both, so orchestration keeps its current
+	// dependency graph. See DoctorReport's field comment.
+	if err := knowledge.DriverAvailable(); err != nil {
+		report.KnowledgeStoreOK = false
+		report.KnowledgeStoreDetail = "unavailable -- " + err.Error()
+	} else {
+		report.KnowledgeStoreOK = true
+		report.KnowledgeStoreDetail = "available (cgo sqlite3 driver linked)"
+	}
 
 	if asJSON {
 		data, err := json.MarshalIndent(report, "", "  ")

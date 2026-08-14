@@ -1399,6 +1399,56 @@ class SelectorTests(unittest.TestCase):
         self.assertIn("security-reviewer", result["agents"]["reviewers"])
         self.assertIn("release-engineer", result["agents"]["support"])
 
+    def test_fetch_and_execute_vocabulary_reaches_supply_chain(self) -> None:
+        # The supply-chain route keyed only on dependency/sbom/provenance/
+        # signing vocabulary and the go.mod/package.json path family. A change
+        # that makes a shipped shim *download a release artifact and execute
+        # it* is squarely supply-chain work, but described in its own natural
+        # words it matched nothing: the same change, same files, routed to
+        # supply-chain when phrased "provenance and signing" and not when
+        # phrased "download ... with checksum verification". Selection is
+        # meant to be deterministic precisely so security review is not left
+        # to whoever writes the task sentence, so the gap is fixed in the
+        # ruleset rather than worked around by an orchestrator adding the
+        # reviewer by hand.
+        result = plan(
+            task=(
+                "Make the packaged plugin shim download a platform-matched "
+                "release archive on first use with mandatory checksum "
+                "verification before executing it"
+            ),
+            changed_files=["internal/generators/plugin_generation.go"],
+            classification="internal",
+            task_id="SC-FETCH-1",
+        )
+        route_ids = {match["id"] for match in result["matched_routes"]}
+        self.assertIn("supply-chain", route_ids)
+        self.assertIn("supply-chain-security-reviewer", result["agents"]["primary"])
+        self.assertIn("security-reviewer", result["agents"]["reviewers"])
+
+    def test_fetch_vocabulary_does_not_overmatch_unrelated_work(self) -> None:
+        # The obvious fix -- adding bare "checksum" and "attestation" -- was
+        # measured and rejected: it routed "add a checksum column to the audit
+        # table" and "improve the attestation wording in the compliance doc"
+        # to a supply-chain security reviewer. A route that fires on unrelated
+        # work trains people to ignore it, so the keywords are the specific
+        # multi-word forms, and "provenance" (already present) carries the
+        # build-attestation sense on its own.
+        for task in (
+            "Add a checksum column to the audit table",
+            "Improve the attestation wording in the compliance doc",
+            "Download the quarterly report and email it to the team",
+        ):
+            with self.subTest(task=task):
+                result = plan(
+                    task=task,
+                    changed_files=["docs/guide.md"],
+                    classification="internal",
+                    task_id="SC-NEG-1",
+                )
+                route_ids = {match["id"] for match in result["matched_routes"]}
+                self.assertNotIn("supply-chain", route_ids)
+
     def test_lockfile_guard_test_matches_supply_chain_by_path_alone(self) -> None:
         # #189 regression: plugin/tools/test_cline_git_plugin_packaging.py is
         # the sole check tying the root lockfile to cline-plugins/, so it
