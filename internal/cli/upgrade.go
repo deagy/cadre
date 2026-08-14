@@ -13,9 +13,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/deagy/cadre/cli/internal/orchestration"
 )
 
 // UpgradeCmd is the `cadre upgrade` command: check for newer versions and apply updates.
+// cliReleaseTagPrefix is the tag namespace .github/workflows/release.yml's
+// cli-publish job creates for the compiled CLI.
+const cliReleaseTagPrefix = "cli-v"
+
 func UpgradeCmd(args []string) int {
 	fs := flag.NewFlagSet("cadre upgrade", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -44,7 +50,7 @@ func UpgradeCmd(args []string) int {
 
 	result, err := fetchLatestRelease()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cadre upgrade: could not reach PyPI to check for updates\n")
+		fmt.Fprintf(os.Stderr, "cadre upgrade: could not reach GitHub to check for a %s* release\n", cliReleaseTagPrefix)
 		fmt.Fprintf(os.Stderr, "  check your internet connection or try again later\n")
 		return 1
 	}
@@ -75,10 +81,17 @@ func UpgradeCmd(args []string) int {
 		return 0
 	}
 
-	installMethod := detectInstallMethod()
+	kind, root := detectInstallKind()
+	tag, _ := result["tag"].(string)
+
+	// Only the wheel channel is updated in place; every other kind prints an
+	// instruction and changes nothing, so there is nothing to confirm.
+	if kind != orchestration.InstallKindUnknown {
+		return updateCadre(kind, root, tag)
+	}
 
 	if *force {
-		return updateCadre(installMethod)
+		return updateCadre(kind, root, tag)
 	}
 
 	if !promptUpdate(currentVersion, latestVersion, releaseURL) {
@@ -86,7 +99,7 @@ func UpgradeCmd(args []string) int {
 		return 0
 	}
 
-	return updateCadre(installMethod)
+	return updateCadre(kind, root, tag)
 }
 
 func getInstalledVersion() (string, error) {
@@ -129,8 +142,21 @@ func findRepoRoot() (string, error) {
 	return filepath.Join(filepath.Dir(exe), "..", "..", ".."), nil
 }
 
+// fetchLatestRelease returns the newest `cli-v*` GitHub release.
+//
+// This used to query PyPI. That was coherent for exactly one of the four
+// install kinds: the pip/pipx wheel. A checkout, a `go install` binary and a
+// plugin-cache install are none of them updated from PyPI, and a wheel
+// publish can lag or fail independently of the binaries. The CLI's own
+// release job (.github/workflows/release.yml's cli-publish) tags
+// `cli-v<version>` from cadre_cli/_version.py and attaches the per-platform
+// binaries there, so that tag is the one source every install kind shares.
+//
+// /releases/latest is not usable here: this repository also publishes
+// `plugin-v*` and kernel tags, and "latest" is whichever was cut most
+// recently regardless of prefix.
 func fetchLatestRelease() (map[string]any, error) {
-	url := "https://pypi.org/pypi/cadre/json"
+	url := "https://api.github.com/repos/deagy/cadre/releases?per_page=30"
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	resp, err := client.Get(url)
@@ -148,60 +174,44 @@ func fetchLatestRelease() (map[string]any, error) {
 		return nil, err
 	}
 
-	var data map[string]any
-	if err := json.Unmarshal(body, &data); err != nil {
+	var releases []map[string]any
+	if err := json.Unmarshal(body, &releases); err != nil {
 		return nil, err
 	}
 
-	info, ok := data["info"].(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("no info field in response")
+	for _, release := range releases {
+		tag, _ := release["tag_name"].(string)
+		if !strings.HasPrefix(tag, cliReleaseTagPrefix) {
+			continue
+		}
+		if draft, _ := release["draft"].(bool); draft {
+			continue
+		}
+		version := strings.TrimPrefix(tag, cliReleaseTagPrefix)
+		if version == "" {
+			continue
+		}
+		releaseURL, _ := release["html_url"].(string)
+		if releaseURL == "" {
+			releaseURL = "https://github.com/deagy/cadre/releases/tag/" + tag
+		}
+		return map[string]any{"version": version, "release_url": releaseURL, "tag": tag}, nil
 	}
-
-	version, ok := info["version"].(string)
-	if !ok || version == "" {
-		return nil, fmt.Errorf("no version in response")
-	}
-
-	releaseURL := fmt.Sprintf("https://pypi.org/project/cadre/%s/", version)
-	return map[string]any{
-		"version":     version,
-		"release_url": releaseURL,
-	}, nil
+	return nil, fmt.Errorf("no %s* release found", cliReleaseTagPrefix)
 }
 
-func detectInstallMethod() string {
-	repoRoot, err := findRepoRoot()
-	if err == nil {
-		if _, err := os.Stat(filepath.Join(repoRoot, "pyproject.toml")); err == nil {
-			if _, err := os.Stat(filepath.Join(repoRoot, "bin", "cadre")); err == nil {
-				return "source"
-			}
-		}
-		if _, err := os.Stat(filepath.Join(repoRoot, "..", "pyproject.toml")); err == nil {
-			if _, err := os.Stat(filepath.Join(repoRoot, "..", "bin", "cadre")); err == nil {
-				return "source"
-			}
-		}
-	}
-
-	// Try to detect pipx installation
-	cmd := exec.Command("pipx", "list", "--json")
-	output, err := cmd.Output()
-	if err == nil {
-		var data map[string]any
-		if err := json.Unmarshal(output, &data); err == nil {
-			venvs, ok := data["venvs"].(map[string]any)
-			if ok {
-				if _, ok := venvs["cadre"]; ok {
-					return "pipx"
-				}
-			}
-		}
-	}
-
-	// Default to pip
-	return "pip"
+// detectInstallKind reuses the classification cadre doctor already
+// performs, rather than re-deriving it here.
+//
+// The previous implementation looked for a pyproject.toml, then shelled out
+// to `pipx list --json`, then defaulted to "pip" -- so a checkout whose
+// probe missed was told to run `pip install --upgrade cadre`, installing a
+// wheel over the CLI it was already running from a git tree.
+// orchestration.ClassifyRunningBinary distinguishes checkout, go-install,
+// plugin-cache and unknown, and is covered by its own tests.
+func detectInstallKind() (kind string, root string) {
+	report := orchestration.GatherDoctorReport("", "")
+	return report.InstallKind, report.InstallRoot
 }
 
 func compareVersions(current, latest string) int {
@@ -276,36 +286,94 @@ func promptUpdate(current, latest, releaseURL string) bool {
 	return strings.ToLower(strings.TrimSpace(response)) == "y"
 }
 
-func updateCadre(installMethod string) int {
-	if installMethod == "source" {
-		fmt.Println("cadre: Running from a source checkout. To update, use:")
-		fmt.Println("  git pull origin main")
-		fmt.Println("  make generate")
+// updateCadre routes on how this binary was installed. Only the wheel
+// channel is updated in place; the others print the one correct instruction
+// for their kind, because `git pull` in someone's working tree and a
+// marketplace refresh are not this command's to perform unprompted.
+func updateCadre(kind, root, tag string) int {
+	switch kind {
+	case orchestration.InstallKindCheckout:
+		fmt.Println("cadre: running from a git checkout" + locatedAt(root) + ".")
+		fmt.Println("  To update:")
+		fmt.Println("    git -C " + displayRoot(root) + " pull --ff-only")
+		fmt.Println()
+		fmt.Println("  bin/cadre rebuilds the Go binary on the next invocation, so no")
+		fmt.Println("  separate build step is needed. If the pull touched roster/,")
+		fmt.Println("  .agents/skills/ or AGENTS.md, re-run the regeneration sequence in")
+		fmt.Println("  roster/RUNBOOK.md section 17 before committing anything.")
+		return 0
+
+	case orchestration.InstallKindGoInstall:
+		target := "github.com/deagy/cadre/cmd/cadre@" + tag
+		fmt.Println("cadre: installed with `go install`" + locatedAt(root) + ".")
+		fmt.Println("  To update:")
+		fmt.Println("    go install " + target)
+		return 0
+
+	case orchestration.InstallKindPluginCache:
+		fmt.Println("cadre: running from a Claude Code plugin cache" + locatedAt(root) + ".")
+		fmt.Println("  This copy is managed by the plugin marketplace, not by this command.")
+		fmt.Println("  To update, from Claude Code:")
+		fmt.Println("    /plugin marketplace update cadre-team")
+		fmt.Println("  then reinstall or update the cadre plugin from that marketplace.")
 		return 0
 	}
 
-	if installMethod == "pipx" {
+	// Unknown: the pip/pipx wheel is the only remaining channel this command
+	// can act on, and it is the one PyPI genuinely serves.
+	if pipxHasCadre() {
 		fmt.Println("Updating via pipx...")
-		cmd := exec.Command("pipx", "upgrade", "cadre")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
+		command := exec.Command("pipx", "upgrade", "cadre")
+		command.Stdout = os.Stdout
+		command.Stderr = os.Stderr
+		if err := command.Run(); err != nil {
 			return 1
 		}
-		fmt.Println("✓ Cadre updated successfully via pipx")
+		fmt.Println("\u2713 Cadre updated successfully via pipx")
 		fmt.Println("  Run 'cadre --version' to verify the new version")
 		return 0
 	}
 
-	// pip
 	fmt.Println("Updating via pip...")
-	cmd := exec.Command("pip", "install", "--upgrade", "cadre")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	command := exec.Command("pip", "install", "--upgrade", "cadre")
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	if err := command.Run(); err != nil {
 		return 1
 	}
-	fmt.Println("✓ Cadre updated successfully via pip")
+	fmt.Println("\u2713 Cadre updated successfully via pip")
 	fmt.Println("  Run 'cadre --version' to verify the new version")
 	return 0
+}
+
+// pipxHasCadre reports whether pipx manages a cadre venv.
+func pipxHasCadre() bool {
+	output, err := exec.Command("pipx", "list", "--json").Output()
+	if err != nil {
+		return false
+	}
+	var data map[string]any
+	if err := json.Unmarshal(output, &data); err != nil {
+		return false
+	}
+	venvs, ok := data["venvs"].(map[string]any)
+	if !ok {
+		return false
+	}
+	_, present := venvs["cadre"]
+	return present
+}
+
+func locatedAt(root string) string {
+	if root == "" {
+		return ""
+	}
+	return " at " + root
+}
+
+func displayRoot(root string) string {
+	if root == "" {
+		return "<checkout>"
+	}
+	return root
 }
