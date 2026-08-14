@@ -195,13 +195,6 @@ func ancestorCandidates(start, relative string) []string {
 // a fixed exclusion set), catalog ordering, risk classification, team-recipe
 // expansion, the lifecycle-contract handshake, and argparse's exact flag
 // surface, defaults, usage text and exit codes.
-func selectAgentsGo(_ context.Context, _ []string, _ bool) int {
-	fmt.Fprintf(os.Stderr,
-		"cadre select: %s=go is set, but no native Go selector exists yet.\n"+
-			"  The port is gated on roster/orchestration/test/test_select_differential.py;\n"+
-			"  implement selectAgentsGo in internal/cli/select_agents.go and that\n"+
-			"  harness will begin comparing it against the Python plan automatically.\n"+
-			"  Unset %s to use the shipping implementation.\n",
-		SelectImplEnv, SelectImplEnv)
-	return SelectGoNotImplementedExit
+func selectAgentsGo(_ context.Context, args []string, _ bool) int {
+	return runSelectGo(args)
 }
