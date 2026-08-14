@@ -390,6 +390,12 @@ jobs:
             goarch: amd64
             cc: gcc
             exe-suffix: .exe
+          # Windows ARM64: cross-compile on windows-latest
+          - os: windows-latest
+            goos: windows
+            goarch: arm64
+            cc: gcc
+            exe-suffix: .exe
     environment: release
     permissions:
       contents: write
