@@ -66,9 +66,11 @@ packages = ["cadre_cli"]
 # paths that no dispatched script reads as a packaged resource, so they are
 # simply never listed here. `__pycache__`/`*.pyc` are skipped by hatchling
 # by default even under force-include.
+#
+# NOTE: bin/cadre.py has been removed (deprecated in favor of Go CLI).
+# bin/cadre and bin/cadre.ps1 are shell wrappers for the Go binary and are
+# not needed in the Python distribution.
 [tool.hatch.build.targets.wheel.force-include]
-"bin/cadre.py" = "cadre_cli/_vendor/bin/cadre.py"
-"bin/subcommands.tsv" = "cadre_cli/_vendor/bin/subcommands.tsv"
 
 "roster/catalog.yaml" = "cadre_cli/_vendor/roster/catalog.yaml"
 # Idea #8's runner/capability/model-tier manifest: generate_global_plugin.py
@@ -197,7 +199,6 @@ packages = ["cadre_cli"]
 [tool.hatch.build.targets.sdist]
 include = [
     "cadre_cli/**",
-    "bin/cadre.py",
     "bin/subcommands.tsv",
     "roster/**",
     ".agents/skills/**",
