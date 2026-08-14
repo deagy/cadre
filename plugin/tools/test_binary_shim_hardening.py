@@ -113,13 +113,17 @@ class BinaryShimHardeningTest(unittest.TestCase):
             tar.add(bystander, arcname="UNWANTED-MEMBER")
         return archive
 
-    def _install_curl_stub(self, archive: Path, *, checksum: str | None = None) -> None:
+    def _install_curl_stub(
+        self, archive: Path, *, checksum: str | None = None, log: Path | None = None
+    ) -> None:
         """A `curl` that serves the archive and a SHA256SUMS naming it."""
         digest = checksum or hashlib.sha256(archive.read_bytes()).hexdigest()
         stub = self.stub_bin / "curl"
+        record = f'printf "%s\\n" "$*" >> "{log}"\n' if log else ""
         stub.write_text(
             "#!/bin/sh\n"
-            'out=""; url=""\n'
+            + record
+            + 'out=""; url=""\n'
             'while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift 2;; -*) shift;; '
             '*) url="$1"; shift;; esac; done\n'
             'case "$url" in\n'
@@ -168,9 +172,21 @@ class BinaryShimHardeningTest(unittest.TestCase):
         occupied = self.cache_dir / self.binary_name
         (occupied / "occupied").mkdir(parents=True)
         archive = self._payload_archive()
-        self._install_curl_stub(archive)
+        curl_log = self.tmpdir / "curl-calls.log"
+        self._install_curl_stub(archive, log=curl_log)
 
         result = self._run("definitely-not-a-subcommand")
+
+        # Assert the download actually ran. Without this the test proves far
+        # less than it appears to: any unrelated failure to resolve a binary
+        # (a curl stub not on PATH, a platform mismatch) produces exactly the
+        # same observable outcome, so the assertions below would pass while
+        # the mv-into-directory path was never reached at all.
+        self.assertTrue(
+            curl_log.exists() and curl_log.read_text(encoding="utf-8").strip(),
+            "the download path was never exercised, so this test did not reach "
+            f"the defect it covers; stderr={result.stderr}",
+        )
 
         self.assertNotEqual(
             126, result.returncode,
@@ -191,7 +207,19 @@ class BinaryShimHardeningTest(unittest.TestCase):
 
     def test_cached_binary_permissions_gate_execution_on_writability(self) -> None:
         """Group/other *writable* is refused; merely readable is allowed."""
-        for mode, should_execute in ((0o700, True), (0o750, True), (0o770, False), (0o777, False)):
+        # 0o706 isolates *other*-write with no group-write. Without it the
+        # matrix cannot distinguish a correct implementation from one that
+        # checks GROUP_WRITE and ignores OTHER_WRITE: 0o770 and 0o777 both
+        # carry group-write, so either would still be refused. This is the
+        # shape of the bug the positional-glob check originally missed.
+        matrix = (
+            (0o700, True),
+            (0o750, True),
+            (0o706, False),
+            (0o770, False),
+            (0o777, False),
+        )
+        for mode, should_execute in matrix:
             with self.subTest(mode=oct(mode)):
                 for stale in self.cache_dir.iterdir():
                     shutil.rmtree(stale, ignore_errors=True) if stale.is_dir() else stale.unlink()
