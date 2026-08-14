@@ -42,7 +42,6 @@ func TestE2EWithCaching(t *testing.T) {
 		enableByDefault: false,
 	}
 
-
 	stats := cachedWorkflow.GetCacheStats()
 	if stats.MaxSize != 10 {
 		t.Errorf("cache size mismatch")

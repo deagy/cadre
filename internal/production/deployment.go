@@ -10,13 +10,13 @@ import (
 
 // DeploymentInfo holds deployment metadata.
 type DeploymentInfo struct {
-	Environment     string
-	Version         string
-	Revision        string
-	DeploymentTime  time.Time
-	DeployedBy      string
-	BuildNumber     string
-	DockerImage     string
+	Environment    string
+	Version        string
+	Revision       string
+	DeploymentTime time.Time
+	DeployedBy     string
+	BuildNumber    string
+	DockerImage    string
 }
 
 // NewDeploymentInfo creates deployment info from environment variables.
@@ -113,11 +113,11 @@ type ServiceLoadBalancer struct {
 
 // ServiceInstance represents a service instance.
 type ServiceInstance struct {
-	ID       string
-	Host     string
-	Port     int
-	Healthy  bool
-	Weight   int
+	ID      string
+	Host    string
+	Port    int
+	Healthy bool
+	Weight  int
 }
 
 // NewServiceLoadBalancer creates a new load balancer.
@@ -290,8 +290,8 @@ spec:
   selector:
     app: cadre
 `, deployment.Version, deployment.Version, deployment.DockerImage,
-	config.Port, config.Port, config.Environment, config.MaxAgents,
-	config.Port, config.Port, config.Port)
+		config.Port, config.Port, config.Environment, config.MaxAgents,
+		config.Port, config.Port, config.Port)
 
 	return os.WriteFile(outputPath, []byte(manifest), 0644)
 }
