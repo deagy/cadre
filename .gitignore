@@ -109,8 +109,9 @@ node_modules/
 cline-plugins/node_modules/
 
 # Go CLI build output (ADR-001-CLI-GO-REFACTOR.md).
+# The compiled "cadre" binary, build artifacts, and dist archives are never committed.
+# bin/cadre and bin/cadre.ps1 self-build the Go CLI into this cache on first run.
 /dist/
-
-# bin/cadre and bin/cadre.ps1 self-build the Go CLI into this cache on first
-# run (see those scripts) -- never commit the resulting binary.
+/build/
+cadre
 /.cadre-build-cache/

@@ -137,10 +137,10 @@ func (mg *MigrationGuide) ListSteps() []*MigrationStep {
 
 // CompatibilityMode provides backward compatibility layer.
 type CompatibilityMode struct {
-	enabled           bool
+	enabled            bool
 	deprecationTracker *DeprecationTracker
-	legacyRouting     bool
-	legacyFormat      string
+	legacyRouting      bool
+	legacyFormat       string
 }
 
 // NewCompatibilityMode creates a new compatibility mode.
@@ -156,7 +156,7 @@ func NewCompatibilityMode(deprecationTracker *DeprecationTracker) *Compatibility
 // EnableLegacyRouting enables legacy routing compatibility.
 func (cm *CompatibilityMode) EnableLegacyRouting() {
 	if cm.deprecationTracker != nil {
-		cm.deprecationTracker.Warn("legacy-routing")
+		_ = cm.deprecationTracker.Warn("legacy-routing")
 	}
 	cm.legacyRouting = true
 }
@@ -164,7 +164,7 @@ func (cm *CompatibilityMode) EnableLegacyRouting() {
 // UseLegacyFormat switches to legacy output format.
 func (cm *CompatibilityMode) UseLegacyFormat(format string) {
 	if cm.deprecationTracker != nil {
-		cm.deprecationTracker.Warn("legacy-format")
+		_ = cm.deprecationTracker.Warn("legacy-format")
 	}
 	cm.legacyFormat = format
 }
@@ -181,9 +181,9 @@ func (cm *CompatibilityMode) IsEnabled() bool {
 
 // VersionMigration provides version-specific migration utilities.
 type VersionMigration struct {
-	from    string
-	to      string
-	steps   []*MigrationStep
+	from  string
+	to    string
+	steps []*MigrationStep
 }
 
 // NewVersionMigration creates a new version migration.
