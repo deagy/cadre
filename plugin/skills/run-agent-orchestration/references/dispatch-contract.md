@@ -10,6 +10,14 @@ Each dispatch prompt must include:
 - task ID, objective, execution mode, classification, scope, exclusions, and acceptance criteria;
 - exact files, source revision, plan, artifact digest, target, or environment when applicable;
 - applicable shared policies, workflow, quality gates, and escalation policy;
+- for any agent expected to write or extend tests: the falsification-evidence
+  requirement from `roster/orchestration/handoff-contracts.md` — a test offered
+  as regression coverage must come back with the specific implementation change
+  that makes it fail, the observed failing output from running it against that
+  change, and the passing output without it. State this in the brief rather than
+  assuming it: an agent told only to "add tests and validate" reliably returns a
+  green suite and a confident summary, which is precisely the pair that hides a
+  test passing against the defect it was written for;
 - selector-emitted lifecycle `required_quality_gates`, mutation-oriented `human_gates`, and current gate-state records;
 - the planned Python knowledge-store invocation and its result status; resolve its Python 3.10+ launcher at execution and preserve the supplied argv without shell interpretation;
 - retrieved passages with `source`, `conversation_id`, `message_id`, `chunk_id`, `content_hash`, `created_at`, and `classification` citations, plus the retrieved bundle and its integrity hash as point-in-time evidence;
@@ -88,5 +96,10 @@ validation: []
 disposition: <approve|request-changes|needs-information|blocked|plan-only>
 next_safe_action: <action>
 ```
+
+A `validation` entry that claims regression coverage carries the falsification
+evidence with it — the breaking change and the observed failing output, not just
+the passing run. A run record showing only green results cannot distinguish a
+suite that covers the defect from one that passes against it.
 
 Record `communication_mode_used` per dispatched team even in standalone mode — it reflects what the runner actually did (see [runner-adapters.md](runner-adapters.md)'s "Team communication contract"), not a lifecycle decision, so it belongs in the plain summary regardless of `lifecycle_tracking.status`.
