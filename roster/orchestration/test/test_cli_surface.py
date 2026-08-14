@@ -22,6 +22,8 @@ the check exists to catch.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import re
@@ -318,6 +320,57 @@ class WrapperCgoBuildTest(unittest.TestCase):
             # anything that leaks breaks `--version` for every stderr-sensitive
             # caller (this file's GlobalVersionTest, the Cline vitest suites).
             self.assertEqual("", result.stderr)
+
+
+class SingleShimGeneratorTest(unittest.TestCase):
+    """Only one generator may produce `plugin/bin/cadre`.
+
+    Two existed. The Go implementation
+    (`internal/generators/plugin_generation.go`, reached via `./bin/cadre`)
+    emits the hardened launcher -- binary resolution, mandatory checksum
+    verification, sidecar-verified cache, permission-gated exec. The Python
+    `generate_global_plugin.py`'s `generate_bin_wrapper()` still emits the
+    pre-hardening one.
+
+    That mattered because `cadre_cli` dispatched `generate-plugin` to the
+    Python script and only failed closed for a *bundled* install, so an
+    editable checkout install (`pip install -e .`) silently regenerated a
+    plugin whose launcher had none of those controls -- and the committed
+    tree's own drift guard would then flag it, attributing the damage to
+    whoever regenerated last.
+    """
+
+    def test_cadre_cli_refuses_generate_plugin_from_any_install_kind(self) -> None:
+        import cadre_cli
+
+        with tempfile.TemporaryDirectory(prefix="cadre-shim-gen-") as target_dir:
+            target = Path(target_dir) / "package"
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                code = cadre_cli.main(["generate-plugin", "--output", str(target)])
+
+        self.assertEqual(
+            2, code, "generate-plugin must fail closed from the Python channel"
+        )
+        self.assertFalse(
+            target.exists(),
+            "the Python channel generated a plugin package; only the Go "
+            "generator may produce one, because only it emits the hardened "
+            "bin/cadre launcher",
+        )
+        self.assertIn(
+            "./bin/cadre generate-plugin",
+            stderr.getvalue(),
+            "the refusal must name the generator to use instead",
+        )
+
+    def test_other_subcommands_still_dispatch(self) -> None:
+        """The refusal is scoped to generate-plugin, not a blanket block."""
+        import cadre_cli
+
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            code = cadre_cli.main(["doctor"])
+        self.assertEqual(0, code, "doctor must still dispatch through this channel")
 
 
 if __name__ == "__main__":
