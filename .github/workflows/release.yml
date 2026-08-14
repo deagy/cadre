@@ -390,12 +390,9 @@ jobs:
             goarch: amd64
             cc: gcc
             exe-suffix: .exe
-          # Windows ARM64: cross-compile on windows-latest
-          - os: windows-latest
-            goos: windows
-            goarch: arm64
-            cc: gcc
-            exe-suffix: .exe
+          # NOTE: windows-arm64 is currently unsupported.
+          # windows-latest is x64 with MinGW x86_64 gcc; cannot emit ARM64 objects with CGO_ENABLED=1.
+          # Re-add if/when provisioning windows-11-arm hosted runner with proper cross-toolchain.
     environment: release
     permissions:
       contents: read
@@ -473,8 +470,7 @@ jobs:
 
       - name: Smoke test binary on native platforms
         # Test the built binary on native (non-cross-compiled) platforms only.
-        # linux-arm64 and windows-arm64 are cross-compiled and cannot run without
-        # emulation, so they are explicitly excluded from smoke testing.
+        # linux-arm64 is cross-compiled and cannot run without emulation, so it is excluded.
         if: |
           steps.tag.outputs.skip == 'false' && (
             (matrix.goos == 'linux' && matrix.goarch == 'amd64') ||
@@ -544,10 +540,12 @@ jobs:
           import sys, re
           from pathlib import Path
 
+          # Five platforms: linux-amd64, linux-arm64, darwin-amd64, darwin-arm64, windows-amd64.
+          # windows-arm64 is unsupported (no ARM64 Windows cross-toolchain on windows-latest).
           contracted = {
               ('linux', 'amd64'), ('linux', 'arm64'),
               ('darwin', 'amd64'), ('darwin', 'arm64'),
-              ('windows', 'amd64'), ('windows', 'arm64'),
+              ('windows', 'amd64'),
           }
 
           flat_dist = Path('flat-dist')
