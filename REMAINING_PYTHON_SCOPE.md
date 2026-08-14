@@ -233,6 +233,31 @@ command was first ported and the decision was never made. Route on install
 kind: checkout → `git pull`; go-install → `go install` the latest tag;
 plugin-cache → the marketplace path; wheel → keep pip/pipx.
 
+**Resolved 2026-08-14** along exactly those lines, and the rework turned up
+three further defects the original framing had not named:
+
+- It checked **PyPI** for the latest version. That is coherent for one of
+  the four install kinds; a checkout, a `go install` binary and a
+  plugin-cache install are none of them updated from PyPI, and a wheel
+  publish can lag or fail independently of the binaries. It now reads the
+  newest `cli-v*` GitHub release — the tag `release.yml`'s `cli-publish` job
+  creates and attaches the per-platform binaries to. (`/releases/latest` is
+  unusable: this repository also publishes `plugin-v*` and kernel tags.)
+- `detectInstallMethod()` re-derived install detection by probing for a
+  `pyproject.toml`, then shelling out to `pipx list --json`, then
+  **defaulting to pip** — so a checkout whose probe missed was told to run
+  `pip install --upgrade cadre`, installing a wheel over the CLI it was
+  already running from a git tree. It now reuses
+  `orchestration.ClassifyRunningBinary`, which `cadre doctor` already uses
+  and which has its own tests.
+- The source-checkout branch told users to run `make generate`, a target
+  that does not exist in the `Makefile`. It now points at `git pull
+  --ff-only` and, only when relevant, `roster/RUNBOOK.md` §17.
+
+Only the wheel channel is updated in place. Every other kind prints its one
+correct instruction and changes nothing, so there is nothing to confirm and
+`--force` does not apply to them.
+
 ### 5. Knowledge-store config vocabulary drift
 
 The Go port renamed the embedding provider from `hashing` to
