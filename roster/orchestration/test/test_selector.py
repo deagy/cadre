@@ -18,6 +18,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 AGENTS_ROOT = ROOT.parent
+REPOSITORY_ROOT = AGENTS_ROOT.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 import agentic_sdlc_contracts  # noqa: E402
@@ -483,13 +484,15 @@ class SelectorTests(unittest.TestCase):
         self.assertTrue(all("APP-42" in request["invocation"]["args"] for request in requests))
         self.assertTrue(all("\n" not in request["query"] and "\r" not in request["query"] for request in requests))
         expected_launcher = {
-            "runtime": "python",
-            "minimum_version": "3.10",
-            "resolution": "runner-probed",
+            "runtime": "cadre",
+            "minimum_version": "0.5.0",
+            "resolution": "platform-anchored",
         }
         self.assertTrue(all(request["invocation"]["launcher"] == expected_launcher for request in requests))
         self.assertTrue(all(Path(request["invocation"]["args"][0]).is_absolute() for request in requests))
-        self.assertTrue(all(request["invocation"]["args"][1] == "context" for request in requests))
+        self.assertTrue(
+            all(request["invocation"]["args"][1:3] == ["knowledge", "search"] for request in requests)
+        )
 
     def test_selects_interaction_designer_as_frontend_support(self) -> None:
         result = plan(
@@ -852,7 +855,7 @@ class SelectorTests(unittest.TestCase):
                         self.assertIn(team["role"], selected)
 
     def test_knowledge_invocation_uses_resolved_repository_source(self) -> None:
-        from build_dispatch_plan import KNOWLEDGE_STORE_ROOT
+        from build_dispatch_plan import KNOWLEDGE_CLI
 
         result = plan(
             task="Add a React upload form backed by a PostgreSQL API",
@@ -866,7 +869,7 @@ class SelectorTests(unittest.TestCase):
             args = request["invocation"]["args"]
             self.assertIn("--source", args)
             self.assertEqual("example/repository", args[args.index("--source") + 1])
-            self.assertEqual(str(KNOWLEDGE_STORE_ROOT / "src" / "cli.py"), args[0])
+            self.assertEqual(str(KNOWLEDGE_CLI), args[0])
             self.assertNotIn("--config", args)
             self.assertNotIn("cwd", request["invocation"])
 
@@ -876,7 +879,7 @@ class SelectorTests(unittest.TestCase):
             task="Deploy to production with Terraform",
             changed_files=["terraform/service/main.tf"],
         )
-        self.assertEqual(result["schema_version"], 7)
+        self.assertEqual(result["schema_version"], 8)
         self.assertEqual(result["workflow"], "production-release")
         self.assertEqual(self.quality_gate_ids(result), ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9"])
         production_gate = next(
@@ -1154,28 +1157,31 @@ class SelectorTests(unittest.TestCase):
                     "browser security, and approved React or TypeScript conventions."
                 ),
                 "invocation": {
+                    # args[0] is executed directly -- no interpreter is
+                    # prepended to it. Through schema_version 7 this named the
+                    # Python knowledge store's `src/cli.py` and the runner
+                    # probed its own Python 3.10+; that store is now the Go
+                    # implementation behind `cadre knowledge search` and the
+                    # script it named was deleted, so the plan was emitting a
+                    # path that did not exist.
                     "launcher": {
-                        "runtime": "python",
-                        "minimum_version": "3.10",
-                        "resolution": "runner-probed",
+                        "runtime": "cadre",
+                        "minimum_version": "0.5.0",
+                        "resolution": "platform-anchored",
                     },
                     "args": [
-                        str(AGENTS_ROOT / "knowledge-store" / "src" / "cli.py"),
-                        "context",
+                        str(AGENTS_ROOT.parent / "bin" / "cadre"),
+                        "knowledge",
+                        "search",
                         "--agent",
                         "frontend-engineer",
                         "--task-id",
                         "UI-8",
-                        "--query",
-                        (
-                            "Task: Update the React navigation. Retrieve frontend implementation "
-                            "patterns, UX decisions, accessibility behavior, API contracts, "
-                            "browser security, and approved React or TypeScript conventions."
-                        ),
                         "--classification",
                         "confidential",
                         "--top",
                         "3",
+                        "--json",
                         # One --source per entry, in the order the caller named
                         # them. The argv contract is what the Cline consumer
                         # executes verbatim, so the repetition is the contract.
@@ -1183,6 +1189,15 @@ class SelectorTests(unittest.TestCase):
                         "approved-decisions",
                         "--source",
                         "proposed-knowledge",
+                        # Trailing positional, after every flag: Go's flag
+                        # package stops parsing at the first non-flag argument,
+                        # so a query placed earlier would strip the scoping off
+                        # every `--source` that followed it.
+                        (
+                            "Task: Update the React navigation. Retrieve frontend implementation "
+                            "patterns, UX decisions, accessibility behavior, API contracts, "
+                            "browser security, and approved React or TypeScript conventions."
+                        ),
                     ],
                 },
             },
@@ -2178,60 +2193,56 @@ class SelectorTests(unittest.TestCase):
                 )
 
     def test_project_local_knowledge_config_path_matches_the_store_constant(self) -> None:
-        """`PROJECT_LOCAL_KNOWLEDGE_CONFIG` duplicates `config.PROJECT_LOCAL_RELATIVE_PATH`.
+        """`PROJECT_LOCAL_KNOWLEDGE_CONFIG` duplicates the store's own constant.
 
         Duplicated for the same reason as `STAGED_KNOWLEDGE_SOURCE` (this
-        module does not import the store's `src/`), so it needs the same drift
-        guard: if the store moved its project-local config, every plan would
-        keep testing a path nothing writes and silently drop the staged source
-        from projects that do have their own partition.
-        """
-        config_module = AGENTS_ROOT / "knowledge-store" / "src" / "config.py"
-        tree = ast.parse(config_module.read_text(encoding="utf-8"))
-        assignments = [
-            node
-            for node in tree.body
-            if isinstance(node, ast.Assign)
-            and any(
-                isinstance(target, ast.Name) and target.id == "PROJECT_LOCAL_RELATIVE_PATH"
-                for target in node.targets
-            )
-        ]
-        self.assertEqual(1, len(assignments), "config.py no longer declares PROJECT_LOCAL_RELATIVE_PATH")
-        # `Path(".agents") / "knowledge-store" / "config.json"` -- the string
-        # literals are the path segments. Collected depth-first through
-        # iter_child_nodes (left before right) rather than with ast.walk, whose
-        # breadth-first order would put the outermost `/` operand first.
-        def literals(node: ast.AST) -> list[str]:
-            if isinstance(node, ast.Constant) and isinstance(node.value, str):
-                return [node.value]
-            found: list[str] = []
-            for child in ast.iter_child_nodes(node):
-                found.extend(literals(child))
-            return found
+        module does not import the store), so it needs the same drift guard: if
+        the store moved its project-local config, every plan would keep testing
+        a path nothing writes and silently drop the staged source from projects
+        that do have their own partition.
 
-        self.assertEqual(list(PROJECT_LOCAL_KNOWLEDGE_CONFIG.parts), literals(assignments[0].value))
+        Read from Go, not Python. The knowledge store this selector plans
+        against is `internal/knowledge`; its Python original
+        (`roster/knowledge-store/src/config.py`) was deleted, and pointing this
+        guard at the deleted file would have made the drift it exists to catch
+        unobservable rather than absent.
+        """
+        source = (
+            REPOSITORY_ROOT / "internal" / "knowledge" / "config.go"
+        ).read_text(encoding="utf-8")
+        match = re.search(
+            r"^var ProjectLocalRelativePath = filepath\.Join\(([^)]*)\)$",
+            source,
+            re.MULTILINE,
+        )
+        self.assertIsNotNone(
+            match, "internal/knowledge/config.go no longer declares ProjectLocalRelativePath"
+        )
+        segments = re.findall(r'"([^"]*)"', match.group(1))
+        self.assertEqual(list(PROJECT_LOCAL_KNOWLEDGE_CONFIG.parts), segments)
 
     def test_staged_knowledge_source_matches_the_store_constant(self) -> None:
-        """`STAGED_KNOWLEDGE_SOURCE` duplicates `accepted_ingest.STAGED_SOURCE`.
+        """`STAGED_KNOWLEDGE_SOURCE` duplicates the store's staged-source constant.
 
         Duplicated deliberately (see the constant's comment), so the drift
         this test catches is the whole reason the duplication is acceptable:
         if the store renames its dedicated source, every dispatched plan would
         otherwise keep naming the old one and silently retrieve nothing from
         the steward-accepted half of the corpus.
+
+        Read from Go for the same reason as the test above: the constant now
+        lives in `internal/knowledge/staged_ingest.go` as `StagedIngestSource`,
+        the Python `accepted_ingest.STAGED_SOURCE` it used to read having been
+        deleted with the rest of that package.
         """
-        accepted_ingest = AGENTS_ROOT / "knowledge-store" / "src" / "accepted_ingest.py"
-        tree = ast.parse(accepted_ingest.read_text(encoding="utf-8"))
-        declared = {
-            target.id: node.value.value
-            for node in tree.body
-            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant)
-            for target in node.targets
-            if isinstance(target, ast.Name)
-        }
-        self.assertIn("STAGED_SOURCE", declared, "accepted_ingest.py no longer declares STAGED_SOURCE")
-        self.assertEqual(declared["STAGED_SOURCE"], STAGED_KNOWLEDGE_SOURCE)
+        source = (
+            REPOSITORY_ROOT / "internal" / "knowledge" / "staged_ingest.go"
+        ).read_text(encoding="utf-8")
+        match = re.search(r'^const StagedIngestSource = "([^"]*)"$', source, re.MULTILINE)
+        self.assertIsNotNone(
+            match, "internal/knowledge/staged_ingest.go no longer declares StagedIngestSource"
+        )
+        self.assertEqual(match.group(1), STAGED_KNOWLEDGE_SOURCE)
 
     def test_cli_root_targets_unrelated_git_repository_for_status_and_base(self) -> None:
         selector = ROOT / "src" / "select_agents.py"

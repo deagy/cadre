@@ -15,7 +15,7 @@ import (
 // select` (see select_agents.go), never here.
 func SelectionTelemetryCmd(args []string) int {
 	fs := flag.NewFlagSet("cadre selection-telemetry", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	setUsage(fs, "selection-telemetry", usageSelectionTelemetry)
 	summarizePath := fs.String("summarize", "", "Path to a selection-telemetry JSON-lines file (required)")
 
 	if err := fs.Parse(args); err != nil {

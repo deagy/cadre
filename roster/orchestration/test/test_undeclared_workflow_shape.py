@@ -300,11 +300,15 @@ class SchemaCompatibilityTests(unittest.TestCase):
         6 -> 7 was the `source_filter` retype (string -> array of sources),
         which is why this is no longer named for a fixed number: the field
         this class covers did not change, but the version it asserts moves
-        whenever any emitted field does.
+        whenever any emitted field does. 7 -> 8 was the knowledge-retrieval
+        `invocation` reshape when the Python knowledge store's `src/cli.py`
+        was replaced by the Go `cadre knowledge search` -- a `const`-value
+        change that `test_schema_release_drift.py` deliberately cannot see,
+        so this pin is the one that catches a producer/schema split there.
         """
-        self.assertEqual(self.schema["properties"]["schema_version"]["const"], 7)
-        self.assertEqual(_plan(load_routing(ROUTING_PATH))["schema_version"], 7)
-        self.assertEqual(_plan(_config_with_overlay_route())["schema_version"], 7)
+        self.assertEqual(self.schema["properties"]["schema_version"]["const"], 8)
+        self.assertEqual(_plan(load_routing(ROUTING_PATH))["schema_version"], 8)
+        self.assertEqual(_plan(_config_with_overlay_route())["schema_version"], 8)
 
     def test_signal_is_optional_but_that_did_not_make_it_additive(self) -> None:
         self.assertIn(SIGNAL, self.schema["properties"])

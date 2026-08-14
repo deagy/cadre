@@ -19,13 +19,13 @@ import (
 // overlay.
 func ResolveSharedCmd(args []string) int {
 	fs := flag.NewFlagSet("cadre resolve-shared", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	setUsage(fs, "resolve-shared", usageResolveShared)
 	project := fs.String("project", "", "Directory to resolve overlays from (default: cwd)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: cadre resolve-shared <filename> [--project <dir>]")
+		fmt.Fprintln(os.Stderr, "usage: cadre resolve-shared "+usageResolveShared)
 		return 2
 	}
 	filename := fs.Arg(0)

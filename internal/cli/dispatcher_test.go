@@ -192,6 +192,51 @@ func TestRun_InteractiveFlagSetsChildEnv(t *testing.T) {
 	}
 }
 
+// TestRun_InteractiveFlagOnlyHonoredWhenLeading. `--interactive` is a
+// dispatcher-level flag, recognised only in front of the subcommand name.
+// Anywhere else it belongs to the subcommand, which may define its own (see
+// `cadre init --interactive`, a different thing entirely: the shared-policy
+// questionnaire, not a prompt for one missing operator setting). Consuming a
+// trailing one would both swallow an argument the subcommand was given and
+// silently turn a non-interactive invocation interactive.
+//
+// Ported from roster/orchestration/test/test_agents_dispatcher.py's
+// `test_interactive_flag_only_honored_when_leading`, which tested the deleted
+// bin/cadre.py and had no Go counterpart.
+func TestRun_InteractiveFlagOnlyHonoredWhenLeading(t *testing.T) {
+	dir := t.TempDir()
+	subPath := writeSubcommandsTSV(t, dir, [][3]string{
+		{"widget", "roster/shared/src/settings.py", "Show resolved operator settings"},
+	})
+
+	var gotEnv []string
+	var gotArgs []string
+	deps := Deps{
+		Stdout:          io.Discard,
+		Stderr:          io.Discard,
+		RepoRoot:        dir,
+		SubcommandsPath: subPath,
+		PythonExecutable: func(ctx context.Context, script string, args []string, env []string, stdout, stderr io.Writer, stdin io.Reader) (int, error) {
+			gotEnv = env
+			gotArgs = append([]string(nil), args...)
+			return 0, nil
+		},
+	}
+
+	code := Run(context.Background(), []string{"widget", InteractiveFlag, "show"}, deps)
+	if code != 0 {
+		t.Fatalf("Run() code = %d, want 0", code)
+	}
+	if len(gotArgs) != 2 || gotArgs[0] != InteractiveFlag || gotArgs[1] != "show" {
+		t.Errorf("args = %v, want [%s show] forwarded verbatim", gotArgs, InteractiveFlag)
+	}
+	for _, kv := range gotEnv {
+		if kv == "CADRE_INTERACTIVE=1" {
+			t.Errorf("a trailing %s set CADRE_INTERACTIVE=1; only a leading one may", InteractiveFlag)
+		}
+	}
+}
+
 func TestRun_SubcommandExitCodePropagates(t *testing.T) {
 	dir := t.TempDir()
 	// See TestRun_RoutesToSubcommandScript's comment on why this uses a

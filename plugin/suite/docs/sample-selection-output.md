@@ -5,7 +5,7 @@
 This walks through one real, committed `cadre select` plan so a reader can see
 what the selector actually produces before running it themselves. The
 authoritative shape is [`roster/orchestration/selection.schema.json`](../roster/orchestration/selection.schema.json)
-(`schema_version: 7`); if this page and the schema ever disagree, the schema
+(`schema_version: 8`); if this page and the schema ever disagree, the schema
 wins.
 
 See the [glossary](terminology.md) for definitions of the terms used below
@@ -55,7 +55,7 @@ comment).
 
 ```json
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "task_id": "GOLDEN-CROSS-STACK-1",
   "generated_at": "2026-08-10T18:57:46.976Z",
   "status": "ready",
@@ -248,27 +248,28 @@ comment).
         "query": "Task: Add a React upload form backed by a PostgreSQL API. Retrieve prior UX decisions, interaction patterns, accessibility findings, and user journey/flow history.",
         "invocation": {
           "launcher": {
-            "runtime": "python",
-            "minimum_version": "3.10",
-            "resolution": "runner-probed"
+            "runtime": "cadre",
+            "minimum_version": "0.5.0",
+            "resolution": "platform-anchored"
           },
           "args": [
-            "/path/to/your/checkout/roster/knowledge-store/src/cli.py",
-            "context",
+            "/path/to/your/checkout/bin/cadre",
+            "knowledge",
+            "search",
             "--agent",
             "interaction-designer",
             "--task-id",
             "GOLDEN-CROSS-STACK-1",
-            "--query",
-            "Task: Add a React upload form backed by a PostgreSQL API. Retrieve prior UX decisions, interaction patterns, accessibility findings, and user journey/flow history.",
             "--classification",
             "internal",
             "--top",
             "5",
+            "--json",
             "--source",
             "deagy/cadre",
             "--source",
-            "proposed-knowledge"
+            "proposed-knowledge",
+            "Task: Add a React upload form backed by a PostgreSQL API. Retrieve prior UX decisions, interaction patterns, accessibility findings, and user journey/flow history."
           ]
         }
       },
@@ -277,27 +278,28 @@ comment).
         "query": "Task: Add a React upload form backed by a PostgreSQL API. Retrieve frontend implementation patterns, UX decisions, accessibility behavior, API contracts, browser security, and approved React or TypeScript conventions.",
         "invocation": {
           "launcher": {
-            "runtime": "python",
-            "minimum_version": "3.10",
-            "resolution": "runner-probed"
+            "runtime": "cadre",
+            "minimum_version": "0.5.0",
+            "resolution": "platform-anchored"
           },
           "args": [
-            "/path/to/your/checkout/roster/knowledge-store/src/cli.py",
-            "context",
+            "/path/to/your/checkout/bin/cadre",
+            "knowledge",
+            "search",
             "--agent",
             "frontend-engineer",
             "--task-id",
             "GOLDEN-CROSS-STACK-1",
-            "--query",
-            "Task: Add a React upload form backed by a PostgreSQL API. Retrieve frontend implementation patterns, UX decisions, accessibility behavior, API contracts, browser security, and approved React or TypeScript conventions.",
             "--classification",
             "internal",
             "--top",
             "5",
+            "--json",
             "--source",
             "deagy/cadre",
             "--source",
-            "proposed-knowledge"
+            "proposed-knowledge",
+            "Task: Add a React upload form backed by a PostgreSQL API. Retrieve frontend implementation patterns, UX decisions, accessibility behavior, API contracts, browser security, and approved React or TypeScript conventions."
           ]
         }
       },
@@ -306,27 +308,28 @@ comment).
         "query": "Task: Add a React upload form backed by a PostgreSQL API. Retrieve backend service patterns, datastore decisions, schemas, migrations, APIs, operational lessons, and approved Go or PostgreSQL conventions.",
         "invocation": {
           "launcher": {
-            "runtime": "python",
-            "minimum_version": "3.10",
-            "resolution": "runner-probed"
+            "runtime": "cadre",
+            "minimum_version": "0.5.0",
+            "resolution": "platform-anchored"
           },
           "args": [
-            "/path/to/your/checkout/roster/knowledge-store/src/cli.py",
-            "context",
+            "/path/to/your/checkout/bin/cadre",
+            "knowledge",
+            "search",
             "--agent",
             "backend-engineer",
             "--task-id",
             "GOLDEN-CROSS-STACK-1",
-            "--query",
-            "Task: Add a React upload form backed by a PostgreSQL API. Retrieve backend service patterns, datastore decisions, schemas, migrations, APIs, operational lessons, and approved Go or PostgreSQL conventions.",
             "--classification",
             "internal",
             "--top",
             "5",
+            "--json",
             "--source",
             "deagy/cadre",
             "--source",
-            "proposed-knowledge"
+            "proposed-knowledge",
+            "Task: Add a React upload form backed by a PostgreSQL API. Retrieve backend service patterns, datastore decisions, schemas, migrations, APIs, operational lessons, and approved Go or PostgreSQL conventions."
           ]
         }
       },
@@ -335,27 +338,28 @@ comment).
         "query": "Task: Add a React upload form backed by a PostgreSQL API. Retrieve Go service patterns, safe concurrency, interfaces, tests, and approved library conventions.",
         "invocation": {
           "launcher": {
-            "runtime": "python",
-            "minimum_version": "3.10",
-            "resolution": "runner-probed"
+            "runtime": "cadre",
+            "minimum_version": "0.5.0",
+            "resolution": "platform-anchored"
           },
           "args": [
-            "/path/to/your/checkout/roster/knowledge-store/src/cli.py",
-            "context",
+            "/path/to/your/checkout/bin/cadre",
+            "knowledge",
+            "search",
             "--agent",
             "go-service-implementer",
             "--task-id",
             "GOLDEN-CROSS-STACK-1",
-            "--query",
-            "Task: Add a React upload form backed by a PostgreSQL API. Retrieve Go service patterns, safe concurrency, interfaces, tests, and approved library conventions.",
             "--classification",
             "internal",
             "--top",
             "5",
+            "--json",
             "--source",
             "deagy/cadre",
             "--source",
-            "proposed-knowledge"
+            "proposed-knowledge",
+            "Task: Add a React upload form backed by a PostgreSQL API. Retrieve Go service patterns, safe concurrency, interfaces, tests, and approved library conventions."
           ]
         }
       },
@@ -364,27 +368,28 @@ comment).
         "query": "Task: Add a React upload form backed by a PostgreSQL API. Retrieve Gherkin scenarios, regressions, failure cases, and quality history.",
         "invocation": {
           "launcher": {
-            "runtime": "python",
-            "minimum_version": "3.10",
-            "resolution": "runner-probed"
+            "runtime": "cadre",
+            "minimum_version": "0.5.0",
+            "resolution": "platform-anchored"
           },
           "args": [
-            "/path/to/your/checkout/roster/knowledge-store/src/cli.py",
-            "context",
+            "/path/to/your/checkout/bin/cadre",
+            "knowledge",
+            "search",
             "--agent",
             "test-engineer",
             "--task-id",
             "GOLDEN-CROSS-STACK-1",
-            "--query",
-            "Task: Add a React upload form backed by a PostgreSQL API. Retrieve Gherkin scenarios, regressions, failure cases, and quality history.",
             "--classification",
             "internal",
             "--top",
             "5",
+            "--json",
             "--source",
             "deagy/cadre",
             "--source",
-            "proposed-knowledge"
+            "proposed-knowledge",
+            "Task: Add a React upload form backed by a PostgreSQL API. Retrieve Gherkin scenarios, regressions, failure cases, and quality history."
           ]
         }
       },
@@ -393,27 +398,28 @@ comment).
         "query": "Task: Add a React upload form backed by a PostgreSQL API. Retrieve prior defects, coding conventions, exceptions, and relevant findings.",
         "invocation": {
           "launcher": {
-            "runtime": "python",
-            "minimum_version": "3.10",
-            "resolution": "runner-probed"
+            "runtime": "cadre",
+            "minimum_version": "0.5.0",
+            "resolution": "platform-anchored"
           },
           "args": [
-            "/path/to/your/checkout/roster/knowledge-store/src/cli.py",
-            "context",
+            "/path/to/your/checkout/bin/cadre",
+            "knowledge",
+            "search",
             "--agent",
             "code-reviewer",
             "--task-id",
             "GOLDEN-CROSS-STACK-1",
-            "--query",
-            "Task: Add a React upload form backed by a PostgreSQL API. Retrieve prior defects, coding conventions, exceptions, and relevant findings.",
             "--classification",
             "internal",
             "--top",
             "5",
+            "--json",
             "--source",
             "deagy/cadre",
             "--source",
-            "proposed-knowledge"
+            "proposed-knowledge",
+            "Task: Add a React upload form backed by a PostgreSQL API. Retrieve prior defects, coding conventions, exceptions, and relevant findings."
           ]
         }
       },
@@ -422,27 +428,28 @@ comment).
         "query": "Task: Add a React upload form backed by a PostgreSQL API. Retrieve prior accessibility findings, conformance target decisions, affected journeys, and assistive-technology constraints.",
         "invocation": {
           "launcher": {
-            "runtime": "python",
-            "minimum_version": "3.10",
-            "resolution": "runner-probed"
+            "runtime": "cadre",
+            "minimum_version": "0.5.0",
+            "resolution": "platform-anchored"
           },
           "args": [
-            "/path/to/your/checkout/roster/knowledge-store/src/cli.py",
-            "context",
+            "/path/to/your/checkout/bin/cadre",
+            "knowledge",
+            "search",
             "--agent",
             "accessibility-reviewer",
             "--task-id",
             "GOLDEN-CROSS-STACK-1",
-            "--query",
-            "Task: Add a React upload form backed by a PostgreSQL API. Retrieve prior accessibility findings, conformance target decisions, affected journeys, and assistive-technology constraints.",
             "--classification",
             "internal",
             "--top",
             "5",
+            "--json",
             "--source",
             "deagy/cadre",
             "--source",
-            "proposed-knowledge"
+            "proposed-knowledge",
+            "Task: Add a React upload form backed by a PostgreSQL API. Retrieve prior accessibility findings, conformance target decisions, affected journeys, and assistive-technology constraints."
           ]
         }
       }

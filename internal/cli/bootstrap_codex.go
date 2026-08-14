@@ -16,14 +16,14 @@ import (
 // there that this suite does not own.
 func BootstrapCodexCmd(args []string) int {
 	fs := flag.NewFlagSet("cadre bootstrap-codex", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	setUsage(fs, "bootstrap-codex", usageBootstrapCodex)
 	source := fs.String("source", "", "defaults to <repo root>/provider/codex-agents")
 	target := fs.String("target", "", "defaults to ~/.codex/agents")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintln(os.Stderr, "usage: cadre bootstrap-codex [--source DIR] [--target DIR]")
+		fmt.Fprintln(os.Stderr, "usage: cadre bootstrap-codex "+usageBootstrapCodex)
 		return 2
 	}
 

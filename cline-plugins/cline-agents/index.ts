@@ -176,6 +176,13 @@ async function runGitlabEvidenceCli(args: string[]): Promise<Record<string, unkn
   }
 }
 
+// No longer on the knowledge-retrieval path: as of selection.schema.json
+// schema_version 8 a plan's `invocation.args[0]` is an executable `cadre`
+// wrapper (launcher.runtime "cadre"), executed directly, rather than a
+// `.py` path needing an interpreter prepended to it. Kept because several
+// Python-backed subcommands are still reached through it elsewhere and it
+// remains part of this module's exported, directly tested surface.
+//
 // Mirrors bin/cadre's own interpreter probe (python3, then python; each
 // checked for 3.10+ via the same -c version guard) -- see bin/cadre's
 // AGENT_PYTHON loop. Cached per process since the resolved interpreter
@@ -249,8 +256,18 @@ async function retrieveKnowledgeContext(
   rootPath: string,
 ): Promise<KnowledgeRetrievalResult> {
   try {
-    const interpreter = await resolvePythonInterpreter();
-    const { stdout } = await execFileAsync(interpreter, request.invocation.args, {
+    // args[0] is the plan's platform-anchored `cadre` wrapper and is executed
+    // as-is -- no interpreter is prepended. Through schema_version 7 it named
+    // the knowledge store's `src/cli.py` and this call prepended a probed
+    // Python 3.10+; that store is now the Go implementation behind
+    // `cadre knowledge search` and the script it named no longer exists.
+    // Still execFile, never a shell: the argv array embeds the caller's task
+    // text verbatim.
+    const [executable, ...argv] = request.invocation.args;
+    if (!executable) {
+      return { status: "unavailable", error: "plan emitted an empty knowledge invocation argv" };
+    }
+    const { stdout } = await execFileAsync(executable, argv, {
       cwd: rootPath,
       timeout: KNOWLEDGE_RETRIEVAL_TIMEOUT_MS,
       maxBuffer: KNOWLEDGE_RETRIEVAL_MAX_BUFFER,

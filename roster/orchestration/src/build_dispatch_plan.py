@@ -26,11 +26,38 @@ CLASSIFICATION_ORDER = ("public", "internal", "confidential", "restricted")
 CLASSIFICATIONS = set(CLASSIFICATION_ORDER)
 CLASSIFICATION_RANK = {name: index for index, name in enumerate(CLASSIFICATION_ORDER)}
 MAXIMUM_KNOWLEDGE_TOP = 20
-KNOWLEDGE_STORE_ROOT = Path(__file__).resolve().parents[2] / "knowledge-store"
+# The `cadre` CLI a planned knowledge retrieval is executed through. This used
+# to be `<roster>/knowledge-store/src/cli.py`; that Python store was replaced by
+# the Go implementation behind `cadre knowledge` and the script was deleted, so
+# every plan emitted an argv naming a file that no longer existed.
+#
+# PP-FR-5 is unchanged by that move and is the reason this is a walk from
+# `Path(__file__)` rather than anything derived from ROSTER_ROOT below: the
+# knowledge store is platform-owned, so the emitted path must stay anchored on
+# the platform checkout that produced the plan. Derive it from a resolved
+# roster root instead and the argv stops existing the moment `roster.root`
+# points at a directory that carries no CLI -- in a plan whose consumer is
+# TypeScript in another package (`cline-plugins/cline-agents/index.ts`).
+#
+# Walked upward rather than taken at a fixed `parents[N]` because the two
+# layouts this file ships in disagree by one level: a repository checkout puts
+# the wrapper at `<root>/bin/cadre` (parents[3] from here), while the packaged
+# plugin relocates this tree under `suite/` and puts it at `<plugin>/bin/cadre`
+# (parents[4]). Nearest ancestor wins, so a checkout never reaches past its own
+# root. The fallback keeps the constant a real path for the error message when
+# no wrapper is found at all.
+KNOWLEDGE_CLI = next(
+    (
+        parent / "bin" / "cadre"
+        for parent in Path(__file__).resolve().parents
+        if (parent / "bin" / "cadre").is_file()
+    ),
+    Path(__file__).resolve().parents[3] / "bin" / "cadre",
+)
 # The DEFAULT roster root. Context-pack definitions below resolve against the
 # roster the selector actually chose, which is threaded in rather than read
 # from here; this stays as the fallback for direct callers.
-# NOTE the line above: KNOWLEDGE_STORE_ROOT is platform-anchored and must NOT
+# NOTE the lines above: KNOWLEDGE_CLI is platform-anchored and must NOT
 # follow this constant -- test_knowledge_store_anchor.py asserts it (PP-FR-5).
 ROSTER_ROOT = Path(__file__).resolve().parents[2]
 STANDALONE_REASON = "Agentic SDLC executable not found; team dispatch is unaffected."
@@ -526,33 +553,45 @@ def _build_knowledge_context(
             raise ValueError(f"Missing knowledge focus for selected agent: {agent}")
         query = f"Task: {normalized_task}. Retrieve {focus}."
         args = [
-            str(KNOWLEDGE_STORE_ROOT / "src" / "cli.py"),
-            "context",
+            str(KNOWLEDGE_CLI),
+            "knowledge",
+            "search",
             "--agent",
             agent,
             "--task-id",
             input_data["task_id"],
-            "--query",
-            query,
             "--classification",
             classification,
             "--top",
             str(top),
+            "--json",
         ]
         # One --source per entry: the store's flag is repeatable, and naming
         # each source keeps the retrieval scoped. Never --all-sources, which
         # on the shared global store would read other projects' corpora.
         for knowledge_source in input_data["sources"]:
             args.extend(["--source", knowledge_source])
+        # The query is a trailing positional, not `--query`. Go's flag package
+        # stops parsing at the first non-flag argument, so it has to come after
+        # every flag above -- appending it anywhere earlier would silently turn
+        # the remaining `--source` scoping into positional junk, which is the
+        # one direction retrieval must never fail in.
+        args.append(query)
         requests.append(
             {
                 "agent": agent,
                 "query": query,
                 "invocation": {
+                    # args[0] is an executable wrapper, run directly. It was a
+                    # `.py` path plus a runner-probed Python 3.10+ interpreter
+                    # until the knowledge store moved to Go; the runner no
+                    # longer supplies an interpreter of its own. `minimum_version`
+                    # is the `cadre --version` floor that first carries
+                    # `knowledge search --json`.
                     "launcher": {
-                        "runtime": "python",
-                        "minimum_version": "3.10",
-                        "resolution": "runner-probed",
+                        "runtime": "cadre",
+                        "minimum_version": "0.5.0",
+                        "resolution": "platform-anchored",
                     },
                     "args": args,
                 },
@@ -826,9 +865,20 @@ def build_dispatch_plan(
     # covered by the same rule as an addition -- more plainly so, since a
     # pinned consumer reading `source_filter` as a string breaks on the value
     # rather than merely on an unknown key.
+    # 7 -> 8: the knowledge-retrieval `launcher` block's three `const` values
+    # changed together (`python`/`3.10`/`runner-probed` ->
+    # `cadre`/`0.5.0`/`platform-anchored`) and `invocation.args` was reshaped
+    # from `<store>/src/cli.py context --query <q> ...` to
+    # `<checkout>/bin/cadre knowledge search ... <q>`, because the Python
+    # knowledge store was replaced by the Go one behind `cadre knowledge` and
+    # its `cli.py` was deleted. That is a `const`-value change rather than a
+    # retype, so `test_schema_release_drift.py` -- which deliberately does not
+    # compare `const`/`enum` values -- cannot see it; the RUNBOOK rule is
+    # applied by hand here. A pinned consumer must break loudly on the version
+    # rather than quietly exec an argv it cannot run.
     undeclared_workflow_shapes = _undeclared_workflow_shape_routes(matched_routes)
     dispatch = {
-        "schema_version": 7,
+        "schema_version": 8,
         "task_id": task_id,
         "generated_at": generated_at,
         "status": "ready" if selected_agents else "needs-triage",

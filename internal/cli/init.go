@@ -17,7 +17,7 @@ import (
 // what is and is not ported (the --interactive questionnaire is not).
 func InitCmd(args []string) int {
 	fs := flag.NewFlagSet("cadre init", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	setUsage(fs, "init", usageInit)
 
 	target := fs.String("target", "", "Project root (legacy spelling; cannot be combined with TARGET)")
 	stack := fs.String("stack", "", "Named starter preset id from roster/shared/init-presets/*.yaml")
@@ -45,7 +45,7 @@ func InitCmd(args []string) int {
 		return 2
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintln(os.Stderr, "usage: cadre init [TARGET] [--target DIR] [--answers FILE] [--set [REGION:]PATH=VALUE ...] [--stack ID] [--sections LIST] [--dry-run] [--force] [--repair [--apply]] [--print-answers] [--interactive]")
+		fmt.Fprintln(os.Stderr, "usage: cadre init "+usageInit)
 		return 2
 	}
 

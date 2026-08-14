@@ -15,13 +15,20 @@ import (
 // roster/context-store/src/cli.py.
 func ContextCmd(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: cadre context <init|put|get|list|search|reindex|export|promote|prune-audit|drop|expire|stats> [options]")
+		contextUsage()
 		return 2
 	}
 	command := args[0]
 	rest := args[1:]
 
 	switch command {
+	// `cadre context --help` had no branch at all: it fell into the default
+	// below and was reported as an unknown command, so the one subcommand
+	// whose verb list is not discoverable from its flags was also the one
+	// that would not print it.
+	case "help", "-h", "--help":
+		contextUsage()
+		return 0
 	case "init":
 		return contextInit(rest)
 	case "stats":
@@ -50,6 +57,12 @@ func ContextCmd(args []string) int {
 		fmt.Fprintf(os.Stderr, "cadre context: unknown command %q\n", command)
 		return 2
 	}
+}
+
+func contextUsage() {
+	fmt.Fprintln(os.Stderr, "usage: cadre context "+usageContext)
+	fmt.Fprintln(os.Stderr, "\nPark working material outside an agent's context window and get it back")
+	fmt.Fprintln(os.Stderr, "by handle. Run `cadre context <command> --help` for a command's own flags.")
 }
 
 func contextError(err error) int {

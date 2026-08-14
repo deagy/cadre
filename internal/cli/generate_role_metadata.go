@@ -13,6 +13,7 @@ import (
 // GenerateRoleMetadata is the `cadre generate-role-metadata` command.
 func GenerateRoleMetadata(args []string) int {
 	fs := flag.NewFlagSet("cadre generate-role-metadata", flag.ContinueOnError)
+	setUsage(fs, "generate-role-metadata", usageGenerateRoleMetadata)
 	checkMode := fs.Bool("check", false, "Report whether files are current without writing anything (exit 1 if stale)")
 
 	if err := fs.Parse(args); err != nil {

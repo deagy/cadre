@@ -13,6 +13,7 @@ import (
 // GenerateAuthorityAides is the `cadre generate-authority-aides` command.
 func GenerateAuthorityAides(args []string) int {
 	fs := flag.NewFlagSet("cadre generate-authority-aides", flag.ContinueOnError)
+	setUsage(fs, "generate-authority-aides", usageGenerateAuthorityAide)
 	checkMode := fs.Bool("check", false, "Report whether files are current without writing anything (exit 1 if stale)")
 
 	if err := fs.Parse(args); err != nil {

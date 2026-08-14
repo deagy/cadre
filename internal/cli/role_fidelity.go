@@ -18,7 +18,7 @@ import (
 // probe (live scoring against an OpenAI-compatible endpoint).
 func RoleFidelityCmd(args []string) int {
 	fs := flag.NewFlagSet("cadre role-fidelity", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	setUsage(fs, "role-fidelity", usageRoleFidelity)
 
 	mode := fs.String("mode", "static", "static or probe")
 	presetsDir := fs.String("presets-dir", "", "Directory of *.md role presets")

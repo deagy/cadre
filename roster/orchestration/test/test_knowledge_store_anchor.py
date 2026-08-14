@@ -4,18 +4,30 @@ Phase D of `roster/orchestration/runs/cadre-feature-portable-platform-2026-08-11
 This phase changes no behaviour and is deliberately landed *before* the phase
 that can break it.
 
-`build_dispatch_plan.py:29-30` holds two adjacent constants derived from the
-same `parents[2]` walk:
+`build_dispatch_plan.py` holds two adjacent constants that used to come from
+the same `parents[2]` walk:
 
     KNOWLEDGE_STORE_ROOT = Path(__file__).resolve().parents[2] / "knowledge-store"
     ROSTER_ROOT          = Path(__file__).resolve().parents[2]
 
 PP-FR-1 makes `ROSTER_ROOT` resolver-driven. The live risk is that an
-implementer takes `KNOWLEDGE_STORE_ROOT` along with it -- same shape, adjacent
-line, and it would look like tidying. Do that and `:501` emits a `cli.py` path
-that stops existing whenever the roster root points somewhere without a
-knowledge store, in a plan whose consumer is a TypeScript file in another
-package (`cline-plugins/cline-agents/index.ts:247-259`).
+implementer takes the knowledge-store constant along with it -- same shape,
+adjacent line, and it would look like tidying. Do that and the emitted argv
+names a path that stops existing whenever the roster root points somewhere
+without a knowledge store, in a plan whose consumer is a TypeScript file in
+another package (`cline-plugins/cline-agents/index.ts`).
+
+**What the first constant is now.** The Python knowledge store was replaced by
+the Go implementation behind `cadre knowledge` and `roster/knowledge-store/src/`
+was deleted, so `KNOWLEDGE_STORE_ROOT / "src" / "cli.py"` became a dangling path
+in every plan -- the exact failure this file exists to catch, arriving by a
+route it did not anticipate. The constant carrying the emitted path is now
+`KNOWLEDGE_CLI` (`<checkout>/bin/cadre`) and the assertions below moved onto it
+unchanged in substance: PP-FR-5 is about *where the emitted path is anchored*,
+not about which executable sits at the end of it. It is a `next(...)` walk up
+`Path(__file__).resolve().parents` rather than a fixed index because the
+packaged plugin relocates this tree under `suite/`, putting `bin/cadre` one
+level further up than a repository checkout does.
 
 The store's *data* location stays governed by `knowledge_store.home`
 (`settings.py:673-680`), which is a different setting and is not what this pins.
@@ -71,7 +83,7 @@ def _names_in(node: ast.expr) -> set[str]:
 
 
 class TestKnowledgeStoreRootIsPlatformAnchored(unittest.TestCase):
-    """The structural half: KNOWLEDGE_STORE_ROOT must not be roster-derived."""
+    """The structural half: KNOWLEDGE_CLI must not be roster-derived."""
 
     def setUp(self) -> None:
         self.source = (SRC_DIR / "build_dispatch_plan.py").read_text(encoding="utf-8")
@@ -79,41 +91,41 @@ class TestKnowledgeStoreRootIsPlatformAnchored(unittest.TestCase):
     def test_the_constants_this_guard_is_about_still_exist(self) -> None:
         # Self-vacuity guard, on the model of test_context_boundary.py:150-155.
         # A rename would otherwise make every assertion below pass over nothing.
-        for name in ("KNOWLEDGE_STORE_ROOT", "ROSTER_ROOT"):
+        for name in ("KNOWLEDGE_CLI", "ROSTER_ROOT"):
             self.assertIsNotNone(
                 _module_level_assignment(self.source, name),
                 f"{name} is no longer a module-level constant in build_dispatch_plan.py",
             )
         self.assertTrue(
-            hasattr(build_dispatch_plan, "KNOWLEDGE_STORE_ROOT"),
-            "build_dispatch_plan no longer exposes KNOWLEDGE_STORE_ROOT",
+            hasattr(build_dispatch_plan, "KNOWLEDGE_CLI"),
+            "build_dispatch_plan no longer exposes KNOWLEDGE_CLI",
         )
 
-    def test_knowledge_store_root_does_not_resolve_through_the_roster_root(self) -> None:
+    def test_knowledge_cli_does_not_resolve_through_the_roster_root(self) -> None:
         """The assertion PP-FR-5 exists for.
 
-        Fails if someone writes `KNOWLEDGE_STORE_ROOT = ROSTER_ROOT / "knowledge-store"`,
-        which is the exact mistake Phase A invites and which no existing test
-        would otherwise catch.
+        Fails if someone writes `KNOWLEDGE_CLI = ROSTER_ROOT / ...`, which is
+        the exact mistake Phase A invites and which no existing test would
+        otherwise catch.
         """
-        rhs = _module_level_assignment(self.source, "KNOWLEDGE_STORE_ROOT")
+        rhs = _module_level_assignment(self.source, "KNOWLEDGE_CLI")
         names = _names_in(rhs)
         self.assertNotIn(
             "ROSTER_ROOT",
             names,
-            "KNOWLEDGE_STORE_ROOT is derived from ROSTER_ROOT. The knowledge store is "
+            "KNOWLEDGE_CLI is derived from ROSTER_ROOT. The knowledge store is "
             "platform-owned (PP-FR-6) and must not follow a resolved roster: a plan's "
-            "emitted cli.py path would stop existing whenever roster.root points at a "
-            "directory with no knowledge store. Re-derive it from Path(__file__).",
+            "emitted CLI path would stop existing whenever roster.root points at a "
+            "directory with no CLI. Re-derive it from Path(__file__).",
         )
         self.assertNotIn(
             "roster_root",
-            {name.lower() for name in names} - {"knowledge_store_root"},
-            "KNOWLEDGE_STORE_ROOT references a roster-root-shaped name",
+            {name.lower() for name in names},
+            "KNOWLEDGE_CLI references a roster-root-shaped name",
         )
 
-    def test_knowledge_store_root_is_anchored_on_this_files_location(self) -> None:
-        rhs = _module_level_assignment(self.source, "KNOWLEDGE_STORE_ROOT")
+    def test_knowledge_cli_is_anchored_on_this_files_location(self) -> None:
+        rhs = _module_level_assignment(self.source, "KNOWLEDGE_CLI")
         self.assertIn(
             "__file__",
             {
@@ -126,15 +138,15 @@ class TestKnowledgeStoreRootIsPlatformAnchored(unittest.TestCase):
                 for child in ast.walk(rhs)
                 if isinstance(child, ast.Attribute)
             },
-            "KNOWLEDGE_STORE_ROOT is not derived from Path(__file__); it must be "
+            "KNOWLEDGE_CLI is not derived from Path(__file__); it must be "
             "anchored on the platform checkout rather than on any resolved value.",
         )
 
     def test_resolved_value_points_into_the_platform_checkout(self) -> None:
         self.assertEqual(
-            build_dispatch_plan.KNOWLEDGE_STORE_ROOT,
-            ROSTER_DIR / "knowledge-store",
-            "KNOWLEDGE_STORE_ROOT no longer resolves to this checkout's knowledge store",
+            build_dispatch_plan.KNOWLEDGE_CLI,
+            REPO_ROOT / "bin" / "cadre",
+            "KNOWLEDGE_CLI no longer resolves to this checkout's cadre wrapper",
         )
 
 
@@ -215,20 +227,58 @@ class TestEmittedKnowledgeCliPath(unittest.TestCase):
                 finally:
                     importlib.reload(build_dispatch_plan)
 
-    def test_emitted_invocation_shape_is_unchanged(self) -> None:
-        """`cline-plugins/cline-agents/index.ts:247-259` executes this argv.
+    def test_emitted_invocation_shape_matches_the_go_knowledge_cli(self) -> None:
+        """`cline-plugins/cline-agents/index.ts` executes this argv.
 
         The shape is a cross-language published contract: the consumer is
-        TypeScript in another package. Only *how* the path is computed is in
-        scope for this work -- never what the emitted args look like.
+        TypeScript in another package. It changed exactly once, when the
+        Python store behind `src/cli.py context` was deleted in favour of the
+        Go `cadre knowledge search`; that took `schema_version` 7 -> 8 and the
+        Cline consumer with it. Pinned here so it cannot change again quietly.
         """
         plan = self._plan(REPO_ROOT)
         for request in plan["knowledge_context"]["requests"]:
             args = request["invocation"]["args"]
             with self.subTest(agent=request.get("agent")):
-                self.assertTrue(args[0].endswith(str(Path("src") / "cli.py")))
-                self.assertEqual(args[1], "context")
+                self.assertTrue(args[0].endswith(str(Path("bin") / "cadre")), args[0])
+                self.assertEqual(args[1:3], ["knowledge", "search"])
                 self.assertIn("--source", args)
+                self.assertIn("--json", args)
+                self.assertNotIn(
+                    "--all-sources",
+                    args,
+                    "a planned retrieval must never widen to every source in the store",
+                )
+                # The query is a trailing positional under Go's flag package,
+                # which stops at the first non-flag argument. If it ever moves
+                # ahead of a flag, every `--source` after it silently stops
+                # scoping the read -- a widening failure, so assert placement
+                # rather than mere presence.
+                self.assertEqual(args[-1], request["query"])
+                self.assertNotIn(request["query"], args[:-1])
+
+    def test_emitted_launcher_describes_a_directly_executed_wrapper(self) -> None:
+        """args[0] is executed as-is; no interpreter is prepended to it."""
+        plan = self._plan(REPO_ROOT)
+        for request in plan["knowledge_context"]["requests"]:
+            with self.subTest(agent=request.get("agent")):
+                self.assertEqual(
+                    request["invocation"]["launcher"],
+                    {
+                        "runtime": "cadre",
+                        "minimum_version": "0.5.0",
+                        "resolution": "platform-anchored",
+                    },
+                )
+
+    def test_emitted_cli_path_is_executable(self) -> None:
+        """Stronger than `is_file()`: the consumer execs it directly now."""
+        for path in self._cli_paths(self._plan(REPO_ROOT)):
+            with self.subTest(path=path):
+                self.assertTrue(
+                    os.access(path, os.X_OK),
+                    f"emitted knowledge CLI path is not executable: {path}",
+                )
 
 
 if __name__ == "__main__":

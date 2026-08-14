@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -56,9 +57,22 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 ROSTER_ROOT = REPOSITORY_ROOT / "roster"
-KNOWLEDGE_SRC = ROSTER_ROOT / "knowledge-store" / "src"
 CONTEXT_SRC = ROSTER_ROOT / "context-store" / "src"
 SHARED_SRC = ROSTER_ROOT / "shared" / "src"
+
+# The knowledge store is Go now. `roster/knowledge-store/src/` was deleted when
+# `cadre knowledge` moved to `internal/knowledge`, so the three assertions in
+# this file that read the *knowledge* half read Go source instead. The context
+# store still has a live Python implementation (it ships in the packaged
+# plugin), so the context half of every check below is unchanged.
+#
+# Reading Go source here rather than deleting the checks is deliberate: this
+# file's value is that it is a *second, differently-owned* guard. The Go
+# package has its own (`internal/contextstore/boundary_test.go`), and a
+# boundary asserted only from inside one of the two things it separates is
+# asserted by the party with the motive to relax it.
+GO_KNOWLEDGE_SRC = REPOSITORY_ROOT / "internal" / "knowledge"
+GO_CONTEXT_SRC = REPOSITORY_ROOT / "internal" / "contextstore"
 
 # Both stores deliberately use the same flat module names for the same roles
 # (`config`, `database`, `service`, `cli`), so a name alone cannot say which
@@ -137,6 +151,26 @@ def _non_docstring_string_literals(path: Path) -> list[ast.Constant]:
     ]
 
 
+GO_CONTEXT_STORE_PACKAGE = "github.com/deagy/cadre/cli/internal/contextstore"
+GO_KNOWLEDGE_STORE_PACKAGE = "github.com/deagy/cadre/cli/internal/knowledge"
+
+
+def _go_import_paths(path: Path) -> set[str]:
+    """Every quoted import path in a Go file's import declarations.
+
+    A regex rather than a real parse, on the same terms this file's docstring
+    already sets out for its Python checks: it catches the accidental crossing,
+    not a determined one. `internal/contextstore/boundary_test.go` does the
+    same job with go/parser from inside the module.
+    """
+    source = path.read_text(encoding="utf-8")
+    block = re.search(r"^import \((.*?)^\)", source, re.DOTALL | re.MULTILINE)
+    region = block.group(1) if block else source
+    return set(re.findall(r'^\s*(?:[\w.]+\s+)?"([^"]+)"', region, re.MULTILINE)) | set(
+        re.findall(r'^import (?:[\w.]+\s+)?"([^"]+)"', source, re.MULTILINE)
+    )
+
+
 def _imports_of(path: Path) -> set[str]:
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -149,10 +183,13 @@ class TestNeitherStoreImportsTheOther(unittest.TestCase):
     def test_both_store_directories_exist(self) -> None:
         # Guards against this whole file silently passing because a rename
         # made every rglob below return nothing.
-        for root in (KNOWLEDGE_SRC, CONTEXT_SRC, SHARED_SRC):
+        for root in (CONTEXT_SRC, SHARED_SRC, GO_KNOWLEDGE_SRC, GO_CONTEXT_SRC):
             self.assertTrue(root.is_dir(), f"expected {root.relative_to(REPOSITORY_ROOT)} to exist")
         self.assertTrue(_python_files(CONTEXT_SRC), "context-store/src has no modules to check")
-        self.assertTrue(_python_files(KNOWLEDGE_SRC), "knowledge-store/src has no modules to check")
+        self.assertTrue(
+            list(GO_KNOWLEDGE_SRC.glob("*.go")),
+            "internal/knowledge has no Go source; the knowledge half of this guard is vacuous",
+        )
 
     def test_context_store_never_imports_knowledge_store_code(self) -> None:
         offenders = [
@@ -171,15 +208,25 @@ class TestNeitherStoreImportsTheOther(unittest.TestCase):
         )
 
     def test_knowledge_store_never_imports_context_store_code(self) -> None:
+        """The symmetric half, read from Go.
+
+        The knowledge store's Python package is gone; this reads
+        `internal/knowledge`'s import declarations for the context-store
+        package instead. `internal/contextstore/boundary_test.go`'s
+        `TestNeitherStoreImportsTheOther` asserts the same thing from inside
+        the Go module, over both directions and including test files -- this
+        is the second, differently-owned copy, which is the point of a
+        boundary check living outside the packages it separates.
+        """
         offenders = [
-            f"{path.relative_to(REPOSITORY_ROOT)}: imports {module}"
-            for path in _python_files(KNOWLEDGE_SRC)
-            for module in sorted(_imports_of(path) & CONTEXT_ONLY_MODULES)
+            f"{path.relative_to(REPOSITORY_ROOT)}: imports {GO_CONTEXT_STORE_PACKAGE}"
+            for path in sorted(GO_KNOWLEDGE_SRC.glob("*.go"))
+            if GO_CONTEXT_STORE_PACKAGE in _go_import_paths(path)
         ]
         self.assertEqual(
             offenders,
             [],
-            "roster/knowledge-store/ must not import context-store code. The "
+            "internal/knowledge must not import internal/contextstore. The "
             "boundary is symmetric: the curated store must not grow a dependency "
             "on unreviewed working material either.\n" + "\n".join(offenders),
         )
@@ -200,10 +247,17 @@ class TestNeitherStoreImportsTheOther(unittest.TestCase):
         # forbidden import and without the string "knowledge-store" appearing
         # anywhere -- enough to `ATTACH` that database and write exactly the
         # cross-store JOIN this boundary exists to make unwritable.
-        pairs = (
-            (CONTEXT_SRC, ("knowledge-store", "knowledge_store", "knowledge.db")),
-            (KNOWLEDGE_SRC, ("context-store", "context_store", "context.db")),
-        )
+        #
+        # One-sided now, and deliberately so: the reverse limb read
+        # `roster/knowledge-store/src/`, which no longer exists -- and the
+        # hazard it described (flat module names resolving by `sys.path`
+        # order) is a Python-only hazard that the Go knowledge store cannot
+        # reproduce, since a Go import path names its package unambiguously.
+        # The reverse *direction* is still guarded, by
+        # `test_knowledge_store_never_imports_context_store_code` above and by
+        # `internal/contextstore/boundary_test.go`'s
+        # `TestNeitherStoreImportsTheOther`.
+        pairs = ((CONTEXT_SRC, ("knowledge-store", "knowledge_store", "knowledge.db")),)
         offenders: list[str] = []
         for root, forbidden_tokens in pairs:
             for path in _python_files(root):
@@ -274,7 +328,6 @@ class TestTheContextStoreCannotEmbedRemotely(unittest.TestCase):
 
     def test_the_offline_and_remote_halves_are_in_different_modules(self) -> None:
         shared = (SHARED_SRC / "text_embedding.py").read_text(encoding="utf-8")
-        knowledge = (KNOWLEDGE_SRC / "embeddings.py").read_text(encoding="utf-8")
         self.assertIn("def hashing_embedding", shared)
         self.assertIn("def cosine_similarity", shared)
         # The shared half must stay free of anything that could reach a network.
@@ -285,7 +338,29 @@ class TestTheContextStoreCannotEmbedRemotely(unittest.TestCase):
                 f"roster/shared/src/text_embedding.py must stay offline; found {forbidden!r} "
                 "outside its docstring",
             )
-        self.assertIn("_remote_embeddings", knowledge)
+        # The Go half. `knowledge-store/src/embeddings.py` held the remote
+        # (`openai-compatible`) path and was checked here by name; it was
+        # deleted with the rest of that package, and the remote path now lives
+        # in internal/knowledge/remote_embeddings.go. The module split is the
+        # property, so assert it where it now is: exactly one Go file in the
+        # knowledge store may reach the network, and no file in the context
+        # store may.
+        remote = GO_KNOWLEDGE_SRC / "remote_embeddings.go"
+        self.assertTrue(remote.is_file(), f"expected {remote.relative_to(REPOSITORY_ROOT)} to exist")
+        self.assertIn("net/http", _go_import_paths(remote))
+        networked = sorted(
+            path.name
+            for path in GO_CONTEXT_SRC.glob("*.go")
+            if {"net", "net/http", "net/url"} & _go_import_paths(path)
+        )
+        self.assertEqual(
+            networked,
+            [],
+            "internal/contextstore must have no import path to the network: it holds "
+            "unreviewed agent working material, and whether that may be transmitted to a "
+            "third-party endpoint is an open security decision that is currently refused "
+            "(OD-5).\n" + "\n".join(networked),
+        )
 
     def test_context_store_cannot_import_the_remote_embedding_module(self) -> None:
         offenders = [
@@ -328,7 +403,7 @@ class TestTheStoresCannotShareADatabase(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        for source in (KNOWLEDGE_SRC, CONTEXT_SRC, SHARED_SRC):
+        for source in (CONTEXT_SRC, SHARED_SRC):
             if str(source) in sys.path:
                 sys.path.remove(str(source))
         self.tmp = tempfile.TemporaryDirectory()
@@ -360,29 +435,65 @@ class TestTheStoresCannotShareADatabase(unittest.TestCase):
         spec.loader.exec_module(module)
         return module.load_config(str(config_path))
 
+    @staticmethod
+    def _go_default_database(config_go: Path) -> str:
+        """The `"database"` entry of a Go store's shipped default config."""
+        source = config_go.read_text(encoding="utf-8")
+        match = re.search(r'^\s*"database":\s*"([^"]+)",?\s*$', source, re.MULTILINE)
+        assert match, f"{config_go} no longer declares a default database"
+        return match.group(1)
+
+    @staticmethod
+    def _go_project_local_relative_path(config_go: Path) -> str:
+        source = config_go.read_text(encoding="utf-8")
+        match = re.search(
+            r"^var ProjectLocalRelativePath = filepath\.Join\(([^)]*)\)$", source, re.MULTILINE
+        )
+        assert match, f"{config_go} no longer declares ProjectLocalRelativePath"
+        return "/".join(re.findall(r'"([^"]*)"', match.group(1)))
+
     def test_default_database_paths_differ(self) -> None:
-        knowledge = self._load(KNOWLEDGE_SRC, {})
-        context = self._load(CONTEXT_SRC, {})
-        self.assertNotEqual(knowledge["database"], context["database"])
-        self.assertNotIn("context", Path(knowledge["database"]).name)
-        self.assertNotIn("knowledge", Path(context["database"]).name)
+        """Three implementations, one separation.
+
+        The knowledge store's `config.py` was deleted when it moved to Go, so
+        its default comes from `internal/knowledge/config.go` now. The context
+        store still has both a Python implementation (shipped in the packaged
+        plugin) and a Go one, and both are checked against it: a shipped
+        combination that collides is a shared database however many other
+        combinations do not.
+        """
+        knowledge = self._go_default_database(GO_KNOWLEDGE_SRC / "config.go")
+        contexts = {
+            "python": self._load(CONTEXT_SRC, {})["database"],
+            "go": self._go_default_database(GO_CONTEXT_SRC / "config.go"),
+        }
+        self.assertNotIn("context", Path(knowledge).name)
+        for implementation, context in contexts.items():
+            with self.subTest(context_store=implementation):
+                self.assertNotEqual(knowledge, context)
+                self.assertNotIn("knowledge", Path(context).name)
 
     def test_project_local_config_locations_differ(self) -> None:
         import importlib.util
 
-        located: dict[str, str] = {}
-        for source in (KNOWLEDGE_SRC, CONTEXT_SRC):
-            if str(SHARED_SRC) not in sys.path:
-                sys.path.append(str(SHARED_SRC))
-            name = f"_boundary_paths_{source.parent.name.replace('-', '_')}"
-            spec = importlib.util.spec_from_file_location(name, source / "config.py")
-            assert spec and spec.loader
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[name] = module
-            self.addCleanup(sys.modules.pop, name, None)
-            spec.loader.exec_module(module)
-            located[source.parent.name] = str(module.PROJECT_LOCAL_RELATIVE_PATH)
-        self.assertNotEqual(located["knowledge-store"], located["context-store"])
+        if str(SHARED_SRC) not in sys.path:
+            sys.path.append(str(SHARED_SRC))
+        name = "_boundary_paths_context_store"
+        spec = importlib.util.spec_from_file_location(name, CONTEXT_SRC / "config.py")
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        self.addCleanup(sys.modules.pop, name, None)
+        spec.loader.exec_module(module)
+
+        knowledge = self._go_project_local_relative_path(GO_KNOWLEDGE_SRC / "config.go")
+        located = {
+            "context-store (python)": Path(str(module.PROJECT_LOCAL_RELATIVE_PATH)).as_posix(),
+            "context-store (go)": self._go_project_local_relative_path(GO_CONTEXT_SRC / "config.go"),
+        }
+        for implementation, path in located.items():
+            with self.subTest(context_store=implementation):
+                self.assertNotEqual(knowledge, path)
 
     def test_each_store_declares_its_own_settings_key(self) -> None:
         if str(SHARED_SRC) not in sys.path:
