@@ -246,6 +246,23 @@ config. A silent breaking rename with no migration path.
 notice), or a migration is provided. Small, and it is a live user-facing
 break.
 
+**Resolved 2026-08-14.** The legacy name is normalised to `local-hashing`
+when a config is parsed, before validation and before the
+implicit-project-config trust guard. Normalising rather than widening
+`SupportedEmbeddingProviders` is load-bearing: that guard compares against
+`local-hashing` exactly, so merely accepting `hashing` would have left a
+project-local config naming the offline provider refused *as though it had
+asked for remote embeddings*. Both halves are covered by tests, and the
+naive fix was measured to fail both.
+
+The sibling context store was checked and is **not** affected:
+`internal/contextstore/config.go` keeps `"hashing"` as a deliberate
+single-element list with no remote provider, matching its own Python
+original. The two stores therefore name the same offline algorithm
+differently — `hashing` in the context store, `local-hashing` in the
+knowledge store — which is worth knowing before assuming one is a typo for
+the other.
+
 ### 6. `cadre select` — the last Python in the shipped product
 
 Now that the shim execs the Go binary, `select` is the only reason a plugin

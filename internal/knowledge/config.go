@@ -68,6 +68,36 @@ var Classifications = []string{"public", "internal", "confidential", "restricted
 // SupportedEmbeddingProviders are the provider identifiers a config may name.
 var SupportedEmbeddingProviders = []string{"local-hashing", "openai-compatible"}
 
+// LegacyLocalEmbeddingProvider is the name the Python implementation this
+// package replaced used for the offline provider. That implementation
+// accepted {"hashing", "openai-compatible"}; the port renamed the first to
+// "local-hashing" and shipped no migration, so every config written before
+// it -- including the default config the Python implementation itself wrote
+// at ~/.agents/knowledge-store/config.json -- stopped loading with
+// `unsupported embedding provider: "hashing"`, taking every `cadre
+// knowledge` command with it.
+const LegacyLocalEmbeddingProvider = "hashing"
+
+// canonicalEmbeddingProvider maps the legacy spelling onto this package's.
+//
+// Normalising here, rather than adding "hashing" to
+// SupportedEmbeddingProviders, is deliberate. The implicit-project-config
+// guard compares the provider against "local-hashing" exactly, to stop a
+// clonable project-local file deciding that this project's content leaves
+// the machine. Widening the accepted list would leave a config naming the
+// legacy spelling failing that guard as though it had asked for remote
+// embeddings -- rejected for entirely the wrong reason, with a message
+// about remote embeddings for a config that named the offline provider.
+// One normalisation point keeps validation, the trust-scope guard, and the
+// stored value seeing the same canonical name.
+func canonicalEmbeddingProvider(raw any) string {
+	provider, _ := raw.(string)
+	if provider == LegacyLocalEmbeddingProvider {
+		return "local-hashing"
+	}
+	return provider
+}
+
 // Config-resolution tiers. Exposed so a caller can gate behaviour on the
 // shared tier specifically without altering resolution order.
 const (
@@ -353,7 +383,7 @@ func LoadConfig(configPath string) (*Config, string, error) {
 	}
 
 	embeddingRaw := raw["embedding"].(map[string]any)
-	provider, _ := embeddingRaw["provider"].(string)
+	provider := canonicalEmbeddingProvider(embeddingRaw["provider"])
 	if !stringInList(provider, SupportedEmbeddingProviders) {
 		return nil, "", configErrorf("unsupported embedding provider: %q. Expected one of: %s.",
 			provider, strings.Join(SupportedEmbeddingProviders, ", "))
