@@ -85,7 +85,13 @@ func (s *Store) Search(opts SearchOptions) ([]*SearchResult, error) {
 	}
 	defer rows.Close()
 
-	var results []resultWithScore
+	// Pre-allocate results with reasonable capacity (topK is default 10, but can be larger)
+	// Most searches return fewer results, so cap initial allocation
+	capacity := topK
+	if capacity > 100 {
+		capacity = 100 // Limit initial allocation to avoid wasteful memory for small searches
+	}
+	results := make([]resultWithScore, 0, capacity)
 
 	for rows.Next() {
 		var msg Message
@@ -106,7 +112,7 @@ func (s *Store) Search(opts SearchOptions) ([]*SearchResult, error) {
 
 		msg.InjectionRisk = injectionRiskInt != 0
 
-		// Deserialize embedding
+		// Deserialize embedding (optimized for common case)
 		chunkVec, err := JSONToVector(chunk.EmbeddingJSON)
 		if err != nil {
 			return nil, fmt.Errorf("cannot deserialize embedding: %w", err)
@@ -126,6 +132,11 @@ func (s *Store) Search(opts SearchOptions) ([]*SearchResult, error) {
 		return nil, fmt.Errorf("query error: %w", err)
 	}
 
+	// Early return if no results
+	if len(results) == 0 {
+		return []*SearchResult{}, nil
+	}
+
 	// Sort by similarity (descending)
 	sortByScore(results)
 
@@ -134,7 +145,7 @@ func (s *Store) Search(opts SearchOptions) ([]*SearchResult, error) {
 		results = results[:topK]
 	}
 
-	// Convert to SearchResult
+	// Convert to SearchResult (with pre-allocated capacity)
 	output := make([]*SearchResult, len(results))
 	for i, r := range results {
 		output[i] = &SearchResult{
