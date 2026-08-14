@@ -22,7 +22,7 @@ func run() int {
 	// Try resolving the repository root in order:
 	// 1. The caller's project (project-relative, from cwd)
 	// 2. The CLI installation (for packaged plugins and checkouts)
-	// 3. CADRE_REPO_ROOT environment variable (set by bin/cadre wrapper)
+	//    FindInstallationRoot already includes CADRE_REPO_ROOT as its first step
 	repoRoot, err := platform.RepoRoot()
 	if err != nil {
 		// platform.RepoRoot() answers "which project is the caller working
@@ -32,18 +32,11 @@ func run() int {
 		// test_repository_health.py's symlink case does deliberately.
 		// Try self-discovery for packaged plugin installations: find the
 		// installation's own roster/ by walking up from the executable or cwd.
-		installErr := error(nil)
-		repoRoot, installErr = platform.FindInstallationRoot()
-		if installErr != nil {
-			// Self-discovery failed; try CADRE_REPO_ROOT, which is exported
-			// by bin/cadre and bin/cadre.ps1 so the built binary knows where
-			// the checkout that produced it lives. This is the right fallback
-			// when explicit configuration is needed.
-			repoRoot = os.Getenv("CADRE_REPO_ROOT")
-			if repoRoot == "" {
-				fmt.Fprintf(os.Stderr, "cadre: could not resolve repository root: %s\n", installErr)
-				return 1
-			}
+		// This also checks CADRE_REPO_ROOT as a first step.
+		repoRoot, err = platform.FindInstallationRoot()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cadre: could not resolve repository root: %s\n", err)
+			return 1
 		}
 	}
 

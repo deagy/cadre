@@ -171,79 +171,68 @@ func TestFindInstallationRoot_NormalCheckout(t *testing.T) {
 	}
 }
 
-func TestFindInstallationRoot_PackagedPluginLayout_FromBinDir(t *testing.T) {
-	// Simulate a packaged plugin with bin/cadre-bin and suite/roster.
-	// The binary walks up from <plugin>/bin/ and must find suite/roster.
-	pluginRoot := t.TempDir()
-	binDir := filepath.Join(pluginRoot, "bin")
-	suiteDir := filepath.Join(pluginRoot, "suite")
-	rosterDir := filepath.Join(suiteDir, "roster")
+func TestFindAncestorWith_DirectMarkerBeatsNestedMarker(t *testing.T) {
+	// Regression test: direct marker (roster/) should beat nested marker (suite/roster/)
+	// even when the nested marker appears lower in the tree.
+	// This simulates the real repository structure where both exist.
 
-	if err := os.MkdirAll(binDir, 0o755); err != nil {
+	root := t.TempDir()
+
+	// Create nested plugin marker lower in tree
+	pluginDir := filepath.Join(root, "plugin")
+	suiteDir := filepath.Join(pluginDir, "suite")
+	pluginRosterDir := filepath.Join(suiteDir, "roster")
+	if err := os.MkdirAll(pluginRosterDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(rosterDir, 0o755); err != nil {
+
+	// Create direct marker at root (higher in tree)
+	rootRosterDir := filepath.Join(root, "roster")
+	if err := os.MkdirAll(rootRosterDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	// Test that walking from the bin directory finds suite/roster
-	got, found := findAncestorWith(binDir, "roster", 64)
+	// Test from plugin/tools (should climb to root, not stop at plugin/suite)
+	startDir := filepath.Join(pluginDir, "tools")
+	if err := os.MkdirAll(startDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got, found := findAncestorWith(startDir, "roster", 64)
 	if !found {
-		t.Fatalf("findAncestorWith() should find suite/roster from bin dir")
+		t.Fatal("findAncestorWith() should find roster")
 	}
-	want, _ := filepath.Abs(suiteDir)
-	if got != want {
-		t.Errorf("findAncestorWith() = %q, want %q", got, want)
+
+	wantAbs, _ := filepath.Abs(root)
+	if got != wantAbs {
+		t.Errorf("findAncestorWith() = %q, want %q (should find direct marker at root, not nested marker at plugin/suite)", got, wantAbs)
 	}
 }
 
-func TestFindInstallationRoot_PackagedPluginLayout_NoGitNoEnv(t *testing.T) {
-	// Test FindInstallationRoot from an unrelated cwd with a plugin in a separate temp dir.
-	// This simulates: user runs <plugin>/bin/cadre from their own project dir.
-	pluginRoot := t.TempDir()
-	binDir := filepath.Join(pluginRoot, "bin")
+func TestFindAncestorWith_PluginLayoutWhenNoDirectMarker(t *testing.T) {
+	// Test that plugin layout (suite/roster/) is found when no direct marker exists.
+	// This covers plugin-only installations without a checkout-style root.
+
+	root := t.TempDir()
+	pluginRoot := filepath.Join(root, "plugin")
 	suiteDir := filepath.Join(pluginRoot, "suite")
 	rosterDir := filepath.Join(suiteDir, "roster")
 
-	if err := os.MkdirAll(binDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
 	if err := os.MkdirAll(rosterDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	// Create a completely separate user project directory
-	userProjectDir := t.TempDir()
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(cwd) })
-
-	// Change to the unrelated user project directory
-	if err := os.Chdir(userProjectDir); err != nil {
+	// Start from plugin/bin (no direct roster/ anywhere)
+	binDir := filepath.Join(pluginRoot, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	// Clear CADRE_REPO_ROOT to force self-discovery
-	oldEnv := os.Getenv("CADRE_REPO_ROOT")
-	t.Cleanup(func() {
-		if oldEnv == "" {
-			os.Unsetenv("CADRE_REPO_ROOT")
-		} else {
-			os.Setenv("CADRE_REPO_ROOT", oldEnv)
-		}
-	})
-	os.Unsetenv("CADRE_REPO_ROOT")
-
-	// This test would require os.Executable() to return binDir, which we can't
-	// control in the test. So we only test that findAncestorWith finds the suite layout.
-	// The full end-to-end test requires running the actual binary.
 	got, found := findAncestorWith(binDir, "roster", 64)
 	if !found {
-		t.Fatalf("findAncestorWith() should find suite/roster from bin dir, even without CADRE_REPO_ROOT")
+		t.Fatal("findAncestorWith() should find suite/roster as fallback")
 	}
+
 	want, _ := filepath.Abs(suiteDir)
 	if got != want {
 		t.Errorf("findAncestorWith() = %q, want %q", got, want)
