@@ -1,3 +1,6 @@
+//go:build cgo
+// +build cgo
+
 package knowledge
 
 import (
@@ -57,6 +60,7 @@ func TestRegisterReplica(t *testing.T) {
 }
 
 func TestGetReplicationStatus(t *testing.T) {
+	skipIfNoCGO(t)
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
@@ -79,6 +83,7 @@ func TestGetReplicationStatus(t *testing.T) {
 }
 
 func TestRecordReplication(t *testing.T) {
+	skipIfNoCGO(t)
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
