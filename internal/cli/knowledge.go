@@ -40,6 +40,13 @@ Subcommands:
   fault-tolerance      Manage fault tolerance and circuit breaker
   replication          Manage data replication across nodes
   backup               Manage backups and disaster recovery
+  config               Manage configuration settings
+  health-check         Perform system health checks
+  diagnostics          Generate system diagnostics report
+  metrics              Display system metrics and performance
+  maintenance          Run maintenance tasks
+  export               Export knowledge store data
+  import               Import knowledge store data
 
 Options:
 `)
@@ -116,6 +123,20 @@ Options:
 		return knowledgeReplication(subArgs)
 	case "backup":
 		return knowledgeBackup(subArgs)
+	case "config":
+		return knowledgeConfig(subArgs)
+	case "health-check":
+		return knowledgeHealthCheck(subArgs)
+	case "diagnostics":
+		return knowledgeDiagnostics(subArgs)
+	case "metrics":
+		return knowledgeMetrics(subArgs)
+	case "maintenance":
+		return knowledgeMaintenance(subArgs)
+	case "export":
+		return knowledgeExport(subArgs)
+	case "import":
+		return knowledgeImport(subArgs)
 	case "help", "-h", "--help":
 		fs.Usage()
 		return 0
@@ -2209,6 +2230,336 @@ Options:
 		fmt.Fprintf(os.Stderr, "cadre knowledge backup: unknown subcommand '%s'\n", subcommand)
 		return 1
 	}
+}
+
+// knowledgeConfig manages configuration settings.
+func knowledgeConfig(args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge config", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge config <subcommand> [options]
+
+Subcommands:
+  get <key>       Get configuration value
+  set <key> <val> Set configuration value
+  list            List all configuration settings
+
+`)
+		fs.PrintDefaults()
+	}
+
+	jsonOutput := fs.Bool("json", false, "Output as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if fs.NArg() < 1 {
+		fs.Usage()
+		return 2
+	}
+
+	subcommand := fs.Arg(0)
+	cm := knowledge.NewConfigManager()
+
+	switch subcommand {
+	case "get":
+		if fs.NArg() < 2 {
+			fmt.Fprintf(os.Stderr, "cadre knowledge config get: missing key\n")
+			return 2
+		}
+		key := fs.Arg(1)
+		val, ok := cm.Get(key)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "cadre knowledge config get: key not found: %s\n", key)
+			return 1
+		}
+		fmt.Printf("%v\n", val)
+		return 0
+
+	case "set":
+		if fs.NArg() < 3 {
+			fmt.Fprintf(os.Stderr, "cadre knowledge config set: missing key or value\n")
+			return 2
+		}
+		key := fs.Arg(1)
+		val := fs.Arg(2)
+		if err := cm.Set(key, val); err != nil {
+			fmt.Fprintf(os.Stderr, "cadre knowledge config set: %v\n", err)
+			return 1
+		}
+		fmt.Printf("Config updated: %s=%s\n", key, val)
+		return 0
+
+	case "list":
+		all := cm.GetAll()
+		if *jsonOutput {
+			data, _ := json.MarshalIndent(all, "", "  ")
+			fmt.Println(string(data))
+		} else {
+			fmt.Println("Configuration Settings:")
+			for k, v := range all {
+				fmt.Printf("  %s: %v\n", k, v)
+			}
+		}
+		return 0
+
+	default:
+		fmt.Fprintf(os.Stderr, "cadre knowledge config: unknown subcommand '%s'\n", subcommand)
+		return 1
+	}
+}
+
+// knowledgeHealthCheck performs system health checks.
+func knowledgeHealthCheck(args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge health-check", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: cadre knowledge health-check [options]\n\nOptions:\n")
+		fs.PrintDefaults()
+	}
+
+	jsonOutput := fs.Bool("json", false, "Output as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	hc := knowledge.NewHealthChecker()
+	report := hc.Check()
+
+	if *jsonOutput {
+		data, _ := json.MarshalIndent(map[string]interface{}{
+			"status":     report.OverallStatus,
+			"timestamp":  report.Timestamp,
+			"duration_ms": report.ChecksDuration,
+			"components": report.Components,
+		}, "", "  ")
+		fmt.Println(string(data))
+	} else {
+		fmt.Printf("System Health: %s\n", report.OverallStatus)
+		fmt.Printf("Timestamp: %s\n", report.Timestamp)
+		fmt.Printf("Duration: %dms\n", report.ChecksDuration)
+		fmt.Println("\nComponents:")
+		for _, comp := range report.Components {
+			fmt.Printf("  %s: %s - %s\n", comp.Name, comp.Status, comp.Message)
+		}
+	}
+
+	if report.OverallStatus == "healthy" {
+		return 0
+	}
+	return 1
+}
+
+// knowledgeDiagnostics generates system diagnostics report.
+func knowledgeDiagnostics(args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge diagnostics", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: cadre knowledge diagnostics [options]\n\nOptions:\n")
+		fs.PrintDefaults()
+	}
+
+	jsonOutput := fs.Bool("json", false, "Output as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	diag := knowledge.NewDiagnostics()
+	report := diag.GetReport()
+
+	if *jsonOutput {
+		data, _ := json.MarshalIndent(report, "", "  ")
+		fmt.Println(string(data))
+	} else {
+		fmt.Printf("System Diagnostics Report\n")
+		fmt.Printf("Uptime: %d seconds\n", report.Uptime)
+		fmt.Printf("Messages: %d\n", report.MessageCount)
+		fmt.Printf("Chunks: %d\n", report.ChunkCount)
+		fmt.Printf("Operations: %d\n", report.OperationCount)
+		fmt.Printf("Errors: %d\n", report.ErrorCount)
+		fmt.Printf("Average Latency: %.2fms\n", report.AverageLatency)
+		fmt.Printf("Replicas: %d\n", report.Replicas)
+		fmt.Printf("Backups: %d\n", report.BackupCount)
+		fmt.Printf("Circuit State: %s\n", report.CircuitState)
+	}
+
+	return 0
+}
+
+// knowledgeMetrics displays system metrics and performance.
+func knowledgeMetrics(args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge metrics", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: cadre knowledge metrics [options]\n\nOptions:\n")
+		fs.PrintDefaults()
+	}
+
+	jsonOutput := fs.Bool("json", false, "Output as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	mc := knowledge.NewMetricsCollector()
+	snapshot := mc.GetSnapshot()
+
+	if *jsonOutput {
+		data, _ := json.MarshalIndent(snapshot, "", "  ")
+		fmt.Println(string(data))
+	} else {
+		fmt.Printf("System Metrics\n")
+		fmt.Printf("Timestamp: %s\n", snapshot.Timestamp)
+		fmt.Printf("Search Latency: %.2fms\n", snapshot.SearchLatencyMs)
+		fmt.Printf("Replica Lag: %.2fms\n", snapshot.ReplicaLagMs)
+		fmt.Printf("Backup Size: %d bytes\n", snapshot.BackupSizeBytes)
+		fmt.Printf("Error Rate: %.4f%%\n", snapshot.ErrorRate*100)
+		fmt.Printf("Uptime: %.2f%%\n", snapshot.UptimePercent)
+		fmt.Printf("Throughput: %d ops/sec\n", snapshot.ThroughputOps)
+	}
+
+	return 0
+}
+
+// knowledgeMaintenance runs maintenance tasks.
+func knowledgeMaintenance(args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge maintenance", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge maintenance <subcommand> [options]
+
+Subcommands:
+  vacuum      Optimize database file size
+  optimize    Optimize indexes and statistics
+  repair      Repair corrupted database
+  status      Check maintenance task status
+
+`)
+		fs.PrintDefaults()
+	}
+
+	jsonOutput := fs.Bool("json", false, "Output as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if fs.NArg() < 1 {
+		fs.Usage()
+		return 2
+	}
+
+	subcommand := fs.Arg(0)
+	ms := knowledge.NewMaintenanceScheduler()
+
+	switch subcommand {
+	case "vacuum":
+		taskID := ms.ScheduleVacuum()
+		if *jsonOutput {
+			data, _ := json.Marshal(map[string]string{"task_id": taskID})
+			fmt.Println(string(data))
+		} else {
+			fmt.Printf("Vacuum scheduled: %s\n", taskID)
+		}
+		return 0
+
+	case "optimize":
+		taskID := ms.ScheduleOptimize()
+		if *jsonOutput {
+			data, _ := json.Marshal(map[string]string{"task_id": taskID})
+			fmt.Println(string(data))
+		} else {
+			fmt.Printf("Optimize scheduled: %s\n", taskID)
+		}
+		return 0
+
+	case "status":
+		if fs.NArg() < 2 {
+			fmt.Fprintf(os.Stderr, "cadre knowledge maintenance status: missing task ID\n")
+			return 2
+		}
+		taskID := fs.Arg(1)
+		task := ms.GetTaskStatus(taskID)
+		if task == nil {
+			fmt.Fprintf(os.Stderr, "cadre knowledge maintenance status: task not found\n")
+			return 1
+		}
+		if *jsonOutput {
+			data, _ := json.MarshalIndent(task, "", "  ")
+			fmt.Println(string(data))
+		} else {
+			fmt.Printf("Task: %s\n", task.Name)
+			fmt.Printf("Status: %s\n", task.Status)
+			fmt.Printf("Progress: %d%%\n", task.Progress)
+		}
+		return 0
+
+	default:
+		fmt.Fprintf(os.Stderr, "cadre knowledge maintenance: unknown subcommand '%s'\n", subcommand)
+		return 1
+	}
+}
+
+// knowledgeExport exports knowledge store data.
+func knowledgeExport(args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge export", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: cadre knowledge export [options]\n\nOptions:\n")
+		fs.PrintDefaults()
+	}
+
+	format := fs.String("format", "json", "Export format (json, csv, parquet)")
+	compress := fs.Bool("compress", false, "Compress export")
+	filter := fs.String("filter", "", "Optional filter query")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	de := knowledge.NewDataExporter("./exports")
+	exportID, err := de.Export(&knowledge.ExportFormat{
+		Format:   *format,
+		Compress: *compress,
+		Filter:   *filter,
+	})
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge export: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("Export created: %s\n", exportID)
+	return 0
+}
+
+// knowledgeImport imports knowledge store data.
+func knowledgeImport(args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge import", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: cadre knowledge import [options]\n\nOptions:\n")
+		fs.PrintDefaults()
+	}
+
+	format := fs.String("format", "json", "Import format (json, csv, parquet)")
+	compress := fs.Bool("compress", false, "Decompress import")
+	merge := fs.Bool("merge", false, "Merge with existing or replace")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	di := knowledge.NewDataImporter("./imports")
+	count, err := di.Import(&knowledge.ImportFormat{
+		Format:   *format,
+		Compress: *compress,
+		Merge:    *merge,
+	})
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge import: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("Imported %d items\n", count)
+	return 0
 }
 
 // Helper function to open database with proper configuration.
