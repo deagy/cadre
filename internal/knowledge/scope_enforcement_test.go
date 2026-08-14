@@ -227,6 +227,141 @@ func TestSearchWithSeveralSourceFiltersSpansExactlyThose(t *testing.T) {
 	}
 }
 
+// TestSearchByContentRefusesAnUnscopedRead is the same guarantee on the
+// substring path, which had no source parameter at all: a caller could not
+// scope `--mode content` even if they wanted to, so it read every project's
+// content out of a shared store.
+//
+// The CLI refuses an unscoped read before it reaches this function, so this
+// test is what keeps the library honest on its own -- a caller reaching the
+// package directly, or a future command that forgets, must still be refused.
+func TestSearchByContentRefusesAnUnscopedRead(t *testing.T) {
+	requireSQLite(t)
+	store, _ := twoSourceCorpus(t)
+
+	results, err := store.SearchByContent(SearchOptions{
+		Query:          "runbook",
+		Classification: "internal",
+		// No SourceFilters, AllSources not set.
+	})
+	if err == nil {
+		t.Fatalf("expected a refusal for an unscoped content read, got %d results", len(results))
+	}
+	if !strings.Contains(err.Error(), "source scope is required") {
+		t.Errorf("error should name the missing scope, got: %v", err)
+	}
+	if results != nil {
+		t.Errorf("a refused retrieval must return no results, got %d", len(results))
+	}
+
+	// And it must be refused as ambiguous when both are supplied.
+	if _, err := store.SearchByContent(SearchOptions{
+		Query: "runbook", Classification: "internal",
+		SourceFilters: []string{"project-alpha"}, AllSources: true,
+	}); err == nil {
+		t.Fatal("expected a refusal when both a source filter and all-sources are supplied")
+	}
+}
+
+// TestSearchByContentWithASourceFilterExcludesEveryOtherSource: naming one
+// source must exclude the others from a substring match, not merely order
+// them differently -- a substring search has no ranking to hide behind.
+func TestSearchByContentWithASourceFilterExcludesEveryOtherSource(t *testing.T) {
+	requireSQLite(t)
+	store, _ := twoSourceCorpus(t)
+
+	results, err := store.SearchByContent(SearchOptions{
+		Query: "runbook", Classification: "internal",
+		SourceFilters: []string{"project-alpha"}, Top: 20,
+	})
+	if err != nil {
+		t.Fatalf("SearchByContent: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected exactly the one in-scope message, got %d", len(results))
+	}
+	if results[0].Source != "project-alpha" {
+		t.Errorf("source = %q, want project-alpha", results[0].Source)
+	}
+
+	// Control: the deliberate wide read does span both, so the exclusion
+	// above is the scope filter and not a broken query.
+	results, err = store.SearchByContent(SearchOptions{
+		Query: "runbook", Classification: "internal", AllSources: true, Top: 20,
+	})
+	if err != nil {
+		t.Fatalf("SearchByContent (control): %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("all-sources content search returned %d, want 2", len(results))
+	}
+}
+
+// TestSearchByContentIsAudited: a substring match returns stored content to
+// a caller, so it owes an audit row. It wrote none, so a cross-project read
+// through `--mode content` left no trace at all.
+func TestSearchByContentIsAudited(t *testing.T) {
+	requireSQLite(t)
+	store, _ := twoSourceCorpus(t)
+
+	const rawQuery = "runbook"
+	if _, err := store.SearchByContent(SearchOptions{
+		Query: rawQuery, Classification: "internal",
+		SourceFilters: []string{"project-alpha"},
+		Agent:         "knowledge-store-steward", TaskID: "TASK-92", Top: 5,
+	}); err != nil {
+		t.Fatalf("SearchByContent: %v", err)
+	}
+
+	var queryHash, agent, taskID, sourceFilter, provider, model string
+	var requestedTop, resultCount int
+	err := store.db.QueryRow(`
+		SELECT query_hash, agent, task_id, source_filter,
+		       embedding_provider, embedding_model, requested_top, result_count
+		FROM retrieval_runs
+	`).Scan(&queryHash, &agent, &taskID, &sourceFilter, &provider, &model, &requestedTop, &resultCount)
+	if err != nil {
+		t.Fatalf("reading the audit row: %v", err)
+	}
+	if queryHash != hashQueryString(rawQuery) {
+		t.Errorf("query_hash = %q, want the query's hash", queryHash)
+	}
+	if agent != "knowledge-store-steward" || taskID != "TASK-92" {
+		t.Errorf("attribution lost: agent=%q task_id=%q", agent, taskID)
+	}
+	if sourceFilter != "project-alpha" {
+		t.Errorf("source_filter = %q; the scope the read ran under must be on the record", sourceFilter)
+	}
+	if provider != "" || model != "" {
+		t.Errorf("embedding identity = %q/%q; a substring match used no embedding and must "+
+			"not borrow a provider it never called", provider, model)
+	}
+	if requestedTop != 5 || resultCount != 1 {
+		t.Errorf("requested_top = %d result_count = %d, want 5 and 1", requestedTop, resultCount)
+	}
+}
+
+// TestRefusedContentRetrievalIsNotAudited: a refusal never happened, so it
+// must not leave a row implying a read took place.
+func TestRefusedContentRetrievalIsNotAudited(t *testing.T) {
+	requireSQLite(t)
+	store, _ := twoSourceCorpus(t)
+
+	if _, err := store.SearchByContent(SearchOptions{
+		Query: "runbook", Classification: "internal",
+	}); err == nil {
+		t.Fatal("expected the unscoped content read to be refused")
+	}
+
+	var count int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM retrieval_runs`).Scan(&count); err != nil {
+		t.Fatalf("counting audit rows: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("a refused content retrieval wrote %d audit row(s)", count)
+	}
+}
+
 // --- Classification ---------------------------------------------------------
 
 // TestSearchClassificationIsExactMatchNotHierarchical pins SECURITY.md's

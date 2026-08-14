@@ -1,12 +1,52 @@
 package cli
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/deagy/cadre/cli/internal/knowledge"
 )
 
 // Database tests are skipped in CGO_ENABLED=0 builds (standard SQLite limitation).
 // These tests focus on CLI interface without database I/O.
+
+// writeStoreConfig writes a knowledge-store config.json pointing at dbPath
+// and returns its path. Tests go through the real config loader rather than
+// hand-building a Config, so a change to resolution or validation shows up
+// here rather than being bypassed.
+func writeStoreConfig(t *testing.T, dbPath string, extra map[string]any) string {
+	t.Helper()
+	dir := t.TempDir()
+	raw := map[string]any{"database": dbPath}
+	for k, v := range extra {
+		raw[k] = v
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("marshalling config: %v", err)
+	}
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("writing config: %v", err)
+	}
+	return path
+}
+
+// testEnv resolves a knowledgeEnv for a store at dbPath.
+func testEnv(t *testing.T, dbPath string, extra ...map[string]any) knowledgeEnv {
+	t.Helper()
+	var supplied map[string]any
+	if len(extra) > 0 {
+		supplied = extra[0]
+	}
+	cfg, tier, err := knowledge.LoadConfig(writeStoreConfig(t, dbPath, supplied))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	return knowledgeEnv{cfg: cfg, tier: tier}
+}
 
 func TestKnowledgeInitFlagError(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -52,7 +92,10 @@ func TestKnowledgeCmdUnknown(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
-	code := KnowledgeCmd([]string{"--config", dbPath, "unknown-command"})
+	// A resolvable config, so this exercises the unknown-subcommand branch
+	// rather than failing earlier on config resolution.
+	cfgPath := writeStoreConfig(t, dbPath, nil)
+	code := KnowledgeCmd([]string{"--config", cfgPath, "unknown-command"})
 	if code == 0 {
 		t.Error("Expected non-zero exit code for unknown command")
 	}
@@ -63,7 +106,7 @@ func TestKnowledgeIngestMissingSource(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// ingest without --source should fail
-	code := knowledgeIngest(dbPath, []string{})
+	code := knowledgeIngest(testEnv(t, dbPath), []string{})
 	if code != 2 {
 		t.Errorf("Expected exit code 2 for missing source, got %d", code)
 	}
@@ -74,7 +117,7 @@ func TestKnowledgeSearchMissingQuery(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// search without query should fail
-	code := knowledgeSearch(dbPath, []string{})
+	code := knowledgeSearch(testEnv(t, dbPath), []string{})
 	if code != 2 {
 		t.Errorf("Expected exit code 2 for missing query, got %d", code)
 	}
@@ -85,7 +128,7 @@ func TestKnowledgeSearchMissingClassification(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// search without --classification should fail
-	code := knowledgeSearch(dbPath, []string{"test-query"})
+	code := knowledgeSearch(testEnv(t, dbPath), []string{"test-query"})
 	if code != 2 {
 		t.Errorf("Expected exit code 2 for missing classification, got %d", code)
 	}

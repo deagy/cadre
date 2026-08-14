@@ -233,7 +233,10 @@ func BenchmarkSearchByContent(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		store.SearchByContent("machine learning", "general", 10)
+		_, _ = store.SearchByContent(SearchOptions{
+			Query: "machine learning", Classification: "general",
+			SourceFilters: []string{"bench-source"}, Top: 10,
+		})
 	}
 }
 

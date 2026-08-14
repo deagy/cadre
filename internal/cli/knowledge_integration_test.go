@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -22,6 +23,7 @@ func TestPythonInteropIngestAndSearch(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test-interop.db")
+	cfgPath := writeIntegrationConfig(t, tmpDir, dbPath)
 
 	// Simulate Python creating JSON messages and piping to Go CLI
 	messages := `{"message_id": "py-msg-1", "conversation_id": "python-conv", "role": "user", "content": "Python script message"}
@@ -29,9 +31,9 @@ func TestPythonInteropIngestAndSearch(t *testing.T) {
 `
 
 	// Test ingest via subprocess (like Python would call it)
-	cmd := exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "ingest",
+	cmd := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest",
 		"--source", "python-script",
-		"--classification", "general")
+		"--classification", "internal")
 
 	cmd.Stdin = bytes.NewBufferString(messages)
 	output, err := cmd.CombinedOutput()
@@ -44,8 +46,9 @@ func TestPythonInteropIngestAndSearch(t *testing.T) {
 	}
 
 	// Test search via subprocess and parse JSON output
-	cmd = exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "search",
-		"--classification", "general",
+	cmd = exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "search",
+		"--all-sources",
+		"--classification", "internal",
 		"--json",
 		"Python")
 
@@ -72,6 +75,7 @@ func TestPythonInteropJSONIngestion(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test-json-ingest.db")
+	cfgPath := writeIntegrationConfig(t, tmpDir, dbPath)
 
 	// Create test messages in various formats that Python might generate
 	type PyMessage struct {
@@ -113,9 +117,9 @@ func TestPythonInteropJSONIngestion(t *testing.T) {
 	}
 
 	// Ingest via Go CLI
-	cmd := exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "ingest",
+	cmd := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest",
 		"--source", "python-app",
-		"--classification", "technical")
+		"--classification", "internal")
 
 	cmd.Stdin = &msgLines
 	output, err := cmd.CombinedOutput()
@@ -128,7 +132,7 @@ func TestPythonInteropJSONIngestion(t *testing.T) {
 	}
 
 	// Verify via stats
-	cmd = exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "stats", "--json")
+	cmd = exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "stats", "--json")
 	output, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("stats failed: %v", err)
@@ -152,6 +156,7 @@ func TestPythonInteropSearchJSONParsing(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test-search-json.db")
+	cfgPath := writeIntegrationConfig(t, tmpDir, dbPath)
 
 	// Ingest test data
 	messages := `{"message_id": "m1", "conversation_id": "conv1", "role": "user", "content": "machine learning models"}
@@ -159,16 +164,17 @@ func TestPythonInteropSearchJSONParsing(t *testing.T) {
 {"message_id": "m3", "conversation_id": "conv2", "role": "user", "content": "data science techniques"}
 `
 
-	cmd := exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "ingest",
+	cmd := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest",
 		"--source", "ml-data",
-		"--classification", "ml-research")
+		"--classification", "internal")
 
 	cmd.Stdin = bytes.NewBufferString(messages)
 	cmd.CombinedOutput()
 
 	// Search and verify JSON structure
-	cmd = exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "search",
-		"--classification", "ml-research",
+	cmd = exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "search",
+		"--all-sources",
+		"--classification", "internal",
 		"--json",
 		"machine learning")
 
@@ -182,13 +188,22 @@ func TestPythonInteropSearchJSONParsing(t *testing.T) {
 		t.Fatalf("cannot parse search JSON: %v", err)
 	}
 
-	// Verify structure (Python would check these fields)
-	if query, ok := result["query"].(string); !ok || query != "machine learning" {
-		t.Errorf("Expected query field, got: %v", result["query"])
+	// The bundle carries a stable query_id, never the query text: the store
+	// deliberately never writes a raw query anywhere, and a JSON envelope
+	// that echoed it would put it back into whatever captures this output.
+	if _, present := result["query"]; present {
+		t.Errorf("the retrieval bundle echoed the raw query back: %v", result["query"])
+	}
+	if queryID, ok := result["query_id"].(string); !ok || queryID == "" {
+		t.Errorf("Expected query_id field, got: %v", result["query_id"])
 	}
 
 	if mode, ok := result["mode"].(string); !ok || mode != "vector" {
 		t.Errorf("Expected mode=vector, got: %v", result["mode"])
+	}
+
+	if trust, ok := result["trust"].(string); !ok || trust != "untrusted_reference" {
+		t.Errorf("Expected the untrusted-data trust label, got: %v", result["trust"])
 	}
 
 	if results, ok := result["results"].([]interface{}); !ok || len(results) == 0 {
@@ -203,6 +218,7 @@ func TestPythonInteropContentSearch(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test-content-search.db")
+	cfgPath := writeIntegrationConfig(t, tmpDir, dbPath)
 
 	// Ingest diverse content
 	messages := `{"message_id": "doc1", "conversation_id": "docs", "role": "document", "content": "Kubernetes is a container orchestration platform"}
@@ -210,16 +226,17 @@ func TestPythonInteropContentSearch(t *testing.T) {
 {"message_id": "doc3", "conversation_id": "docs", "role": "document", "content": "Terraform manages infrastructure as code"}
 `
 
-	cmd := exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "ingest",
+	cmd := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest",
 		"--source", "docs",
-		"--classification", "infrastructure")
+		"--classification", "internal")
 
 	cmd.Stdin = bytes.NewBufferString(messages)
 	cmd.CombinedOutput()
 
 	// Test content search (Python parsing results)
-	cmd = exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "search",
-		"--classification", "infrastructure",
+	cmd = exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "search",
+		"--all-sources",
+		"--classification", "internal",
 		"--mode", "content",
 		"--json",
 		"container")
@@ -251,6 +268,7 @@ func TestPythonInteropDeletionTracking(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test-deletion.db")
+	cfgPath := writeIntegrationConfig(t, tmpDir, dbPath)
 
 	// Ingest test data
 	messages := `{"message_id": "del1", "conversation_id": "del-conv", "role": "user", "content": "test message 1"}
@@ -258,15 +276,15 @@ func TestPythonInteropDeletionTracking(t *testing.T) {
 {"message_id": "del3", "conversation_id": "del-conv", "role": "user", "content": "test message 3"}
 `
 
-	cmd := exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "ingest",
+	cmd := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest",
 		"--source", "to-delete",
-		"--classification", "temporary")
+		"--classification", "internal")
 
 	cmd.Stdin = bytes.NewBufferString(messages)
 	cmd.CombinedOutput()
 
 	// Delete and verify JSON tracking
-	cmd = exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "delete",
+	cmd = exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "delete",
 		"--source", "to-delete",
 		"--json")
 
@@ -299,23 +317,25 @@ func TestPythonInteropMultipleClassifications(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test-multi-class.db")
+	cfgPath := writeIntegrationConfig(t, tmpDir, dbPath)
 
 	// Ingest public
-	cmd := exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "ingest",
+	cmd := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest",
 		"--source", "data",
 		"--classification", "public")
 	cmd.Stdin = bytes.NewBufferString(`{"message_id": "pub1", "conversation_id": "c1", "role": "user", "content": "public info"}`)
 	cmd.CombinedOutput()
 
 	// Ingest secret
-	cmd = exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "ingest",
+	cmd = exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest",
 		"--source", "data",
-		"--classification", "secret")
+		"--classification", "confidential")
 	cmd.Stdin = bytes.NewBufferString(`{"message_id": "sec1", "conversation_id": "c2", "role": "user", "content": "secret info"}`)
 	cmd.CombinedOutput()
 
 	// Search in public only
-	cmd = exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "search",
+	cmd = exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "search",
+		"--all-sources",
 		"--classification", "public",
 		"--json",
 		"info")
@@ -330,8 +350,8 @@ func TestPythonInteropMultipleClassifications(t *testing.T) {
 	}
 
 	// Delete secret
-	cmd = exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "delete",
-		"--classification", "secret",
+	cmd = exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "delete",
+		"--classification", "confidential",
 		"--json",
 		"--authorized-by", "python-script")
 
@@ -352,27 +372,28 @@ func TestPythonInteropSourceFiltering(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test-source-filter.db")
+	cfgPath := writeIntegrationConfig(t, tmpDir, dbPath)
 
 	// Ingest from multiple sources
 	msg1 := `{"message_id": "src1-1", "conversation_id": "conv", "role": "user", "content": "message from source 1"}`
 	msg2 := `{"message_id": "src2-1", "conversation_id": "conv", "role": "user", "content": "message from source 2"}`
 
-	cmd := exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "ingest",
+	cmd := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest",
 		"--source", "python-source-1",
-		"--classification", "general")
+		"--classification", "internal")
 	cmd.Stdin = bytes.NewBufferString(msg1)
 	cmd.CombinedOutput()
 
-	cmd = exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "ingest",
+	cmd = exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest",
 		"--source", "python-source-2",
-		"--classification", "general")
+		"--classification", "internal")
 	cmd.Stdin = bytes.NewBufferString(msg2)
 	cmd.CombinedOutput()
 
 	// Search filtering by source (single)
-	cmd = exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "search",
-		"--classification", "general",
-		"--sources", "python-source-1",
+	cmd = exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "search",
+		"--classification", "internal",
+		"--source", "python-source-1",
 		"--json",
 		"message")
 
@@ -386,9 +407,10 @@ func TestPythonInteropSourceFiltering(t *testing.T) {
 	}
 
 	// Search with multiple sources
-	cmd = exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "search",
-		"--classification", "general",
-		"--sources", "python-source-1,python-source-2",
+	cmd = exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "search",
+		"--classification", "internal",
+		"--source", "python-source-1",
+		"--source", "python-source-2",
 		"--json",
 		"message")
 
@@ -408,9 +430,10 @@ func TestPythonInteropErrorHandling(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test-errors.db")
+	cfgPath := writeIntegrationConfig(t, tmpDir, dbPath)
 
 	// Test ingest without source
-	cmd := exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "ingest")
+	cmd := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest")
 	cmd.Stdin = bytes.NewBufferString(`{"message_id": "m", "role": "u", "content": "test"}`)
 	output, err := cmd.CombinedOutput()
 
@@ -423,7 +446,7 @@ func TestPythonInteropErrorHandling(t *testing.T) {
 	}
 
 	// Test search without classification
-	cmd = exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "search", "query")
+	cmd = exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "search", "query")
 	output, err = cmd.CombinedOutput()
 
 	if err == nil {
@@ -442,6 +465,7 @@ func TestPythonInteropLargeScale(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test-large-scale.db")
+	cfgPath := writeIntegrationConfig(t, tmpDir, dbPath)
 
 	// Generate large dataset (simulating Python doing bulk ingest)
 	var msgLines bytes.Buffer
@@ -454,9 +478,9 @@ func TestPythonInteropLargeScale(t *testing.T) {
 	}
 
 	// Ingest large dataset
-	cmd := exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "ingest",
+	cmd := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest",
 		"--source", "bulk-python-source",
-		"--classification", "test-data")
+		"--classification", "internal")
 
 	cmd.Stdin = &msgLines
 	output, err := cmd.CombinedOutput()
@@ -469,7 +493,7 @@ func TestPythonInteropLargeScale(t *testing.T) {
 	}
 
 	// Verify stats
-	cmd = exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "stats", "--json")
+	cmd = exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "stats", "--json")
 	output, _ = cmd.CombinedOutput()
 
 	var stats map[string]interface{}
@@ -488,6 +512,7 @@ func TestPythonInteropConcurrentOperations(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test-concurrent.db")
+	cfgPath := writeIntegrationConfig(t, tmpDir, dbPath)
 
 	// Simulate concurrent Python scripts writing to same store
 	// (tests that store handles multiple simultaneous operations)
@@ -495,9 +520,9 @@ func TestPythonInteropConcurrentOperations(t *testing.T) {
 	// Script 1: Ingest
 	go func() {
 		msg := `{"message_id": "c1", "conversation_id": "concurrent", "role": "user", "content": "from script 1"}`
-		cmd := exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "ingest",
+		cmd := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest",
 			"--source", "script-1",
-			"--classification", "concurrent")
+			"--classification", "internal")
 		cmd.Stdin = bytes.NewBufferString(msg)
 		cmd.CombinedOutput()
 	}()
@@ -505,9 +530,9 @@ func TestPythonInteropConcurrentOperations(t *testing.T) {
 	// Script 2: Ingest
 	go func() {
 		msg := `{"message_id": "c2", "conversation_id": "concurrent", "role": "user", "content": "from script 2"}`
-		cmd := exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "ingest",
+		cmd := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest",
 			"--source", "script-2",
-			"--classification", "concurrent")
+			"--classification", "internal")
 		cmd.Stdin = bytes.NewBufferString(msg)
 		cmd.CombinedOutput()
 	}()
@@ -516,7 +541,7 @@ func TestPythonInteropConcurrentOperations(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify both messages ingested
-	cmd := exec.Command(cliBinaryPath(), "knowledge", "--config", dbPath, "stats", "--json")
+	cmd := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "stats", "--json")
 	output, _ := cmd.CombinedOutput()
 
 	var stats map[string]interface{}
@@ -530,28 +555,72 @@ func TestPythonInteropConcurrentOperations(t *testing.T) {
 
 // Helper functions
 
-func cliBinaryPath() string {
-	// Check environment variable first (set by test runner)
+// writeIntegrationConfig writes a knowledge-store config.json pointing at
+// dbPath and returns its path.
+//
+// `--config` names a config *file*, not a database. It used to be read as a
+// database path, which is why every test in this file passed one: a missing
+// path silently created a new empty store rather than failing.
+func writeIntegrationConfig(t *testing.T, dir, dbPath string) string {
+	t.Helper()
+	path := filepath.Join(dir, "knowledge-config.json")
+	data, err := json.Marshal(map[string]any{"database": dbPath})
+	if err != nil {
+		t.Fatalf("marshalling config: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("writing config: %v", err)
+	}
+	return path
+}
+
+var (
+	builtCLIOnce sync.Once
+	builtCLIPath string
+	builtCLIErr  error
+)
+
+// cliBinaryPath returns the CLI binary these subprocess tests exercise.
+//
+// It builds the binary from this working tree unless CADRE_BIN names one
+// explicitly. It previously fell back to /tmp/cadre-test, ./cadre, and
+// finally bare "cadre" on PATH -- so on any machine with a `cadre` installed
+// (or a stale build left in /tmp) these tests silently validated some other
+// binary's behaviour and passed no matter what this package did. A test that
+// cannot fail on a regression is worse than no test, because it reports
+// coverage it does not have.
+func cliBinaryPath(t *testing.T) string {
+	t.Helper()
+	// Every test in this file drives a SQLite-backed store through the
+	// binary. The binary is built with this process's own CGO setting, so
+	// the test process's driver availability is a faithful proxy for the
+	// subprocess's -- see sqlite_guard_test.go.
+	requireSQLite(t)
 	if bin := os.Getenv("CADRE_BIN"); bin != "" {
 		if _, err := os.Stat(bin); err == nil {
 			return bin
 		}
+		t.Fatalf("CADRE_BIN is set to %q but that path does not exist", bin)
 	}
 
-	// Try to find it in typical locations
-	paths := []string{
-		"/tmp/cadre-test",
-		"./cadre",
-	}
-
-	for _, path := range paths {
-		if _, err := os.Stat(path); err == nil {
-			return path
+	builtCLIOnce.Do(func() {
+		dir, err := os.MkdirTemp("", "cadre-cli-under-test")
+		if err != nil {
+			builtCLIErr = err
+			return
 		}
+		binary := filepath.Join(dir, "cadre")
+		build := exec.Command("go", "build", "-o", binary, "github.com/deagy/cadre/cli/cmd/cadre")
+		if output, err := build.CombinedOutput(); err != nil {
+			builtCLIErr = fmt.Errorf("building the CLI under test: %w\n%s", err, output)
+			return
+		}
+		builtCLIPath = binary
+	})
+	if builtCLIErr != nil {
+		t.Skipf("cannot build the CLI under test: %v", builtCLIErr)
 	}
-
-	// Fallback: assume it's in PATH
-	return "cadre"
+	return builtCLIPath
 }
 
 func strPtr(s string) *string {

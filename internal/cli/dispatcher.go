@@ -246,8 +246,15 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 		return ExecuteCmd(context.Background(), rest, deps.Stdout, deps.Stderr)
 	}
 
-	// Route Go-implemented knowledge store
+	// Route Go-implemented knowledge store. The staged-record verbs
+	// (propose, show-staged, import-staged, disposition-staged,
+	// ingest-accepted, delete-staged) are handled separately in
+	// knowledge_staged.go, where the authorship/approval separation checks
+	// live; everything else goes to KnowledgeCmd.
 	if command == "knowledge" {
+		if KnowledgeStagedRoute(rest) {
+			return KnowledgeStagedCmd(rest)
+		}
 		return KnowledgeCmd(rest)
 	}
 	if command == "doctor" {

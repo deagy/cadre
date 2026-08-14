@@ -189,7 +189,10 @@ func TestSearchByContent(t *testing.T) {
 	)
 
 	// Search by content
-	results, err := store.SearchByContent("quick", "general", 10)
+	results, err := store.SearchByContent(SearchOptions{
+		Query: "quick", Classification: "general",
+		SourceFilters: []string{"source"}, Top: 10,
+	})
 	if err != nil {
 		t.Fatalf("SearchByContent failed: %v", err)
 	}

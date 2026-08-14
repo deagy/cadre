@@ -25,7 +25,7 @@ func setupTestShards(t *testing.T) (string, func()) {
 	// Add a message to shard-0
 	msgID, err := store0.SaveMessage(
 		"app-a", nil, "conv-1", nil, "msg-1",
-		"user", "test message for shard 0", nil, "general", false,
+		"user", "test message for shard 0", nil, "internal", false,
 		`[]`, `{}`, nil,
 	)
 	if err != nil {
@@ -47,7 +47,7 @@ func setupTestShards(t *testing.T) (string, func()) {
 	// Add a message to shard-1
 	msgID2, err := store1.SaveMessage(
 		"app-b", nil, "conv-2", nil, "msg-2",
-		"user", "another message for shard 1", nil, "general", false,
+		"user", "another message for shard 1", nil, "internal", false,
 		`[]`, `{}`, nil,
 	)
 	if err != nil {
@@ -128,8 +128,9 @@ func TestKnowledgeFederatedSearchSingleStore(t *testing.T) {
 	store.Close()
 
 	// Try federated search in single-store mode (should fail)
-	exitCode := knowledgeFederatedSearch(dbPath, []string{
-		"--classification", "general",
+	exitCode := knowledgeFederatedSearch(testEnv(t, dbPath), []string{
+		"--classification", "internal",
+		"--all-sources",
 		"test",
 	})
 	if exitCode != 1 {
@@ -142,7 +143,7 @@ func TestKnowledgeFederatedSearchMissingClassification(t *testing.T) {
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
-	exitCode := knowledgeFederatedSearch(dbPath, []string{"test"})
+	exitCode := knowledgeFederatedSearch(testEnv(t, dbPath), []string{"test"})
 	if exitCode != 2 {
 		t.Errorf("Expected exit code 2 for missing classification, got %d", exitCode)
 	}
@@ -153,7 +154,7 @@ func TestKnowledgeFederatedSearchMissingQuery(t *testing.T) {
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
-	exitCode := knowledgeFederatedSearch(dbPath, []string{"--classification", "general"})
+	exitCode := knowledgeFederatedSearch(testEnv(t, dbPath), []string{"--classification", "internal"})
 	if exitCode != 2 {
 		t.Errorf("Expected exit code 2 for missing query, got %d", exitCode)
 	}
@@ -164,8 +165,9 @@ func TestKnowledgeFederatedSearchBasic(t *testing.T) {
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
-	exitCode := knowledgeFederatedSearch(dbPath, []string{
-		"--classification", "general",
+	exitCode := knowledgeFederatedSearch(testEnv(t, dbPath), []string{
+		"--classification", "internal",
+		"--all-sources",
 		"--json",
 		"test",
 	})
@@ -179,8 +181,9 @@ func TestKnowledgeFederatedSearchWithParallelism(t *testing.T) {
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
-	exitCode := knowledgeFederatedSearch(dbPath, []string{
-		"--classification", "general",
+	exitCode := knowledgeFederatedSearch(testEnv(t, dbPath), []string{
+		"--classification", "internal",
+		"--all-sources",
 		"--parallel", "2",
 		"test",
 	})
@@ -196,8 +199,9 @@ func TestKnowledgeFederatedSearchWithStrategy(t *testing.T) {
 
 	strategies := []string{"classification", "source", "conversation"}
 	for _, strategy := range strategies {
-		exitCode := knowledgeFederatedSearch(dbPath, []string{
-			"--classification", "general",
+		exitCode := knowledgeFederatedSearch(testEnv(t, dbPath), []string{
+			"--classification", "internal",
+			"--all-sources",
 			"--strategy", strategy,
 			"test",
 		})
@@ -212,8 +216,9 @@ func TestKnowledgeFederatedSearchInvalidStrategy(t *testing.T) {
 	dbPath, cleanup := setupTestShards(t)
 	defer cleanup()
 
-	exitCode := knowledgeFederatedSearch(dbPath, []string{
-		"--classification", "general",
+	exitCode := knowledgeFederatedSearch(testEnv(t, dbPath), []string{
+		"--classification", "internal",
+		"--all-sources",
 		"--strategy", "invalid",
 		"test",
 	})
@@ -267,7 +272,7 @@ func TestKnowledgeFederatedDeleteMultipleModes(t *testing.T) {
 	// Multiple deletion modes specified
 	exitCode := knowledgeFederatedDelete(dbPath, []string{
 		"--expired",
-		"--classification", "general",
+		"--classification", "internal",
 	})
 	if exitCode != 2 {
 		t.Errorf("Expected exit code 2 for multiple modes, got %d", exitCode)
@@ -280,7 +285,7 @@ func TestKnowledgeFederatedDeleteByClassification(t *testing.T) {
 	defer cleanup()
 
 	exitCode := knowledgeFederatedDelete(dbPath, []string{
-		"--classification", "general",
+		"--classification", "internal",
 		"--json",
 	})
 	if exitCode != 0 {
@@ -339,7 +344,7 @@ func TestKnowledgeFederatedDeleteWithStrategy(t *testing.T) {
 	for _, strategy := range strategies {
 		exitCode := knowledgeFederatedDelete(dbPath, []string{
 			"--strategy", strategy,
-			"--classification", "general",
+			"--classification", "internal",
 		})
 		if exitCode != 0 {
 			t.Errorf("Expected exit code 0 for strategy %s, got %d", strategy, exitCode)
@@ -354,7 +359,7 @@ func TestKnowledgeFederatedDeleteInvalidStrategy(t *testing.T) {
 
 	exitCode := knowledgeFederatedDelete(dbPath, []string{
 		"--strategy", "invalid",
-		"--classification", "general",
+		"--classification", "internal",
 	})
 	if exitCode != 2 {
 		t.Errorf("Expected exit code 2 for invalid strategy, got %d", exitCode)
