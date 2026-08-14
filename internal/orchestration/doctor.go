@@ -53,6 +53,22 @@ type DoctorReport struct {
 	CWDCheckoutRoot string `json:"cwd_checkout_root,omitempty"`
 	Mismatch        bool   `json:"mismatch"`
 	MismatchDetail  string `json:"mismatch_detail,omitempty"`
+
+	// KnowledgeStoreOK reports whether the running binary can actually reach
+	// its sqlite-backed knowledge store, and KnowledgeStoreDetail explains
+	// the verdict either way.
+	//
+	// GatherDoctorReport does not fill these in: probing the driver means
+	// importing it, and this package has no sqlite dependency today -- adding
+	// one for a diagnostic line would pull cgo into every consumer of
+	// orchestration. internal/cli owns the wiring instead (it already imports
+	// both packages) and calls knowledge.DriverAvailable.
+	//
+	// An empty KnowledgeStoreDetail therefore means "not probed", not
+	// "unavailable", and the renderer stays silent rather than reporting a
+	// failure nobody checked for.
+	KnowledgeStoreOK     bool   `json:"knowledge_store_ok"`
+	KnowledgeStoreDetail string `json:"knowledge_store_detail,omitempty"`
 }
 
 // repoMarkersPresent is true when root looks like a Cadre checkout root by
@@ -270,6 +286,11 @@ func RenderDoctorReport(report DoctorReport) string {
 		goLine += " (below the required go" + report.GoMinVersion + "+)"
 	}
 	b.WriteString(goLine + "\n")
+	// Empty detail means the caller did not probe -- say nothing rather than
+	// report a failure nobody checked for. See DoctorReport's field comment.
+	if report.KnowledgeStoreDetail != "" {
+		b.WriteString("  knowledge store:    " + report.KnowledgeStoreDetail + "\n")
+	}
 	b.WriteString("  install kind:       " + report.InstallKind + "\n")
 	b.WriteString("  detail:             " + report.InstallDetail + "\n")
 	b.WriteString("  cwd:                " + report.CWD + "\n")
@@ -282,6 +303,13 @@ func RenderDoctorReport(report DoctorReport) string {
 	if !report.GoVersionOK {
 		b.WriteString("WARNING: this toolchain is below the declared floor (go.mod requires go " +
 			report.GoMinVersion + "+); some subcommands may behave in ways unrelated to your change.\n\n")
+	}
+	if report.KnowledgeStoreDetail != "" && !report.KnowledgeStoreOK {
+		b.WriteString("WARNING: this binary was built without cgo, so every `cadre knowledge` " +
+			"command will fail at runtime.\n" +
+			"         bin/cadre prefers a cgo build and falls back to a cgo-less one when no C\n" +
+			"         compiler is on PATH. Install a C toolchain (e.g. build-essential, Xcode\n" +
+			"         command line tools, or mingw-w64) and delete .cadre-build-cache/ to rebuild.\n\n")
 	}
 	if report.Mismatch {
 		b.WriteString("WARNING: " + report.MismatchDetail + "\n")
