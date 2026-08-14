@@ -47,7 +47,7 @@ appropriate generic profile rather than importing Secure Cloud-specific roles.
 ## Install the suite globally
 
 The self-contained plugin makes this repository's roles and skills available
-from other projects. See [Installing Cadre](INSTALL.md) for runner-specific
+from other projects. See [Installing Cadre](../README.md#installation) for runner-specific
 installation, and [`plugin/README.md`](https://github.com/deagy/cadre/blob/main/plugin/README.md) for what is
 generated versus hand-authored. Prefer a
 project-local lifecycle profile when only one project needs the Secure Cloud

@@ -8,7 +8,7 @@ for what's changed in the suite recently.
 
 ## 1. Install `cadre`
 
-See **[Installing Cadre](INSTALL.md)** — one command for whichever runner you
+See **[Installing Cadre](../README.md#installation)** — one command for whichever runner you
 use. This guide does not repeat the steps; a second install path is one
 nobody remembers to update.
 
@@ -30,7 +30,7 @@ this repository, so a checkout needs no separate install and no
 `AGENTIC_SDLC_BIN` — `cadre sdlc` finds it. If you installed Cadre as a
 plugin instead, install the kernel once with the `/cadre-install-kernel`
 skill; see [Adding lifecycle
-governance](INSTALL.md#adding-lifecycle-governance).
+governance](../README.md#adding-lifecycle-governance).
 
 Then initialize your project through this suite's compatibility launcher,
 using `--profile secure-cloud` if your project actually runs on this suite's

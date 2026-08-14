@@ -11,8 +11,8 @@ Use this index to choose the shortest useful path.
 
 | Goal | Start here |
 | --- | --- |
-| **Install it** | **[Installing Cadre](INSTALL.md)** — the canonical guide for every runner |
-| Roll it out to a fleet | [Enterprise deployment](enterprise.md) |
+| **Install it** | **[Installing Cadre](../README.md#installation)** — the canonical guide for every runner |
+| Roll it out to a fleet | [Enterprise deployment](../README.md#enterprise-deployment) |
 | Understand how this repository got its shape | [Monorepo migration](migration/monorepo-migration.md) |
 | Understand the suite | [Identity](../IDENTITY.md), then [Terminology](terminology.md) |
 | Adopt this suite in a new project, start to finish | [Adopt-Cadre quickstart](adopt-cadre-quickstart.md) |

@@ -161,7 +161,7 @@ it would cost Cline users a second path change to reverse a completed one.
 
 ## Still open
 
-The Cline plugins stay. `docs/INSTALL.md` records that cline CLI 3.0.46 cannot
+The Cline plugins stay. README.md's [Cline CLI section](#cline-cli) notes that cline CLI 3.0.46 cannot
 invoke *any* locally-installed plugin's tool — affecting Cline's own example
 plugin — so this cannot be smoke-tested end to end on Cline today. CI's per-workspace
 `npm test` and `typecheck` are the available signal.

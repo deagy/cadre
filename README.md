@@ -53,7 +53,7 @@ Key areas:
 - [roster/workflows/](roster/workflows/) defines workflows for new services, infrastructure, CI/CD, releases, rollback, knowledge ingestion, and support escalation.
 - [roster/knowledge-store/](roster/knowledge-store/) contains the retrieval layer for approved historical context.
 - [roster/testing/](roster/testing/) and [roster/support/](roster/support/) define black-box testing, end-user testing, support triage, and escalation roles.
-- [.agents/skills/](.agents/skills/) contains this repository's skills, packaged for Codex CLI directly and pointed to from `.claude/skills/` for Claude Code.
+- [.agents/skills/](.agents/skills/) contains this repository's 13 skills, packaged for Codex CLI directly and pointed to from `.claude/skills/` for Claude Code.
 - [`kernel/`](kernel/) owns the portable lifecycle kernel, initializer, validator, and lifecycle skills — a separately versioned, separately released pip distribution (see "Releasing" below), even though its source now lives in this repository. It was `deagy/agentic-sdlc` before the monorepo merge.
 - [`plugin/`](plugin/) packages this suite, its 159 roles and 20 non-authoring context packs, and the `secure-cloud` provider profile as installable Claude Code / Codex plugins, alongside the optional Agentic SDLC lifecycle-governance plugins. It was `deagy/cadre-lifecycle` before the monorepo merge.
 - [`cline-plugins/`](cline-plugins/) holds the three Cline CLI plugins and the single npm workspace that backs them — the only Node code in this repository. It is deliberately *not* inside `plugin/`: an npm workspace root there made installing the Claude Code plugin run `npm install` and write 263 MB of Cline SDK dependencies into every user's plugin cache.

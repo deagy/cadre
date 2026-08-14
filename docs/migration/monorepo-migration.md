@@ -231,7 +231,7 @@ Deliberately not closed:
 
 ## Related
 
-- [Installing Cadre](../INSTALL.md)
-- [Enterprise deployment](../enterprise.md)
+- [Installing Cadre](../../README.md#installation)
+- [Enterprise deployment](../../README.md#enterprise-deployment)
 - [`plugin/README.md`](https://github.com/deagy/cadre/blob/main/plugin/README.md)
   for what is generated versus hand-authored
