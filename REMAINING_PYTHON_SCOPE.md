@@ -148,3 +148,111 @@ questionnaire), a future scope-tracking document — if one is wanted at all
 — should track the distribution-channel question above (owned by
 `DISTRIBUTION.md`) rather than reconstruct a CLI-porting backlog that no
 longer exists.
+
+---
+
+## Forward plan (recorded 2026-08-14, after PR #267 merged as `d8b80073`)
+
+PR #267 put the compiled Go binary into the packaged plugin channel
+(verified download, sidecar-verified offline cache, permission-gated exec,
+unconditional Python fallback). That closed the `cadre knowledge` gap for
+plugin installs, which previously had no route to the knowledge store at
+all.
+
+What follows is ordered by risk relative to effort, not by size. Each item
+states what would make it *done*, because several of these are one-line
+changes gated on a decision rather than on work.
+
+### 1. A second, drifted producer of `plugin/bin/cadre`
+
+**Status: in progress.** `generate_bin_wrapper()` in
+`roster/orchestration/src/generate_global_plugin.py` emits a `bin/cadre`
+carrying none of #267's hardening — no binary resolution, no checksum
+verification, no cache. The Go generator
+(`internal/generators/plugin_generation.go`) emits the hardened one, and
+that is what ships.
+
+Both are live, which is why this is a real risk rather than tidy-up:
+`cadre_cli/__init__.py` dispatches `generate-plugin` to the Python script and
+`_requires_checkout()` fails closed only for a *bundled* install, so an
+editable checkout install regenerates the unhardened shim; and
+`roster/orchestration/test/test_repository_health.py` invokes the Python
+generator directly as one of the two drift guards.
+
+Note the module itself is **not** dead and must not simply be deleted:
+`generate_role_metadata.py` and `generate_authority_aides.py` import
+constants and `GENERATED_MARKER` from it. The fix is to remove the *second
+shim producer*, not the module.
+
+**Done when:** exactly one generator produces `bin/cadre`, the
+repository-health guard exercises the generator that actually ships, and no
+install path can regenerate an unhardened shim.
+
+### 2. `cadre execute` ships a second, incompatible dispatch plan
+
+`internal/orchestration/{routing,route_matching,dispatch_plan,workflow}.go`
+build a `DispatchPlan` with no `dispatch_fingerprint` and a shape
+incompatible with `selection.schema.json` v7. It is reachable through
+`cadre execute`, which appears in neither `bin/subcommands.tsv` nor
+`internal/cli/usage.go`. This is the exact divergence
+`internal/cli/select_agents.go`'s header warns against, shipping
+undocumented.
+
+**Done when:** either the command is documented and its plan shape declared
+non-contractual, or it is removed and its route-matching folded into the
+`select` port below. Small either way; the cost is deciding which.
+
+### 3. `PythonCLIBridge` is dead
+
+`internal/orchestration/python_integration.go` (197 lines) has zero
+production callers — only its own tests. Deletion, no decision needed.
+
+### 4. `cadre upgrade` still assumes pip/pipx
+
+`internal/cli/upgrade.go` shells to `pipx upgrade cadre` and
+`pip install --upgrade cadre`, which is wrong for a checkout or `go install`
+user. `internal/orchestration/doctor.go` already classifies install kind and
+is not consulted.
+
+**Blocked on a product decision, not on effort** — this was flagged when the
+command was first ported and the decision was never made. Route on install
+kind: checkout → `git pull`; go-install → `go install` the latest tag;
+plugin-cache → the marketplace path; wheel → keep pip/pipx.
+
+### 5. Knowledge-store config vocabulary drift
+
+The Go port renamed the embedding provider from `hashing` to
+`local-hashing` (`internal/knowledge/config.go`'s
+`SupportedEmbeddingProviders`). An existing `~/.agents/knowledge-store/config.json`
+written by the Python implementation is now rejected outright, so
+`cadre knowledge` fails from any directory outside a project with its own
+config. A silent breaking rename with no migration path.
+
+**Done when:** the legacy name is accepted (with or without a deprecation
+notice), or a migration is provided. Small, and it is a live user-facing
+break.
+
+### 6. `cadre select` — the last Python in the shipped product
+
+Now that the shim execs the Go binary, `select` is the only reason a plugin
+install still needs Python at all. Porting it makes the distribution
+genuinely Python-free.
+
+Roughly 1,900 lines remain (`build_dispatch_plan.py` 940,
+`select_agents.py`'s argparse surface 450, `plan_text_format.py` 185,
+`agentic_sdlc_contracts.py` 146, `route_near_miss.py` 130,
+`risk_classifier.py` 28); `routing_overlay`, `glob_containment`,
+`roster_manifest`, `provenance`, `role_metadata` and `settings` already have
+Go equivalents.
+
+**The port is not the hard part — the harness is.** The plan is
+`selection.schema.json` v7 and carries a `dispatch_fingerprint` that is a
+SHA-256 over its own canonical form, compared byte-for-byte across
+invocation paths. Build a differential harness that runs both
+implementations over a task corpus and asserts byte equality including the
+fingerprint, *first*; port behind it. A near-miss port is worse than no
+port, because every consumer reads the v7 plan.
+
+**Done when:** `internal/cli/select_agents.go` no longer calls
+`interop.PythonSubcommand`, and the differential harness is green over the
+corpus and committed as a regression guard.
