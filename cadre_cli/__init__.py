@@ -7,6 +7,18 @@ import importlib.util
 import sys
 from pathlib import Path
 
+_CHECKOUT_ONLY_SUBCOMMANDS = {
+    "generate-plugin",
+    "generate-authority-aides",
+    "generate-role-metadata",
+}
+
+def _is_checkout() -> bool:
+    """Detect if running from a checkout vs an installed wheel."""
+    cadre_cli = Path(__file__).resolve().parent
+    checkout_root = cadre_cli.parent
+    return (checkout_root / "bin" / "cadre.py").is_file()
+
 def _load_dispatcher() -> object:
     """Load the cadre CLI main dispatcher from bin/cadre.py.
 
@@ -49,7 +61,26 @@ def main() -> int:
     The dispatcher's main function requires an argv parameter, but pip's entry point
     mechanism calls this with no arguments. We extract sys.argv[1:] (all arguments
     except the program name) and pass it through.
+
+    Also prevents checkout-only commands from running in installed distributions.
     """
-    return _dispatcher.main(sys.argv[1:])
+    argv = sys.argv[1:]
+
+    # Prevent checkout-only commands from running in installed distributions
+    if not _is_checkout() and argv:
+        cmd = argv[0]
+        if cmd in _CHECKOUT_ONLY_SUBCOMMANDS:
+            # Special case: generate-role-metadata --check is read-only and allowed
+            if cmd == "generate-role-metadata" and "--check" in argv:
+                pass  # Allow --check
+            else:
+                print(
+                    f"cadre: {cmd} is a checkout-only command and cannot be run from an installed distribution.\n"
+                    f"To use this command, clone the Cadre repository and run './bin/cadre {cmd}' from the checkout.",
+                    file=sys.stderr
+                )
+                return 1
+
+    return _dispatcher.main(argv)
 
 __all__ = ["main"]
