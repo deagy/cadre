@@ -41,7 +41,15 @@ def _load_dispatcher() -> object:
 # Load the dispatcher module
 _dispatcher = _load_dispatcher()
 
-# Export the main function for pip's entry point
-main = _dispatcher.main
+# Wrap the dispatcher's main function for pip's entry point
+# pip calls main() with no arguments, but bin/cadre.py's main(argv) requires argv
+def main() -> int:
+    """Entry point for pip/pipx installations.
+
+    The dispatcher's main function requires an argv parameter, but pip's entry point
+    mechanism calls this with no arguments. We extract sys.argv[1:] (all arguments
+    except the program name) and pass it through.
+    """
+    return _dispatcher.main(sys.argv[1:])
 
 __all__ = ["main"]
