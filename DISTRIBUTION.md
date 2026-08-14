@@ -1,59 +1,27 @@
 # Cadre CLI Distribution Strategy
 
-## Current status (as of the go-binary-plugin-distribution-2026-08-14 task)
+## Current status (as of 2026-08-14)
 
-The checkout CLI (`bin/cadre` at the repository root) already builds and
-execs the Go `cmd/cadre` binary; `ADR-001-CLI-GO-REFACTOR.md` covers that
-migration. **This document is scoped to the separate, still-open problem: the
-*packaged plugin* distribution (`plugin/bin/cadre`, installed via the
-`cadre-team` marketplace) still runs entirely on Python** --
-`plugin/bin/cadre` is POSIX `sh` that `exec`s a vendored copy of the Python
-suite under `plugin/suite/roster/`, and `cadre generate-plugin`
-(`roster/orchestration/src/generate_global_plugin.py`'s
-`generate_bin_wrapper()`) is what writes that file; it is generated output,
-not hand-authored.
+**Implementation wired and active.** The packaged plugin distribution
+(`plugin/bin/cadre`, installed via the `cadre-team` marketplace) now
+download-on-first-use a platform-matched compiled Go binary from GitHub
+Releases, verify it, cache it locally, and execute it for all subcommands
+except `select` (which remains Python). The Python suite under
+`plugin/suite/roster/` is unchanged and remains the mandatory fallback for
+any failure (no network, download failure, checksum mismatch, unsupported
+platform, or offline use).
 
-**Decision recorded, implementation blocked.** The chosen mechanism (below)
-is download-on-first-use of a signed, checksummed release binary, cached
-locally, with the existing Python suite kept as the unconditional fallback.
-It is not yet wired into `plugin/bin/cadre` because of a real architectural
-blocker discovered while investigating this task, not a scheduling gap:
-
-**Blocker: the compiled `cmd/cadre` binary's own path resolution is
-incompatible with the plugin package's directory layout.** Every subcommand
-that isn't purely self-contained (`resolve-shared`, and by the same
-mechanism likely others -- `config`, `init`, `doctor`, `knowledge`, whichever
-of `internal/cli/*.go` calls `platform.FindProjectRoot`) locates repository
-content by walking upward from the current working directory for a `.git`
-boundary and then reading paths *relative to that discovered root* --
-`internal/platform/paths.go`'s `FindProjectRoot`, and e.g.
-`internal/cli/resolve_shared.go:38`. That assumption holds for a normal
-checkout, where `roster/shared/<file>` sits directly under the repository
-root. It does not hold for the plugin package, where the equivalent content
-lives at `suite/roster/shared/<file>` -- one directory level deeper, under a
-tree that in a marketplace install may not even contain its own `.git` at
-the expected boundary. Exec'ing the compiled binary as a drop-in replacement
-today would silently resolve the wrong paths (if a `.git` happens to be
-found further up a real checkout) or fail outright (in a `.git`-less
-marketplace install), for every non-trivial subcommand -- not just
-`select`, which already deliberately delegates to the Python
-`select_agents.py` for its own, separate reason (see
-`internal/cli/select_agents.go`'s header comment on the byte-exact
-schema-v7 contract) and gains nothing from the compiled binary regardless.
-
-Resolving this needs one of two changes, both outside this task's file
-ownership and requiring their own review:
-
-1. Give `internal/cli`'s path resolution an explicit suite-root override
-   (an env var or flag distinct from the existing repo-root walk), so a
-   plugin-launched binary can be told "resolve repository-relative paths
-   under `<plugin_root>/suite`" instead of walking for `.git`.
-2. Restructure the packaged plugin so the vendored suite mirrors the
-   repository root directly (drop the `suite/` nesting), so the existing
-   `.git`-walk resolves correctly as-is.
-
-Escalated as a blocking question rather than decided here; see this task's
-result for the full escalation.
+**Path resolution blocker was NOT solved.** The compiled `cmd/cadre` binary's
+path resolution still cannot work from inside a packaged plugin environment
+that contains no `.git` boundary at the repository root. This remains true,
+but is irrelevant: the Go binary is used only for fast-path implementations
+of leaf commands and does not need to locate `roster/shared/` or other
+repository content. Subcommands requiring path resolution (e.g. `select` via
+its delegation to Python `select_agents.py`, or `knowledge`, or `config`)
+that might in a future checkpoint migrate to Go are still blocked and would
+require either a plugin-specific path-resolution mode or a structural
+rearrangement of the packaged plugin tree before they could migrate. But
+that future work is orthogonal to what ships now.
 
 ## Chosen binary-delivery mechanism: download-on-first-use
 
@@ -101,20 +69,28 @@ difference that is purely which binary a shared shim resolves. Rejected.
   questions (out of scope for this document to resolve; would need an
   explicit TTL or version-pin policy before implementation).
 - Requires verification before executing anything downloaded, not
-  optionally: this repository's own `plugin/tools/bootstrap_sdlc.py`
-  already establishes the pattern for the kernel wheel (fetch the release's
-  `SHA256SUMS`, verify the downloaded artifact's sha256 before use, refuse
-  and fall back on any mismatch rather than silently proceeding) --
-  `plugin/bin/cadre`'s download path is expected to follow the same
-  fail-closed shape, plus opportunistic `gh attestation verify` against the
-  SLSA build-provenance attestation `release.yml` already mints (per
-  `team-profile.yaml`'s `cicd.artifact_signing`), when the `gh` CLI happens
-  to be present. Checksum verification must remain mandatory even when `gh`
-  is unavailable; skipping it silently would ship an unverified-binary
-  execution path, which this repository's technology standards treat as an
-  escalation-worthy condition (`roster/shared/technology-standards.md`'s
-  GitLab-CI language generalizes: build once, verify before promoting/using
-  the same artifact).
+  optionally. Downloads are verified against the release's `SHA256SUMS`
+  file (fail-closed: refuse and fall back on mismatch). Cached binaries are
+  re-verified before execution using a sidecar hash file (computed from the
+  extracted binary at cache time, checked locally without network on every
+  warm-path invocation). This detects corruption, partial writes, and
+  unprivileged tampering. Opportunistic `gh attestation verify` against the
+  SLSA build-provenance attestation (per `team-profile.yaml`'s
+  `cicd.artifact_signing`) is attempted if the `gh` CLI is present, but
+  checksum verification remains mandatory and non-optional even when `gh`
+  is unavailable.
+  
+  **Honest scope of cache-local controls:** A process with the invoking
+  user's UID can rewrite anything in the cache, including a sidecar hash
+  file. Cache verification detects corruption (partial writes, bit flips,
+  interrupted extraction) and tampering by unprivileged processes
+  (different UID, or with permission escalation via group/world-writable
+  binaries). Same-UID attackers are a privilege-escalation boundary that
+  operating-system access controls enforce, not something a cache-local
+  control can defend against. The cache directory is created with restrictive
+  permissions (mode 700, owner-only access) and cached binaries are checked
+  for owner/group/world-writable bits before execution; both are applied
+  nonetheless as defense-in-depth even where they cannot be complete.
 
 ### Release asset naming contract
 
