@@ -1,0 +1,194 @@
+{
+  "_comment": [
+    "Input corpus for the cadre select differential harness.",
+    "",
+    "Not an exhaustive sweep of the ruleset -- 147 routes, 22 risk rules and 20",
+    "context packs cannot be enumerated here, and a corpus that tried would be",
+    "a second copy of routing.json rather than a test of it. Each case instead",
+    "pins a distinct *shape* the plan can take, and says which one in `why`.",
+    "",
+    "Every case passes --files explicitly. Omitting it makes the selector read",
+    "git status, which is not reproducible, so a corpus case that relied on it",
+    "would fail for reasons unrelated to selection.",
+    "",
+    "Adding a case is cheap and welcome. Deleting one needs a reason beyond",
+    "'it looks like that other case' -- read its `why` first."
+  ],
+  "cases": [
+    {
+      "id": "backend-go-change",
+      "why": "Single ordinary route by path and keyword; the baseline shape.",
+      "task": "add a new HTTP handler to the go service",
+      "files": "internal/api/handler.go",
+      "classification": "internal"
+    },
+    {
+      "id": "frontend-react-change",
+      "why": "A different route family, to catch a matcher that only works for one.",
+      "task": "fix the react component rendering the dashboard",
+      "files": "web/src/Dashboard.tsx",
+      "classification": "internal"
+    },
+    {
+      "id": "cross-stack-team",
+      "why": "Triggers the cross-stack-build team recipe; exercises the teams array.",
+      "task": "add an endpoint and wire the frontend form to it, updating the pipeline",
+      "files": "internal/api/handler.go,web/src/Form.tsx,.github/workflows/validate.yml",
+      "classification": "internal"
+    },
+    {
+      "id": "parallel-review-team",
+      "why": "Triggers the parallel-review team recipe via multiple review surfaces.",
+      "task": "review the backend change and the pipeline change together",
+      "files": "internal/api/handler.go,.github/workflows/release.yml",
+      "classification": "internal"
+    },
+    {
+      "id": "supply-chain-by-path",
+      "why": "Route matched by path alone, with task wording that names nothing.",
+      "task": "bump a transitive pin",
+      "files": "go.mod,go.sum",
+      "classification": "internal"
+    },
+    {
+      "id": "supply-chain-by-keyword",
+      "why": "Same route reached by vocabulary rather than path.",
+      "task": "verify provenance and signing of the release artifact before publishing",
+      "files": "docs/release.md",
+      "classification": "internal"
+    },
+    {
+      "id": "needs-triage",
+      "why": "No route matches. The selector must return needs-triage rather than guess.",
+      "task": "zzzz qqqq wwww",
+      "files": "notes/scratch.txt",
+      "classification": "internal"
+    },
+    {
+      "id": "risk-production-deploy",
+      "why": "Risk rule that raises a human gate; pins human_gates content.",
+      "task": "deploy to production the new release build",
+      "files": "deploy/prod.yaml",
+      "classification": "confidential"
+    },
+    {
+      "id": "risk-destructive",
+      "why": "A second, differently-shaped risk rule (destructive action).",
+      "task": "drop table sessions and delete namespace staging",
+      "files": "db/migrations/003_drop.sql",
+      "classification": "confidential"
+    },
+    {
+      "id": "risk-identity-privilege",
+      "why": "Risk rule touching privileged identity; distinct gate set.",
+      "task": "rotate the production secret and update the service account key",
+      "files": "infra/iam.tf",
+      "classification": "restricted"
+    },
+    {
+      "id": "risk-sensitive-data",
+      "why": "Classification-sensitive risk rule.",
+      "task": "store customer pii in the new confidential table",
+      "files": "db/schema.sql",
+      "classification": "restricted"
+    },
+    {
+      "id": "classification-internal",
+      "why": "Classification is an input to the plan; these four pin each value.",
+      "task": "add a new HTTP handler to the go service",
+      "files": "internal/api/handler.go",
+      "classification": "internal"
+    },
+    {
+      "id": "classification-public",
+      "why": "See classification-internal.",
+      "task": "add a new HTTP handler to the go service",
+      "files": "internal/api/handler.go",
+      "classification": "public"
+    },
+    {
+      "id": "classification-confidential",
+      "why": "See classification-internal.",
+      "task": "add a new HTTP handler to the go service",
+      "files": "internal/api/handler.go",
+      "classification": "confidential"
+    },
+    {
+      "id": "classification-restricted",
+      "why": "See classification-internal.",
+      "task": "add a new HTTP handler to the go service",
+      "files": "internal/api/handler.go",
+      "classification": "restricted"
+    },
+    {
+      "id": "documentation-only",
+      "why": "Docs route; a plan with no build agents at all.",
+      "task": "rewrite the getting started guide",
+      "files": "docs/getting-started.md",
+      "classification": "internal"
+    },
+    {
+      "id": "testing-route",
+      "why": "Verify-phase route, distinct agent groups.",
+      "task": "add gherkin coverage for the failure path",
+      "files": "test/features/failure.feature",
+      "classification": "internal"
+    },
+    {
+      "id": "infrastructure-route",
+      "why": "Infrastructure route; opentofu paths.",
+      "task": "add a new opentofu module for the storage cluster",
+      "files": "infra/modules/storage/main.tf",
+      "classification": "internal"
+    },
+    {
+      "id": "security-route",
+      "why": "Security-phase route with its own reviewer set.",
+      "task": "add a threat model for the new ingest path",
+      "files": "security/threat-model.md",
+      "classification": "confidential"
+    },
+    {
+      "id": "many-files",
+      "why": "Multiple files spanning several routes; pins ordering of matched_routes.",
+      "task": "broad refactor across the service, tests and docs",
+      "files": "internal/api/handler.go,test/api_test.go,docs/api.md,go.mod,web/src/App.tsx",
+      "classification": "internal"
+    },
+    {
+      "id": "path-glob-edge",
+      "why": "Nested path that must match a ** glob, not a literal prefix.",
+      "task": "adjust a deeply nested workflow",
+      "files": "services/edge/.github/workflows/build.yml",
+      "classification": "internal"
+    },
+    {
+      "id": "keyword-word-boundary",
+      "why": "Matching is whole-word with hyphen as a word character; 'runner' must not match 'cross-runner'.",
+      "task": "investigate the cross-runner behaviour difference",
+      "files": "notes/runners.md",
+      "classification": "internal"
+    },
+    {
+      "id": "unicode-and-quotes",
+      "why": "Task text with characters that JSON-encode differently if canonicalisation drifts.",
+      "task": "handle “smart quotes”, em—dashes and café in the parser",
+      "files": "internal/parse/text.go",
+      "classification": "internal"
+    },
+    {
+      "id": "long-task-text",
+      "why": "Long input; guards a truncation difference between implementations.",
+      "task": "refactor the dispatch layer so that every handler receives an explicit context, the retry policy is configurable per route, the telemetry emitter is injected rather than constructed inline, and the whole thing still passes the existing contract tests without modification",
+      "files": "internal/dispatch/core.go",
+      "classification": "internal"
+    },
+    {
+      "id": "context-pack-match",
+      "why": "Populates context_packs. Without a case here that field is never compared, and a port could emit it empty or wrongly ordered unnoticed.",
+      "task": "integrate the thinkquantum qrng device into the key service",
+      "files": "internal/crypto/qrng.go",
+      "classification": "internal"
+    }
+  ]
+}

@@ -62,12 +62,31 @@ func SelectAgents(args []string) int {
 	return SelectAgentsWithOptions(context.Background(), args, false)
 }
 
+// SelectImplEnv opts into a native Go selector instead of dispatching to
+// Python. It exists so a port can land incrementally behind a flag while the
+// Python implementation stays the default, and so
+// roster/orchestration/test/test_select_differential.py can run both and
+// compare their plans.
+//
+// Unset (the default) keeps today's behaviour exactly.
+const SelectImplEnv = "CADRE_SELECT_IMPL"
+
+// SelectGoNotImplementedExit is returned when the Go selector is requested
+// but does not exist yet. Deliberately distinct from 1 (a selection error)
+// and 2 (a usage error): the differential harness has to be able to tell
+// "not built yet" from "built and wrong", because a gate that cannot tell
+// them apart reports green against a port that never ran.
+const SelectGoNotImplementedExit = 3
+
 // SelectAgentsWithOptions is SelectAgents with the dispatcher's leading
 // `--interactive` flag threaded through, so `cadre --interactive select`
 // reaches roster/shared/src/settings.py's prompt the same way it does for
 // any other dispatched subcommand (CADRE_INTERACTIVE=1 in an explicit child
 // environment, never a mutation of this process's own).
 func SelectAgentsWithOptions(ctx context.Context, args []string, interactive bool) int {
+	if os.Getenv(SelectImplEnv) == "go" {
+		return selectAgentsGo(ctx, args, interactive)
+	}
 	script, err := FindCadreFile(SelectorScriptRelativePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "cadre select: %s\n", err)
@@ -157,4 +176,32 @@ func ancestorCandidates(start, relative string) []string {
 		directory = parent
 	}
 	return candidates
+}
+
+// selectAgentsGo is where a native Go selector lands.
+//
+// It is unimplemented on purpose. The port is gated on
+// roster/orchestration/test/test_select_differential.py, which compares this
+// implementation's plan against the Python one over a corpus of input shapes
+// and requires byte equality including dispatch_fingerprint. That harness
+// skips while this returns SelectGoNotImplementedExit and activates by
+// itself the moment it does not -- so the first working increment is
+// measured against the contract without anyone remembering to enable
+// anything.
+//
+// What a real implementation has to reproduce, per select_agents.go's header
+// and build_dispatch_plan.py: schema-version-correct output, the canonical
+// JSON encoding the fingerprint is computed over (sort_keys, no whitespace,
+// a fixed exclusion set), catalog ordering, risk classification, team-recipe
+// expansion, the lifecycle-contract handshake, and argparse's exact flag
+// surface, defaults, usage text and exit codes.
+func selectAgentsGo(_ context.Context, _ []string, _ bool) int {
+	fmt.Fprintf(os.Stderr,
+		"cadre select: %s=go is set, but no native Go selector exists yet.\n"+
+			"  The port is gated on roster/orchestration/test/test_select_differential.py;\n"+
+			"  implement selectAgentsGo in internal/cli/select_agents.go and that\n"+
+			"  harness will begin comparing it against the Python plan automatically.\n"+
+			"  Unset %s to use the shipping implementation.\n",
+		SelectImplEnv, SelectImplEnv)
+	return SelectGoNotImplementedExit
 }
