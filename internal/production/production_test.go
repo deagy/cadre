@@ -7,12 +7,12 @@ import (
 
 func TestConfigValidation(t *testing.T) {
 	config := &Config{
-		Port:            8080,
-		Host:            "localhost",
-		CacheSize:       1000,
-		RateLimitRPS:    100.0,
-		MaxAgents:       10,
-		Environment:     "production",
+		Port:         8080,
+		Host:         "localhost",
+		CacheSize:    1000,
+		RateLimitRPS: 100.0,
+		MaxAgents:    10,
+		Environment:  "production",
 	}
 
 	if err := config.Validate(); err != nil {

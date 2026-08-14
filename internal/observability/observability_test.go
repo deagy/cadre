@@ -26,6 +26,7 @@ func TestStartSpan(t *testing.T) {
 
 	if span == nil {
 		t.Errorf("Span should be created")
+		return
 	}
 
 	if span.Name != "test-span" {

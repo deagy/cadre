@@ -8,15 +8,23 @@ import (
 	"time"
 )
 
+type contextKey string
+
+const (
+	traceIDKey contextKey = "trace_id"
+	spanIDKey  contextKey = "span_id"
+	tracerKey  contextKey = "tracer"
+)
+
 // Tracer manages distributed tracing with OpenTelemetry-compatible spans.
 type Tracer struct {
-	mu            sync.RWMutex
-	spans         map[string]*Span
-	traceID       string
-	serviceName   string
-	environment   string
-	version       string
-	isEnabled     bool
+	mu          sync.RWMutex
+	spans       map[string]*Span
+	traceID     string
+	serviceName string
+	environment string
+	version     string
+	isEnabled   bool
 }
 
 // Span represents a distributed trace span.
@@ -85,9 +93,9 @@ func (t *Tracer) StartSpan(ctx context.Context, name string) (*Span, context.Con
 	t.spans[spanID] = span
 
 	// Propagate trace context
-	newCtx := context.WithValue(ctx, "trace_id", t.traceID)
-	newCtx = context.WithValue(newCtx, "span_id", spanID)
-	newCtx = context.WithValue(newCtx, "tracer", t)
+	newCtx := context.WithValue(ctx, traceIDKey, t.traceID)
+	newCtx = context.WithValue(newCtx, spanIDKey, spanID)
+	newCtx = context.WithValue(newCtx, tracerKey, t)
 
 	return span, newCtx
 }
@@ -330,7 +338,8 @@ type TraceContext struct {
 
 // InjectIntoEnv injects trace context into environment variables.
 func (tc *TraceContext) InjectIntoEnv(env []string) []string {
-	result := append(env, fmt.Sprintf("TRACE_ID=%s", tc.TraceID))
+	result := env
+	result = append(result, fmt.Sprintf("TRACE_ID=%s", tc.TraceID))
 	result = append(result, fmt.Sprintf("SPAN_ID=%s", tc.SpanID))
 
 	for k, v := range tc.Baggage {
