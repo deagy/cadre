@@ -133,6 +133,46 @@ jobs:
         working-directory: engine
         run: uv run pytest
 
+  go:
+    name: cmd/, internal/ (Go CLI dispatcher, Phase 1 -- ADR-001-CLI-GO-REFACTOR.md)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go build ./...
+      - run: go vet ./...
+      # -race needs cgo; ubuntu-latest ships a C toolchain. If that ever
+      # stops being true, fall back to a plain `go test ./...` leg rather
+      # than disabling cgo globally, per the Makefile's test-race comment.
+      - run: CGO_ENABLED=1 go test -race ./...
+      - name: gofmt (fails on any formatting diff)
+        run: |
+          set -eu
+          diff="$(gofmt -l .)"
+          if [ -n "$diff" ]; then
+            echo "gofmt issues found in:"
+            echo "$diff"
+            exit 1
+          fi
+      # goimports and golangci-lint are pinned in go.mod's `tool` block and
+      # resolved via `go tool`, never a floating `@latest` install, so this
+      # job and a local `make lint`/`make fmt` run the exact same tool
+      # binary go.sum already verified.
+      - name: goimports (fails on any import-formatting diff)
+        run: |
+          set -eu
+          diff="$(go tool goimports -l .)"
+          if [ -n "$diff" ]; then
+            echo "goimports issues found in:"
+            echo "$diff"
+            exit 1
+          fi
+      - run: go tool golangci-lint run ./...
+
   plugin-tools:
     name: plugin/tools (packaging, docs guards, kernel bootstrap)
     runs-on: ubuntu-latest

@@ -4357,6 +4357,8 @@ class AutomaticContextCaptureDispatchTests(unittest.TestCase):
         else:
             self.fail("async dispatch did not finish")
         self.assertEqual(completed["status"], "unavailable")
+        # Allow background cleanup thread to finish before checking
+        time.sleep(0.5)
         self.assertFalse(observed["directory"].exists(), "async failure paths must clean the private channel")
 
     def test_async_polling_returns_the_single_existing_capture_without_recapturing(self) -> None:

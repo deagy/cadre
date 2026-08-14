@@ -15,6 +15,13 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.23.3](https://github.com/deagy/cadre/releases/tag/plugin-v0.23.3) - 2026-08-13
+
+### Fixed
+
+- **`cadre upgrade` command fixes from code review:** Fixed 5 critical bugs identified in security review including proper handling of pre-release versions, REPO_ROOT path detection in bundled layouts, source checkout detection, and exit code handling. All version comparison edge cases now pass.
+- **Runtime knowledge stewardship improvements:** Enhanced auto-defer validation to check both `true` and `unknown` risk states, improved filtering logic with clear edge case handling, added context-store operations to steward scope, and expanded test coverage.
+
 ## [0.23.2](https://github.com/deagy/cadre/releases/tag/plugin-v0.23.2) - 2026-08-13
 
 ### Added

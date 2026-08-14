@@ -34,7 +34,7 @@ if [ "$command_name" = "sdlc" ]; then
       sdlc_bin=$(command -v agentic-sdlc || true)
     fi
   fi
-  [ -n "$sdlc_bin" ] || { echo "cadre: install Agentic SDLC v0.13.3+ from https://github.com/deagy/cadre" >&2; exit 1; }
+  [ -n "$sdlc_bin" ] || { echo "cadre: install Agentic SDLC v0.13.2+ from https://github.com/deagy/cadre" >&2; exit 1; }
   exec "$sdlc_bin" --provider "$PLUGIN_ROOT/provider.json" "$@"
 fi
 detect_agent_python
