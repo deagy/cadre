@@ -10,21 +10,21 @@ import (
 // Config holds all production configuration.
 type Config struct {
 	// Server
-	Port             int
-	Host             string
-	ReadTimeout      time.Duration
-	WriteTimeout     time.Duration
-	ShutdownTimeout  time.Duration
+	Port            int
+	Host            string
+	ReadTimeout     time.Duration
+	WriteTimeout    time.Duration
+	ShutdownTimeout time.Duration
 
 	// Logging
-	LogLevel         string
-	LogFormat        string // json or text
-	LogOutput        string // stdout or file path
+	LogLevel  string
+	LogFormat string // json or text
+	LogOutput string // stdout or file path
 
 	// Cache
-	CacheEnabled     bool
-	CacheSize        int
-	CacheTTL         time.Duration
+	CacheEnabled bool
+	CacheSize    int
+	CacheTTL     time.Duration
 
 	// Rate Limiting
 	RateLimitEnabled bool
@@ -32,41 +32,41 @@ type Config struct {
 	QuotaWindow      time.Duration
 
 	// Agents
-	MaxAgents        int
-	AgentTimeout     time.Duration
+	MaxAgents    int
+	AgentTimeout time.Duration
 
 	// Security
-	RequireAuth      bool
-	APIKeyEnv        string
+	RequireAuth bool
+	APIKeyEnv   string
 
 	// Health
-	HealthCheckPath  string
-	ReadyCheckPath   string
+	HealthCheckPath string
+	ReadyCheckPath  string
 
 	// Environment
-	Environment      string // development, staging, production
-	Version          string
+	Environment string // development, staging, production
+	Version     string
 }
 
 // NewConfigFromEnv loads configuration from environment variables.
 func NewConfigFromEnv() *Config {
 	return &Config{
 		// Server
-		Port:             getEnvInt("PORT", 8080),
-		Host:             getEnvString("HOST", "0.0.0.0"),
-		ReadTimeout:      getEnvDuration("READ_TIMEOUT", 30*time.Second),
-		WriteTimeout:     getEnvDuration("WRITE_TIMEOUT", 30*time.Second),
-		ShutdownTimeout:  getEnvDuration("SHUTDOWN_TIMEOUT", 30*time.Second),
+		Port:            getEnvInt("PORT", 8080),
+		Host:            getEnvString("HOST", "0.0.0.0"),
+		ReadTimeout:     getEnvDuration("READ_TIMEOUT", 30*time.Second),
+		WriteTimeout:    getEnvDuration("WRITE_TIMEOUT", 30*time.Second),
+		ShutdownTimeout: getEnvDuration("SHUTDOWN_TIMEOUT", 30*time.Second),
 
 		// Logging
-		LogLevel:         getEnvString("LOG_LEVEL", "info"),
-		LogFormat:        getEnvString("LOG_FORMAT", "json"),
-		LogOutput:        getEnvString("LOG_OUTPUT", "stdout"),
+		LogLevel:  getEnvString("LOG_LEVEL", "info"),
+		LogFormat: getEnvString("LOG_FORMAT", "json"),
+		LogOutput: getEnvString("LOG_OUTPUT", "stdout"),
 
 		// Cache
-		CacheEnabled:     getEnvBool("CACHE_ENABLED", true),
-		CacheSize:        getEnvInt("CACHE_SIZE", 1000),
-		CacheTTL:         getEnvDuration("CACHE_TTL", 1*time.Hour),
+		CacheEnabled: getEnvBool("CACHE_ENABLED", true),
+		CacheSize:    getEnvInt("CACHE_SIZE", 1000),
+		CacheTTL:     getEnvDuration("CACHE_TTL", 1*time.Hour),
 
 		// Rate Limiting
 		RateLimitEnabled: getEnvBool("RATE_LIMIT_ENABLED", true),
@@ -74,20 +74,20 @@ func NewConfigFromEnv() *Config {
 		QuotaWindow:      getEnvDuration("QUOTA_WINDOW", 1*time.Minute),
 
 		// Agents
-		MaxAgents:        getEnvInt("MAX_AGENTS", 10),
-		AgentTimeout:     getEnvDuration("AGENT_TIMEOUT", 5*time.Minute),
+		MaxAgents:    getEnvInt("MAX_AGENTS", 10),
+		AgentTimeout: getEnvDuration("AGENT_TIMEOUT", 5*time.Minute),
 
 		// Security
-		RequireAuth:      getEnvBool("REQUIRE_AUTH", false),
-		APIKeyEnv:        getEnvString("API_KEY_ENV", "API_KEY"),
+		RequireAuth: getEnvBool("REQUIRE_AUTH", false),
+		APIKeyEnv:   getEnvString("API_KEY_ENV", "API_KEY"),
 
 		// Health
-		HealthCheckPath:  getEnvString("HEALTH_CHECK_PATH", "/health"),
-		ReadyCheckPath:   getEnvString("READY_CHECK_PATH", "/ready"),
+		HealthCheckPath: getEnvString("HEALTH_CHECK_PATH", "/health"),
+		ReadyCheckPath:  getEnvString("READY_CHECK_PATH", "/ready"),
 
 		// Environment
-		Environment:      getEnvString("ENVIRONMENT", "development"),
-		Version:          getEnvString("VERSION", "unknown"),
+		Environment: getEnvString("ENVIRONMENT", "development"),
+		Version:     getEnvString("VERSION", "unknown"),
 	}
 }
 

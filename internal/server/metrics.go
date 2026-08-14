@@ -52,8 +52,18 @@ func (mc *MetricsCollector) Record(name string, value float64, labels map[string
 	key := mc.buildKey(name, labels)
 
 	// Infer type from name suffix and record
-	if strings.HasSuffix(name, "_total") {
-		// Counter
+	var metricType string
+	switch {
+	case strings.HasSuffix(name, "_total"):
+		metricType = "counter"
+	case strings.HasSuffix(name, "_ms"), strings.HasSuffix(name, "_duration"):
+		metricType = "histogram"
+	default:
+		metricType = "gauge"
+	}
+
+	switch metricType {
+	case "counter":
 		if _, exists := mc.counterLabels[key]; !exists {
 			mc.counterLabels[key] = make(map[string]float64)
 		}
@@ -61,8 +71,7 @@ func (mc *MetricsCollector) Record(name string, value float64, labels map[string
 		labelKey := mc.labelKey(labels)
 		current[labelKey] += value
 		mc.requestCount++
-	} else if strings.HasSuffix(name, "_ms") || strings.HasSuffix(name, "_duration") {
-		// Histogram (latency)
+	case "histogram":
 		if _, exists := mc.histogramLabels[key]; !exists {
 			mc.histogramLabels[key] = make(map[string]*Histogram)
 		}
@@ -73,8 +82,7 @@ func (mc *MetricsCollector) Record(name string, value float64, labels map[string
 		}
 		histograms[labelKey].Observe(value)
 		mc.totalRequestLatency += int64(value * 1e6) // convert to nanoseconds
-	} else {
-		// Gauge
+	case "gauge":
 		if _, exists := mc.gaugeLabels[key]; !exists {
 			mc.gaugeLabels[key] = make(map[string]float64)
 		}
@@ -102,10 +110,10 @@ func (mc *MetricsCollector) Export() string {
 	var b strings.Builder
 
 	// Write timestamp
-	b.WriteString(fmt.Sprintf("# HELP process_uptime_seconds Time since process start\n"))
-	b.WriteString(fmt.Sprintf("# TYPE process_uptime_seconds gauge\n"))
+	fmt.Fprintf(&b, "# HELP process_uptime_seconds Time since process start\n")
+	fmt.Fprintf(&b, "# TYPE process_uptime_seconds gauge\n")
 	uptime := time.Since(mc.startTime).Seconds()
-	b.WriteString(fmt.Sprintf("process_uptime_seconds %f\n\n", uptime))
+	fmt.Fprintf(&b, "process_uptime_seconds %f\n\n", uptime)
 
 	// Export counters
 	if len(mc.counterLabels) > 0 {
@@ -113,7 +121,7 @@ func (mc *MetricsCollector) Export() string {
 		b.WriteString("# TYPE http_requests_total counter\n")
 		for key, labelMap := range mc.counterLabels {
 			for labelKey, value := range labelMap {
-				b.WriteString(fmt.Sprintf("%s{%s} %f\n", key, labelKey, value))
+				fmt.Fprintf(&b, "%s{%s} %f\n", key, labelKey, value)
 			}
 		}
 		b.WriteString("\n")
@@ -125,7 +133,7 @@ func (mc *MetricsCollector) Export() string {
 		b.WriteString("# TYPE gauges gauge\n")
 		for key, labelMap := range mc.gaugeLabels {
 			for labelKey, value := range labelMap {
-				b.WriteString(fmt.Sprintf("%s{%s} %f\n", key, labelKey, value))
+				fmt.Fprintf(&b, "%s{%s} %f\n", key, labelKey, value)
 			}
 		}
 		b.WriteString("\n")
@@ -147,13 +155,13 @@ func (mc *MetricsCollector) Export() string {
 							count += c
 						}
 					}
-					b.WriteString(fmt.Sprintf("%s_bucket{%s,le=\"%d\"} %d\n", key, labelKey, bucket, count))
+					fmt.Fprintf(&b, "%s_bucket{%s,le=\"%d\"} %d\n", key, labelKey, bucket, count)
 				}
 				// +Inf bucket
-				b.WriteString(fmt.Sprintf("%s_bucket{%s,le=\"+Inf\"} %d\n", key, labelKey, hist.count))
+				fmt.Fprintf(&b, "%s_bucket{%s,le=\"+Inf\"} %d\n", key, labelKey, hist.count)
 				// Sum and count
-				b.WriteString(fmt.Sprintf("%s_sum{%s} %f\n", key, labelKey, hist.sum))
-				b.WriteString(fmt.Sprintf("%s_count{%s} %d\n", key, labelKey, hist.count))
+				fmt.Fprintf(&b, "%s_sum{%s} %f\n", key, labelKey, hist.sum)
+				fmt.Fprintf(&b, "%s_count{%s} %d\n", key, labelKey, hist.count)
 				hist.mu.Unlock()
 			}
 		}
@@ -162,11 +170,11 @@ func (mc *MetricsCollector) Export() string {
 
 	// Summary
 	b.WriteString("# Summary\n")
-	b.WriteString(fmt.Sprintf("# Total Requests: %d\n", mc.requestCount))
-	b.WriteString(fmt.Sprintf("# Total Errors: %d\n", mc.errorCount))
+	fmt.Fprintf(&b, "# Total Requests: %d\n", mc.requestCount)
+	fmt.Fprintf(&b, "# Total Errors: %d\n", mc.errorCount)
 	if mc.requestCount > 0 {
 		avgLatency := mc.totalRequestLatency / mc.requestCount
-		b.WriteString(fmt.Sprintf("# Average Latency: %d ns\n", avgLatency))
+		fmt.Fprintf(&b, "# Average Latency: %d ns\n", avgLatency)
 	}
 
 	return b.String()
@@ -262,7 +270,7 @@ func (mc *MetricsCollector) labelKey(labels map[string]string) string {
 		if i > 0 {
 			b.WriteString(",")
 		}
-		b.WriteString(fmt.Sprintf("%s=\"%s\"", k, labels[k]))
+		fmt.Fprintf(&b, "%s=\"%s\"", k, labels[k])
 	}
 
 	return b.String()

@@ -174,9 +174,10 @@ kubectl logs deployment/cadre | grep ERROR
    docker exec <container> python3 --version
    ```
 
-2. Verify Python script paths:
+2. Verify CLI binary and Python path:
    ```bash
-   docker exec <container> ls -la /app/bin/cadre.py
+   docker exec <container> which cadre
+   docker exec <container> ls -la /app/bin/cadre
    ```
 
 3. Check subprocess logs:
@@ -186,7 +187,7 @@ kubectl logs deployment/cadre | grep ERROR
 
 4. Increase subprocess timeout:
    ```bash
-   export AGENT_TIMEOUT=10m
+   export SUBPROCESS_TIMEOUT=10m
    ```
 
 ## Deployment Issues

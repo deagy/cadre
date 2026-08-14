@@ -12,14 +12,14 @@ import (
 
 // Server represents the HTTP server for health checks, metrics, and observability.
 type Server struct {
-	config          *production.Config
-	httpServer      *http.Server
-	healthChecker   *production.HealthChecker
-	readinessCheck  *production.ReadinessChecker
+	config           *production.Config
+	httpServer       *http.Server
+	healthChecker    *production.HealthChecker
+	readinessCheck   *production.ReadinessChecker
 	metricsCollector *MetricsCollector
-	logger          *production.ProductionLogger
-	mu              sync.RWMutex
-	isRunning       bool
+	logger           *production.ProductionLogger
+	mu               sync.RWMutex
+	isRunning        bool
 }
 
 // NewServer creates a new HTTP server instance.
@@ -151,7 +151,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(statusCode)
-	fmt.Fprintf(w, `{"status":"%s","timestamp":"%s","version":"%s","components":%d}`,
+	_, _ = fmt.Fprintf(w, `{"status":"%s","timestamp":"%s","version":"%s","components":%d}`,
 		status.Status, status.Timestamp.Format(time.RFC3339), status.Version, len(status.Components))
 }
 
@@ -175,7 +175,7 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(statusCode)
-	fmt.Fprintf(w, `{"status":"%s","timestamp":"%s"}`, status, time.Now().Format(time.RFC3339))
+	_, _ = fmt.Fprintf(w, `{"status":"%s","timestamp":"%s"}`, status, time.Now().Format(time.RFC3339))
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
@@ -186,7 +186,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 
-	fmt.Fprint(w, metrics)
+	_, _ = fmt.Fprint(w, metrics)
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -198,14 +198,14 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	fmt.Fprintf(w, `{"health":"%s","ready":%v,"version":"%s"}`,
+	_, _ = fmt.Fprintf(w, `{"health":"%s","ready":%v,"version":"%s"}`,
 		health.Status, isReady, s.config.Version)
 }
 
 func (s *Server) handlePprof(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, `<html><body><h1>pprof Profiling</h1>
+	_, _ = fmt.Fprint(w, `<html><body><h1>pprof Profiling</h1>
 <p><a href="/debug/pprof/heap">Heap</a></p>
 <p><a href="/debug/pprof/goroutine">Goroutines</a></p>
 <p><a href="/debug/pprof/profile">CPU (30s)</a></p>
@@ -239,11 +239,11 @@ func (s *Server) metricsMiddleware(next http.Handler) http.Handler {
 
 		if s.logger != nil {
 			s.logger.Info(fmt.Sprintf("%s %s", r.Method, r.URL.Path), map[string]interface{}{
-				"status":     wrapped.statusCode,
-				"duration":   duration,
-				"method":     r.Method,
-				"path":       r.URL.Path,
-				"remote_ip":  r.RemoteAddr,
+				"status":    wrapped.statusCode,
+				"duration":  duration,
+				"method":    r.Method,
+				"path":      r.URL.Path,
+				"remote_ip": r.RemoteAddr,
 			})
 		}
 	})

@@ -42,7 +42,6 @@ func TestE2EWithCaching(t *testing.T) {
 		enableByDefault: false,
 	}
 
-
 	stats := cachedWorkflow.GetCacheStats()
 	if stats.MaxSize != 10 {
 		t.Errorf("cache size mismatch")
@@ -100,6 +99,7 @@ func TestE2EWithMonitoring(t *testing.T) {
 	snapshot := monitor.GetSnapshot("e2e-test")
 	if snapshot == nil {
 		t.Errorf("snapshot should not be nil")
+		return
 	}
 
 	if snapshot.TotalOperations != 5 {
