@@ -7,9 +7,9 @@ import (
 
 // HealthStatus represents the health status of a component.
 type HealthStatus struct {
-	Status    string                 `json:"status"`
-	Timestamp time.Time              `json:"timestamp"`
-	Version   string                 `json:"version"`
+	Status     string                     `json:"status"`
+	Timestamp  time.Time                  `json:"timestamp"`
+	Version    string                     `json:"version"`
 	Components map[string]ComponentHealth `json:"components"`
 }
 
@@ -23,10 +23,10 @@ type ComponentHealth struct {
 
 // HealthChecker performs health checks on components.
 type HealthChecker struct {
-	mu         sync.RWMutex
-	checks     map[string]HealthCheckFunc
-	version    string
-	startTime  time.Time
+	mu        sync.RWMutex
+	checks    map[string]HealthCheckFunc
+	version   string
+	startTime time.Time
 }
 
 // HealthCheckFunc is a function that performs a health check.
@@ -123,9 +123,9 @@ func (hc *HealthChecker) CheckAll() HealthStatus {
 
 // ReadinessChecker checks if the application is ready to serve traffic.
 type ReadinessChecker struct {
-	mu         sync.RWMutex
-	checks     map[string]ReadinessCheckFunc
-	ready      bool
+	mu     sync.RWMutex
+	checks map[string]ReadinessCheckFunc
+	ready  bool
 }
 
 // ReadinessCheckFunc checks if a component is ready.

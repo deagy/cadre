@@ -137,10 +137,10 @@ func (mg *MigrationGuide) ListSteps() []*MigrationStep {
 
 // CompatibilityMode provides backward compatibility layer.
 type CompatibilityMode struct {
-	enabled           bool
+	enabled            bool
 	deprecationTracker *DeprecationTracker
-	legacyRouting     bool
-	legacyFormat      string
+	legacyRouting      bool
+	legacyFormat       string
 }
 
 // NewCompatibilityMode creates a new compatibility mode.
@@ -181,9 +181,9 @@ func (cm *CompatibilityMode) IsEnabled() bool {
 
 // VersionMigration provides version-specific migration utilities.
 type VersionMigration struct {
-	from    string
-	to      string
-	steps   []*MigrationStep
+	from  string
+	to    string
+	steps []*MigrationStep
 }
 
 // NewVersionMigration creates a new version migration.
