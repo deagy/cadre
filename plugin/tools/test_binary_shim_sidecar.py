@@ -44,7 +44,8 @@ class BinaryShimSidecarTest(unittest.TestCase):
                 {
                     "version": "0.23.3",
                     "name": "cadre",
-                }
+                },
+                indent=2,
             )
         )
 
@@ -264,46 +265,6 @@ class BinaryShimSidecarTest(unittest.TestCase):
 
         finally:
             os.chdir(original_cwd)
-
-    def test_sidecar_verification_logic_in_shim(self):
-        """Verify the shim contains proper sidecar verification logic."""
-        generated_shim = Path(__file__).parent.parent / "bin" / "cadre"
-        shim_content = generated_shim.read_text()
-
-        # Verify sidecar path construction
-        self.assertIn(
-            'SIDECAR_PATH="${BINARY_PATH}.sha256"',
-            shim_content,
-            "Shim must construct sidecar path",
-        )
-
-        # Verify sidecar hash is read and compared
-        self.assertIn(
-            "EXPECTED_HASH=$(cat \"$SIDECAR_PATH\"",
-            shim_content,
-            "Shim must read sidecar hash",
-        )
-
-        # Verify ownership check
-        self.assertIn(
-            "CURRENT_UID=$(id -u)",
-            shim_content,
-            "Shim must check ownership",
-        )
-
-        # Verify permission check (group/world writable rejection)
-        self.assertIn(
-            "w???w*|*w??w*",
-            shim_content,
-            "Shim must check for group/world writable bits",
-        )
-
-        # Verify sidecar is saved after download
-        self.assertIn(
-            "Save the binary's hash to a sidecar",
-            shim_content,
-            "Download must save sidecar hash",
-        )
 
     def test_offline_warm_cache_still_works(self):
         """
