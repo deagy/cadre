@@ -182,6 +182,60 @@ jobs:
             exit 1
           fi
       - run: go tool golangci-lint run ./...
+      - name: Verify release.yml CLI cross-compile matrix matches DISTRIBUTION.md
+        run: |
+          set -eu
+          python3 - <<'VERIFY'
+          import yaml, re
+
+          # Read the release.yml workflow
+          with open('.github/workflows/release.yml') as f:
+              workflow = yaml.safe_load(f)
+
+          # Extract the CLI build matrix from the workflow
+          cli_job = workflow['jobs']['cli']
+          if 'strategy' not in cli_job or 'matrix' not in cli_job['strategy']:
+              print('ERROR: cli job has no strategy.matrix defined')
+              exit(1)
+
+          matrix_platforms = set()
+          for item in cli_job['strategy']['matrix']['include']:
+              goos = item['goos']
+              goarch = item['goarch']
+              matrix_platforms.add(f"{goos}-{goarch}")
+
+          # Read DISTRIBUTION.md and extract promised archive names
+          with open('DISTRIBUTION.md') as f:
+              content = f.read()
+
+          # Find all cadre-v*-goos-goarch.tar.gz and .zip patterns
+          promised_platforms = set()
+          for match in re.finditer(r'cadre-v\d+\.\d+\.\d+-(\w+)-(\w+)\.(?:tar\.gz|zip)', content):
+              goos, goarch = match.group(1), match.group(2)
+              promised_platforms.add(f"{goos}-{goarch}")
+
+          if not promised_platforms:
+              print('WARNING: Could not extract platform list from DISTRIBUTION.md')
+              print('Skipping matrix drift check')
+              exit(0)
+
+          print(f'Platforms in release.yml matrix: {sorted(matrix_platforms)}')
+          print(f'Platforms promised in DISTRIBUTION.md: {sorted(promised_platforms)}')
+
+          # Check for divergence
+          missing_in_matrix = promised_platforms - matrix_platforms
+          extra_in_matrix = matrix_platforms - promised_platforms
+
+          if missing_in_matrix:
+              print(f'ERROR: DISTRIBUTION.md promises {missing_in_matrix} but they are not in the release.yml matrix')
+              exit(1)
+
+          if extra_in_matrix:
+              print(f'WARNING: release.yml builds {extra_in_matrix} but DISTRIBUTION.md does not mention them')
+              # Don't fail on this; it's OK to build more than promised
+
+          print('Matrix drift check passed')
+          VERIFY
 
   plugin-tools:
     name: plugin/tools (packaging, docs guards, kernel bootstrap)
