@@ -3,6 +3,7 @@ package orchestration
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -263,4 +264,11 @@ func TestGoVersionOK(t *testing.T) {
 			t.Errorf("goVersionOK(%q) = %v, want %v", tt.version, got, tt.want)
 		}
 	}
+}
+
+// contains previously lived in dispatch_plan_test.go, removed with the
+// divergent dispatch-plan builder. Kept here because doctor_test.go is the
+// remaining user.
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
 }

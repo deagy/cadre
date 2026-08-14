@@ -408,6 +408,19 @@ written:
   undocumented `cadre execute` command absent from both
   `bin/subcommands.tsv` and `internal/cli/usage.go`. Recorded here as a
   finding for follow-up, not resolved by this pass.
+  **Resolved 2026-08-14 by removal.** Run against the same input as `cadre
+  select`, that second implementation matched a different route set, emitted
+  no `schema_version` and no `dispatch_fingerprint`, invented a `code-review`
+  quality gate unrelated to the lifecycle gates, named a retired knowledge
+  source (`cadre-agents`), and requested knowledge at classification
+  `medium` for a task the caller had classified `internal` — then executed
+  agents against that plan. It was deleted rather than documented, because
+  documenting it would have blessed those defects as contract. The execution
+  engine reachable only through it (executor, agent pool, API/subprocess
+  runners, Claude/OpenAI providers, result cache and consolidation) went with
+  it; `routing.go`'s types and loaders, `routing_overlay.go` and
+  `glob_containment.go` were kept, being ported foundations for an eventual
+  `select` port rather than part of the divergence.
 - This ADR's dependency claim ("viper only") does not match the shipped
   code: `viper` is an indirect (transitive) `go.mod` dependency only, never
   imported directly; `internal/config/` hand-rolls its resolution against

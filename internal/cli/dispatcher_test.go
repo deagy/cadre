@@ -382,25 +382,3 @@ func TestRun_SelectRouting(t *testing.T) {
 		t.Errorf("Run() for select code = %d, want 2", code)
 	}
 }
-
-func TestRun_ExecuteRouting(t *testing.T) {
-	// Test that execute is properly routed to the Go CLI
-	dir := t.TempDir()
-	subPath := writeSubcommandsTSV(t, dir, [][3]string{})
-
-	var stderr bytes.Buffer
-	deps := Deps{
-		Stdout:          io.Discard,
-		Stderr:          &stderr,
-		RepoRoot:        dir,
-		SubcommandsPath: subPath,
-	}
-
-	// execute without required flags should exit with 2
-	code := Run(context.Background(), []string{"execute"}, deps)
-
-	// Should fail with code 2 (missing required flags)
-	if code != 2 {
-		t.Errorf("Run() for execute code = %d, want 2", code)
-	}
-}
