@@ -10,13 +10,13 @@ import (
 
 // Tracer manages distributed tracing with OpenTelemetry-compatible spans.
 type Tracer struct {
-	mu            sync.RWMutex
-	spans         map[string]*Span
-	traceID       string
-	serviceName   string
-	environment   string
-	version       string
-	isEnabled     bool
+	mu          sync.RWMutex
+	spans       map[string]*Span
+	traceID     string
+	serviceName string
+	environment string
+	version     string
+	isEnabled   bool
 }
 
 // Span represents a distributed trace span.

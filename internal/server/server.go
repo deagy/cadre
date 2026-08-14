@@ -12,14 +12,14 @@ import (
 
 // Server represents the HTTP server for health checks, metrics, and observability.
 type Server struct {
-	config          *production.Config
-	httpServer      *http.Server
-	healthChecker   *production.HealthChecker
-	readinessCheck  *production.ReadinessChecker
+	config           *production.Config
+	httpServer       *http.Server
+	healthChecker    *production.HealthChecker
+	readinessCheck   *production.ReadinessChecker
 	metricsCollector *MetricsCollector
-	logger          *production.ProductionLogger
-	mu              sync.RWMutex
-	isRunning       bool
+	logger           *production.ProductionLogger
+	mu               sync.RWMutex
+	isRunning        bool
 }
 
 // NewServer creates a new HTTP server instance.
@@ -239,11 +239,11 @@ func (s *Server) metricsMiddleware(next http.Handler) http.Handler {
 
 		if s.logger != nil {
 			s.logger.Info(fmt.Sprintf("%s %s", r.Method, r.URL.Path), map[string]interface{}{
-				"status":     wrapped.statusCode,
-				"duration":   duration,
-				"method":     r.Method,
-				"path":       r.URL.Path,
-				"remote_ip":  r.RemoteAddr,
+				"status":    wrapped.statusCode,
+				"duration":  duration,
+				"method":    r.Method,
+				"path":      r.URL.Path,
+				"remote_ip": r.RemoteAddr,
 			})
 		}
 	})
