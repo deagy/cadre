@@ -47,6 +47,13 @@ Subcommands:
   maintenance          Run maintenance tasks
   export               Export knowledge store data
   import               Import knowledge store data
+  batch-import         Bulk import messages from file
+  batch-delete         Bulk delete messages by filter
+  batch-update         Bulk update messages by filter
+  check-integrity      Check database integrity
+  repair               Repair database issues
+  rebuild-indexes      Rebuild database indices
+  defragment           Optimize database file size
 
 Options:
 `)
@@ -137,6 +144,20 @@ Options:
 		return knowledgeExport(subArgs)
 	case "import":
 		return knowledgeImport(subArgs)
+	case "batch-import":
+		return knowledgeBatchImport(subArgs)
+	case "batch-delete":
+		return knowledgeBatchDelete(subArgs)
+	case "batch-update":
+		return knowledgeBatchUpdate(subArgs)
+	case "check-integrity":
+		return knowledgeCheckIntegrity(subArgs)
+	case "repair":
+		return knowledgeRepair(subArgs)
+	case "rebuild-indexes":
+		return knowledgeRebuildIndexes(subArgs)
+	case "defragment":
+		return knowledgeDefragment(subArgs)
 	case "help", "-h", "--help":
 		fs.Usage()
 		return 0
@@ -3008,6 +3029,440 @@ func knowledgeImport(args []string) int {
 		"format": *format,
 	})
 
+	return 0
+}
+
+// knowledgeBatchImport performs bulk import of messages.
+func knowledgeBatchImport(args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge batch-import", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge batch-import [options]
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
+
+	file := fs.String("file", "", "File to import from")
+	format := fs.String("format", "json", "Format: json, jsonl, csv")
+	batchSize := fs.Int("batch-size", 100, "Batch size for processing")
+	skipErrors := fs.Bool("skip-errors", false, "Skip messages with errors")
+	dryRun := fs.Bool("dry-run", false, "Preview without importing")
+	jsonOutput := fs.Bool("json", false, "JSON output")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if *file == "" {
+		fmt.Fprintf(os.Stderr, "cadre knowledge batch-import: --file required\n")
+		return 2
+	}
+
+	bo := knowledge.NewBatchOperations()
+	result, err := bo.ImportFromFile(*file, *format, *batchSize, *skipErrors, *dryRun)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge batch-import: %v\n", err)
+		return 1
+	}
+
+	if *jsonOutput {
+		output := map[string]interface{}{
+			"total_read":    result.TotalRead,
+			"success_count": result.SuccessCount,
+			"failure_count": result.FailureCount,
+			"skipped_count": result.SkippedCount,
+			"success_rate":  result.GetSuccessRate(),
+			"throughput":    result.GetThroughput(),
+			"duration_ms":   result.GetDuration().Milliseconds(),
+			"dry_run":       result.DryRun,
+		}
+		data, _ := json.MarshalIndent(output, "", "  ")
+		fmt.Println(string(data))
+	} else {
+		fmt.Printf("Import Summary\n")
+		fmt.Printf("  Total read: %d\n", result.TotalRead)
+		fmt.Printf("  Success: %d (%.1f%%)\n", result.SuccessCount, result.GetSuccessRate())
+		fmt.Printf("  Failures: %d\n", result.FailureCount)
+		fmt.Printf("  Skipped: %d\n", result.SkippedCount)
+		fmt.Printf("  Throughput: %.0f ops/sec\n", result.GetThroughput())
+		fmt.Printf("  Duration: %dms\n", result.GetDuration().Milliseconds())
+		if *dryRun {
+			fmt.Printf("  (Dry run - no data was imported)\n")
+		}
+		if len(result.Errors) > 0 && len(result.Errors) <= 5 {
+			fmt.Println("\nErrors:")
+			for _, err := range result.Errors {
+				fmt.Printf("  - %s\n", err)
+			}
+		}
+	}
+
+	if result.FailureCount > 0 || result.SkippedCount > 0 {
+		return 1
+	}
+	return 0
+}
+
+// knowledgeBatchDelete performs bulk deletion of messages.
+func knowledgeBatchDelete(args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge batch-delete", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge batch-delete [options]
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
+
+	classification := fs.String("classification", "", "Filter by classification")
+	source := fs.String("source", "", "Filter by source")
+	olderThan := fs.Int("older-than-days", 0, "Delete messages older than N days")
+	batchSize := fs.Int("batch-size", 100, "Batch size for processing")
+	dryRun := fs.Bool("dry-run", false, "Preview without deleting")
+	confirm := fs.Bool("confirm", false, "Confirm deletion (required for non-dry-run)")
+	jsonOutput := fs.Bool("json", false, "JSON output")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if *classification == "" && *source == "" && *olderThan == 0 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge batch-delete: at least one filter required (--classification, --source, or --older-than-days)\n")
+		return 2
+	}
+
+	if !*dryRun && !*confirm {
+		fmt.Fprintf(os.Stderr, "cadre knowledge batch-delete: --confirm required for actual deletion\n")
+		return 2
+	}
+
+	bo := knowledge.NewBatchOperations()
+	result, err := bo.DeleteByFilter(*classification, *source, *olderThan, *batchSize, *dryRun)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge batch-delete: %v\n", err)
+		return 1
+	}
+
+	if *jsonOutput {
+		output := map[string]interface{}{
+			"total_matched": result.TotalMatched,
+			"deleted_count": result.DeletedCount,
+			"failure_count": result.FailureCount,
+			"success_rate":  result.GetSuccessRate(),
+			"filter":        result.FilterUsed,
+			"dry_run":       result.DryRun,
+		}
+		data, _ := json.MarshalIndent(output, "", "  ")
+		fmt.Println(string(data))
+	} else {
+		fmt.Printf("Delete Summary\n")
+		fmt.Printf("  Filter: %s\n", result.FilterUsed)
+		fmt.Printf("  Total matched: %d\n", result.TotalMatched)
+		fmt.Printf("  Deleted: %d (%.1f%%)\n", result.DeletedCount, result.GetSuccessRate())
+		fmt.Printf("  Failures: %d\n", result.FailureCount)
+		if *dryRun {
+			fmt.Printf("  (Dry run - no data was deleted)\n")
+		}
+	}
+
+	if result.FailureCount > 0 {
+		return 1
+	}
+	return 0
+}
+
+// knowledgeBatchUpdate performs bulk update of messages.
+func knowledgeBatchUpdate(args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge batch-update", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge batch-update [options]
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
+
+	filter := fs.String("filter", "", "Filter expression")
+	changes := fs.String("changes", "", "JSON object with changes")
+	batchSize := fs.Int("batch-size", 100, "Batch size for processing")
+	dryRun := fs.Bool("dry-run", false, "Preview without updating")
+	confirm := fs.Bool("confirm", false, "Confirm update (required for non-dry-run)")
+	jsonOutput := fs.Bool("json", false, "JSON output")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if *filter == "" {
+		fmt.Fprintf(os.Stderr, "cadre knowledge batch-update: --filter required\n")
+		return 2
+	}
+
+	if *changes == "" {
+		fmt.Fprintf(os.Stderr, "cadre knowledge batch-update: --changes required\n")
+		return 2
+	}
+
+	if !*dryRun && !*confirm {
+		fmt.Fprintf(os.Stderr, "cadre knowledge batch-update: --confirm required for actual update\n")
+		return 2
+	}
+
+	// Parse changes JSON
+	var changeMap map[string]interface{}
+	if err := json.Unmarshal([]byte(*changes), &changeMap); err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge batch-update: invalid changes JSON: %v\n", err)
+		return 2
+	}
+
+	bo := knowledge.NewBatchOperations()
+	result, err := bo.UpdateByFilter(*filter, changeMap, *batchSize, *dryRun)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge batch-update: %v\n", err)
+		return 1
+	}
+
+	if *jsonOutput {
+		output := map[string]interface{}{
+			"total_matched": result.TotalMatched,
+			"updated_count": result.UpdatedCount,
+			"failure_count": result.FailureCount,
+			"success_rate":  result.GetSuccessRate(),
+			"changes":       len(changeMap),
+			"dry_run":       result.DryRun,
+		}
+		data, _ := json.MarshalIndent(output, "", "  ")
+		fmt.Println(string(data))
+	} else {
+		fmt.Printf("Update Summary\n")
+		fmt.Printf("  Filter: %s\n", *filter)
+		fmt.Printf("  Total matched: %d\n", result.TotalMatched)
+		fmt.Printf("  Updated: %d (%.1f%%)\n", result.UpdatedCount, result.GetSuccessRate())
+		fmt.Printf("  Failures: %d\n", result.FailureCount)
+		fmt.Printf("  Fields changed: %d\n", result.ChangeCount)
+		if *dryRun {
+			fmt.Printf("  (Dry run - no data was updated)\n")
+		}
+	}
+
+	if result.FailureCount > 0 {
+		return 1
+	}
+	return 0
+}
+
+// knowledgeCheckIntegrity checks database integrity.
+func knowledgeCheckIntegrity(args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge check-integrity", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: cadre knowledge check-integrity [options]\n\nOptions:\n")
+		fs.PrintDefaults()
+	}
+
+	detailed := fs.Bool("detailed", false, "Detailed integrity check")
+	jsonOutput := fs.Bool("json", false, "JSON output")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	// Get database path
+	wd, _ := os.Getwd()
+	repoRoot, _ := platform.FindProjectRoot(wd)
+	dbPath := filepath.Join(repoRoot, ".agents", "knowledge-store", "store.db")
+
+	// Open database
+	db, err := openDatabase(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge check-integrity: cannot open database: %v\n", err)
+		return 1
+	}
+	defer db.Close()
+
+	dr := knowledge.NewDatabaseRepair(db)
+	result, _ := dr.CheckIntegrity(*detailed)
+
+	if *jsonOutput {
+		output := map[string]interface{}{
+			"database_valid":  result.DatabaseValid,
+			"issues_found":    len(result.IssuesFound),
+			"total_messages":  result.TotalMessages,
+			"total_chunks":    result.TotalChunks,
+			"orphaned_chunks": result.OrphanedChunks,
+		}
+		data, _ := json.MarshalIndent(output, "", "  ")
+		fmt.Println(string(data))
+	} else {
+		fmt.Println(result.GetSummary())
+		if *detailed {
+			fmt.Printf("\nStatistics:\n")
+			fmt.Printf("  Total messages: %d\n", result.TotalMessages)
+			fmt.Printf("  Total chunks: %d\n", result.TotalChunks)
+			if result.OrphanedChunks > 0 {
+				fmt.Printf("  Orphaned chunks: %d\n", result.OrphanedChunks)
+			}
+		}
+	}
+
+	if !result.DatabaseValid {
+		return 1
+	}
+	return 0
+}
+
+// knowledgeRepair repairs database issues.
+func knowledgeRepair(args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge repair", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: cadre knowledge repair [options]\n\nOptions:\n")
+		fs.PrintDefaults()
+	}
+
+	aggressive := fs.Bool("aggressive", false, "Aggressive repair (rebuild all indices)")
+	dryRun := fs.Bool("dry-run", false, "Preview without repairing")
+	jsonOutput := fs.Bool("json", false, "JSON output")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	// Get database path
+	wd, _ := os.Getwd()
+	repoRoot, _ := platform.FindProjectRoot(wd)
+	dbPath := filepath.Join(repoRoot, ".agents", "knowledge-store", "store.db")
+
+	// Open database
+	db, err := openDatabase(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge repair: cannot open database: %v\n", err)
+		return 1
+	}
+	defer db.Close()
+
+	dr := knowledge.NewDatabaseRepair(db)
+	result, err := dr.Repair(*aggressive, *dryRun)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge repair: %v\n", err)
+		return 1
+	}
+
+	if *jsonOutput {
+		output := map[string]interface{}{
+			"database_valid":     result.DatabaseValid,
+			"actions_performed":  len(result.ActionsPerformed),
+			"total_fixed":        result.TotalFixed,
+			"total_errors":       result.TotalErrors,
+			"dry_run":            result.DryRun,
+		}
+		data, _ := json.MarshalIndent(output, "", "  ")
+		fmt.Println(string(data))
+	} else {
+		fmt.Println(result.GetSummary())
+	}
+
+	if result.TotalErrors > 0 {
+		return 1
+	}
+	return 0
+}
+
+// knowledgeRebuildIndexes rebuilds all database indices.
+func knowledgeRebuildIndexes(args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge rebuild-indexes", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: cadre knowledge rebuild-indexes [options]\n\nOptions:\n")
+		fs.PrintDefaults()
+	}
+
+	dryRun := fs.Bool("dry-run", false, "Preview without rebuilding")
+	jsonOutput := fs.Bool("json", false, "JSON output")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	// Get database path
+	wd, _ := os.Getwd()
+	repoRoot, _ := platform.FindProjectRoot(wd)
+	dbPath := filepath.Join(repoRoot, ".agents", "knowledge-store", "store.db")
+
+	// Open database
+	db, err := openDatabase(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge rebuild-indexes: cannot open database: %v\n", err)
+		return 1
+	}
+	defer db.Close()
+
+	dr := knowledge.NewDatabaseRepair(db)
+	result, _ := dr.RebuildIndexes(*dryRun)
+
+	if *jsonOutput {
+		output := map[string]interface{}{
+			"actions_performed": len(result.ActionsPerformed),
+			"dry_run":           result.DryRun,
+			"status":            "completed",
+		}
+		data, _ := json.MarshalIndent(output, "", "  ")
+		fmt.Println(string(data))
+	} else {
+		fmt.Printf("Index Rebuild %s\n", map[bool]string{true: "(Dry Run)", false: ""}[*dryRun])
+		fmt.Println(result.GetSummary())
+	}
+
+	if result.TotalErrors > 0 {
+		return 1
+	}
+	return 0
+}
+
+// knowledgeDefragment optimizes database file size.
+func knowledgeDefragment(args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge defragment", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: cadre knowledge defragment [options]\n\nOptions:\n")
+		fs.PrintDefaults()
+	}
+
+	dryRun := fs.Bool("dry-run", false, "Preview without defragmenting")
+	jsonOutput := fs.Bool("json", false, "JSON output")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	// Get database path
+	wd, _ := os.Getwd()
+	repoRoot, _ := platform.FindProjectRoot(wd)
+	dbPath := filepath.Join(repoRoot, ".agents", "knowledge-store", "store.db")
+
+	// Open database
+	db, err := openDatabase(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge defragment: cannot open database: %v\n", err)
+		return 1
+	}
+	defer db.Close()
+
+	dr := knowledge.NewDatabaseRepair(db)
+	result, _ := dr.Defragment(*dryRun)
+
+	if *jsonOutput {
+		output := map[string]interface{}{
+			"status":   "completed",
+			"dry_run":  result.DryRun,
+		}
+		data, _ := json.MarshalIndent(output, "", "  ")
+		fmt.Println(string(data))
+	} else {
+		fmt.Printf("Defragmentation %s\n", map[bool]string{true: "(Dry Run)", false: ""}[*dryRun])
+		fmt.Println(result.GetSummary())
+	}
+
+	if result.TotalErrors > 0 {
+		return 1
+	}
 	return 0
 }
 
