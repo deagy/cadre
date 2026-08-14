@@ -30,9 +30,10 @@ The suite selects, coordinates, tests, reviews, documents, supports, and escalat
 
 | Goal | Start here |
 | --- | --- |
+| Install Cadre | [Installation](#installation) section above |
 | Understand the suite | [IDENTITY.md](IDENTITY.md), then [documentation index](docs/README.md) |
 | Adopt this suite in a new project, start to finish | [Adopt-Cadre quickstart](docs/adopt-cadre-quickstart.md) |
-| Use the suite from a checkout | [Getting started](docs/getting-started.md) |
+| Work from a checkout | [Getting started](docs/getting-started.md) |
 | Select and coordinate agents | [Orchestration guide](docs/orchestration.md) |
 | Set up lifecycle gates conversationally (non-engineers) | `lifecycle-onboarding` skill — ask an agent to run it |
 | Approve/reject/request changes on a lifecycle gate conversationally | `lifecycle-review` skill — ask an agent to run it |
@@ -72,9 +73,9 @@ Every role definition and orchestration tool is runner-neutral text and data. Li
 
 | Runner | Support | Notes |
 | --- | --- | --- |
-| Codex CLI | Generated wrapper, packaged in the Cadre plugin | See [`docs/INSTALL.md`](docs/INSTALL.md#codex-cli). |
-| Claude Code | Generated wrapper, packaged in the Cadre plugin | See [`docs/INSTALL.md`](docs/INSTALL.md#claude-code). |
-| [Cline](https://docs.cline.bot) | Native `AGENTS.md` support, plus an installable CLI plugin | [Reads `AGENTS.md` natively](https://docs.cline.bot/customization/cline-rules); this repository also provides `.clinerules/agents-repository.md`, pointing at the same canonical `AGENTS.md`/`roster/RUNBOOK.md` sources — works for any Cline session with this repository as its working directory, no install required. Separately, [`cline-plugins/`](cline-plugins/) holds three real, hand-authored (not generated) installable Cline CLI plugins — `cline` (an `agents_select` tool wrapping `cadre select`), `cline-agents`, and `cline-lifecycle`. Cline's Git source format cannot select a subdirectory, so `cline plugin install https://github.com/deagy/cadre --force` installs all three together; see [`docs/INSTALL.md`](docs/INSTALL.md#cline). Applies to the Cline CLI, SDK, and Kanban only — not the VSCode/JetBrains extension. |
+| Codex CLI | Generated wrapper, packaged in the Cadre plugin | See [Codex CLI section](#codex-cli) in Installation. |
+| Claude Code | Generated wrapper, packaged in the Cadre plugin | See [Claude Code section](#claude-code) in Installation. |
+| [Cline](https://docs.cline.bot) | Native `AGENTS.md` support, plus an installable CLI plugin | [Reads `AGENTS.md` natively](https://docs.cline.bot/customization/cline-rules); this repository also provides `.clinerules/agents-repository.md`, pointing at the same canonical `AGENTS.md`/`roster/RUNBOOK.md` sources — works for any Cline session with this repository as its working directory, no install required. Separately, [`cline-plugins/`](cline-plugins/) holds three real, hand-authored (not generated) installable Cline CLI plugins. See [Cline CLI section](#cline-cli) in Installation. Applies to the Cline CLI, SDK, and Kanban only — not the VSCode/JetBrains extension. |
 
 <details>
 <summary>Known Cline plugin limitations</summary>
@@ -198,105 +199,251 @@ for the full setup and command reference, or [RUNBOOK.md
 §18](roster/RUNBOOK.md#18-record-a-github-backed-human-gate-approval) for the
 two supported recording paths and the evidence-URI format.
 
-## Advanced: install every role globally
+## Installation
 
-Most projects want the per-project `--profile secure-cloud` path above instead
-of this section — it avoids forcing this repository's cloud-specific roles
-onto projects with a different stack, and each project's generated wrappers
-are static files it owns, not a live link back to this checkout. This section
-is for the narrower case of genuinely wanting all 159 roles, the 13 skills, and
-the knowledge and context stores reachable from *every* project on the machine
-unconditionally.
+Pick your use case from the table, then see the detailed section below.
+
+| You are | Do this |
+| --- | --- |
+| Claude Code user | `/plugin marketplace add deagy/cadre` → `/plugin install cadre@cadre-team` |
+| Any runner (fast) | `curl -fsSL https://raw.githubusercontent.com/deagy/cadre/main/install.sh \| sh` |
+| Working on Cadre itself | `git clone https://github.com/deagy/cadre.git` → `./bin/cadre select ...` |
+| Rolling out to a fleet | See [Enterprise deployment](#enterprise-deployment) section below |
+| Codex CLI | `codex plugin marketplace add deagy/cadre` → `codex plugin add cadre@cadre-team` |
+| Cline CLI | `cline plugin install https://github.com/deagy/cadre --force` |
+
+Lifecycle governance (G1–G10 gates) is **optional** and most projects don't need it. Nothing above installs it. See [Adding lifecycle governance](#adding-lifecycle-governance) if you want it.
+
+### Claude Code
 
 ```text
 /plugin marketplace add deagy/cadre
 /plugin install cadre@cadre-team
 ```
 
-**[`docs/INSTALL.md`](docs/INSTALL.md) is the canonical install guide** —
-Codex, Cline, the one-command install script, pinning, and the optional
-lifecycle plugins are all covered there. This section is a pointer, not a
-second copy: three documents quoting three different stale version tags is
-exactly what one canonical page exists to prevent.
+Deliberately unpinned — the version comes from the plugin's manifest, and releases only tag `main` when every plugin manifest agrees, so the marketplace ref needs no tag. Use `/plugin update` to move forward. If your policy requires a pinned source, append `@<tag>` from [releases](https://github.com/deagy/cadre/releases).
 
-For a fleet, see [`docs/enterprise.md`](docs/enterprise.md).
+Set `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1` if your policy requires HTTPS over SSH.
 
-The first `run-agent-orchestration` or `knowledge-ingestion` invocation with no
-knowledge-store config anywhere asks whether to create an isolated project-local
-one or use this shared global one — it does not create the global one silently.
-See [roster/RUNBOOK.md](roster/RUNBOOK.md)
-for how namespaced Codex subagent wrappers get into `~/.codex/agents/` without
-overwriting bare project/global roles or unowned namespaced files (Codex has no
-plugin-bundled-agent mechanism) and for how to regenerate after adding a role.
-
-## Put `cadre` on `PATH`
-
-Optional, and useful regardless of which path above you took: put `bin/cadre`
-on `PATH` so the `cadre` command in this README and `roster/RUNBOOK.md` works
-from any directory, not just this checkout (an orchestrating Claude Code agent
-doesn't need this — the installed plugins already put `bin/cadre` on the Bash
-tool's PATH for it). Symlink it (a copy would break its reach-back into this
-repository) into a directory already on `PATH`, e.g.:
+### One-command install (all runners)
 
 ```sh
-mkdir -p ~/.local/bin
-ln -s "$(pwd)/bin/cadre" ~/.local/bin/cadre   # ensure ~/.local/bin is on PATH
+curl -fsSL https://raw.githubusercontent.com/deagy/cadre/main/install.sh | sh
 ```
 
-PowerShell has no bare-name script execution by default; wrap `bin/cadre.ps1`
-in a `$PROFILE` function instead:
+On Windows, use [`install.ps1`](https://github.com/deagy/cadre/blob/main/install.ps1) instead (or via `PowerShell -ExecutionPolicy Bypass -File install.ps1`).
 
-```powershell
-function cadre { & "C:\path\to\this\checkout\bin\cadre.ps1" @args }
-```
-
-## pip / pipx install (additional distribution channel)
-
-This is a second, independent way to run the `cadre` CLI, alongside the
-checkout path above (`./bin/cadre` / `bin/cadre.py` / `bin/cadre.ps1`) — it
-does not replace it, and the checkout path keeps working unmodified whether
-or not you ever build or install this package. `pyproject.toml` at the
-repository root packages the CLI (subcommand table, dispatch logic, and
-every resource each subcommand reads: `roster/`, `.agents/skills/`, and
-`provider/` for `cadre sdlc`/`cadre bootstrap-codex`) as an installable
-`cadre` distribution, runnable from any directory on a machine that has
-never cloned this repository.
-
-Build and install a local wheel:
+Flags:
 
 ```sh
-python3 -m pip install --upgrade build
-python3 -m build                      # produces dist/cadre-*.whl (and an sdist)
-pipx install dist/cadre-*.whl         # or: pip install dist/cadre-*.whl
+./install.sh --dry-run              # print actions, change nothing
+./install.sh --runner=codex         # just one runner (codex, claude, or cline)
+./install.sh --with-lifecycle       # include optional G1-G10 governance
+./install.sh --uninstall            # remove everything
 ```
 
-This puts a `cadre` console script directly on `PATH`. It is not published to
-PyPI and there is no publish automation for it — install only from a local
-build or a built artifact you trust.
+Touches only: `~/.cadre/dist`, `~/.local/bin/cadre`, `~/.codex/config.toml` (MCP entry), and each runner's plugin store. Safe to re-run (updates in place).
 
-`cadre resolve-shared` / `cadre init` can optionally parse YAML shared-config
-overlays (JSON-only overlays work without this), and `cadre
-mcp-dispatch-server` requires the official MCP SDK — both are optional
-extras, so installing the built wheel without them stays dependency-light
-(note: an unrelated third-party project already owns the name `cadre` on
-PyPI — always install from your own `dist/` build, never from PyPI):
+### From a checkout
+
+For working on Cadre itself, or running without installing:
+
+```sh
+git clone https://github.com/deagy/cadre.git && cd cadre
+./bin/cadre select --task "..." --files file.go --task-id T-1
+```
+
+On PowerShell, use `.\bin\cadre.ps1`. To put `cadre` on `PATH`:
+
+```sh
+ln -s "$PWD/bin/cadre" ~/.local/bin/cadre      # on POSIX
+# or on PowerShell:
+function cadre { & "C:\path\to\checkout\bin\cadre.ps1" @args }
+```
+
+The in-tree kernel means `cadre sdlc` works immediately with no separate install.
+
+### Codex CLI
+
+The install script covers this, or directly:
+
+```sh
+codex plugin marketplace add deagy/cadre
+codex plugin marketplace upgrade cadre-team
+codex plugin add cadre@cadre-team
+cadre bootstrap-codex                 # Write agent wrappers to ~/.codex/agents/
+```
+
+For mid-session dispatch, add MCP to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.cadre-dispatch]
+command = "cadre"
+args = ["mcp-dispatch-server"]
+```
+
+Requires `cadre` on `PATH` and the MCP extra: `pip install -r roster/orchestration/mcp/requirements-mcp.txt`.
+
+#### Self-hosted models (llama.cpp, Ollama, vLLM)
+
+Create `$CODEX_HOME/cadre-local.config.toml` (default `~/.codex`):
+
+```toml
+model = "qwen3-coder-30b"
+model_provider = "llamacpp"
+
+[model_providers.llamacpp]
+name = "llama.cpp"
+base_url = "http://<host>:8080/v1"
+wire_api = "chat"
+```
+
+Then point Cadre at it:
+
+```sh
+export SECURE_CLOUD_AGENTS_CODEX_PROFILE=cadre-local
+export SECURE_CLOUD_AGENTS_LOCAL_MODEL_OPUS=qwen3-coder-30b
+export SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET=qwen3-coder-30b
+export SECURE_CLOUD_AGENTS_LOCAL_MODEL_HAIKU=qwen3-4b
+```
+
+To dispatch with no coding CLI installed at all, use `runner="api"` and point at an endpoint:
+
+```sh
+export SECURE_CLOUD_AGENTS_API_BASE_URL=http://<host>:8080/v1
+```
+
+See `roster/orchestration/SECURITY-CONTROLS.md` before enabling `SECURE_CLOUD_AGENTS_API_ALLOW_WRITES` or `SECURE_CLOUD_AGENTS_API_COMMAND_ALLOWLIST`.
+
+### Cline CLI
+
+```sh
+cline plugin install https://github.com/deagy/cadre --force
+```
+
+Installs three plugins together (`cline`, `cline-agents`, `cline-lifecycle`). Local development: `cline plugin install ./cadre --force` from a checkout after running `npm ci` in `cline-plugins/`.
+
+**Known upstream issue**: as of Cline 3.0.46, invoking any locally-installed plugin's tool fails with a cyclic-structure error (also affects Cline's own example plugin). Expected to resolve when Cline ships a fix.
+
+### pip / pipx install
+
+For running the CLI from anywhere on a machine that's never cloned this repository:
+
+```sh
+python3 -m build                      # produces dist/cadre-*.whl
+pipx install dist/cadre-*.whl         # puts cadre on PATH
+```
+
+Puts a `cadre` console script on `PATH`. Not published to PyPI (an unrelated project owns that name). Always install from your own `dist/` build.
+
+Optional extras:
 
 ```sh
 pipx install "dist/cadre-*.whl[yaml]"        # or [mcp], or [yaml,mcp]
 ```
 
-`cadre sdlc` still shells out to a separately installed `agentic-sdlc`
-binary (`AGENTIC_SDLC_BIN` or `PATH`) exactly as the checkout CLI does — this
-package never vendors or bundles the Agentic SDLC kernel; see "Agentic SDLC
-quick start" above for installing it.
+**Limitation**: `cadre generate-plugin` and `cadre generate-authority-aides` require a git checkout; not available from pip/pipx.
 
-**Known limitation**: `cadre generate-plugin` and `cadre
-generate-authority-aides` are maintainer-only tools that require a full git
-checkout; they are not available from a pip/pipx install. Both read tracked
-source through this repository's own git index and write generated content
-back to a real checkout (the `plugin/` directory named by `--output` for
-`generate-plugin`; `roster/authority/*/AGENT.md` for
-`generate-authority-aides`) — an operation that only makes sense against a
+### Enterprise deployment
+
+Deploy one managed-settings file to equip a fleet with no per-user install:
+
+**File content:**
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "cadre-team": {
+      "source": { "source": "github", "repo": "deagy/cadre" },
+      "autoUpdate": true
+    }
+  },
+  "enabledPlugins": {
+    "cadre@cadre-team": true
+  }
+}
+```
+
+**File location:**
+
+| Platform | Path |
+| --- | --- |
+| macOS | `/Library/Application Support/ClaudeCode/managed-settings.json` |
+| Linux / WSL | `/etc/claude-code/managed-settings.json` |
+| Windows | `C:\Program Files\ClaudeCode\managed-settings.json` |
+
+**Important**: `enabledPlugins` declares intent to *install*; users still see a prompt to accept marketplace/plugin setup. For genuinely zero-touch, pair with:
+
+```sh
+claude plugin install cadre@cadre-team --scope user
+```
+
+**Do not remove `extraKnownMarketplaces` as a pause mechanism** — it uninstalls the plugin. Instead, set `autoUpdate: false` or set `enabledPlugins: { "cadre@cadre-team": false }`.
+
+To pre-configure lifecycle plugins (if you're deploying them):
+
+```json
+{
+  "pluginConfigs": {
+    "cadre-lifecycle-github@cadre-team": {
+      "options": {
+        "kernelInstall": "auto",
+        "profile": "secure-cloud"
+      }
+    }
+  }
+}
+```
+
+`kernelInstall` options: `auto` (manages own copy), `system` (never installs), `off` (disables check).
+
+### Adding lifecycle governance
+
+Three optional plugins, self-sufficient — install whichever matches your approval flow:
+
+```text
+/plugin install cadre-lifecycle-core@cadre-team        # forge-agnostic
+/plugin install cadre-lifecycle-github@cadre-team      # GitHub PR review source
+/plugin install cadre-lifecycle-gitlab@cadre-team      # GitLab MR approval source
+```
+
+Each depends on `cadre`, so it comes along automatically. They need the Agentic SDLC kernel. At first invocation, the plugin will prompt:
+
+```text
+/cadre-install-kernel
+```
+
+This installs a copy under the plugin's data directory. It never modifies your own `AGENTIC_SDLC_BIN` or replaces a kernel on `PATH`. Deleting the plugin's data directory undoes the install.
+
+Then set up your project:
+
+```text
+/lifecycle-onboarding
+```
+
+Use the skill — assigning the eight human authorities is a decision people make, and the skill guides through it.
+
+### PyPI security note
+
+**Neither `agentic-sdlc` nor `cadre` is on PyPI.** Both names belong to unrelated projects.
+
+- `pip install agentic-sdlc` installs an unrelated third-party project.
+- The PyPI `cadre` package is a placeholder from 2022.
+
+Install only from this repository — a checkout, the marketplace, the install script, or a release artifact (verify against `SHA256SUMS`). See [SECURITY.md](SECURITY.md).
+
+### Verify installation
+
+```sh
+cadre select --task "smoke test" --files README.md --task-id SMOKE-1
+cadre sdlc --version        # only if you installed lifecycle governance
+```
+
+In Claude Code, `/plugin details cadre@cadre-team` shows what the plugin contributes and its context cost.
+
+## Put `cadre` on `PATH` (optional shortcut)
+
+Already done by `install.sh`. If working from a checkout, symlink it:
 real checkout, never an installed site-packages copy. `cadre
 generate-role-metadata` is a partial case: `--check` works fully from a
 pip/pipx install (it only verifies the installed package's own bundled

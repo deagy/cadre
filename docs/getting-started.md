@@ -1,27 +1,15 @@
-# Getting started
+# Getting started with a checkout
 
-This guide is for someone using the suite from a checkout of this repository.
-To *install* it instead, see [Installing Cadre](INSTALL.md) — that is the
-canonical install guide for every runner.
-For a target project's lifecycle setup, use the [lifecycle and plugin
-operations guide](lifecycle-and-plugin-operations.md).
+This guide covers working on Cadre itself from a repository checkout. If you want to *install* Cadre for use, see the [Installation section in README.md](../README.md#installation) instead. For setting up lifecycle gates in a target project, see [Lifecycle and plugin operations](lifecycle-and-plugin-operations.md).
 
 ## Prerequisites
 
-- Python 3.10 or newer.
-- A checkout of this repository.
+- Python 3.10 or newer
+- This repository checked out
 
-The lifecycle kernel is in-tree, under
-[`kernel/`](https://github.com/deagy/cadre/tree/main/kernel) — `cadre sdlc`
-and the lifecycle-contract tests need no separate install and no
-`AGENTIC_SDLC_BIN`. Set that env var only to point at a *different* kernel
-deliberately; see the [lifecycle guide](lifecycle-and-plugin-operations.md)
-for that case.
+The in-tree kernel means `cadre sdlc` works immediately with no separate install.
 
-The `bin/cadre` launcher probes for `python3` or `python`; PowerShell users
-can use `bin/cadre.ps1`.
-
-## Five-minute path
+## Quick start
 
 From the repository root:
 
@@ -33,42 +21,40 @@ From the repository root:
   --task-id EXAMPLE-1
 ```
 
-The selector produces a reviewable dispatch plan. It does not execute agents,
-retrieve knowledge, approve gates, deploy, mutate infrastructure, merge, or
-push changes.
+On PowerShell, use `.\bin\cadre.ps1`.
 
-Run the suite-only check with:
+The selector produces a reviewable dispatch plan only — no agent execution, knowledge retrieval, gate approval, deployment, or infrastructure mutation.
+
+## Testing
+
+Knowledge store tests:
 
 ```sh
 python3 -m unittest discover -b -s roster/knowledge-store/test -p "test_*.py"
 ```
 
-The orchestration tests need no install and run as-is:
+Orchestration tests (standalone mode, no lifecycle kernel on PATH):
 
 ```sh
 python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
 ```
 
-Run that way they exercise the selector in **standalone** mode, because the
-lifecycle contract is resolved by looking for an `agentic-sdlc` executable on
-`PATH` — being in-tree is not enough on its own. To exercise the
-lifecycle-*integrated* assertions as CI does, point `AGENTIC_SDLC_BIN` at the
-launcher this repository already ships; there is still nothing to install:
+Orchestration tests with integrated lifecycle contracts (as CI runs them):
 
 ```sh
 AGENTIC_SDLC_BIN="$PWD/bin/agentic-sdlc" \
   python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
 ```
 
-The kernel's own tests (`kernel/test`) are different again: they import the
-package in-process and need neither the variable nor anything on `PATH`. See
-the [lifecycle guide](lifecycle-and-plugin-operations.md) to point at a
-separately installed kernel instead.
+Kernel tests (in-process, no PATH dependency):
 
-## Choosing the next guide
+```sh
+python3 -B -m unittest discover -b -s kernel/test -p "test_*.py"
+```
 
-- Need roles for a task? Read [Orchestration](orchestration.md).
-- Need a target-project overlay or gate record? Read [Lifecycle and plugin operations](lifecycle-and-plugin-operations.md).
-- Need a role's purpose and handoff? Read the [role index](role-index.md).
-- Need a complete worked example? Read the [runbook](../roster/RUNBOOK.md),
-  starting with its section index.
+## Next steps
+
+- **Roles for a task?** Read [Orchestration](orchestration.md).
+- **Target-project setup?** Read [Lifecycle and plugin operations](lifecycle-and-plugin-operations.md).
+- **Role purpose and handoff?** Read the [role index](role-index.md).
+- **Worked example?** Read [roster/RUNBOOK.md](../roster/RUNBOOK.md).

@@ -431,8 +431,8 @@ target is still required so an incidental CWD never becomes a write target.
   own `model` key applies, which also sidesteps the field-confirmed
   ChatGPT-auth rejection of any explicit `--model`. Note Codex's
   `--oss`/`--local-provider` shortcut only knows `lmstudio` and `ollama`, so
-  llama.cpp needs a custom `[model_providers.*]` block; `docs/INSTALL.md` has
-  a worked example. This is the first *dispatch-time* read of
+  llama.cpp needs a custom `[model_providers.*]` block; see README.md's
+  [Self-hosted models section](#self-hosted-models-llamacpp-ollama-vlm) for a worked example. This is the first *dispatch-time* read of
   `roster/runner-capabilities.json`, which was previously build-time-only —
   its `model_tiers` table is inverted to recover a role's tier from its
   wrapper's model identifier.
