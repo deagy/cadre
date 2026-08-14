@@ -1,0 +1,1 @@
+"""Cadre CLI package."""

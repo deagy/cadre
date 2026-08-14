@@ -104,6 +104,8 @@ cline-plugins/node_modules/
 
 # Go CLI build output (ADR-001-CLI-GO-REFACTOR.md). Never bin/ -- that
 # directory is the existing, committed Python dispatcher.
+# Note: cadre_cli/ is source code needed for pip distribution, NOT a build artifact.
+# The only Go artifacts to ignore are the compiled "cadre" binary and /build/, /dist/.
 /dist/
+/build/
 cadre
-cadre_cli/
