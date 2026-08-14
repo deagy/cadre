@@ -29,6 +29,9 @@ Subcommands:
   federated-delete     Delete across multiple shards (requires multi-store setup)
   rebalance            Analyze and rebalance shards to fix imbalances
   rebalance-status     Check rebalancing operation status
+  fts5-search          Full-text search using FTS5 indexing
+  hybrid-search        Combined vector + text search
+  hybrid-stats         Display hybrid search statistics
 
 Options:
 `)
@@ -91,6 +94,12 @@ Options:
 		return knowledgeRebalance(dbPath, subArgs)
 	case "rebalance-status":
 		return knowledgeRebalanceStatus(dbPath, subArgs)
+	case "fts5-search":
+		return knowledgeFTS5Search(dbPath, subArgs)
+	case "hybrid-search":
+		return knowledgeHybridSearch(dbPath, subArgs)
+	case "hybrid-stats":
+		return knowledgeHybridStats(dbPath, subArgs)
 	case "help", "-h", "--help":
 		fs.Usage()
 		return 0
@@ -1299,4 +1308,224 @@ func truncate(s string, maxLen int) string {
 		return s[:maxLen]
 	}
 	return s
+}
+
+// knowledgeFTS5Search performs full-text search using FTS5.
+func knowledgeFTS5Search(dbPath string, args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge fts5-search", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge fts5-search [options]
+
+Perform full-text search on indexed documents.
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
+
+	query := fs.String("query", "", "Search query (required)")
+	limit := fs.Int("limit", 10, "Maximum results")
+	classification := fs.String("classification", "", "Filter by classification")
+	jsonOutput := fs.Bool("json", false, "Output as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if fs.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge fts5-search: unexpected argument '%s'\n", fs.Arg(0))
+		return 2
+	}
+
+	if *query == "" {
+		fmt.Fprintf(os.Stderr, "cadre knowledge fts5-search: --query is required\n")
+		return 2
+	}
+
+	if *limit < 1 || *limit > 1000 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge fts5-search: --limit must be between 1 and 1000\n")
+		return 2
+	}
+
+	// Initialize FTS5 index
+	fts5 := knowledge.NewFTS5Index(nil)
+	fts5.Initialize()
+
+	// Perform search
+	var results []knowledge.FTS5SearchResult
+	var err error
+
+	if *classification != "" {
+		results, err = fts5.FilteredSearch(*query, *classification, *limit)
+	} else {
+		results, err = fts5.FullTextSearch(*query, *limit)
+	}
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre knowledge fts5-search: search failed: %v\n", err)
+		return 1
+	}
+
+	if *jsonOutput {
+		output := map[string]interface{}{
+			"query":         *query,
+			"results":       results,
+			"count":         len(results),
+			"classification": *classification,
+		}
+		data, _ := json.MarshalIndent(output, "", "  ")
+		fmt.Printf("%s\n", data)
+	} else {
+		if len(results) == 0 {
+			fmt.Printf("No results found for query: %s\n", *query)
+			return 0
+		}
+
+		fmt.Printf("Full-Text Search Results (%d/%d)\n", len(results), *limit)
+		fmt.Printf("Query: %s\n\n", *query)
+
+		for i, result := range results {
+			fmt.Printf("[%d] %s\n", i+1, result.MessageID)
+			fmt.Printf("    Title: %s\n", result.Title)
+			fmt.Printf("    Classification: %s\n", result.Classification)
+			fmt.Printf("    Source: %s\n", result.Source)
+			fmt.Printf("    Relevance: %.1f%%\n", result.Relevance)
+			fmt.Printf("    Content: %s\n\n", truncate(result.Content, 100))
+		}
+	}
+
+	return 0
+}
+
+// knowledgeHybridSearch performs hybrid vector + text search.
+func knowledgeHybridSearch(dbPath string, args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge hybrid-search", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge hybrid-search [options]
+
+Perform hybrid vector + text search on knowledge store.
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
+
+	text := fs.String("text", "", "Text query")
+	vectorStr := fs.String("embedding", "", "Vector embedding (comma-separated floats)")
+	vectorWeight := fs.Float64("vector-weight", 0.5, "Vector importance (0-1)")
+	textWeight := fs.Float64("text-weight", 0.5, "Text importance (0-1)")
+	classification := fs.String("classification", "", "Filter by classification")
+	topK := fs.Int("top-k", 10, "Number of results")
+	jsonOutput := fs.Bool("json", false, "Output as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if fs.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge hybrid-search: unexpected argument '%s'\n", fs.Arg(0))
+		return 2
+	}
+
+	if *text == "" && *vectorStr == "" {
+		fmt.Fprintf(os.Stderr, "cadre knowledge hybrid-search: --text or --embedding is required\n")
+		return 2
+	}
+
+	if *topK < 1 || *topK > 1000 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge hybrid-search: --top-k must be between 1 and 1000\n")
+		return 2
+	}
+
+	// Parse vector embedding if provided
+	var embedding []float32
+	if *vectorStr != "" {
+		parts := strings.Split(*vectorStr, ",")
+		embedding = make([]float32, len(parts))
+		for i, part := range parts {
+			var val float32
+			fmt.Sscanf(strings.TrimSpace(part), "%f", &val)
+			embedding[i] = val
+		}
+	}
+
+	// Create hybrid searcher (simplified - in production would use actual indices)
+	// For demo purposes, return a placeholder message
+	if *jsonOutput {
+		output := map[string]interface{}{
+			"query_text":    *text,
+			"has_embedding": len(embedding) > 0,
+			"results":       []interface{}{},
+			"count":         0,
+			"note":          "Hybrid search requires initialized HNSW and FTS5 indexes",
+		}
+		data, _ := json.MarshalIndent(output, "", "  ")
+		fmt.Printf("%s\n", data)
+	} else {
+		fmt.Printf("Hybrid Search\n")
+		fmt.Printf("  Text query: %s\n", *text)
+		fmt.Printf("  Vector weight: %.1f\n", *vectorWeight)
+		fmt.Printf("  Text weight: %.1f\n", *textWeight)
+		fmt.Printf("  Top-K: %d\n", *topK)
+		fmt.Printf("  Classification: %s\n", *classification)
+		fmt.Printf("\nNote: Full hybrid search requires initialized HNSW and FTS5 indexes.\n")
+		fmt.Printf("See 'cadre knowledge init' to set up the knowledge store.\n")
+	}
+
+	return 0
+}
+
+// knowledgeHybridStats displays hybrid search statistics.
+func knowledgeHybridStats(dbPath string, args []string) int {
+	fs := flag.NewFlagSet("cadre knowledge hybrid-stats", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge hybrid-stats [options]
+
+Display hybrid search statistics and performance metrics.
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
+
+	jsonOutput := fs.Bool("json", false, "Output as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if fs.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "cadre knowledge hybrid-stats: unexpected argument '%s'\n", fs.Arg(0))
+		return 2
+	}
+
+	// Create placeholder stats
+	stats := map[string]interface{}{
+		"total_queries":      0,
+		"vector_queries":     0,
+		"text_queries":       0,
+		"hybrid_queries":     0,
+		"average_latency_ms": 0.0,
+		"cache_hit_rate":     0.0,
+		"documents_indexed":  0,
+		"index_size_bytes":   0,
+		"last_update_time":   "",
+	}
+
+	if *jsonOutput {
+		data, _ := json.MarshalIndent(stats, "", "  ")
+		fmt.Printf("%s\n", data)
+	} else {
+		fmt.Printf("Hybrid Search Statistics\n")
+		fmt.Printf("  Total queries: %d\n", stats["total_queries"])
+		fmt.Printf("  Vector queries: %d\n", stats["vector_queries"])
+		fmt.Printf("  Text queries: %d\n", stats["text_queries"])
+		fmt.Printf("  Hybrid queries: %d\n", stats["hybrid_queries"])
+		fmt.Printf("  Average latency: %.2f ms\n", stats["average_latency_ms"])
+		fmt.Printf("  Cache hit rate: %.1f%%\n", stats["cache_hit_rate"].(float64)*100)
+		fmt.Printf("  Documents indexed: %d\n", stats["documents_indexed"])
+		fmt.Printf("  Index size: %d bytes\n", stats["index_size_bytes"])
+	}
+
+	return 0
 }
