@@ -124,6 +124,12 @@ func spawnCodexChildIn(
 		}
 	}
 
+	// TODO(2026-08-15, M-2/M-3 in SECURITY-CONTROLS.md): the flag shapes below
+	// are taken from `codex exec --help` for codex-cli 0.147.0 as recorded by
+	// the Python original, and have not been re-verified against a live,
+	// authenticated run. Isolated here so a correction never touches
+	// safety-relevant logic elsewhere.
+	//
 	// The trailing "-" is what makes codex exec read the prompt from stdin.
 	argv := []string{
 		runnerBinary("runners.codex_bin", "codex", projectRoot),

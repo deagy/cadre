@@ -29,9 +29,16 @@ import (
 // which had no Go equivalent.
 
 // gitlabSourceFiles are the files that may talk to the GitLab API.
+//
+// internal/mcpserver/gitlab_server.go is included although nothing imports
+// it: it is a second, currently-unreachable GitLab tool surface built on the
+// official MCP Go SDK, and an unreachable surface is exactly the place a
+// state transition would be added without anyone noticing. Being outside the
+// invariant is not a reason to be outside the check.
 var gitlabSourceFiles = []string{
 	"gitlab.go",
 	"gitlab_mcp.go",
+	"../mcpserver/gitlab_server.go",
 }
 
 func parseGitLabSource(t *testing.T, name string) (*token.FileSet, *ast.File, string) {

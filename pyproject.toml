@@ -20,13 +20,13 @@ dependencies = []
 
 # No optional dependencies. `yaml` (PyYAML) and `mcp` existed for the Python
 # implementations this wheel used to vendor -- resolve.py's YAML overlay
-# support and dispatch_server.py's MCP transport. The wheel ships neither any
-# more, and the Go CLI reads YAML natively, so an extra that installs a
-# Python package nothing in the distribution imports would be a promise the
-# wheel cannot keep.
+# support and dispatch_server.py's MCP transport. Both are gone: the Go CLI
+# reads YAML natively, and roster/orchestration/mcp/ has been deleted, so an
+# extra that installs a Python package nothing in the distribution imports
+# would be a promise the wheel cannot keep.
 #
-# `cadre mcp-dispatch-server` is served by the Go CLI. A checkout that wants
-# the Python MCP server still has roster/orchestration/mcp/requirements-mcp.txt.
+# `cadre mcp-dispatch-server` and `cadre mcp-gitlab-server` are served by the
+# Go CLI and need no Python dependency at all.
 
 [project.urls]
 Repository = "https://github.com/deagy/cadre"

@@ -118,10 +118,13 @@ knowledge-store implementation has been deleted outright — there is no
 (`internal/knowledge/`), and `cadre_cli/__init__.py` says so explicitly in
 its own comments.
 
-What keeps the rest of `roster/{shared,context-store,orchestration}/src`
-and `roster/orchestration/mcp` in the tree is that **two non-checkout
-distribution channels still dispatch straight to Python, not to the Go
-binary**:
+`roster/orchestration/mcp/` is gone -- deleted once every module had a Go
+counterpart that was actually reached, and every one of its Python suites had
+been compared against that counterpart.
+
+What keeps the rest of `roster/{shared,context-store,orchestration}/src` in
+the tree is that **two non-checkout distribution channels still dispatch
+straight to Python, not to the Go binary**:
 
 - `plugin/bin/cadre` (the packaged Claude Code / Codex plugin's shell shim)
   execs Python for `select`, `selection-telemetry`, `context`,
@@ -150,15 +153,13 @@ the checkout) pieces, approximately:
 | Settings / resolve / init (non-interactive) | `roster/shared/src/{settings,resolve,init_project}.py` | 3,710 |
 | Init questionnaire | `roster/shared/src/init_project_interactive.py` | 445 |
 | Codex sync / profile diff / upgrade | `roster/orchestration/src/{sync_codex_agents,profile_diff,upgrade}.py` | 995 |
-| MCP servers | `roster/orchestration/mcp/{dispatch_server,gitlab_server}.py` | 708 |
-| Doctor / role-fidelity / telemetry / text libs / gitlab CLI | `roster/orchestration/src/{doctor,role_fidelity,selection_telemetry}.py`, `roster/shared/src/{content_protection,text_chunking,text_embedding}.py`, `roster/orchestration/mcp/gitlab_cli.py` | 2,270 |
+| Doctor / role-fidelity / telemetry / text libs | `roster/orchestration/src/{doctor,role_fidelity,selection_telemetry}.py`, `roster/shared/src/{content_protection,text_chunking,text_embedding}.py` | 2,158 |
 | `cadre select`'s stack (see above — the one item still live in the checkout too) | — | 1,879 |
 
 **This table is not exhaustive** — it does not account for every file under
 the ~23,500-line total (e.g. `routing.py`, `roster_manifest.py`,
 `provenance.py`, `routing_overlay.py`, `role_metadata.py`, the
-`generate-*` scripts, `gitlab_core.py`, and their test suites are not
-itemized here). Re-derive from the tree rather than treating this as a
+`generate-*` scripts, and their test suites are not itemized here). Re-derive from the tree rather than treating this as a
 complete inventory.
 
 ---

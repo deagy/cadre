@@ -634,3 +634,24 @@ func TestTheAuditLogIsNotWorldReadable(t *testing.T) {
 		t.Errorf("audit log mode = %04o, want no group or other access", mode)
 	}
 }
+
+func TestTheInteractiveFlagNeverReachesAChild(t *testing.T) {
+	// CADRE_INTERACTIVE tells the settings resolver it may prompt on stdin.
+	// A dispatched child's stdin is the prompt channel, not a terminal, so a
+	// child that inherited this would block forever waiting for an answer
+	// nobody is there to give -- and on a stdio MCP server it would consume a
+	// protocol frame as the answer.
+	//
+	// Ported from roster/shared/test/test_settings.py, which asserted this
+	// against dispatch_core.py's ENV_ALLOWLIST before dispatch moved to Go.
+	t.Setenv("CADRE_INTERACTIVE", "1")
+
+	for _, name := range EnvAllowlist {
+		if name == "CADRE_INTERACTIVE" {
+			t.Fatal("CADRE_INTERACTIVE is in the dispatch env allowlist")
+		}
+	}
+	if _, present := BuildChildEnv(1, "")["CADRE_INTERACTIVE"]; present {
+		t.Error("CADRE_INTERACTIVE reached the child environment")
+	}
+}

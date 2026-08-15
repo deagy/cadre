@@ -629,7 +629,7 @@ The accountable control or risk owner—not an agent—approves exceptions. Ever
 
 Follow `orchestration/GITLAB-EVIDENCE.md` and read
 `orchestration/SECURITY-CONTROLS.md`'s "GitLab evidence MCP server"
-section first. `orchestration/mcp/gitlab_server.py` exposes three create-only
+section first. `cadre mcp-gitlab-server` exposes three create-only
 tools (`create_review_subtask`, `write_wiki_page`, `write_evidence_comment`)
 against a single, pre-configured, docs-only GitLab project, configured by
 `GITLAB_SVC_TOKEN`/`GITLAB_BASE_URL`/`GITLAB_DOCS_PROJECT_ID` — this server
@@ -638,8 +638,8 @@ page it creates is evidence for, never a substitute for, the consuming
 project's own `.agentic-sdlc/` run record. `GITLAB-EVIDENCE.md` also records
 the accepted static-token exception to this org's normal OpenBao
 short-lived-credential standard for this specific integration. This is
-deliberately placed alongside the MCP server it documents, under
-`orchestration/mcp/`, not under `workflows/`, because `roster/workflows/*.md`
+deliberately placed under `orchestration/`, not under `workflows/`,
+because `roster/workflows/*.md`
 is a closed set matched 1:1 against `orchestration/selection.schema.json`'s
 `workflow` enum (`test_repository_health.py` enforces the equality) — this is
 operator/setup documentation for one MCP server, not a dispatch-plan
@@ -1057,8 +1057,9 @@ child process — `bin/cadre.py` never mutates its own `os.environ`. A prompt
 only actually fires when `CADRE_INTERACTIVE=1`, `sys.stdin`/`sys.stdout` are
 both a real terminal, and `settings.disable_interactive()` was not called —
 that last hard opt-out is invoked unconditionally at the top of both stdio
-MCP servers (`dispatch_server.py`, `gitlab_server.py`), since stdin there is
-the JSON-RPC transport channel and a blocking prompt would corrupt it.
+MCP servers (`cadre mcp-dispatch-server`, `cadre mcp-gitlab-server`), since
+stdin there is the JSON-RPC transport channel and a blocking prompt would
+corrupt it.
 Prompting is lazy (only the one field that actually failed to resolve, only
 when that code path is actually reached), validates an answer with the same
 per-field validator env/file values go through, never prompts for a
