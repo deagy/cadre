@@ -312,12 +312,14 @@ func TestGetToolDefinitions(t *testing.T) {
 		return
 	}
 
-	// The dispatch tools plus the four context-store tools. Counted rather
-	// than fixed at 4: the server grew the context tools when they were
-	// ported from context_tools.py, and pinning a literal here would make
-	// every future tool a test edit rather than a definition.
-	if len(definitions) != len(dispatchToolDefinitions())+len(contextToolDefinitions()) {
-		t.Errorf("expected every dispatch and context tool, got %d", len(definitions))
+	// Every group the server assembles, counted from the groups themselves
+	// rather than pinned to a literal -- the server has grown twice now (the
+	// context tools, then dispatch_team_recipe), and a literal would make
+	// each new tool a test edit rather than a definition.
+	want := len(dispatchToolDefinitions()) + len(contextToolDefinitions()) + 1
+	if len(definitions) != want {
+		t.Errorf("got %d tool definitions, want %d (dispatch + context + team recipe)",
+			len(definitions), want)
 	}
 
 	// Every tool that must be present, dispatch and context alike.
@@ -330,6 +332,7 @@ func TestGetToolDefinitions(t *testing.T) {
 		"context_get":                false,
 		"context_list":               false,
 		"context_search":             false,
+		"dispatch_team_recipe":       false,
 	}
 
 	for _, def := range definitions {
