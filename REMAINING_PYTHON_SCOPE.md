@@ -17,6 +17,11 @@ timeline — an earlier version of this document (dated the same day) claimed
 
 ---
 
+> **Sequencing lives in [`PYTHON_ELIMINATION_PLAN.md`](PYTHON_ELIMINATION_PLAN.md).**
+> This file records *what* is still Python and why. That one records the order
+> it goes in, what gates each step, and what breaks — against the stated goal
+> of zero Python in this repository.
+
 ## What actually remains
 
 ### `cadre select` — ported; Python retained as an escape hatch
