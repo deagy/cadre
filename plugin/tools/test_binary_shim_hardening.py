@@ -27,6 +27,7 @@ positional match was correctly replaced with field extraction, having never
 tested the behaviour it was named for.
 """
 
+import re
 import hashlib
 import json
 import os
@@ -40,15 +41,24 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GENERATED_SHIM = REPO_ROOT / "plugin" / "bin" / "cadre"
-CLI_VERSION_SOURCE = REPO_ROOT / "cadre_cli" / "_version.py"
+# A plain text file since Phase 2 of PYTHON_ELIMINATION_PLAN.md.
+CLI_VERSION_SOURCE = REPO_ROOT / "VERSION"
 
 
 def _cli_version() -> str:
-    """The CLI version the shim is pinned to at generation time."""
+    """The CLI version the shim is pinned to at generation time.
+
+    Accepts both shapes: the plain `x.y.z` the VERSION file now holds, and the
+    `VERSION = "x.y.z"` assignment cadre_cli/_version.py used to, so this
+    keeps working against an older generated shim.
+    """
     for line in CLI_VERSION_SOURCE.read_text(encoding="utf-8").splitlines():
-        if line.startswith("VERSION = "):
-            return line.split('"')[1]
-    raise AssertionError(f"no VERSION marker in {CLI_VERSION_SOURCE}")
+        stripped = line.strip()
+        if stripped.startswith("VERSION = "):
+            return stripped.split('"')[1]
+        if re.fullmatch(r"\d+\.\d+\.\d+", stripped):
+            return stripped
+    raise AssertionError(f"no version found in {CLI_VERSION_SOURCE}")
 
 
 @unittest.skipUnless(GENERATED_SHIM.exists(), "generated shim not present")

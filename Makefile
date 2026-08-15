@@ -142,7 +142,7 @@ wheel:
 	  unpacked=$$(find build/wheel -mindepth 1 -maxdepth 1 -type d); \
 	  datadir=$$(find $$unpacked -mindepth 1 -maxdepth 1 -type d -name '*.data')/data/share/cadre; \
 	  mkdir -p $$datadir; \
-	  tar -c $(WHEEL_DATA_EXCLUDES) roster .agents/skills provider | tar -x -C $$datadir; \
+	  tar -c $(WHEEL_DATA_EXCLUDES) VERSION roster .agents/skills provider | tar -x -C $$datadir; \
 	  if [ -n "$(WHEEL_EXE_SUFFIX)" ]; then \
 	    scripts=$$(find $$unpacked -type d -name scripts); \
 	    mv $$scripts/cadre $$scripts/cadre$(WHEEL_EXE_SUFFIX); \

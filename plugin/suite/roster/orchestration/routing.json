@@ -577,8 +577,7 @@
         ".agents/skills/**",
         "provider/**",
         "packaging/**",
-        "cadre_cli/__init__.py",
-        "cadre_cli/_version.py",
+        "VERSION",
         "README.md",
         "AGENTS.md"
       ],

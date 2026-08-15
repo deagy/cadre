@@ -325,7 +325,10 @@ class SelectorTests(unittest.TestCase):
         # They must not be represented by a generic Python glob: routing.json
         # ships as the base ruleset to consuming projects, whose source trees
         # have no Cadre-specific routing meaning (#196).
-        for relative_path in ("cadre_cli/__init__.py", "cadre_cli/_version.py"):
+        # VERSION replaced cadre_cli/_version.py in Phase 2 of
+        # PYTHON_ELIMINATION_PLAN.md. The route must follow the marker, or a
+        # version bump stops reaching the governance reviewers.
+        for relative_path in ("VERSION",):
             with self.subTest(path=relative_path):
                 result = plan(
                     task="Inspect selected file",
