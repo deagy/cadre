@@ -126,10 +126,18 @@ func ExecuteDispatchChild(
 		return SpawnCodexChild(ctx.Prompt, ctx.Model, env, timeout)
 
 	case RunnerAPI:
-		return map[string]any{
-			"status": "unavailable",
-			"reason": "API runner not yet implemented",
+		// Spawns no child process: it drives a chat endpoint and executes the
+		// tool calls itself, inside the sandbox in api_runner_sandbox.go.
+		// That is the point of runner="api" -- it serves deployments where
+		// there is no coding CLI to spawn.
+		//
+		// Configuration arrives from the caller rather than being resolved
+		// here, so the runner stays testable without a settings tree.
+		apiConfig := ResolveAPIRunnerConfig(apiProjectRoot())
+		if apiConfig.Model == "" {
+			apiConfig.Model = modelForTier(ctx.ModelTier)
 		}
+		return SpawnAPIChild(*ctx, apiConfig, time.Duration(timeout*float64(time.Second)))
 
 	default:
 		return map[string]any{
