@@ -369,3 +369,65 @@ func claudeRoleRoots(t *testing.T, roleID string) DispatchRoots {
 	}
 	return DispatchRoots{ProjectRoot: t.TempDir(), GlobalRoot: t.TempDir(), PluginRoot: plugin}
 }
+
+func TestOperatorForwardedEnvReachesTheChild(t *testing.T) {
+	// runners.forward_env was registered, documented and validated while
+	// nothing consumed it: BuildChildEnv took a projectRoot and never used
+	// it. An operator who opted in got no forwarding and no error saying so,
+	// which surfaces as an unexplained authentication failure from a
+	// self-hosted provider.
+	t.Setenv("SECURE_CLOUD_AGENTS_FORWARD_ENV", "PROBE_PROVIDER_KEY")
+	t.Setenv("PROBE_PROVIDER_KEY", "secret-value")
+
+	env := BuildChildEnv(1, t.TempDir())
+	if env["PROBE_PROVIDER_KEY"] != "secret-value" {
+		t.Errorf("a forwarded variable did not reach the child env: %v", env)
+	}
+}
+
+func TestForwardingCannotOverwriteTheDepthCounter(t *testing.T) {
+	// The counter is what stops a dispatch chain recursing without bound. If
+	// forwarding were applied after it, an operator -- or anything that could
+	// influence that list -- could reset the cap by forwarding the counter's
+	// own variable.
+	t.Setenv("SECURE_CLOUD_AGENTS_FORWARD_ENV", DepthEnvVar)
+	t.Setenv(DepthEnvVar, "0")
+
+	env := BuildChildEnv(1, t.TempDir())
+	if env[DepthEnvVar] != "1" {
+		t.Errorf("%s = %q, want the dispatch's own depth", DepthEnvVar, env[DepthEnvVar])
+	}
+}
+
+func TestAVariableNotListedIsNotForwarded(t *testing.T) {
+	// Deny by default: the allowlist plus exactly what the operator named.
+	t.Setenv("SECURE_CLOUD_AGENTS_FORWARD_ENV", "PROBE_ALLOWED")
+	t.Setenv("PROBE_ALLOWED", "yes")
+	t.Setenv("PROBE_NOT_ALLOWED", "no")
+
+	env := BuildChildEnv(1, t.TempDir())
+	if _, present := env["PROBE_NOT_ALLOWED"]; present {
+		t.Error("an unlisted variable was forwarded to the child")
+	}
+}
+
+func TestTheChildAlwaysHasAPath(t *testing.T) {
+	// A child with no PATH cannot exec anything it does not name absolutely,
+	// which turns a missing PATH here into an unexplained child failure.
+	//
+	// PATH is cleared first: with one set, the allowlist copy supplies it and
+	// the fallback never runs, so the test would pass whether or not the
+	// fallback existed.
+	t.Setenv("PATH", "")
+	env := BuildChildEnv(1, "")
+	if env["PATH"] == "" {
+		t.Error("the child environment has no PATH at all")
+	}
+
+	// And a real PATH wins over the fallback -- it is a floor, not an
+	// override.
+	t.Setenv("PATH", "/opt/probe/bin")
+	if got := BuildChildEnv(1, "")["PATH"]; got != "/opt/probe/bin" {
+		t.Errorf("PATH = %q, want this process's own", got)
+	}
+}

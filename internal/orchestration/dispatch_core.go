@@ -15,6 +15,8 @@ import (
 	"regexp"
 	"sync"
 	"time"
+
+	cadreconfig "github.com/deagy/cadre/cli/internal/config"
 )
 
 // Constants matching Python dispatch_core.py exactly
@@ -321,7 +323,28 @@ func BuildChildEnv(dispatchDepth int, projectRoot string) map[string]string {
 		}
 	}
 
-	// Set dispatch depth
+	// The operator-consented extension of the allowlist. projectRoot was
+	// accepted as a parameter and then never used, so `runners.forward_env`
+	// was registered, documented and validated while nothing consumed it --
+	// an operator who opted in got no forwarding and no error saying so.
+	//
+	// It exists for one concrete case: a Codex [model_providers.*] block
+	// declaring env_key = "SOME_VAR" cannot authenticate to a self-hosted
+	// endpoint unless SOME_VAR reaches the child. Empty by default, so an
+	// operator who does not opt in keeps the deny-by-default posture.
+	//
+	// Applied after the allowlist copy and before the depth counter below,
+	// so forwarding can widen the environment but can never overwrite the
+	// counter and defeat the re-dispatch cap.
+	if projectRoot != "" {
+		for name, value := range resolveForwardedEnv(projectRoot) {
+			env[name] = value
+		}
+	}
+
+	// Not a secret: a small integer re-dispatch counter, carried so that a
+	// child which also runs this server enforces the depth cap against
+	// itself.
 	env[DepthEnvVar] = fmt.Sprintf("%d", dispatchDepth)
 
 	// Set parent classification if needed
@@ -329,7 +352,52 @@ func BuildChildEnv(dispatchDepth int, projectRoot string) map[string]string {
 		env[ParentClassificationVar] = parentClass
 	}
 
+	// A child with no PATH cannot exec anything it does not name absolutely,
+	// which turns a missing PATH in this process into an unexplained child
+	// failure. Only a fallback: a real PATH from the allowlist above wins.
+	if env["PATH"] == "" {
+		env["PATH"] = "/usr/bin:/bin"
+	}
+
 	return env
+}
+
+// resolveForwardedEnv reads runners.forward_env and returns the named
+// variables that this process actually has.
+//
+// A listed name that is absent here is simply not forwarded. Failing the
+// whole dispatch over it would be worse than letting the provider's own
+// authentication error surface, which says something specific.
+func resolveForwardedEnv(projectRoot string) map[string]string {
+	forwarded := map[string]string{}
+	value, err := cadreconfig.ResolveOptional("runners.forward_env", projectRoot)
+	if err != nil || value == nil {
+		return forwarded
+	}
+	// The validator returns []string; a YAML file reaches here as []any.
+	// Both are handled rather than assumed, because getting it wrong fails
+	// silently -- an operator's forwarding list would simply do nothing,
+	// which is the bug this function exists to fix.
+	var names []string
+	switch typed := value.(type) {
+	case []string:
+		names = typed
+	case []any:
+		for _, raw := range typed {
+			if name, ok := raw.(string); ok {
+				names = append(names, name)
+			}
+		}
+	default:
+		return forwarded
+	}
+
+	for _, name := range names {
+		if resolved, present := os.LookupEnv(name); present {
+			forwarded[name] = resolved
+		}
+	}
+	return forwarded
 }
 
 // fenceToken draws the per-call marker that makes a fence unforgeable.
