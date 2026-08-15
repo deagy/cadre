@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -157,35 +158,42 @@ const entryColumns = `handle, scope, source, task_id, agent, dispatch_id, label,
 	content_hash, byte_length, classification, injection_risk, untrusted_inputs, derived_from_json,
 	redactions_json, created_at, expires_at, promoted_at`
 
+// migrateAdditiveColumns brings an older store up to the current shape.
+//
+// It attempts the ALTER unconditionally and treats "duplicate column name" as
+// success, rather than reading PRAGMA table_info first and adding the column
+// only when it looks absent.
+//
+// The check-then-add form was a race. Every OpenStore runs this, and a
+// dispatched team opens the store from several processes at once: two openers
+// both read the column as missing, both ALTER, and the loser's open failed --
+// taking down a dispatch that had done nothing wrong. Tolerating the
+// duplicate covers that, but leaves the guard for it probabilistic, because
+// the interleaving cannot be forced from a test.
+//
+// Attempting unconditionally removes the window instead of narrowing it: the
+// end state either party wanted is that the column exists, which is exactly
+// what "duplicate column name" reports. The cost is one failed statement per
+// open on an already-migrated store, which is nothing beside opening the file.
 func migrateAdditiveColumns(db *sql.DB) error {
-	rows, err := db.Query("PRAGMA table_info(entries)")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = rows.Close() }()
-	hasPromotedAt := false
-	for rows.Next() {
-		var cid int
-		var name, colType string
-		var notNull int
-		var dfltValue any
-		var pk int
-		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
-			return err
-		}
-		if name == "promoted_at" {
-			hasPromotedAt = true
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	if !hasPromotedAt {
-		if _, err := db.Exec("ALTER TABLE entries ADD COLUMN promoted_at TEXT"); err != nil {
+	for _, statement := range []string{
+		"ALTER TABLE entries ADD COLUMN promoted_at TEXT",
+	} {
+		if _, err := db.Exec(statement); err != nil && !isDuplicateColumnError(err) {
 			return err
 		}
 	}
 	return nil
+}
+
+// isDuplicateColumnError reports whether err is SQLite refusing to add a
+// column that already exists.
+//
+// Matched on the message because mattn/go-sqlite3 reports it as a generic
+// SQLITE_ERROR, with no distinct code to test -- so this is deliberately
+// narrow: any other schema failure still fails the open.
+func isDuplicateColumnError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "duplicate column name")
 }
 
 // OpenStore opens (creating if absent) and, by default, sweeps expired
