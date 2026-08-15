@@ -21,10 +21,13 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "show-contract":
 		return showContractCmd(args[1:], stdout, stderr)
+	case "detect":
+		return detectCmd(args[1:], stdout, stderr)
 	case "-h", "--help":
 		_, _ = fmt.Fprintln(stdout, "usage: agentic-sdlc <subcommand> [args...]")
 		_, _ = fmt.Fprintln(stdout, "\nSubcommands ported to Go so far:")
 		_, _ = fmt.Fprintln(stdout, "  show-contract <name>   Print a bundled lifecycle contract as JSON")
+		_, _ = fmt.Fprintln(stdout, "  detect [--root ROOT]   Report what a repository looks like, changing nothing")
 		return 0
 	}
 
@@ -34,6 +37,30 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	_, _ = fmt.Fprintf(stderr,
 		"agentic-sdlc: %q is not ported to the Go kernel yet; use the Python kernel for it\n", args[0])
 	return 2
+}
+
+func detectCmd(args []string, stdout, stderr io.Writer) int {
+	root := "."
+	for index := 0; index < len(args); index++ {
+		switch {
+		case args[index] == "--root" && index+1 < len(args):
+			index++
+			root = args[index]
+		case strings.HasPrefix(args[index], "--root="):
+			root = strings.TrimPrefix(args[index], "--root=")
+		default:
+			_, _ = fmt.Fprintf(stderr, "usage: agentic-sdlc detect [--root ROOT]\n")
+			return 2
+		}
+	}
+
+	rendered, err := RenderDetection(DetectRepository(root))
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "agentic-sdlc detect: %v\n", err)
+		return 1
+	}
+	_, _ = fmt.Fprint(stdout, rendered)
+	return 0
 }
 
 func showContractCmd(args []string, stdout, stderr io.Writer) int {
