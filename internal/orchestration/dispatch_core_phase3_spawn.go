@@ -7,12 +7,34 @@ import (
 	"os"
 	"os/exec"
 	"time"
+
+	cadreconfig "github.com/deagy/cadre/cli/internal/config"
 )
 
 // Phase 3.3: Real Child Process Spawning
 // Replaces echo stubs with actual subprocess execution (claude code CLI, Codex API future)
 
-// SpawnClaudeCodeChild executes a Claude Code subprocess with the given prompt
+// claudePermissionModes maps this repository's sandbox vocabulary onto the
+// Claude Code CLI's own.
+//
+// Not cosmetic: --permission-mode is how the effective sandbox actually
+// reaches the child. The previous invocation passed no permission flag at
+// all, so every sandbox decision this package makes -- planning-review-only
+// forcing read-only included -- was computed, logged, and then discarded at
+// the exec.
+var claudePermissionModes = map[string]string{
+	SandboxReadOnly:         "plan",
+	SandboxWorkspaceWrite:   "acceptEdits",
+	SandboxDangerFullAccess: "bypassPermissions",
+}
+
+// SpawnClaudeCodeChild runs the Claude Code CLI with the prompt on stdin.
+//
+// The invocation was `claude code --agent <model> --brief <prompt>`, which is
+// not a form the CLI accepts: there is no `code` subcommand, no `--agent`,
+// and no `--brief`. It also placed the whole prompt -- role instructions plus
+// the caller's untrusted brief -- in an argv element, where it is visible in
+// the process table and bounded by ARG_MAX.
 func SpawnClaudeCodeChild(
 	prompt string,
 	model string,
@@ -20,77 +42,137 @@ func SpawnClaudeCodeChild(
 	env map[string]string,
 	timeout float64,
 ) map[string]any {
-	if prompt == "" {
-		return map[string]any{
-			"status": "error",
-			"reason": "prompt cannot be empty",
-		}
-	}
-
-	if model == "" {
-		return map[string]any{
-			"status": "error",
-			"reason": "model cannot be empty",
-		}
-	}
-
-	// Validate Claude Code subprocess invocation
-	if err := validateClaudeCodeExecution(model, sandboxMode); err != nil {
-		return map[string]any{
-			"status": "error",
-			"reason": err.Error(),
-		}
-	}
-
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
-	defer cancel()
-
-	// Build claude code command
-	// Format: claude code --agent <model> --brief <prompt>
-	args := []string{
-		"code",
-		"--agent", model,
-		"--brief", prompt,
-	}
-
-	// Add sandbox mode if specified
-	if sandboxMode != "" {
-		args = append(args, "--sandbox", sandboxMode)
-	}
-
-	cmd := exec.CommandContext(ctx, "claude", args...)
-
-	// Set environment
-	cmd.Env = environmentMapToSlice(env)
-
-	// Capture combined output
-	output, err := cmd.CombinedOutput()
-
-	// Handle execution results
-	result := parseCommandOutput(cmd.ProcessState, output, err)
-
-	// Wrap output as untrusted
-	if outputStr, ok := result["output"].(string); ok {
-		result["output"] = WrapUntrustedOutput(outputStr)
-	}
-
-	return result
+	return spawnClaudeCodeChildIn("", prompt, model, sandboxMode, "", env, timeout)
 }
 
-// SpawnCodexChild executes a Codex API request (future implementation)
+func spawnClaudeCodeChildIn(
+	projectRoot, prompt, model, sandboxMode, reasoningEffort string,
+	env map[string]string,
+	timeout float64,
+) map[string]any {
+	if prompt == "" {
+		return map[string]any{"status": "error", "reason": "prompt cannot be empty"}
+	}
+	if model == "" {
+		return map[string]any{"status": "error", "reason": "model cannot be empty"}
+	}
+	// The model is validated separately from the sandbox: an unrecognised
+	// model is this repository's own catalog being wrong, which is a
+	// different failure from a role declaring a sandbox nobody supports.
+	if err := validateClaudeCodeExecution(model, ""); err != nil {
+		return map[string]any{"status": "error", "reason": err.Error()}
+	}
+	// An empty sandbox is refused rather than defaulted. It cannot arise on
+	// the dispatch path -- EffectiveSandboxForDispatch always resolves one --
+	// so reaching here with none is a bug upstream, and quietly picking a
+	// mode would hide it.
+	permissionMode, known := claudePermissionModes[sandboxMode]
+	if !known {
+		// Refused rather than defaulted. Guessing a permission mode for an
+		// unrecognised sandbox is the one direction that can only ever widen
+		// what the child may do.
+		return map[string]any{
+			"status": "denied",
+			"reason": fmt.Sprintf("unknown sandbox_mode for the Claude Code runner: %q", sandboxMode),
+		}
+	}
+
+	argv := []string{
+		runnerBinary("runners.claude_bin", "claude", projectRoot),
+		"-p",
+		"--model", model,
+		"--permission-mode", permissionMode,
+		"--strict-mcp-config",
+	}
+	if reasoningEffort != "" {
+		argv = append(argv, "--effort", reasoningEffort)
+	}
+
+	return spawnChildWithPrompt(spawnChildOptions{
+		Argv: argv, Prompt: prompt, Env: env, WorkingDir: projectRoot,
+		Timeout: time.Duration(timeout * float64(time.Second)),
+	})
+}
+
+// SpawnCodexChild runs the Codex CLI with the prompt on stdin.
+//
+// This returned {"status": "unavailable", "reason": "Codex runner not yet
+// implemented"} -- for the default runner, so the default dispatch path could
+// not run at all once it was reached.
 func SpawnCodexChild(
 	prompt string,
 	model string,
 	env map[string]string,
 	timeout float64,
 ) map[string]any {
-	// Codex API integration is not yet implemented
-	// Future: use Codex OpenAI client to execute prompt
-	return map[string]any{
-		"status": "unavailable",
-		"reason": fmt.Sprintf("Codex runner not yet implemented (model: %s)", model),
+	return spawnCodexChildIn("", prompt, model, SandboxReadOnly, "", env, timeout)
+}
+
+func spawnCodexChildIn(
+	projectRoot, prompt, model, sandboxMode, reasoningEffort string,
+	env map[string]string,
+	timeout float64,
+) map[string]any {
+	if prompt == "" {
+		return map[string]any{"status": "error", "reason": "prompt cannot be empty"}
 	}
+	if !KnownSandboxModes[sandboxMode] {
+		return map[string]any{
+			"status": "denied",
+			"reason": fmt.Sprintf("unknown sandbox_mode for the Codex runner: %q", sandboxMode),
+		}
+	}
+
+	// The trailing "-" is what makes codex exec read the prompt from stdin.
+	argv := []string{
+		runnerBinary("runners.codex_bin", "codex", projectRoot),
+		"exec",
+		"--sandbox", sandboxMode,
+	}
+	// A profile names a Codex config file the operator owns, carrying the
+	// provider's base_url and credential. When one is set it supplies the
+	// model too, so the wrapper's vendor identifier is not also passed --
+	// a self-hosted endpoint has never heard of it.
+	profile := runnerSetting("runners.codex_profile", projectRoot)
+	if profile != "" {
+		argv = append(argv, "--profile", profile)
+	} else if model != "" {
+		argv = append(argv, "--model", model)
+	}
+	if reasoningEffort != "" {
+		// No dedicated flag exists; the CLI's generic -c override is the
+		// documented mechanism.
+		argv = append(argv, "-c", "model_reasoning_effort="+reasoningEffort)
+	}
+	if projectRoot != "" {
+		argv = append(argv, "--cd", projectRoot)
+	}
+	argv = append(argv, "--skip-git-repo-check", "-")
+
+	return spawnChildWithPrompt(spawnChildOptions{
+		Argv: argv, Prompt: prompt, Env: env, WorkingDir: projectRoot,
+		Timeout: time.Duration(timeout * float64(time.Second)),
+	})
+}
+
+// runnerBinary resolves an operator-configured executable, falling back to
+// the name on PATH. Anchored to the dispatch's project root rather than this
+// process's cwd, which for a long-lived MCP server is unrelated to the
+// project being dispatched.
+func runnerBinary(key, fallback, projectRoot string) string {
+	if resolved := runnerSetting(key, projectRoot); resolved != "" {
+		return resolved
+	}
+	return fallback
+}
+
+func runnerSetting(key, projectRoot string) string {
+	value, err := cadreconfig.ResolveOptional(key, projectRoot)
+	if err != nil {
+		return ""
+	}
+	text, _ := value.(string)
+	return text
 }
 
 // ExecuteDispatchChild dispatches to appropriate spawner based on runner type
@@ -120,10 +202,12 @@ func ExecuteDispatchChild(
 
 	switch runner {
 	case RunnerClaudeCode:
-		return SpawnClaudeCodeChild(ctx.Prompt, ctx.Model, ctx.Sandbox, env, timeout)
+		return spawnClaudeCodeChildIn(ctx.ProjectRoot, ctx.Prompt, ctx.Model, ctx.Sandbox,
+			ctx.ReasoningEffort, env, timeout)
 
 	case RunnerCodex:
-		return SpawnCodexChild(ctx.Prompt, ctx.Model, env, timeout)
+		return spawnCodexChildIn(ctx.ProjectRoot, ctx.Prompt, ctx.Model, ctx.Sandbox,
+			ctx.ReasoningEffort, env, timeout)
 
 	case RunnerAPI:
 		// Spawns no child process: it drives a chat endpoint and executes the

@@ -63,6 +63,7 @@ func TestPhase3AsyncDispatchWorkflow(t *testing.T) {
 	// 3. Verify job persists in memory store
 
 	result := DispatchSecureCloudRole(
+		claudeRoleRoots(t, "test-role"),
 		"test-role",
 		"test brief",
 		ModePlanningOnly,
@@ -103,6 +104,7 @@ func TestPhase3ConfirmationWorkflow(t *testing.T) {
 	// 3. Replay with token
 
 	result := DispatchSecureCloudRole(
+		claudeRoleRoots(t, "test-role"),
 		"test-role",
 		"test brief",
 		ModeRepositoryEdit,
@@ -242,6 +244,7 @@ func TestPhase3TeamDispatchWorkflow(t *testing.T) {
 	}
 
 	result := DispatchTeam(
+		testRoots(t, "role1"),
 		members,
 		ModePlanningOnly,
 		"public",

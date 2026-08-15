@@ -70,6 +70,7 @@ func TestDispatchSecureCloudRoleValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := DispatchSecureCloudRole(
+				DispatchRoots{},
 				tt.roleID, tt.brief, tt.mode, tt.classification,
 				"", "task123", "session123", "public", DefaultRunner, true,
 			)
@@ -96,6 +97,7 @@ func TestDispatchSecureCloudRoleValidation(t *testing.T) {
 func TestDispatchConfirmationRequired(t *testing.T) {
 	// Repository edit mode should require confirmation for write-capable sandbox
 	result := DispatchSecureCloudRole(
+		testRoots(t, "test-role"),
 		"test-role", "test brief", ModeRepositoryEdit, "public",
 		"", "task123", "session123", "public", DefaultRunner, true,
 	)
@@ -117,6 +119,7 @@ func TestDispatchConfirmationRequired(t *testing.T) {
 func TestPollDispatchStatus(t *testing.T) {
 	// Async dispatch should return job_id immediately
 	result := DispatchSecureCloudRole(
+		testRoots(t, "test-role"),
 		"test-role", "test brief", ModePlanningOnly, "public",
 		"", "task123", "session123", "public", DefaultRunner, false, // wait=false
 	)
@@ -187,6 +190,7 @@ func TestDispatchTeamValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := DispatchTeam(
+				DispatchRoots{},
 				tt.members, ModePlanningOnly, "public",
 				"", "task123", "session123", "public", DefaultRunner, true,
 			)
@@ -213,6 +217,7 @@ func TestDispatchTeamConcurrency(t *testing.T) {
 	}
 
 	result := DispatchTeam(
+		DispatchRoots{},
 		members, ModePlanningOnly, "public",
 		"", "task123", "session123", "public", DefaultRunner, true,
 	)
@@ -351,6 +356,7 @@ func TestPollTeamStatus(t *testing.T) {
 	}
 
 	result := DispatchTeam(
+		DispatchRoots{},
 		members, ModePlanningOnly, "public",
 		"", "task123", "session123", "public", DefaultRunner, false, // wait=false
 	)
@@ -380,6 +386,7 @@ func TestPollTeamStatus(t *testing.T) {
 func TestDispatchSyncWait(t *testing.T) {
 	// Sync dispatch with wait=true should block and return result
 	result := DispatchSecureCloudRole(
+		testRoots(t, "test-role"),
 		"test-role", "test brief", ModePlanningOnly, "public",
 		"", "task123", "session123", "public", DefaultRunner, true, // wait=true
 	)
@@ -395,6 +402,7 @@ func TestDispatchSyncWait(t *testing.T) {
 func TestDispatchAsyncNoWait(t *testing.T) {
 	// Async dispatch with wait=false should return immediately with job_id
 	result := DispatchSecureCloudRole(
+		testRoots(t, "test-role"),
 		"test-role", "test brief", ModePlanningOnly, "public",
 		"", "task123", "session123", "public", DefaultRunner, false, // wait=false
 	)
