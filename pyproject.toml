@@ -18,208 +18,60 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 dependencies = []
 
-[project.optional-dependencies]
-# `cadre resolve-shared` / `cadre init` can resolve YAML shared-config
-# overlays; JSON-only overlays work without this (see
-# roster/shared/requirements-validation.txt / roster/shared/src/resolve.py's
-# _require_yaml()). Not a core dependency so a plain `pip install cadre`
-# stays dependency-light for callers who only use JSON overlays.
-yaml = [
-    "PyYAML==6.0.3",
-]
-# `cadre mcp-dispatch-server` requires the official MCP Python SDK (stdio
-# transport only -- see roster/orchestration/mcp/requirements-mcp.txt /
-# dispatch_server.py's _require_mcp()). Not a core dependency: every other
-# subcommand works without it, and it fails closed with an install pointer
-# if invoked without this extra installed.
-mcp = [
-    "mcp==2.0.0",
-]
+# No optional dependencies. `yaml` (PyYAML) and `mcp` existed for the Python
+# implementations this wheel used to vendor -- resolve.py's YAML overlay
+# support and dispatch_server.py's MCP transport. The wheel ships neither any
+# more, and the Go CLI reads YAML natively, so an extra that installs a
+# Python package nothing in the distribution imports would be a promise the
+# wheel cannot keep.
+#
+# `cadre mcp-dispatch-server` is served by the Go CLI. A checkout that wants
+# the Python MCP server still has roster/orchestration/mcp/requirements-mcp.txt.
 
 [project.urls]
 Repository = "https://github.com/deagy/cadre"
 
-[project.scripts]
-cadre = "cadre_cli:main"
+# No [project.scripts]. The `cadre` command is the Go binary itself, installed
+# from the wheel's .data/scripts/ directory -- a console-script entry here
+# would generate a Python launcher into <prefix>/bin/cadre and silently
+# overwrite it, which is exactly what happened the first time this was built.
 
 [tool.hatch.version]
 path = "cadre_cli/_version.py"
 pattern = "VERSION = \"(?P<version>[^\"]+)\""
 
 [tool.hatch.build.targets.wheel]
-packages = ["cadre_cli"]
+# No `packages`. This wheel contains no Python at all: it carries the
+# cross-compiled Go binary and the data that binary reads. bypass-selection
+# tells hatchling that is deliberate rather than a missing configuration.
+bypass-selection = true
 
-# roster/ and .agents/skills/ stay a single source of truth at their existing
-# top-level checkout locations
-# (not duplicated under cadre_cli/ in the source tree) -- hatchling's
-# force-include copies each of them into the built wheel only, at build
-# time, so an installed/pipx distribution carries its own bundled copy
-# without the checkout ever having two live copies to keep in sync. See
-# cadre_cli/__init__.py's VENDOR_ROOT resolution for the runtime lookup that
-# matches this.
+# This wheel used to be pure Python, dispatching to vendored roster/
+# scripts through cadre_cli/_SUBCOMMANDS. It no longer is. The binary *is*
+# the distribution -- Phase 2 of PYTHON_ELIMINATION_PLAN.md -- and no *.py
+# is vendored any more.
 #
-# hatchling's force-include does not honor [tool.hatch.build] exclude
-# patterns (verified empirically), so each subtree below is listed
-# individually rather than force-including the whole `roster/` directory
-# and trying to exclude `test/`, `examples/`, `runs/`, `data/`, and
-# `proposed-knowledge/` afterward -- those are dev-only/generated-at-runtime
-# paths that no dispatched script reads as a packaged resource, so they are
-# simply never listed here. `__pycache__`/`*.pyc` are skipped by hatchling
-# by default even under force-include.
+# hatchling builds only the binary here. The roster data the binary reads is
+# added afterwards by `make wheel`, which unpacks this wheel, copies the
+# tree in, and repacks it. That split is not a workaround for tidiness:
+# hatchling's shared-data maps *files only*, and a directory source produces
+# no files and **no error** -- a wheel that builds successfully and is
+# missing all 159 role definitions. Verified directly against hatchling
+# 1.31/1.32, including with `dir/`, `dir/*` and `dir/**/*` forms.
 #
-# NOTE: bin/ is no longer vendored at all. The Python-to-Go migration
-# (ADR-001-CLI-GO-REFACTOR.md) deleted bin/cadre.py, emptied
-# bin/subcommands.tsv, and turned bin/cadre / bin/cadre.ps1 into shims that
-# build and exec the Go binary -- none of which a pure-Python wheel can use.
-# The subcommand table therefore lives in cadre_cli/__init__.py's
-# _SUBCOMMANDS, and this table vendors only the roster/ Python
-# implementations those rows dispatch to. Shipping the Go binary through PyPI
-# instead is DISTRIBUTION.md's "PyPI (Backward Compatibility)" roadmap item
-# (v0.24.0+), which needs platform-tagged wheels and cross-compilation and is
-# not what this pure-Python target builds.
-[tool.hatch.build.targets.wheel.force-include]
+# Copying the tree with exclusions, rather than enumerating 583 paths, is
+# also what keeps a newly added role from silently missing the next release.
 
-"roster/catalog.yaml" = "cadre_cli/_vendor/roster/catalog.yaml"
-# Idea #8's runner/capability/model-tier manifest: generate_global_plugin.py
-# loads it unconditionally at import time (module-level _RUNNER_CAPABILITIES
-# = _load_runner_capabilities()), and generate_role_metadata.py imports that
-# module -- so `cadre generate-role-metadata --check` (an installed-must-work
-# subcommand, see cadre_cli/__init__.py) fails closed with a raw
-# FileNotFoundError/ManifestError traceback from an installed distribution
-# without this file vendored. Only the manifest is a runtime dependency;
-# runner-capabilities.schema.json is a dev/CI-time validation artifact (see
-# test_runner_capabilities.py) that no installed subcommand reads, so it is
-# deliberately not vendored here -- same precedent as catalog.yaml above
-# being vendored without catalog.schema.json.
-"roster/runner-capabilities.json" = "cadre_cli/_vendor/roster/runner-capabilities.json"
-"roster/architecture" = "cadre_cli/_vendor/roster/architecture"
-"roster/authority" = "cadre_cli/_vendor/roster/authority"
-"roster/data" = "cadre_cli/_vendor/roster/data"
-"roster/documentation" = "cadre_cli/_vendor/roster/documentation"
-"roster/engineering" = "cadre_cli/_vendor/roster/engineering"
-"roster/governance" = "cadre_cli/_vendor/roster/governance"
-"roster/operations" = "cadre_cli/_vendor/roster/operations"
-"roster/planning" = "cadre_cli/_vendor/roster/planning"
-"roster/review" = "cadre_cli/_vendor/roster/review"
-"roster/security" = "cadre_cli/_vendor/roster/security"
-"roster/support" = "cadre_cli/_vendor/roster/support"
-"roster/testing" = "cadre_cli/_vendor/roster/testing"
-"roster/workflows" = "cadre_cli/_vendor/roster/workflows"
+# The Go binary, staged into dist-staging/ for the platform being built.
+# One wheel per (GOOS, GOARCH), each carrying only its own binary; see
+# `make wheel` and the release workflow.
+[tool.hatch.build.targets.wheel.shared-scripts]
+"dist-staging/cadre" = "cadre"
 
-# Non-authoring vendor/platform context packs. These are a *runtime* resource,
-# not a build-time one: routing.json's context_packs rules name a `definition`
-# path under roster/context-packs/, and build_dispatch_plan.py's
-# _build_context_packs() opens each matched pack to hash its exact bytes,
-# raising "Context pack definition is missing" when it cannot. That is a hard
-# failure of the whole `cadre select` invocation, not a degraded plan -- so
-# without these vendored, any task whose text hits a pack keyword (`fpga`,
-# `redfish`, `bmc`, `ceph`, `yang`, `gnmi`, `qrng`, `sonicwall`, `root of
-# trust`, ...) aborts on an installed distribution while the same task works
-# from a checkout. context-pack-order.txt is the packaging list consumed by
-# generate_global_plugin.py, vendored alongside for the same reason
-# catalog-order.txt is below: `cadre generate-plugin` is not an
-# installed-must-work subcommand, but the file is the pack inventory and
-# belongs with the packs it enumerates rather than being resolvable only from
-# a checkout.
-"roster/context-packs" = "cadre_cli/_vendor/roster/context-packs"
-"roster/context-pack-order.txt" = "cadre_cli/_vendor/roster/context-pack-order.txt"
-
-# The roster package manifest. This is the THIRD closed allowlist governing
-# "which files ship" -- after generate_global_plugin.py's PROVIDER_BUNDLE and
-# its separate roster-root list -- and each had to be found on its own.
-# Omitting this one ships a wheel whose selector cannot import at all, because
-# routing_overlay resolves the default routing path through the manifest at
-# import time and fails closed when it is absent.
-"roster/roster.json" = "cadre_cli/_vendor/roster/roster.json"
-
-"roster/knowledge-store/AGENT.md" = "cadre_cli/_vendor/roster/knowledge-store/AGENT.md"
-"roster/knowledge-store/README.md" = "cadre_cli/_vendor/roster/knowledge-store/README.md"
-"roster/knowledge-store/SECURITY.md" = "cadre_cli/_vendor/roster/knowledge-store/SECURITY.md"
-"roster/knowledge-store/agent-context.schema.json" = "cadre_cli/_vendor/roster/knowledge-store/agent-context.schema.json"
-"roster/knowledge-store/canonical-message.schema.json" = "cadre_cli/_vendor/roster/knowledge-store/canonical-message.schema.json"
-"roster/knowledge-store/config.example.json" = "cadre_cli/_vendor/roster/knowledge-store/config.example.json"
-# NOTE: roster/knowledge-store/src/ is deliberately absent. The Python
-# knowledge-store implementation was deleted by the Python-to-Go migration
-# (commit b418031e) and replaced by internal/knowledge/ in the Go CLI, which
-# a pure-Python wheel cannot carry -- `cadre knowledge` is therefore not a
-# subcommand of this distribution (see cadre_cli/__init__.py's
-# _UNSHIPPED_SUBCOMMANDS, which recognises the name and says so rather than
-# reporting it as unknown). The sibling files above stay vendored because
-# build_dispatch_plan.py anchors on the roster/knowledge-store/ directory and
-# `cadre select` reads the schemas/policy docs there.
-
-# The agent context store's implementation, backing `cadre context`. Vendored
-# for exactly the same reason as roster/orchestration/src below: cli.py and
-# its sibling modules resolve roster/shared/src via
-# `Path(__file__).resolve().parents[2]`, so they only work when the vendored
-# tree preserves the checkout's relative layout. Only src/ is a runtime
-# dependency -- test/, data/, and the JSON schema are dev-time artifacts no
-# dispatched subcommand reads.
-"roster/context-store/src" = "cadre_cli/_vendor/roster/context-store/src"
-
-"roster/orchestration/escalation-policy.md" = "cadre_cli/_vendor/roster/orchestration/escalation-policy.md"
-"roster/orchestration/handoff-contracts.md" = "cadre_cli/_vendor/roster/orchestration/handoff-contracts.md"
-"roster/orchestration/knowledge-retrieval-policy.yaml" = "cadre_cli/_vendor/roster/orchestration/knowledge-retrieval-policy.yaml"
-"roster/orchestration/review-response-template.md" = "cadre_cli/_vendor/roster/orchestration/review-response-template.md"
-"roster/orchestration/roster.schema.json" = "cadre_cli/_vendor/roster/orchestration/roster.schema.json"
-"roster/orchestration/routing.json" = "cadre_cli/_vendor/roster/orchestration/routing.json"
-"roster/orchestration/selection.schema.json" = "cadre_cli/_vendor/roster/orchestration/selection.schema.json"
-"roster/orchestration/task-brief-template.md" = "cadre_cli/_vendor/roster/orchestration/task-brief-template.md"
-"roster/orchestration/src" = "cadre_cli/_vendor/roster/orchestration/src"
-"roster/orchestration/mcp" = "cadre_cli/_vendor/roster/orchestration/mcp"
-
-"roster/shared/README.md" = "cadre_cli/_vendor/roster/shared/README.md"
-"roster/shared/agent-autonomy.yaml" = "cadre_cli/_vendor/roster/shared/agent-autonomy.yaml"
-"roster/shared/cloud-guardrails.md" = "cadre_cli/_vendor/roster/shared/cloud-guardrails.md"
-"roster/shared/control-mapping-template.yaml" = "cadre_cli/_vendor/roster/shared/control-mapping-template.yaml"
-"roster/shared/definition-of-done.md" = "cadre_cli/_vendor/roster/shared/definition-of-done.md"
-"roster/shared/documentation-style.md" = "cadre_cli/_vendor/roster/shared/documentation-style.md"
-"roster/shared/knowledge-use-policy.md" = "cadre_cli/_vendor/roster/shared/knowledge-use-policy.md"
-"roster/shared/context-use-policy.md" = "cadre_cli/_vendor/roster/shared/context-use-policy.md"
-"roster/shared/library-standards.yaml" = "cadre_cli/_vendor/roster/shared/library-standards.yaml"
-"roster/shared/operating-principles.md" = "cadre_cli/_vendor/roster/shared/operating-principles.md"
-"roster/shared/platform-impact-profile.yaml" = "cadre_cli/_vendor/roster/shared/platform-impact-profile.yaml"
-"roster/shared/requirements-validation.txt" = "cadre_cli/_vendor/roster/shared/requirements-validation.txt"
-"roster/shared/risk-severity-model.md" = "cadre_cli/_vendor/roster/shared/risk-severity-model.md"
-"roster/shared/secure-development-policy.md" = "cadre_cli/_vendor/roster/shared/secure-development-policy.md"
-"roster/shared/team-profile.yaml" = "cadre_cli/_vendor/roster/shared/team-profile.yaml"
-"roster/shared/technology-standards.md" = "cadre_cli/_vendor/roster/shared/technology-standards.md"
-# Like the SHARED_POLICIES entries above it, role_wrapper_inputs() embeds this
-# into generated wrapper instructions -- and because a missing shared file is
-# deliberately *skipped* rather than an error, omitting it here would not
-# crash: an installed distribution would silently generate wrappers without
-# the policy, and `cadre generate-role-metadata --check` would then report
-# drift against the vendored provider/ copies that do contain it.
-"roster/shared/workspace-isolation.md" = "cadre_cli/_vendor/roster/shared/workspace-isolation.md"
-"roster/shared/init-presets" = "cadre_cli/_vendor/roster/shared/init-presets"
-"roster/shared/output-schemas" = "cadre_cli/_vendor/roster/shared/output-schemas"
-"roster/shared/src" = "cadre_cli/_vendor/roster/shared/src"
-
-".agents/skills" = "cadre_cli/_vendor/.agents/skills"
-
-# The whole provider bundle. Needed for `cadre sdlc` (cadre_cli/__init__.py's
-# dispatch_sdlc() passes --provider VENDOR_ROOT/provider/provider.json to the
-# externally installed `agentic-sdlc` binary) and for `cadre bootstrap-codex`
-# (sync_codex_agents.py's DEFAULT_SOURCE reads provider/codex-agents/ as the
-# default set of wrappers to install into the caller's own ~/.codex/ config).
-#
-# This directory is register-owned precisely so these two subcommands keep
-# working from a pip/pipx install with no plugin checkout anywhere: the
-# packaged Claude/Codex plugin distribution (plugin/, in this same
-# repository) receives a copy of it, rather than the other way round. Both
-# subcommands only *read*
-# these resources (bootstrap-codex writes into the caller's own home
-# directory, never back into this package), so vendoring them is safe --
-# unlike generate-plugin below, which fails closed instead (see
-# cadre_cli/__init__.py).
-"provider" = "cadre_cli/_vendor/provider"
-
-# `cadre generate-role-metadata` (generate_role_metadata.py) reads these two
-# top-level roster/ files as its source of truth for dispatch-precedence
-# order and the generated-file header template.
-"roster/catalog-order.txt" = "cadre_cli/_vendor/roster/catalog-order.txt"
-"roster/_catalog_header.yaml.tmpl" = "cadre_cli/_vendor/roster/_catalog_header.yaml.tmpl"
-
+# The sdist is a source archive, not an installable distribution. Building
+# the wheel from it needs the Go toolchain and `make wheel` (see the wheel
+# target above), so `pip install cadre-x.y.z.tar.gz` cannot work and is not
+# offered -- releases carry per-platform wheels instead.
 [tool.hatch.build.targets.sdist]
 include = [
     "cadre_cli/**",

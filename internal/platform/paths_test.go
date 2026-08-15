@@ -335,3 +335,98 @@ func TestFindAncestorWith_RejectsEmptySuiteDirectory(t *testing.T) {
 		t.Errorf("findAncestorWith() should reject empty suite/, got: %q", got)
 	}
 }
+
+// The pip/pipx wheel layout: the binary lands in <prefix>/bin and its roster
+// data in <prefix>/share/cadre/roster, so the installation root has to be
+// findable by ascending from the executable across that shape.
+func TestFindAncestorWithResolvesTheWheelLayout(t *testing.T) {
+	prefix := t.TempDir()
+	installed := filepath.Join(prefix, "share", "cadre")
+	if err := os.MkdirAll(filepath.Join(installed, "roster"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	binDir := filepath.Join(prefix, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got, found := findAncestorWith(binDir, "roster", 64)
+	if !found {
+		t.Fatal("a wheel-installed layout must be findable from <prefix>/bin")
+	}
+	if got != installed {
+		t.Errorf("root = %q, want %q -- the directory roster/ lives in, not the prefix", got, installed)
+	}
+}
+
+func TestACheckoutBeatsAWheelInstallHoweverFarAway(t *testing.T) {
+	// The case this ordering exists for: a developer with cadre pip-installed
+	// into a venv, working inside a checkout. The checkout is authoritative,
+	// even though the venv's share/cadre/roster sits far closer to cwd.
+	//
+	// Testing this needs the wheel layout *nearer* than the checkout, because
+	// a per-level search that tried every layout at each rung would pass a
+	// test where the checkout was nearer and fail only here.
+	root := t.TempDir()
+	checkout := filepath.Join(root, "checkout")
+	if err := os.MkdirAll(filepath.Join(checkout, "roster"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The venv lives several levels below the checkout root, with its own
+	// installed copy one level above the search start.
+	venv := filepath.Join(checkout, "a", "b", "c", ".venv")
+	if err := os.MkdirAll(filepath.Join(venv, "share", "cadre", "roster"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	start := filepath.Join(venv, "bin")
+	if err := os.MkdirAll(start, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got, found := findAncestorWith(start, "roster", 64)
+	if !found {
+		t.Fatal("expected a match")
+	}
+	if got != checkout {
+		t.Errorf("root = %q, want the checkout %q -- an installed copy must never "+
+			"shadow the checkout a developer is working in", got, checkout)
+	}
+}
+
+func TestWheelLayoutIsFoundWhenNoCheckoutIsAnywhereAbove(t *testing.T) {
+	// And the converse: with no checkout in the ancestry, the installed copy
+	// is the right answer rather than an error.
+	prefix := t.TempDir()
+	installed := filepath.Join(prefix, "share", "cadre")
+	if err := os.MkdirAll(filepath.Join(installed, "roster"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	deep := filepath.Join(prefix, "bin", "nested", "deeper")
+	if err := os.MkdirAll(deep, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got, found := findAncestorWith(deep, "roster", 64)
+	if !found || got != installed {
+		t.Errorf("root = %q found=%v, want %q", got, found, installed)
+	}
+}
+
+func TestPluginLayoutStillBeatsAWheelInstall(t *testing.T) {
+	// suite/ predates share/cadre/ and keeps its precedence: a packaged
+	// plugin carries its own complete roster, and an unrelated wheel install
+	// higher up must not take over for it.
+	root := t.TempDir()
+	plugin := filepath.Join(root, "plugin")
+	if err := os.MkdirAll(filepath.Join(plugin, "suite", "roster"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "share", "cadre", "roster"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got, found := findAncestorWith(plugin, "roster", 64)
+	if !found || got != filepath.Join(plugin, "suite") {
+		t.Errorf("root = %q found=%v, want the plugin's own suite/", got, found)
+	}
+}

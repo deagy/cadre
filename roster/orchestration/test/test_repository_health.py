@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import atexit
 import contextlib
+import fnmatch
 import json
 import os
 import re
@@ -1423,20 +1424,27 @@ class RepositoryHealthTests(unittest.TestCase):
                     target = (path.parent / relative).resolve()
                     self.assertTrue(target.is_file() or target.is_dir(), f"{path}: {relative}")
 
-    def test_every_embedded_shared_policy_is_vendored_into_the_wheel(self) -> None:
-        """pyproject.toml's [tool.hatch.build.targets.wheel.force-include]
-        lists roster/shared/ files *individually* (hatchling's force-include
-        does not honor exclude patterns, so the subtree cannot be included
-        wholesale). That is a second, separate allowlist from
-        generate_suite_copy()'s -- which prefix-matches `roster/shared/` and
-        therefore needs no edit for a new file.
+    def test_every_embedded_shared_policy_reaches_the_wheel(self) -> None:
+        """Every shared policy embedded into a generated wrapper must also be
+        carried by the pip/pipx wheel.
 
-        Omitting a new shared policy here does not crash: role_wrapper_inputs()
-        deliberately *skips* a missing shared file, so an installed
-        distribution would silently generate wrappers without the policy, and
-        `cadre generate-role-metadata --check` would then report drift against
-        the vendored provider/ copies that do contain it. This test makes that
-        silent divergence a loud one.
+        This used to check an allowlist: hatchling's force-include ignores
+        exclude patterns, so `pyproject.toml` named each roster/shared/ file
+        individually and a new one had to be added by hand. Phase 2 of
+        PYTHON_ELIMINATION_PLAN.md replaced that with `make wheel` copying the
+        tree with exclusions, so the allowlist is gone and a new shared file
+        is carried automatically.
+
+        The guarantee is unchanged and still worth pinning, because the
+        failure is silent in both arrangements: role_wrapper_inputs() *skips*
+        a missing shared file, so an installed distribution would generate
+        wrappers without the policy, and `generate-role-metadata --check`
+        would then report drift against vendored copies that do contain it.
+
+        Rather than build a wheel (slow), this asks the same question of the
+        copy rule: is the file under a copied root, and does any path
+        component match an exclusion? The exclusions are read from the
+        Makefile rather than restated, so the two cannot drift apart.
         """
         sys.path.insert(0, str(ROOT / "orchestration" / "src"))
         try:
@@ -1444,21 +1452,44 @@ class RepositoryHealthTests(unittest.TestCase):
         finally:
             sys.path.pop(0)
 
-        pyproject = (REPOSITORY_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        makefile = (REPOSITORY_ROOT / "Makefile").read_text(encoding="utf-8")
+        block = re.search(
+            r"WHEEL_DATA_EXCLUDES\s*=\s*((?:.*\\\n)*.*)", makefile
+        )
+        self.assertIsNotNone(block, "WHEEL_DATA_EXCLUDES not found in Makefile")
+        excludes = set(re.findall(r"--exclude='([^']+)'", block.group(1)))
+        self.assertIn("*.py", excludes, "the wheel must still exclude Python")
+
+        copied_roots = re.search(r"tar -c \$\(WHEEL_DATA_EXCLUDES\) ([^|]+)\|", makefile)
+        self.assertIsNotNone(copied_roots, "wheel data roots not found in Makefile")
+        roots = copied_roots.group(1).split()
+        self.assertIn("roster", roots)
+
         embedded = list(generate_global_plugin.SHARED_POLICIES) + list(
             generate_global_plugin.TIER_SCOPED_POLICIES
         )
-        missing = [
-            relative
-            for relative in embedded
-            if f'"{relative}" = "cadre_cli/_vendor/{relative}"' not in pyproject
-        ]
+        self.assertTrue(embedded, "no shared policies found to check")
+
+        missing = []
+        for relative in embedded:
+            path = REPOSITORY_ROOT / relative
+            under_a_copied_root = any(
+                relative == root or relative.startswith(f"{root}/") for root in roots
+            )
+            excluded = any(
+                fnmatch.fnmatch(part, pattern)
+                for part in Path(relative).parts
+                for pattern in excludes
+            )
+            if not path.is_file() or not under_a_copied_root or excluded:
+                missing.append(relative)
+
         self.assertEqual(
             [],
             missing,
-            "shared policy files embedded into generated wrappers but not "
-            "force-included into the wheel (add them to pyproject.toml's "
-            "[tool.hatch.build.targets.wheel.force-include])",
+            "shared policy files embedded into generated wrappers that the wheel "
+            "would not carry -- either they are outside the roots `make wheel` "
+            "copies, or an exclusion pattern drops them",
         )
 
     def test_every_shared_policy_file_is_embedded_or_explicitly_exempted(self) -> None:

@@ -152,17 +152,18 @@ func FindInstallationRoot() (string, error) {
 	const markerPath = "roster"
 	const maxWalkDepth = 64
 
-	// Try environment variable first, validating both direct and plugin layouts
+	// Try the environment variable first, against the same layouts the
+	// ancestor walk uses -- a variable pointing at an install must resolve
+	// exactly as that install would resolve on its own.
 	if root := os.Getenv("CADRE_REPO_ROOT"); root != "" {
-		// Check direct marker (checkout layout)
-		markerDir := filepath.Join(root, markerPath)
-		if _, err := os.Stat(markerDir); err == nil {
-			return root, nil
-		}
-		// Check plugin layout (suite/<markerPath>)
-		suiteMarkerDir := filepath.Join(root, "suite", markerPath)
-		if _, err := os.Stat(suiteMarkerDir); err == nil {
-			return filepath.Join(root, "suite"), nil
+		for _, layout := range installationLayouts {
+			base := root
+			if layout != "" {
+				base = filepath.Join(root, filepath.FromSlash(layout))
+			}
+			if _, err := os.Stat(filepath.Join(base, markerPath)); err == nil {
+				return base, nil
+			}
 		}
 	}
 
@@ -186,52 +187,61 @@ func FindInstallationRoot() (string, error) {
 	return "", fmt.Errorf("cannot locate Cadre installation (roster/ directory); set CADRE_REPO_ROOT to a Cadre checkout, or run from inside one")
 }
 
+// installationLayouts are the directory shapes an installation can take,
+// in precedence order. Each is a prefix that sits between an ancestor
+// directory and the marker directory.
+//
+//   - ""            checkout, and a binary built into one: <root>/roster
+//   - "suite"       packaged plugin:                       <plugin>/suite/roster
+//   - "share/cadre" pip/pipx wheel:                        <prefix>/share/cadre/roster
+//
+// The wheel layout is last because it is the only one that can plausibly
+// coexist with another: a developer with cadre pip-installed into a venv,
+// working inside a checkout, must get the checkout's roster/ and not the
+// installed copy. Precedence here, not luck, is what guarantees that.
+//
+// share/cadre rather than the bare prefix: a `pip install --user` puts
+// sys.prefix at ~/.local, and installing a roster/ directory there would
+// litter a shared prefix with a name nothing else would recognise.
+var installationLayouts = []string{"", "suite", "share/cadre"}
+
 // findAncestorWith walks upward from start looking for an ancestor directory
-// containing a specific subdirectory (the markerPath). Supports both normal
-// checkout layout (<root>/roster) and packaged plugin layout (<plugin>/suite/roster).
+// containing markerPath under one of the known installation layouts.
 //
-// Resolution precedence: direct marker paths anywhere in the ascent beat nested
-// marker paths. Two-pass walk ensures this: first pass checks only direct marker,
-// second pass checks only nested marker (suite/<markerPath>).
+// One full ascent per layout, in precedence order, rather than one ascent
+// testing every layout at each level: a nearer directory matching a
+// lower-precedence layout must not beat a further one matching a higher.
+// A checkout root ten levels up still wins over a wheel install one level
+// up, which is what makes an editable checkout authoritative for a
+// developer who also has the wheel installed.
 //
-// Returns the ancestor (or ancestor/suite if only plugin layout matched) and true
-// if found, or ("", false) if the search exhausts depth or reaches filesystem root.
+// Returns the directory the marker lives directly inside -- for a nested
+// layout that is the ancestor plus the layout prefix, not the ancestor
+// itself -- and true, or ("", false) if the search exhausts depth or reaches
+// the filesystem root.
 func findAncestorWith(start, markerPath string, maxDepth int) (string, bool) {
 	directory, err := filepath.Abs(start)
 	if err != nil {
 		return "", false
 	}
 
-	// First pass: check for direct marker path anywhere in the ascent.
-	// This ensures checkout-style roster/ beats plugin-style suite/roster/ at all levels.
-	curr := directory
-	for i := 0; i < maxDepth; i++ {
-		candidate := filepath.Join(curr, markerPath)
-		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return curr, true
-		}
+	for _, layout := range installationLayouts {
+		current := directory
+		for i := 0; i < maxDepth; i++ {
+			base := current
+			if layout != "" {
+				base = filepath.Join(current, filepath.FromSlash(layout))
+			}
+			if info, err := os.Stat(filepath.Join(base, markerPath)); err == nil && info.IsDir() {
+				return base, true
+			}
 
-		parent := filepath.Dir(curr)
-		if parent == curr {
-			break
+			parent := filepath.Dir(current)
+			if parent == current {
+				break
+			}
+			current = parent
 		}
-		curr = parent
-	}
-
-	// Second pass: check for plugin layout (suite/<markerPath>) only if direct
-	// marker was not found anywhere. This is the fallback for plugin-only installations.
-	curr = directory
-	for i := 0; i < maxDepth; i++ {
-		suiteCandidate := filepath.Join(curr, "suite", markerPath)
-		if info, err := os.Stat(suiteCandidate); err == nil && info.IsDir() {
-			return filepath.Join(curr, "suite"), true
-		}
-
-		parent := filepath.Dir(curr)
-		if parent == curr {
-			break
-		}
-		curr = parent
 	}
 
 	return "", false

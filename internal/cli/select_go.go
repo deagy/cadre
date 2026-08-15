@@ -209,7 +209,7 @@ func runSelectGo(args []string) int {
 		Gates:        gates,
 		ContractVer:  contractVersion,
 		RosterRoot:   rosterRoot,
-		KnowledgeCLI: filepath.Join(suiteRoot, "bin", "cadre"),
+		KnowledgeCLI: knowledgeCLIPath(suiteRoot),
 		Provenance:   provenance,
 	})
 	if err != nil {
@@ -339,3 +339,33 @@ Emit a deterministic local agent dispatch plan.
 
 options:
 `
+
+// knowledgeCLIPath is the command the plan tells an agent to run for
+// knowledge retrieval.
+//
+// In a checkout that is <root>/bin/cadre, the shim -- which is what the
+// Python selector emits and what the golden corpus records, so it must not
+// change there.
+//
+// An installed wheel has no bin/ next to its roster: the data sits at
+// <prefix>/share/cadre/roster and the binary at <prefix>/bin/cadre, two
+// different subtrees. Joining "bin/cadre" onto the installation root there
+// produces <prefix>/share/cadre/bin/cadre, which does not exist -- a plan
+// naming a command that cannot be run, and one nothing would catch until an
+// agent actually tried to retrieve.
+//
+// So: the shim when it is really there, and otherwise this executable, which
+// serves the same subcommand.
+func knowledgeCLIPath(installationRoot string) string {
+	shim := filepath.Join(installationRoot, "bin", "cadre")
+	if info, err := os.Stat(shim); err == nil && !info.IsDir() {
+		return shim
+	}
+	if executable, err := os.Executable(); err == nil {
+		if resolved, linkErr := filepath.EvalSymlinks(executable); linkErr == nil {
+			return resolved
+		}
+		return executable
+	}
+	return shim
+}

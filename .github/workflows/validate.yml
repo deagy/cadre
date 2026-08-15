@@ -280,19 +280,44 @@ jobs:
       # requirements-validation.lock mechanism since it is a single
       # build-only tool, not a runtime/test dependency of this repository's
       # own Python code.
-      - run: pip install --no-cache-dir build==1.5.0
-      - name: Build wheel and sdist
-        run: python -m build --wheel --sdist
-      - name: Confirm LICENSE is packaged into both build targets
+      # Version-pinned to the exact releases reviewed for this job rather
+      # than an unbounded install; not part of requirements-validation.lock
+      # since these are build-only tools, not runtime dependencies.
+      - run: pip install --no-cache-dir build==1.5.0 wheel==0.46.3
+      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build the wheel (Go binary + roster data, no Python)
+        run: make wheel
+      - name: The wheel must contain no Python at all
         run: |
           set -eu
-          python -m zipfile -l dist/cadre-*.whl | grep -i 'licenses/LICENSE'
-          tar tzf dist/cadre-*.tar.gz | grep -E '^cadre-[^/]+/LICENSE$'
-      - name: Install the built wheel into an isolated venv
+          # The whole point of Phase 2: `pip install cadre` stops shipping
+          # Python. A wheel that silently regained a .py would still install
+          # and still work, so nothing else would notice.
+          if python -m zipfile -l dist/*.whl | grep -q '\.py$'; then
+            echo "the wheel contains Python source:" >&2
+            python -m zipfile -l dist/*.whl | grep '\.py$' >&2
+            exit 1
+          fi
+          # And it must contain the binary and the data it reads. hatchling's
+          # shared-data silently drops directory sources -- a wheel missing
+          # every role definition builds cleanly and reports success -- so
+          # these counts are the guard against that specific failure.
+          python -m zipfile -l dist/*.whl | grep -q 'data/scripts/cadre' \
+            || { echo "the wheel has no cadre binary" >&2; exit 1; }
+          roles=$(python -m zipfile -l dist/*.whl | grep -c 'share/cadre/roster/.*/AGENT\.md' || true)
+          if [ "$roles" -lt 100 ]; then
+            echo "the wheel carries only $roles role definitions; expected the full roster" >&2
+            exit 1
+          fi
+          echo "wheel: 0 python files, binary present, $roles role definitions"
+      - name: Install the built wheel into an isolated prefix
         run: |
           set -eu
           python -m venv "$RUNNER_TEMP/cadre-venv"
-          "$RUNNER_TEMP/cadre-venv/bin/pip" install --no-cache-dir dist/cadre-*.whl
+          "$RUNNER_TEMP/cadre-venv/bin/pip" install --no-cache-dir dist/*.whl
       # Run every smoke command from outside the checkout ($RUNNER_TEMP, not
       # $GITHUB_WORKSPACE) so this only exercises what an installed
       # distribution can see on its own.
@@ -305,7 +330,15 @@ jobs:
           cd "$WORKDIR"
           echo "cadre pip/pipx distribution smoke test" > README.md
 
+          # The installed `cadre` must be the Go binary, not a Python
+          # console script. A [project.scripts] entry would generate one into
+          # bin/cadre and silently overwrite the binary -- which is exactly
+          # what happened the first time this wheel was built.
+          file "$CADRE" | grep -qi 'ELF\|executable' \
+            || { echo "installed cadre is not a native binary:" >&2; head -c 200 "$CADRE" >&2; exit 1; }
+
           "$CADRE" help >/dev/null
+
           # The task text deliberately trips two context-pack keywords, and the
           # plan is asserted rather than discarded. roster/context-packs/ is a
           # runtime resource resolved from the installed wheel, so a task that
@@ -318,17 +351,21 @@ jobs:
           "$CADRE" select --root . \
             --task "CI pip package smoke test: redfish bmc inventory and ceph rook storage" \
             --files README.md --classification internal \
-            --task-id ci-pip-smoke-1 \
+            --task-id ci-pip-smoke-1 --source ci \
             | python3 -c 'import json,sys; p=json.load(sys.stdin)["context_packs"]; ids=sorted(x["id"] for x in p); assert ids==["ceph-rook-storage-context","redfish-bmc-context"], f"expected both context packs from the installed wheel, got {ids}"'
 
-          # generate-role-metadata --check is read-only and genuinely
-          # expected to work from an install (see cadre_cli/__init__.py).
-          "$CADRE" generate-role-metadata --check >/dev/null
+          # The plan must name a knowledge command that actually exists. The
+          # installed layout puts the binary in bin/ and the roster in
+          # share/cadre/, so joining "bin/cadre" onto the installation root
+          # names a path that is not there -- a plan an agent cannot execute.
+          "$CADRE" select --root . \
+            --task "knowledge retrieval path check" --files README.md \
+            --classification internal --task-id ci-pip-smoke-2 --source ci \
+            | python3 -c 'import json,os,sys; r=json.load(sys.stdin)["knowledge_context"].get("requests") or []; assert r, "expected a knowledge request"; c=r[0]["invocation"]["args"][0]; assert os.path.exists(c), f"plan names a knowledge command that does not exist: {c}"; print("knowledge command exists:", c)'
 
-          # Maintainer/regeneration subcommands must fail closed (non-zero
-          # exit, no raw traceback) rather than writing into site-packages
-          # or crashing -- see cadre_cli/__init__.py's
-          # _CHECKOUT_ONLY_SUBCOMMANDS / _requires_checkout().
+          # Maintainer/regeneration subcommands need a full checkout. From an
+          # install they must fail closed -- non-zero, no raw traceback --
+          # rather than writing into the installed tree.
           for cmd in generate-plugin generate-authority-aides; do
             if output=$("$CADRE" $cmd 2>&1); then
               echo "cadre $cmd unexpectedly succeeded from an installed distribution" >&2
@@ -340,18 +377,6 @@ jobs:
               exit 1
             fi
           done
-
-          # generate-role-metadata's default (write) mode is the same class
-          # of problem and must also fail closed, distinctly from --check.
-          if output=$("$CADRE" generate-role-metadata 2>&1); then
-            echo "cadre generate-role-metadata (default mode) unexpectedly succeeded from an installed distribution" >&2
-            exit 1
-          fi
-          if echo "$output" | grep -qi 'Traceback'; then
-            echo "cadre generate-role-metadata (default mode) failed with a raw traceback instead of failing closed cleanly:" >&2
-            echo "$output" >&2
-            exit 1
-          fi
 
   install-sh:
     # install.sh's own unit tests (plugin/tools/test_install_script.py) only

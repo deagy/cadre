@@ -322,55 +322,121 @@ class WrapperCgoBuildTest(unittest.TestCase):
             self.assertEqual("", result.stderr)
 
 
-class SingleShimGeneratorTest(unittest.TestCase):
-    """Only one generator may produce `plugin/bin/cadre`.
+class WheelShipsNoPythonTest(unittest.TestCase):
+    """The pip/pipx wheel carries the Go binary and data, and no Python.
 
-    Two existed. The Go implementation
-    (`internal/generators/plugin_generation.go`, reached via `./bin/cadre`)
-    emits the hardened launcher -- binary resolution, mandatory checksum
-    verification, sidecar-verified cache, permission-gated exec. The Python
+    This replaces a pair of tests that guarded `cadre_cli`'s refusal to run
+    `generate-plugin`. Two generators could produce `plugin/bin/cadre`: the Go
+    one emits the hardened launcher (binary resolution, mandatory checksum
+    verification, sidecar-verified cache, permission-gated exec), while
     `generate_global_plugin.py`'s `generate_bin_wrapper()` still emits the
-    pre-hardening one.
+    pre-hardening one. `cadre_cli` dispatched that subcommand to the Python
+    script, so an editable install could silently regenerate a plugin whose
+    launcher had none of those controls.
 
-    That mattered because `cadre_cli` dispatched `generate-plugin` to the
-    Python script and only failed closed for a *bundled* install, so an
-    editable checkout install (`pip install -e .`) silently regenerated a
-    plugin whose launcher had none of those controls -- and the committed
-    tree's own drift guard would then flag it, attributing the damage to
-    whoever regenerated last.
+    Phase 2 of PYTHON_ELIMINATION_PLAN.md removed the channel rather than the
+    symptom: `cadre_cli` is deleted and the wheel ships no Python for
+    anything to dispatch to. Guarding the absence is strictly stronger than
+    guarding the refusal, because a refusal can be relaxed by editing one
+    branch while this fails the moment any `.py` re-enters the distribution.
     """
 
-    def test_cadre_cli_refuses_generate_plugin_from_any_install_kind(self) -> None:
-        import cadre_cli
+    # Text assertions rather than tomllib: this repository supports Python
+    # 3.10+, and tomllib is 3.11+. The questions here are all about whether a
+    # specific line is present or absent, which text answers exactly as well.
 
-        with tempfile.TemporaryDirectory(prefix="cadre-shim-gen-") as target_dir:
-            target = Path(target_dir) / "package"
-            stderr = io.StringIO()
-            with contextlib.redirect_stderr(stderr):
-                code = cadre_cli.main(["generate-plugin", "--output", str(target)])
+    def _pyproject(self) -> str:
+        return (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
-        self.assertEqual(
-            2, code, "generate-plugin must fail closed from the Python channel"
-        )
-        self.assertFalse(
-            target.exists(),
-            "the Python channel generated a plugin package; only the Go "
-            "generator may produce one, because only it emits the hardened "
-            "bin/cadre launcher",
+    def test_the_wheel_declares_no_python_packages(self) -> None:
+        pyproject = self._pyproject()
+        self.assertNotIn(
+            'packages = ["cadre_cli"]',
+            pyproject,
+            "the wheel must not package any Python; the binary is the "
+            "distribution (PYTHON_ELIMINATION_PLAN.md Phase 2)",
         )
         self.assertIn(
-            "./bin/cadre generate-plugin",
-            stderr.getvalue(),
-            "the refusal must name the generator to use instead",
+            "bypass-selection = true",
+            pyproject,
+            "hatchling needs bypass-selection to accept a wheel with no "
+            "Python packages -- without it the build fails rather than "
+            "silently shipping nothing",
         )
 
-    def test_other_subcommands_still_dispatch(self) -> None:
-        """The refusal is scoped to generate-plugin, not a blanket block."""
-        import cadre_cli
+    def test_the_wheel_vendors_no_data_through_hatchling(self) -> None:
+        """hatchling packs only the binary; `make wheel` adds the data tree.
 
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            code = cadre_cli.main(["doctor"])
-        self.assertEqual(0, code, "doctor must still dispatch through this channel")
+        This is not a stylistic split. hatchling's shared-data maps *files
+        only* -- a directory source produces no files and **no error**, so a
+        wheel built that way succeeds and is missing all 159 role
+        definitions. An entry re-added here would either be silently ignored
+        (a directory) or duplicate what the Makefile already copies.
+        """
+        pyproject = self._pyproject()
+        for table in ("shared-data", "force-include"):
+            self.assertIsNone(
+                re.search(
+                    rf"^\[tool\.hatch\.build\.targets\.wheel\.{re.escape(table)}\]",
+                    pyproject,
+                    re.MULTILINE,
+                ),
+                f"{table} does not carry directories reliably; `make wheel` "
+                "copies the data tree instead",
+            )
+
+    def test_no_python_tree_is_vendored_into_the_wheel(self) -> None:
+        """The four Python trees the old wheel carried, named so a re-added
+        one is a visible diff rather than a silent regression."""
+        pyproject = self._pyproject()
+        for tree in (
+            "roster/orchestration/src",
+            "roster/orchestration/mcp",
+            "roster/shared/src",
+            "roster/context-store/src",
+        ):
+            self.assertNotIn(
+                f'"{tree}"',
+                pyproject,
+                f"{tree} is Python and must not be vendored into the wheel",
+            )
+
+    def test_the_binary_is_the_console_command(self) -> None:
+        """A [project.scripts] entry would generate a Python launcher into
+        <prefix>/bin/cadre and silently overwrite the binary the wheel
+        installs there. That is not hypothetical -- it is what happened the
+        first time this wheel was built, and the symptom was a 208-byte
+        `cadre` that raised ModuleNotFoundError."""
+        pyproject = self._pyproject()
+        # A real table header at column 0, not the string wherever it appears
+        # -- pyproject.toml's own comment explains why the table is absent,
+        # and a substring check matches that explanation and passes forever.
+        self.assertIsNone(
+            re.search(r"^\[project\.scripts\]", pyproject, re.MULTILINE),
+            "[project.scripts] would shadow the binary installed from the "
+            "wheel's .data/scripts/ directory",
+        )
+        self.assertIn(
+            '[tool.hatch.build.targets.wheel.shared-scripts]',
+            pyproject,
+            "the wheel must install the staged Go binary as the `cadre` command",
+        )
+        self.assertIn('"dist-staging/cadre" = "cadre"', pyproject)
+
+    def test_no_python_remains_in_the_distribution_package(self) -> None:
+        """cadre_cli/__init__.py -- the 482-line subcommand dispatcher -- is
+        gone. Only the version marker may remain, and only because both
+        channels read it as text (internal/cli/version.go parses it without
+        executing Python)."""
+        package = REPO_ROOT / "cadre_cli"
+        if not package.exists():
+            return
+        remaining = sorted(path.name for path in package.glob("*.py"))
+        self.assertEqual(
+            ["_version.py"],
+            remaining,
+            "only the shared version marker may remain under cadre_cli/",
+        )
 
 
 if __name__ == "__main__":

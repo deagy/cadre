@@ -265,53 +265,45 @@ never cloned this repository.
 Build and install a local wheel:
 
 ```sh
-python3 -m pip install --upgrade build
-python3 -m build                      # produces dist/cadre-*.whl (and an sdist)
+python3 -m pip install --upgrade build wheel
+make wheel                            # produces dist/cadre-*.whl for this platform
 pipx install dist/cadre-*.whl         # or: pip install dist/cadre-*.whl
 ```
 
-This puts a `cadre` console script directly on `PATH`. It is not published to
-PyPI and there is no publish automation for it — install only from a local
-build or a built artifact you trust.
+This puts the `cadre` **binary** directly on `PATH`. The wheel contains the
+compiled Go CLI plus the roster data it reads, and **no Python at all** — an
+installed distribution needs a Python interpreter to run `pip`, and nothing
+after that.
 
-`cadre resolve-shared` / `cadre init` can optionally parse YAML shared-config
-overlays (JSON-only overlays work without this), and `cadre
-mcp-dispatch-server` requires the official MCP SDK — both are optional
-extras, so installing the built wheel without them stays dependency-light
-(note: an unrelated third-party project already owns the name `cadre` on
-PyPI — always install from your own `dist/` build, never from PyPI):
+`make wheel`, not a plain `python -m build`: hatchling packs the binary, and
+the target then adds the roster tree. hatchling's `shared-data` maps files
+only — a directory source produces no files and no error, so a plain build
+succeeds and silently omits all 159 role definitions.
 
-```sh
-pipx install "dist/cadre-*.whl[yaml]"        # or [mcp], or [yaml,mcp]
-```
+Release builds carry one wheel per platform, tagged so `pip` installs the
+right architecture (`manylinux_2_17_x86_64`, `manylinux_2_17_aarch64`,
+`macosx_10_12_x86_64`, `macosx_11_0_arm64`, `win_amd64`). It is not published
+to PyPI and there is no publish automation for it — an unrelated third-party
+project already owns the name `cadre` there, so install from your own build
+or from a release artifact you trust, never from PyPI.
+
+The wheel declares no dependencies and no optional extras. The `[yaml]` and
+`[mcp]` extras existed for Python implementations the wheel used to vendor;
+it ships neither any more.
 
 `cadre sdlc` still shells out to a separately installed `agentic-sdlc`
 binary (`AGENTIC_SDLC_BIN` or `PATH`) exactly as the checkout CLI does — this
 package never vendors or bundles the Agentic SDLC kernel; see "Agentic SDLC
 quick start" above for installing it.
 
-**Known limitation**: `cadre generate-plugin` and `cadre
-generate-authority-aides` are maintainer-only tools that require a full git
-checkout; they are not available from a pip/pipx install. Both read tracked
-source through this repository's own git index and write generated content
-back to a real checkout (the `plugin/` directory named by `--output` for
-`generate-plugin`; `roster/authority/*/AGENT.md` for
-`generate-authority-aides`) — an operation that only makes sense against a
-real checkout, never an installed site-packages copy. `cadre
-generate-role-metadata` is a partial case: `--check` works fully from a
-pip/pipx install (it only verifies the installed package's own bundled
-`roster/catalog.yaml`/`roster/orchestration/routing.json` are internally
-current), but its default write mode requires a checkout for the same
-reason as `generate-plugin` — otherwise it would silently regenerate the
-installed package's own vendored copy under site-packages rather than a
-real project. Every other subcommand (`select`, `selection-telemetry`,
-`knowledge`, `bootstrap-codex`, `resolve-shared`, `mcp-dispatch-server`,
-`profile`, `init`, and `sdlc`) works fully from the pip/pipx install.
-Invoking `generate-plugin`, `generate-authority-aides`, or
-`generate-role-metadata` without `--check` from an installed distribution
-fails closed with an explicit error and non-zero exit, pointing back at the
-checkout path, instead of writing into site-packages or raising a raw
-traceback.
+**Known limitation**: `cadre generate-plugin`, `cadre
+generate-authority-aides` and `cadre generate-role-metadata` (write mode) are
+maintainer tools that require a full git checkout, and refuse to run from an
+install. They rewrite tracked source in place, which only makes sense against
+a real checkout — run from an install, `generate-authority-aides` previously
+rewrote eight `AGENT.md` files *inside the installed distribution* and
+reported success, leaving it differing from the release it claimed to be.
+`--check` is read-only and still works from an install.
 
 ## Agent orchestration
 
