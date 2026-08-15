@@ -46,25 +46,7 @@ pattern = "VERSION = \"(?P<version>[^\"]+)\""
 # tells hatchling that is deliberate rather than a missing configuration.
 bypass-selection = true
 
-# roster/ and .agents/skills/ stay a single source of truth at their existing
-# top-level checkout locations
-# (not duplicated under cadre_cli/ in the source tree) -- hatchling's
-# force-include copies each of them into the built wheel only, at build
-# time, so an installed/pipx distribution carries its own bundled copy
-# without the checkout ever having two live copies to keep in sync. See
-# cadre_cli/__init__.py's VENDOR_ROOT resolution for the runtime lookup that
-# matches this.
-#
-# hatchling's force-include does not honor [tool.hatch.build] exclude
-# patterns (verified empirically), so each subtree below is listed
-# individually rather than force-including the whole `roster/` directory
-# and trying to exclude `test/`, `examples/`, `runs/`, `data/`, and
-# `proposed-knowledge/` afterward -- those are dev-only/generated-at-runtime
-# paths that no dispatched script reads as a packaged resource, so they are
-# simply never listed here. `__pycache__`/`*.pyc` are skipped by hatchling
-# by default even under force-include.
-#
-# NOTE: this wheel used to be pure Python, dispatching to vendored roster/
+# This wheel used to be pure Python, dispatching to vendored roster/
 # scripts through cadre_cli/_SUBCOMMANDS. It no longer is. The binary *is*
 # the distribution -- Phase 2 of PYTHON_ELIMINATION_PLAN.md -- and no *.py
 # is vendored any more.
@@ -86,6 +68,10 @@ bypass-selection = true
 [tool.hatch.build.targets.wheel.shared-scripts]
 "dist-staging/cadre" = "cadre"
 
+# The sdist is a source archive, not an installable distribution. Building
+# the wheel from it needs the Go toolchain and `make wheel` (see the wheel
+# target above), so `pip install cadre-x.y.z.tar.gz` cannot work and is not
+# offered -- releases carry per-platform wheels instead.
 [tool.hatch.build.targets.sdist]
 include = [
     "cadre_cli/**",

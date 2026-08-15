@@ -341,42 +341,65 @@ class WheelShipsNoPythonTest(unittest.TestCase):
     branch while this fails the moment any `.py` re-enters the distribution.
     """
 
-    def _wheel_target(self) -> dict:
-        import tomllib
+    # Text assertions rather than tomllib: this repository supports Python
+    # 3.10+, and tomllib is 3.11+. The questions here are all about whether a
+    # specific line is present or absent, which text answers exactly as well.
 
-        data = tomllib.loads(
-            (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-        )
-        return data["tool"]["hatch"]["build"]["targets"]["wheel"]
+    def _pyproject(self) -> str:
+        return (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
     def test_the_wheel_declares_no_python_packages(self) -> None:
-        target = self._wheel_target()
+        pyproject = self._pyproject()
         self.assertNotIn(
-            "packages",
-            target,
+            'packages = ["cadre_cli"]',
+            pyproject,
             "the wheel must not package any Python; the binary is the "
             "distribution (PYTHON_ELIMINATION_PLAN.md Phase 2)",
         )
-        self.assertTrue(
-            target.get("bypass-selection"),
+        self.assertIn(
+            "bypass-selection = true",
+            pyproject,
             "hatchling needs bypass-selection to accept a wheel with no "
             "Python packages -- without it the build fails rather than "
             "silently shipping nothing",
         )
 
-    def test_no_vendored_path_is_python(self) -> None:
-        target = self._wheel_target()
-        vendored = list(target.get("shared-data", {}).items()) + list(
-            target.get("force-include", {}).items()
-        )
-        python_paths = [
-            f"{source} -> {destination}"
-            for source, destination in vendored
-            if source.endswith(".py") or destination.endswith(".py")
-        ]
-        self.assertEqual(
-            [], python_paths, "the wheel must vendor no Python source"
-        )
+    def test_the_wheel_vendors_no_data_through_hatchling(self) -> None:
+        """hatchling packs only the binary; `make wheel` adds the data tree.
+
+        This is not a stylistic split. hatchling's shared-data maps *files
+        only* -- a directory source produces no files and **no error**, so a
+        wheel built that way succeeds and is missing all 159 role
+        definitions. An entry re-added here would either be silently ignored
+        (a directory) or duplicate what the Makefile already copies.
+        """
+        pyproject = self._pyproject()
+        for table in ("shared-data", "force-include"):
+            self.assertIsNone(
+                re.search(
+                    rf"^\[tool\.hatch\.build\.targets\.wheel\.{re.escape(table)}\]",
+                    pyproject,
+                    re.MULTILINE,
+                ),
+                f"{table} does not carry directories reliably; `make wheel` "
+                "copies the data tree instead",
+            )
+
+    def test_no_python_tree_is_vendored_into_the_wheel(self) -> None:
+        """The four Python trees the old wheel carried, named so a re-added
+        one is a visible diff rather than a silent regression."""
+        pyproject = self._pyproject()
+        for tree in (
+            "roster/orchestration/src",
+            "roster/orchestration/mcp",
+            "roster/shared/src",
+            "roster/context-store/src",
+        ):
+            self.assertNotIn(
+                f'"{tree}"',
+                pyproject,
+                f"{tree} is Python and must not be vendored into the wheel",
+            )
 
     def test_the_binary_is_the_console_command(self) -> None:
         """A [project.scripts] entry would generate a Python launcher into
@@ -384,22 +407,21 @@ class WheelShipsNoPythonTest(unittest.TestCase):
         installs there. That is not hypothetical -- it is what happened the
         first time this wheel was built, and the symptom was a 208-byte
         `cadre` that raised ModuleNotFoundError."""
-        import tomllib
-
-        data = tomllib.loads(
-            (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-        )
-        self.assertNotIn(
-            "scripts",
-            data.get("project", {}),
+        pyproject = self._pyproject()
+        # A real table header at column 0, not the string wherever it appears
+        # -- pyproject.toml's own comment explains why the table is absent,
+        # and a substring check matches that explanation and passes forever.
+        self.assertIsNone(
+            re.search(r"^\[project\.scripts\]", pyproject, re.MULTILINE),
             "[project.scripts] would shadow the binary installed from the "
             "wheel's .data/scripts/ directory",
         )
-        self.assertEqual(
-            {"dist-staging/cadre": "cadre"},
-            self._wheel_target().get("shared-scripts"),
+        self.assertIn(
+            '[tool.hatch.build.targets.wheel.shared-scripts]',
+            pyproject,
             "the wheel must install the staged Go binary as the `cadre` command",
         )
+        self.assertIn('"dist-staging/cadre" = "cadre"', pyproject)
 
     def test_no_python_remains_in_the_distribution_package(self) -> None:
         """cadre_cli/__init__.py -- the 482-line subcommand dispatcher -- is
