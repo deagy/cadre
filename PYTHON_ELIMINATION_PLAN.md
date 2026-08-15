@@ -323,9 +323,33 @@ role file's own text coming back out of a child process is the assertion.
 
 ## Phase 5 — Kernel to Go, distributed as binaries
 
-**Scope:** 9,626 production lines across 30 CLI subcommands, plus 6,883
-lines of tests. The 10 JSON schemas under `kernel/contracts/` are **data,
-not code** — they stay exactly as they are.
+**Scope:** 9,626 production lines across **32** CLI subcommands (this said
+30; the parser reports 32), plus 6,883 lines of tests. The 10 JSON schemas
+under `kernel/contracts/` are **data, not code** — they stay exactly as they
+are.
+
+**Progress: 5 of 32.** `show-contract` (#290), `detect`, and the `provider` /
+`profile` / `extension` introspection trio (#291), each behind
+`kernel/test/test_kernel_differential.py`, which runs both kernels on the
+same machine.
+
+**`status` is not read-only, whatever its name says.** It is documented as
+"Show a task's gate state" and it calls `advance_lifecycle` and then
+`write_json`: it moves the next eligible gate to `ready` and persists the run
+record. `advance_lifecycle` is careful about it ("never infer approval"), but
+a caller running `status` to look at something changes it. Group it with the
+mutating subcommands, not the inspecting ones — it was mis-grouped here, and
+the mistake is easy to repeat because the name invites it.
+
+Genuinely read-only and still unported: `validate`, and the `list-*` sidecar
+readers (`list-gate-issues`, `list-github-gate-issues`, `list-gate-status`,
+`list-reviewer-nudge` — the last is documented "zero network").
+
+**`validate` is the next substantial piece**, and it is not a small slice: it
+needs the overlay loader, `approval_source_policy`, the agent catalog, path
+confinement, and JSON Schema Draft 2020-12 over run records.
+`github.com/santhosh-tekuri/jsonschema/v5` is already a direct dependency
+(`cadre schema-validate` uses it), so the schema half is available.
 
 This is the largest single item and the one with a real consumer cost.
 
