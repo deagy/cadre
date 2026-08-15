@@ -440,5 +440,157 @@ class SelectDiscoveryParityTest(unittest.TestCase):
             )
 
 
+class SelectOverlayParityTest(unittest.TestCase):
+    """Parity for a project-local routing overlay, end to end through the plan.
+
+    The merge rules are compared exhaustively by
+    `probe_overlay_parity.py` (69 documents). What this adds is the part a
+    merge comparison cannot show: that an overlay actually reaches the plan,
+    changes it, and changes it the same way in both implementations -- and
+    that an illegal overlay stops the run in both rather than being ignored
+    by one.
+
+    Ignoring an overlay is the failure that matters here. It produces a
+    perfectly ordinary-looking plan built from rules the project did not
+    declare, and no amount of comparing plans against each other would catch
+    it if both implementations ignored overlays equally.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        if shutil.which("git") is None:
+            raise unittest.SkipTest("git is not available")
+
+        probe = load_corpus()[0]
+        code, _, stderr = run_select(probe, implementation="go")
+        if code == GO_NOT_IMPLEMENTED_EXIT:
+            raise unittest.SkipTest(
+                "no Go select implementation yet: CADRE_SELECT_IMPL=go returns "
+                f"exit {GO_NOT_IMPLEMENTED_EXIT}"
+            )
+        if code != 0:
+            raise AssertionError(f"CADRE_SELECT_IMPL=go failed (exit {code}):\n{stderr}")
+
+        cls.base_routing = json.loads(
+            (REPO_ROOT / "roster" / "orchestration" / "routing.json").read_text(encoding="utf-8")
+        )
+
+    def _project(self, workspace: str, overlay: dict | str | None) -> Path:
+        root = Path(workspace) / "project"
+        root.mkdir(parents=True)
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True, capture_output=True)
+        (root / "handler.go").write_text("package main\n", encoding="utf-8")
+        if overlay is not None:
+            destination = root / ".agents" / "orchestration" / "routing-overlay.json"
+            destination.parent.mkdir(parents=True)
+            destination.write_text(
+                overlay if isinstance(overlay, str) else json.dumps(overlay, indent=2),
+                encoding="utf-8",
+            )
+        return root
+
+    def _run(self, root: Path, *, implementation: str) -> tuple[int, str, str]:
+        environment = dict(os.environ)
+        if implementation == "go":
+            environment["CADRE_SELECT_IMPL"] = "go"
+        else:
+            environment.pop("CADRE_SELECT_IMPL", None)
+        completed = subprocess.run(
+            [
+                str(CADRE), "select",
+                "--task", "probe the overlay path with an unmistakable keyword: zzprobekeyword",
+                "--files", "handler.go",
+                "--task-id", "OVERLAY-1",
+                "--classification", "internal",
+                "--root", str(root),
+                "--source", "deagy/cadre",
+            ],
+            capture_output=True, text=True, timeout=180, cwd=REPO_ROOT, env=environment,
+        )
+        return completed.returncode, completed.stdout, completed.stderr
+
+    def _both(self, root: Path) -> tuple[dict, dict]:
+        results = {}
+        for implementation in ("python", "go"):
+            code, stdout, stderr = self._run(root, implementation=implementation)
+            if code != 0:
+                raise AssertionError(
+                    f"`cadre select` failed ({implementation}, exit {code}):\n{stderr}"
+                )
+            results[implementation] = json.loads(stdout)
+        return results["python"], results["go"]
+
+    def test_a_legal_overlay_reaches_the_plan_and_agrees(self) -> None:
+        overlay = {
+            "routes": [{
+                "id": "probe-overlay-route",
+                "keywords": ["zzprobekeyword"],
+                # primary/reviewers are lists, as every base route declares
+                # them; a bare string would be iterated character by character
+                # by both implementations alike.
+                "primary": ["backend-engineer"],
+                "reviewers": ["code-reviewer"],
+            }],
+        }
+        with tempfile.TemporaryDirectory() as workspace:
+            root = self._project(workspace, overlay)
+            python_plan, go_plan = self._both(root)
+
+            matched = [route["id"] for route in python_plan["matched_routes"]]
+            self.assertIn(
+                "probe-overlay-route", matched,
+                "the overlay's route did not reach the plan at all, so this test "
+                "would pass even if both implementations ignored overlays entirely",
+            )
+            self.assertEqual(canonical_form(python_plan), canonical_form(go_plan))
+            self.assertEqual(python_plan["dispatch_fingerprint"], go_plan["dispatch_fingerprint"])
+
+    def test_the_same_run_without_the_overlay_selects_differently(self) -> None:
+        """Guard the guard: if the overlay changed nothing, the test above
+        would be comparing two implementations of doing nothing."""
+        with tempfile.TemporaryDirectory() as workspace:
+            root = self._project(workspace, None)
+            python_plan, go_plan = self._both(root)
+
+            matched = [route["id"] for route in python_plan["matched_routes"]]
+            self.assertNotIn("probe-overlay-route", matched)
+            self.assertEqual(python_plan["dispatch_fingerprint"], go_plan["dispatch_fingerprint"])
+
+    def test_a_widened_base_route_agrees(self) -> None:
+        route = next(r for r in self.base_routing["routes"] if r.get("keywords"))
+        overlay = {"routes": [{"id": route["id"], "keywords": [*route["keywords"], "zzprobekeyword"]}]}
+        with tempfile.TemporaryDirectory() as workspace:
+            root = self._project(workspace, overlay)
+            python_plan, go_plan = self._both(root)
+
+            matched = [entry["id"] for entry in python_plan["matched_routes"]]
+            self.assertIn(route["id"], matched, "the widened route did not fire on the probe keyword")
+            self.assertEqual(canonical_form(python_plan), canonical_form(go_plan))
+            self.assertEqual(python_plan["dispatch_fingerprint"], go_plan["dispatch_fingerprint"])
+
+    def test_an_illegal_overlay_stops_both_implementations(self) -> None:
+        """An overlay that weakens a base route's reviewers is the case the
+        whole mechanism exists to refuse. Neither implementation may proceed
+        with a plan -- proceeding is worse than any disagreement about the
+        wording of the refusal."""
+        route = next(r for r in self.base_routing["routes"] if r.get("reviewers"))
+        for why, overlay in [
+            ("weakening reviewers", {"routes": [{"id": route["id"], "reviewers": []}]}),
+            ("narrowing keywords", {"routes": [{"id": route["id"], "keywords": []}]}),
+            ("adding a gate suppression", {"ignored_gates": [*self.base_routing.get("ignored_gates", []), "G9"]}),
+            ("an unknown top-level field", {"nonsense": True}),
+            ("malformed JSON", "{not json"),
+        ]:
+            with self.subTest(why=why), tempfile.TemporaryDirectory() as workspace:
+                root = self._project(workspace, overlay)
+                for implementation in ("python", "go"):
+                    code, stdout, _ = self._run(root, implementation=implementation)
+                    self.assertNotEqual(
+                        code, 0,
+                        f"{implementation} accepted an overlay that {why}; "
+                        f"stdout was:\n{stdout[:400]}",
+                    )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -100,23 +100,19 @@ func runSelectGo(args []string) int {
 		return 1
 	}
 
-	// A routing overlay changes the effective ruleset, so ignoring one would
-	// silently produce a plan for different rules than the project declared.
-	// Refuse instead, until the overlay merge is ported.
+	// A routing overlay changes the effective ruleset, so a plan built from
+	// the base rules alone would answer a question the project did not ask.
 	//
 	// Discovery must match routing_overlay.py exactly: the filename is
 	// routing-overlay.json, and it is found by walking up from the repository
 	// under selection to the nearest .git boundary -- not by looking only in
-	// that repository's own root. A guard that checked one fixed path would
-	// miss a real overlay and then proceed, which is precisely the outcome
-	// this refusal exists to prevent.
-	overlayPath, hasOverlay := platform.FindFileAtProjectRoot(
-		filepath.Join(".agents", "orchestration", "routing-overlay.json"), targetRoot)
-	if hasOverlay {
-		fmt.Fprintf(os.Stderr,
-			"cadre select: a routing overlay exists at %s and the Go selector does not apply overlays yet; unset %s\n",
-			overlayPath, SelectImplEnv)
-		return 2
+	// that repository's own root.
+	overlayPath, _ := platform.FindFileAtProjectRoot(
+		filepath.Join(selector.OverlayRelativePath...), targetRoot)
+	config, err = selector.ResolveEffectiveRouting(config, overlayPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "routing overlay is invalid: %s\n", err)
+		return 1
 	}
 
 	contract, err := selector.FetchLifecycleContract(context.Background())
