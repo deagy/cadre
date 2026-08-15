@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/deagy/cadre/cli/internal/orchestration"
+	"github.com/deagy/cadre/cli/internal/platform"
 	"github.com/deagy/cadre/cli/internal/selector"
 )
 
@@ -99,8 +100,16 @@ func runSelectGo(args []string) int {
 	// A routing overlay changes the effective ruleset, so ignoring one would
 	// silently produce a plan for different rules than the project declared.
 	// Refuse instead, until the overlay merge is ported.
-	overlayPath := filepath.Join(targetRoot, ".agents", "orchestration", "routing.json")
-	if _, err := os.Stat(overlayPath); err == nil {
+	//
+	// Discovery must match routing_overlay.py exactly: the filename is
+	// routing-overlay.json, and it is found by walking up from the repository
+	// under selection to the nearest .git boundary -- not by looking only in
+	// that repository's own root. A guard that checked one fixed path would
+	// miss a real overlay and then proceed, which is precisely the outcome
+	// this refusal exists to prevent.
+	overlayPath, hasOverlay := platform.FindFileAtProjectRoot(
+		filepath.Join(".agents", "orchestration", "routing-overlay.json"), targetRoot)
+	if hasOverlay {
 		fmt.Fprintf(os.Stderr,
 			"cadre select: a routing overlay exists at %s and the Go selector does not apply overlays yet; unset %s\n",
 			overlayPath, SelectImplEnv)
