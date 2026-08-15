@@ -27,13 +27,22 @@ func ResolveRoleForDispatch(
 
 	// Route to appropriate resolver based on runner
 	switch runner {
-	case RunnerCodex:
+	case RunnerCodex, RunnerAPI:
+		// "api" resolves through the Codex path deliberately: the committed
+		// .toml wrappers already carry exactly what an HTTP dispatch needs --
+		// developer_instructions, sandbox_mode, and a model identifier the
+		// tier reverse-map turns into a tier. A fourth wrapper format and a
+		// fourth generator would add drift surface for no new information.
+		// Only the model identifier is discarded, because a self-hosted
+		// endpoint has never heard of it; ResolveAPIRunnerConfig takes the
+		// model from operator settings instead.
+		//
+		// This used to answer "runner \"api\" not yet implemented", which
+		// stayed true in the code long after the api runner itself was
+		// ported -- so the whole runner was unreachable through dispatch.
 		return ResolveRoleFileCodex(roleID, projectRoot, globalRoot, pluginRoot, mode)
 	case RunnerClaudeCode:
 		return ResolveClaudeCodeRoleFile(roleID, projectRoot, pluginRoot, mode)
-	case RunnerAPI:
-		// API runner doesn't use local role files (future: resolve from remote registry)
-		return nil, &DispatchUnavailable{Reason: fmt.Sprintf("runner %q not yet implemented", RunnerAPI)}
 	default:
 		return nil, &DispatchDenied{Reason: fmt.Sprintf("unknown runner: %q", runner)}
 	}
@@ -173,7 +182,22 @@ type DispatchContext struct {
 	Sandbox            string
 	DeveloperInstructs string
 	Prompt             string
-	IsWriteCapable     bool
+	// Brief is the caller's raw, unfenced brief.
+	//
+	// Kept alongside Prompt for the api runner, which addresses a chat API
+	// with separate system and user slots and so must fence the brief on its
+	// own rather than reusing Prompt -- Prompt already has the role's trusted
+	// instructions concatenated into it, and sending that as the user message
+	// puts trusted policy inside the untrusted slot.
+	Brief string
+	// ProjectRoot pins the child's working directory and anchors operator
+	// settings. For a long-lived MCP server this process's cwd is wherever
+	// the host was launched, which is not the project being dispatched.
+	ProjectRoot string
+	// ReasoningEffort is the role's declared effort, passed through to
+	// whichever flag the runner uses for it.
+	ReasoningEffort string
+	IsWriteCapable  bool
 }
 
 // BuildDispatchContext prepares a complete dispatch context from a resolved role
@@ -214,6 +238,7 @@ func BuildDispatchContext(
 		Sandbox:            sandbox,
 		DeveloperInstructs: role.DeveloperInstructs,
 		Prompt:             prompt,
+		Brief:              brief,
 		IsWriteCapable:     WriteCarpableSandboxes[sandbox],
 	}
 

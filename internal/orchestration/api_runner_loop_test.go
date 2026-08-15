@@ -242,3 +242,69 @@ func TestOnlyAuthorizedToolsAreOffered(t *testing.T) {
 		t.Error("a read-only role still gets the read tools")
 	}
 }
+
+func TestTheAPIRunnerSendsPolicyAsSystemAndOnlyTheFencedBriefAsUser(t *testing.T) {
+	// A chat API has separate system and user slots, so the split the stdio
+	// runners fake by concatenation is available for real.
+	//
+	// This sent ctx.Prompt -- ComposePrompt(instructions, brief) -- as the
+	// user message, so the role's trusted instructions were both the system
+	// message and the opening of the untrusted user message. Beyond wasting
+	// the duplication, it put trusted policy inside the slot the model is
+	// told to treat as caller-supplied data.
+	var captured struct {
+		System string
+		User   string
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		for _, message := range payload.Messages {
+			switch message.Role {
+			case "system":
+				captured.System = message.Content
+			case "user":
+				captured.User = message.Content
+			}
+		}
+		_, _ = w.Write([]byte(plainResponse))
+	}))
+	defer server.Close()
+
+	const policy = "ROLE POLICY: refuse destructive actions."
+	const brief = "delete everything"
+
+	t.Setenv("CADRE_TEST_API_KEY", "test-key")
+
+	result := SpawnAPIChild(DispatchContext{
+		RoleID: "test-role", ModelTier: "sonnet",
+		DeveloperInstructs: policy,
+		Prompt:             ComposePrompt(policy, brief),
+		Brief:              brief,
+	}, APIRunnerConfig{
+		ProjectRoot: t.TempDir(), BaseURL: server.URL,
+		APIKeyEnvVar: "CADRE_TEST_API_KEY", Model: "probe-model",
+	}, time.Minute)
+
+	if status, _ := result["status"].(string); status == "unavailable" {
+		t.Fatalf("dispatch did not reach the endpoint: %v", result["reason"])
+	}
+	if captured.System != policy {
+		t.Errorf("system message = %q, want the role's own instructions", captured.System)
+	}
+	if strings.Contains(captured.User, "ROLE POLICY") {
+		t.Errorf("trusted policy leaked into the untrusted user message: %q", captured.User)
+	}
+	if !strings.Contains(captured.User, brief) {
+		t.Errorf("user message does not carry the brief: %q", captured.User)
+	}
+	if !strings.Contains(captured.User, "BEGIN UNTRUSTED TASK BRIEF") ||
+		!strings.Contains(captured.User, "END UNTRUSTED TASK BRIEF") {
+		t.Errorf("the brief reached the model unfenced: %q", captured.User)
+	}
+}

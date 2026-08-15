@@ -211,6 +211,48 @@ func relay(value any) (map[string]any, error) {
 	return decoded, nil
 }
 
+// fenceBundleContent wraps every returned entry's content as untrusted.
+//
+// Stored content returns to the parent model as this tool call's result --
+// the same position a dispatched child's stdout occupies, and it gets the
+// same treatment for the same reason. Written by an agent is not the same as
+// trustworthy: an entry may be a faithful summary of a file that was itself
+// hostile, which is exactly what the store's untrusted_inputs flag records.
+//
+// Nothing fenced these results before, although context_get's own tool
+// description told the model they were fenced -- so retrieved content
+// reached the parent as ordinary trusted text, and a description the code
+// did not implement made that harder to notice, not easier.
+//
+// Only content is fenced. A listing carries metadata and no content at all,
+// so fencing it would announce a danger that is not present and teach the
+// model to read the marker as noise.
+func fenceBundleContent(bundle map[string]any) map[string]any {
+	results, ok := bundle["results"].([]any)
+	if !ok {
+		return bundle
+	}
+	for _, raw := range results {
+		result, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if content, ok := result["content"].(string); ok {
+			result["content"] = WrapUntrustedOutput(content)
+		}
+	}
+	return bundle
+}
+
+// relayFenced is relay for the two tools that return stored content.
+func relayFenced(value any) (map[string]any, error) {
+	bundle, err := relay(value)
+	if err != nil {
+		return nil, err
+	}
+	return fenceBundleContent(bundle), nil
+}
+
 // ContextPutRequest is context_put's arguments.
 type ContextPutRequest struct {
 	Label          string   `json:"label"`
@@ -321,7 +363,7 @@ func (server *DispatchMCPServer) ContextGet(request ContextGetRequest) (map[stri
 		"agent": caller.Agent, "task_id": caller.TaskID,
 		"classification": caller.Classification,
 	})
-	return relay(bundle)
+	return relayFenced(bundle)
 }
 
 // ContextListRequest is context_list's arguments.
@@ -425,7 +467,7 @@ func (server *DispatchMCPServer) ContextSearch(request ContextSearchRequest) (ma
 		"agent": caller.Agent, "task_id": caller.TaskID,
 		"classification": caller.Classification,
 	})
-	return relay(bundle)
+	return relayFenced(bundle)
 }
 
 // contextToolDefinitions are the four context-store tools, appended to the

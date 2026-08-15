@@ -17,7 +17,7 @@ func TestResolveRoleForDispatchInvalidRoleID(t *testing.T) {
 
 func TestResolveRoleForDispatchDefaultRunner(t *testing.T) {
 	// Without explicit runner, should default to Codex
-	_, err := ResolveRoleForDispatch("test-role", "", "/tmp/project", "/tmp/global", "/tmp/plugin", ModePlanningOnly)
+	_, err := ResolveRoleForDispatch("code-reviewer", "", "/tmp/project", "/tmp/global", "/tmp/plugin", ModePlanningOnly)
 	// Error is expected because files don't exist, but it should try Codex resolver
 	if err == nil {
 		t.Errorf("expected error for non-existent role files")
@@ -30,7 +30,7 @@ func TestResolveRoleForDispatchDefaultRunner(t *testing.T) {
 }
 
 func TestResolveRoleForDispatchUnknownRunner(t *testing.T) {
-	_, err := ResolveRoleForDispatch("test-role", "unknown-runner", "/tmp/project", "/tmp/global", "/tmp/plugin", ModePlanningOnly)
+	_, err := ResolveRoleForDispatch("code-reviewer", "unknown-runner", "/tmp/project", "/tmp/global", "/tmp/plugin", ModePlanningOnly)
 	if err == nil {
 		t.Errorf("expected error for unknown runner")
 	}
@@ -41,9 +41,15 @@ func TestResolveRoleForDispatchUnknownRunner(t *testing.T) {
 }
 
 func TestResolveRoleForDispatchAPIRunner(t *testing.T) {
-	_, err := ResolveRoleForDispatch("test-role", RunnerAPI, "/tmp/project", "/tmp/global", "/tmp/plugin", ModePlanningOnly)
+	// This asserted that the api runner refused to resolve -- pinning the
+	// "runner \"api\" not yet implemented" answer that made the whole runner
+	// unreachable through dispatch long after it was ported.
+	//
+	// It resolves through the Codex .toml path now, as Python does, so the
+	// failure here is a missing file rather than a refused runner.
+	_, err := ResolveRoleForDispatch("code-reviewer", RunnerAPI, "/tmp/project", "/tmp/global", "/tmp/plugin", ModePlanningOnly)
 	if err == nil {
-		t.Errorf("expected error for unimplemented API runner")
+		t.Errorf("expected error for a role with no file on disk")
 	}
 	var unavailable *DispatchUnavailable
 	if !errors.As(err, &unavailable) {
