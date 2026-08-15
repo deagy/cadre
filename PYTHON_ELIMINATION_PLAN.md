@@ -182,6 +182,62 @@ differential harness. Two have real surface area worth calling out:
 
 **Breaks:** nothing user-visible.
 
+### `mcp/` is blocked: the Go dispatch engine is not wired up
+
+**Measured 2026-08-15, on `fix/untrusted-fencing`.** Every tool in `mcp/` now
+has a Go counterpart, which is what this plan treated as the precondition for
+deleting it. That precondition was the wrong one.
+
+`dispatch_secure_cloud_role` — the flagship tool — routes
+`HandleDispatchSecureCloudRole` → `DispatchSecureCloudRole`
+(`dispatch_core_phase2.go`) → `dispatchSync`, which does this:
+
+```go
+developerInstructions := "Role instructions would be loaded from role file here"
+prompt := ComposePrompt(developerInstructions, brief)
+result, err := SpawnAndWait("echo", []string{prompt}, env, DefaultTimeoutSeconds)
+```
+
+It never resolves a role file, spawns `echo`, and returns
+`{"status": "success", "exit_code": 0}`. Driven end-to-end against a real role
+file with a marker string in its `developer_instructions`, the marker never
+appears in the result — the file is not opened.
+
+`dispatch_team` routes each member through the same function, so it is hollow
+too, and so is `dispatch_team_recipe`, which feeds into it.
+
+Meanwhile the *real* engine exists and is tested: `ResolveRoleFileCodex`,
+`ResolveClaudeCodeRoleFile`, `BuildDispatchContext`, `ExecuteDispatchChild`,
+`SpawnCodexChild`, `SpawnClaudeCodeChild`, `SpawnAPIChild`. Reachability says
+it is production-dead — `BuildDispatchContext` and `ExecuteDispatchChild` have
+**no non-test callers**. `ResolveRoleForRunner` still answers
+`runner "api" not yet implemented`, months after the API runner was ported.
+
+So the entire hardened path — tier resolution, the git-clean gate, sandbox
+narrowing, symlink refusal, the classification ceiling — sits behind a
+function nothing in production calls.
+
+**What this changes:**
+
+1. `roster/orchestration/mcp/` is the only working dispatch implementation in
+   this repository. Deleting it removes dispatch and leaves a stub that
+   reports success for work it did not do. **Do not delete it on the strength
+   of tool-for-tool parity.**
+2. The precondition for Phase 4's `mcp/` half is not "every tool has a Go
+   counterpart", it is "the Go dispatch path resolves a role, spawns the
+   named runner, and records what it did". Wiring phase2 to phase3 is the
+   work; the pieces already exist and are tested individually.
+3. The gate must be behavioural, not protocol-level. A JSON-RPC conformance
+   suite compares framing, and the framing was already correct here — the
+   stub answers `tools/call` perfectly well. What it cannot do is dispatch.
+   The gate has to assert that a named role's instructions reached a child
+   process.
+
+**Why nothing caught it.** Every phase-3 test calls the phase-3 functions
+directly, so they pass while nothing calls them. Nothing tested the seam. This
+is the same shape as the fencing regressions found the same day: a test that
+asserts a component works, with no test that the component is *reached*.
+
 ## Phase 5 — Kernel to Go, distributed as binaries
 
 **Scope:** 9,626 production lines across 30 CLI subcommands, plus 6,883
