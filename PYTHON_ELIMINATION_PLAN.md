@@ -253,11 +253,54 @@ child process is the assertion. That is the behavioural gate this section
 called for, and it is what a protocol-level conformance suite would have
 missed.
 
-**Still open before `mcp/` can go.** The remaining Python suites have not been
-compared yet: `test_mcp_dispatch.py` (294 tests) is roughly a third worked
-through, and `test_gitlab_integration.py` (89) is untouched. Every batch
-compared so far has found something, so the rate does not yet justify
-stopping.
+### What the comparison found, and what is left
+
+`test_mcp_dispatch.py` (294 tests) is now largely worked through.
+`test_gitlab_integration.py` (89) is untouched.
+
+Fixed on `fix/untrusted-fencing`:
+
+| Gap | Effect |
+| --- | --- |
+| Dispatch never dispatched | `echo` and a placeholder; role file never opened |
+| Confirmation gate could not fire | Sandbox computed from a hard-coded `""`, always read-only |
+| `SpawnCodexChild` was a stub | The **default** runner could not run |
+| `SpawnClaudeCodeChild` invented a CLI shape | No `--permission-mode`: the sandbox never reached the child |
+| `runner="api"` unreachable | `not yet implemented`, long after the runner was ported |
+| Both fences degraded | Static/absent markers, no per-call token |
+| Context content relayed unfenced | While the tool description said it was fenced |
+| Role files followed symlinks | Cap measured the link, not the target |
+| `ensureContained` compared string prefixes | `/srv/project` contained `/srv/project-attacker` |
+| Instructions digest discarded | No record of *which* role text ran |
+| Catalog allowlist was an empty-map stub | Any pattern-matching id was dispatchable |
+| `runners.forward_env` never consumed | Registered, validated, ignored |
+| `runners.local_model_<tier>` never consumed | Tier semantics lost on self-hosted models |
+| Refusals never audited | The log recorded only successes |
+| Unparseable dispatch depth read as `0` | Failed open on the recursion cap |
+| No child timeout, process group, or output cap | A hung child hung the dispatch |
+| git-clean gate had no timeout and no test | — |
+
+**Known remaining gap: the final-handoff channel.** `MaxFinalHandoffResultBytes`
+and `FinalHandoffResultEnvVar` are declared in Go and used nowhere. Python's
+`_prepare_cli_final_handoff_channel` / `_read_cli_final_handoff` /
+`_cleanup_cli_final_handoff_channel` create a private, fd-based result file so
+a CLI child can return a *structured* handoff instead of having its stdout
+parsed, and `automatic_context_capture` stores it. Ten tests
+(`AutomaticContextCaptureDispatchTests`) cover properties that are not
+incidental — the retained descriptor is read rather than a replacement, a FIFO
+substituted at the path is ignored without blocking, cleanup does not follow
+symlinks. This is a feature port, not a repair, and it is the last known
+blocker for `mcp/`.
+
+**Also not yet compared:** `test_gitlab_integration.py` (89 tests) against
+`internal/orchestration/gitlab.go`.
+
+**The pattern worth carrying forward.** Every gap above shares one shape: a
+component was implemented and tested in isolation, and nothing tested that it
+was *reached*. Component tests cannot fail for a component nobody calls. Where
+a port is gated, gate it on observable behaviour at the seam — for dispatch
+that meant pointing the runner binary at a script that echoes stdin, so the
+role file's own text coming back out of a child process is the assertion.
 
 ## Phase 5 — Kernel to Go, distributed as binaries
 
