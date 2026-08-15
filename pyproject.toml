@@ -18,23 +18,15 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 dependencies = []
 
-[project.optional-dependencies]
-# `cadre resolve-shared` / `cadre init` can resolve YAML shared-config
-# overlays; JSON-only overlays work without this (see
-# roster/shared/requirements-validation.txt / roster/shared/src/resolve.py's
-# _require_yaml()). Not a core dependency so a plain `pip install cadre`
-# stays dependency-light for callers who only use JSON overlays.
-yaml = [
-    "PyYAML==6.0.3",
-]
-# `cadre mcp-dispatch-server` requires the official MCP Python SDK (stdio
-# transport only -- see roster/orchestration/mcp/requirements-mcp.txt /
-# dispatch_server.py's _require_mcp()). Not a core dependency: every other
-# subcommand works without it, and it fails closed with an install pointer
-# if invoked without this extra installed.
-mcp = [
-    "mcp==2.0.0",
-]
+# No optional dependencies. `yaml` (PyYAML) and `mcp` existed for the Python
+# implementations this wheel used to vendor -- resolve.py's YAML overlay
+# support and dispatch_server.py's MCP transport. The wheel ships neither any
+# more, and the Go CLI reads YAML natively, so an extra that installs a
+# Python package nothing in the distribution imports would be a promise the
+# wheel cannot keep.
+#
+# `cadre mcp-dispatch-server` is served by the Go CLI. A checkout that wants
+# the Python MCP server still has roster/orchestration/mcp/requirements-mcp.txt.
 
 [project.urls]
 Repository = "https://github.com/deagy/cadre"

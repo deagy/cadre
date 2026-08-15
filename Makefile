@@ -104,6 +104,14 @@ cross-build:
 #   make wheel GOOS=linux GOARCH=arm64 PLATFORM_TAG=manylinux_2_17_aarch64
 WHEEL_PYTHON ?= python3
 PLATFORM_TAG ?=
+# Set for a Windows wheel. pip copies .data/scripts/* into Scripts/ verbatim,
+# and an extensionless file there is not executable on Windows -- so the
+# script is renamed during the repack rather than being named per-platform in
+# pyproject.toml, which is static and cannot vary by target.
+WHEEL_EXE_SUFFIX ?=
+# Which binary to package. Defaults to a host build; the release workflow
+# passes the cross-compiled one it already produced for this platform.
+WHEEL_BINARY ?=
 
 # Paths under the checkout that an installed binary reads at runtime.
 # roster/ minus its development-only subtrees, plus the skills and the
@@ -114,9 +122,18 @@ WHEEL_DATA_EXCLUDES = \
 	--exclude='*.pyc' --exclude='.venv' --exclude='data/store.db'
 
 wheel:
-	@rm -rf dist dist-staging build/wheel
+	@# Only the wheel artifacts, not all of dist/: the release workflow builds
+	@# every platform's wheel from binaries that are already sitting there, and
+	@# clearing the directory would delete its own inputs.
+	@rm -rf dist-staging build/wheel
+	@rm -f dist/*.whl
+	@mkdir -p dist
 	@mkdir -p dist-staging
-	CGO_ENABLED=1 go build -o dist-staging/cadre ./cmd/cadre
+	@if [ -n "$(WHEEL_BINARY)" ]; then \
+	  cp "$(WHEEL_BINARY)" dist-staging/cadre; \
+	else \
+	  CGO_ENABLED=1 go build -o dist-staging/cadre ./cmd/cadre; \
+	fi
 	$(WHEEL_PYTHON) -m build --wheel --outdir dist
 	@# Unpack, add the data tree, repack. `wheel pack` rewrites RECORD.
 	@mkdir -p build/wheel
@@ -126,6 +143,10 @@ wheel:
 	  datadir=$$(find $$unpacked -mindepth 1 -maxdepth 1 -type d -name '*.data')/data/share/cadre; \
 	  mkdir -p $$datadir; \
 	  tar -c $(WHEEL_DATA_EXCLUDES) roster .agents/skills provider | tar -x -C $$datadir; \
+	  if [ -n "$(WHEEL_EXE_SUFFIX)" ]; then \
+	    scripts=$$(find $$unpacked -type d -name scripts); \
+	    mv $$scripts/cadre $$scripts/cadre$(WHEEL_EXE_SUFFIX); \
+	  fi; \
 	  rm -f dist/*.whl; \
 	  $(WHEEL_PYTHON) -m wheel pack $$unpacked --dest-dir dist
 	@# Retag. A wheel carrying a native binary is not pure Python, and

@@ -368,28 +368,37 @@ jobs:
             goos: linux
             goarch: amd64
             cc: gcc
+            # PEP 425 platform tags. pip matches these against the installing
+            # interpreter, so a wrong one serves the wrong architecture's
+            # binary. manylinux_2_17 is the glibc floor these are built
+            # against, matching the ubuntu-latest / aarch64 toolchains above.
+            platform-tag: manylinux_2_17_x86_64
           # Linux ARM64: cross-compile with aarch64 toolchain
           - os: ubuntu-latest
             goos: linux
             goarch: arm64
             cc: aarch64-linux-gnu-gcc
             apt-packages: "gcc-aarch64-linux-gnu"
+            platform-tag: manylinux_2_17_aarch64
           # macOS ARM64: native on macos-latest (currently arm64)
           - os: macos-latest
             goos: darwin
             goarch: arm64
             cc: clang
+            platform-tag: macosx_11_0_arm64
           # macOS AMD64: native on macos-13 (Intel x86_64)
           - os: macos-13
             goos: darwin
             goarch: amd64
             cc: clang
+            platform-tag: macosx_10_12_x86_64
           # Windows AMD64
           - os: windows-latest
             goos: windows
             goarch: amd64
             cc: gcc
             exe-suffix: .exe
+            platform-tag: win_amd64
           # NOTE: windows-arm64 is currently unsupported.
           # windows-latest is x64 with MinGW x86_64 gcc; cannot emit ARM64 objects with CGO_ENABLED=1.
           # Re-add if/when provisioning windows-11-arm hosted runner with proper cross-toolchain.
@@ -565,6 +574,83 @@ jobs:
 
           print(f'✓ All {len(contracted)} contracted platforms present')
           VERIFY
+
+      # Phase 2 of PYTHON_ELIMINATION_PLAN.md: `pip install cadre` ships the
+      # binary, not Python. One wheel per platform, each carrying the *same*
+      # binary that platform's archive carries -- built here from the archives
+      # rather than on each matrix runner, which guarantees that and also
+      # avoids needing make, tar and a Python toolchain on the Windows runner.
+      - name: Set up Python for wheel building
+        if: steps.tag.outputs.skip == 'false'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Install wheel build tools
+        if: steps.tag.outputs.skip == 'false'
+        run: pip install --no-cache-dir build==1.5.0 wheel==0.46.3
+
+      - name: Build one wheel per platform
+        if: steps.tag.outputs.skip == 'false'
+        run: |
+          set -eu
+          version="${{ steps.version.outputs.value }}"
+          mkdir -p wheel-binaries
+
+          # goos goarch platform-tag exe-suffix. Kept in step with the build
+          # matrix above and with plugin/tools/binary_platforms.py, which the
+          # contract test guards.
+          while read -r goos goarch tag suffix; do
+            archive="flat-dist/cadre-v$version-$goos-$goarch"
+            if [ "$goos" = "windows" ]; then
+              unzip -o -q "$archive.zip" -d wheel-binaries
+            else
+              tar xzf "$archive.tar.gz" -C wheel-binaries
+            fi
+            binary="wheel-binaries/cadre-$goos-$goarch$suffix"
+            test -f "$binary" || { echo "no binary extracted for $goos/$goarch" >&2; exit 1; }
+
+            make wheel WHEEL_BINARY="$binary" PLATFORM_TAG="$tag" WHEEL_EXE_SUFFIX="$suffix"
+
+            built=$(ls dist/cadre-*-"$tag".whl)
+            cp "$built" flat-dist/
+            echo "built $(basename "$built")"
+          done <<'PLATFORMS'
+          linux amd64 manylinux_2_17_x86_64 
+          linux arm64 manylinux_2_17_aarch64 
+          darwin amd64 macosx_10_12_x86_64 
+          darwin arm64 macosx_11_0_arm64 
+          windows amd64 win_amd64 .exe
+          PLATFORMS
+
+      - name: Every wheel must carry a binary, its data, and no Python
+        if: steps.tag.outputs.skip == 'false'
+        run: |
+          set -eu
+          count=0
+          for wheel in flat-dist/*.whl; do
+            count=$((count + 1))
+            # The whole point of the phase. A wheel that regained a .py would
+            # still install and still work, so nothing else would notice.
+            if python -m zipfile -l "$wheel" | grep -q '\.py$'; then
+              echo "$wheel contains Python source" >&2
+              exit 1
+            fi
+            # No trailing anchor: `zipfile -l` prints name, date and size in
+            # columns, so an end-of-line match never fires and the check
+            # silently passes every wheel, including one with no binary.
+            python -m zipfile -l "$wheel" | grep -qE 'data/scripts/cadre(\.exe)?[[:space:]]' \
+              || { echo "$wheel has no cadre binary" >&2; exit 1; }
+            # hatchling's shared-data silently drops directory sources, which
+            # produces a wheel that builds cleanly and is missing every role.
+            roles=$(python -m zipfile -l "$wheel" | grep -c 'share/cadre/roster/.*/AGENT\.md' || true)
+            if [ "$roles" -lt 100 ]; then
+              echo "$wheel carries only $roles role definitions" >&2
+              exit 1
+            fi
+            echo "$(basename "$wheel"): 0 python, binary present, $roles roles"
+          done
+          test "$count" -eq 5 || { echo "expected 5 wheels, found $count" >&2; exit 1; }
 
       - name: Install syft
         if: steps.tag.outputs.skip == 'false'
