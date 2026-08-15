@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "title": "Provider agent catalog",
+  "type": "object", "additionalProperties": false, "required": ["schema_version", "agents"],
+  "properties": {"schema_version": {"const": 1}, "agents": {"type": "object", "additionalProperties": {"$ref": "#/$defs/agent"}}},
+  "$defs": {"agent": {"type": "object", "additionalProperties": false, "required": ["kind", "capabilities"], "properties": {"kind": {"enum": ["author", "reviewer", "specialist"]}, "capabilities": {"type": "array", "uniqueItems": true, "items": {"enum": ["author", "reviewer", "dispatch"]}}, "definition": {"type": "string"}, "phase": {"type": "string"}, "transport": {"enum": ["local", "a2a"], "default": "local"}, "endpoint": {"type": "string", "format": "uri"}}, "if": {"properties": {"transport": {"const": "a2a"}}, "required": ["transport"]}, "then": {"required": ["endpoint"]}}}
+}

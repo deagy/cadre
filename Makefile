@@ -16,6 +16,14 @@
 
 build:
 	go build -o dist/cadre ./cmd/cadre
+	go build -o dist/agentic-sdlc ./cmd/agentic-sdlc
+
+# agentic-sdlc is deliberately absent from cross-build and the release
+# workflow. It implements one subcommand so far (show-contract); publishing a
+# kernel binary that answers a tenth of the CLI would be worse than publishing
+# none, because a consumer who installed it would find the gap at the point of
+# use rather than at the point of install. It joins the release matrix when
+# the port is complete -- see PYTHON_ELIMINATION_PLAN.md's Phase 5.
 
 # Race requires cgo; CI and local dev are expected to have a C toolchain
 # available. If not, fall back to `go test ./...` (no -race) rather than

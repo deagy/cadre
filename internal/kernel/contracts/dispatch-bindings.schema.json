@@ -1,0 +1,4 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "title": "Provider dispatch bindings", "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "bindings"], "properties": {"schema_version": {"const": 1}, "bindings": {"type": "object", "additionalProperties": {"type": "object", "required": ["agent", "route"], "properties": {"agent": {"type": "string"}, "route": {"type": "string"}}}}}
+}

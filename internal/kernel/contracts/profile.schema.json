@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agentic SDLC provider profile",
+  "type": "object", "additionalProperties": false,
+  "required": ["id", "version", "gate_bindings"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "extends": {"type": "string", "minLength": 1},
+    "description": {"type": "string"},
+    "rich_content_source": {"type": "string"},
+    "agents": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "impact_categories": {"type": "array", "items": {"type": "string"}},
+    "change_intake": {"type": "object"},
+    "routing": {"type": "array", "items": {"type": "object"}},
+    "ignored_gates": {"type": "array", "uniqueItems": true, "items": {"pattern": "^G(?:[1-9]|10)$"}},
+    "gate_bindings": {"type": "object", "additionalProperties": {"$ref": "#/$defs/gateBinding"}}
+  },
+  "$defs": {"gateBinding": {"type": "object", "additionalProperties": false, "required": ["contributions"], "properties": {"contributions": {"type": "object", "additionalProperties": {"$ref": "#/$defs/contribution"}}}}, "contribution": {"type": "object", "additionalProperties": false, "required": ["agents", "tasks", "artifacts"], "properties": {"agents": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}, "tasks": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}, "artifacts": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}}}}
+}
