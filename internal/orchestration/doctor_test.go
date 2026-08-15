@@ -272,3 +272,89 @@ func TestGoVersionOK(t *testing.T) {
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
+
+func TestClassifyRunningBinaryPipInstall(t *testing.T) {
+	// doctor exists to tell an operator which install answered the command,
+	// and README.md promises it names a pip/pipx install among the kinds.
+	// The Go port classified every pip and pipx path as "unknown" -- the most
+	// common install there is, reported as unclassifiable.
+	//
+	// Both shapes, because a wheel that ships a binary can land either way:
+	// under site-packages for a plain pip install, or in a pipx venv's bin/,
+	// which is not under site-packages at all.
+	for _, probe := range []struct {
+		path string
+		root string
+		why  string
+	}{
+		{
+			path: "/home/u/.local/lib/python3.12/site-packages/cadre_cli/bin/cadre",
+			root: "/home/u/.local/lib/python3.12/site-packages",
+			why:  "a user-site pip install",
+		},
+		{
+			path: "/usr/lib/python3/site-packages/cadre_cli/cadre",
+			root: "/usr/lib/python3/site-packages",
+			why:  "a system pip install",
+		},
+		{
+			path: "/home/u/.local/pipx/venvs/cadre/bin/cadre",
+			root: "/home/u/.local/pipx/venvs/cadre",
+			why:  "a pipx install, whose binary is in the venv's bin/",
+		},
+	} {
+		kind, root, detail := ClassifyRunningBinary(probe.path)
+		if kind != InstallKindPipInstall {
+			t.Errorf("%s: kind = %q, want %q (%s)", probe.path, kind, InstallKindPipInstall, probe.why)
+		}
+		if root != probe.root {
+			t.Errorf("%s: root = %q, want %q", probe.path, root, probe.root)
+		}
+		if detail == "" {
+			t.Errorf("%s: no detail reported", probe.path)
+		}
+	}
+}
+
+func TestAPathThatIsNotAnInstallIsStillReportedAsUnknown(t *testing.T) {
+	// The honest answer has to survive. A classifier that stretched to fit
+	// would name an install kind for a path that is not one, which is worse
+	// than saying so: doctor's whole value is that its answer can be trusted.
+	kind, _, detail := ClassifyRunningBinary("/opt/somewhere/random/cadre")
+	if kind != InstallKindUnknown {
+		t.Errorf("kind = %q, want %q", kind, InstallKindUnknown)
+	}
+	if !strings.Contains(detail, "could not classify") {
+		t.Errorf("detail = %q, want it to say the classification failed", detail)
+	}
+}
+
+func TestAMismatchIsReportedForADifferentCheckout(t *testing.T) {
+	// The subtle mismatch: same install *kind*, different root. The cwd is
+	// inside one checkout and the binary that ran belongs to another, which
+	// is exactly the situation where an operator edits one tree and tests
+	// another -- and the one a kind-only comparison would miss.
+	cwdCheckout := t.TempDir()
+	otherCheckout := t.TempDir()
+	for _, root := range []string{cwdCheckout, otherCheckout} {
+		for _, marker := range []string{".git", "roster"} {
+			if err := os.MkdirAll(filepath.Join(root, marker), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.WriteFile(filepath.Join(root, "roster", "catalog.yaml"), []byte("agents: {}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(root, "bin"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "bin", "cadre"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	report := GatherDoctorReport(cwdCheckout, filepath.Join(otherCheckout, "bin", "cadre"))
+	if !report.Mismatch {
+		t.Error("a binary from a different checkout was not reported as a mismatch")
+	}
+}

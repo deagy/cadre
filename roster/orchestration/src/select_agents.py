@@ -20,9 +20,10 @@ from urllib.parse import urlparse
 # `_SHARED_SRC_DIR` used to be derived from `ROSTER_ROOT`, which is the
 # constant the resolver now drives. Leaving them in that form while `:17`
 # became resolver-driven would have redirected both silently -- and
-# `_SHARED_SRC_DIR` is the `sys.path` bootstrap for `settings`,
-# `routing_overlay`, `text_embedding` and `content_protection`, so redirecting
-# it would let a resolved roster supply the platform's own settings resolver.
+# `_SHARED_SRC_DIR` is the `sys.path` bootstrap for `settings` and
+# `routing_overlay`, so redirecting it would let a resolved roster supply the
+# platform's own settings resolver. (`text_embedding` and `content_protection`
+# travelled through it too, until the Go context store made them dead.)
 # It is also circular: `settings` IS the resolver, and it lives under this
 # directory, so it cannot be imported in order to compute its own location.
 # `roster/orchestration/test/test_roster_boundary.py` asserts all of this.

@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -284,5 +285,48 @@ func testConfig() *Config {
 		Limits:    map[string]any{"max_entry_bytes": 1048576},
 		Chunking:  Chunking{MaxCharacters: 2400, OverlapCharacters: 240},
 		Embedding: Embedding{Provider: "hashing", Model: "feature-hash-v1", Dimensions: 384},
+	}
+}
+
+func TestRetentionIsPerScopeNotPerClassification(t *testing.T) {
+	// The two stores model retention differently, and mixing them up is the
+	// boundary this pins.
+	//
+	// Context entries expire on a window chosen by *scope*: agent-scoped
+	// working notes are short-lived, project-scoped material lasts longer.
+	// The knowledge store keys retention off classification instead, because
+	// what it holds is durable and curated. A default_days_by_classification
+	// here would be the knowledge store's model leaking into a store whose
+	// whole purpose is that nothing stays.
+	//
+	// Ported from test_context_boundary.py's
+	// test_the_context_store_has_no_indefinite_retention_default, which
+	// asserted this against config.py's source text.
+	expiry := reflect.TypeOf(Expiry{})
+	if _, present := expiry.FieldByName("DefaultTTLDaysByScope"); !present {
+		t.Error("Expiry has no DefaultTTLDaysByScope; retention is not keyed by scope")
+	}
+	for _, forbidden := range []string{
+		"DefaultDaysByClassification", "DefaultTTLDaysByClassification",
+	} {
+		if _, present := expiry.FieldByName(forbidden); present {
+			t.Errorf("Expiry has %q, which is the knowledge store's retention model", forbidden)
+		}
+	}
+
+	// And there is no way to express "never expires".
+	if _, present := expiry.FieldByName("Indefinite"); present {
+		t.Error("Expiry can express indefinite retention")
+	}
+	if expiry.NumField() > 0 {
+		var maximum bool
+		for index := 0; index < expiry.NumField(); index++ {
+			if expiry.Field(index).Name == "MaximumTTLDays" {
+				maximum = true
+			}
+		}
+		if !maximum {
+			t.Error("Expiry declares no maximum, so an override could reach indefinitely far out")
+		}
 	}
 }

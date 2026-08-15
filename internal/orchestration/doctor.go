@@ -22,6 +22,7 @@ import (
 const (
 	InstallKindCheckout    = "checkout"
 	InstallKindGoInstall   = "go-install"
+	InstallKindPipInstall  = "pip-install"
 	InstallKindPluginCache = "plugin-cache"
 	InstallKindUnknown     = "unknown"
 )
@@ -175,6 +176,10 @@ func ClassifyRunningBinary(runningFile string) (string, string, string) {
 		return InstallKindGoInstall, root, "running from a go-install location under " + root
 	}
 
+	if root := pipInstallRoot(runningFile); root != "" {
+		return InstallKindPipInstall, root, "running from a pip/pipx install under " + root
+	}
+
 	if root := pluginCacheRoot(runningFile); root != "" {
 		return InstallKindPluginCache, root,
 			"running from a Claude Code plugin cache copy under " + root +
@@ -190,6 +195,45 @@ func ClassifyRunningBinary(runningFile string) (string, string, string) {
 		"could not classify the install kind for " + runningFile + " as a checkout, a go-install " +
 			"location, or a Claude Code plugin cache -- reporting the raw resolved path only rather " +
 			"than guessing"
+}
+
+// pipInstallRoot reports the install root when runningFile sits inside a
+// pip or pipx installation, or "" when it does not.
+//
+// Two shapes, because a wheel that ships a binary can land either way. A
+// path under site-packages is the classic pip layout, editable or not; a
+// path under a pipx venv is what `pipx install cadre` produces, and its
+// binary sits in the venv's bin/ rather than under site-packages at all.
+//
+// This was missing entirely: README.md says doctor reports "checkout,
+// pip/pipx install, or Claude Code plugin-cache copy", and the Go port
+// answered "unknown" for every pip and pipx path -- the most common install
+// there is. Reporting "could not classify" for the documented happy path is
+// worse than reporting nothing, because doctor exists to tell an operator
+// which install answered.
+func pipInstallRoot(path string) string {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		absolute = path
+	}
+	parts := strings.Split(filepath.ToSlash(absolute), "/")
+
+	// site-packages: report the site-packages directory itself, which is
+	// what identifies the environment.
+	for index, part := range parts {
+		if part == "site-packages" {
+			return filepath.FromSlash(strings.Join(parts[:index+1], "/"))
+		}
+	}
+
+	// pipx: .../pipx/venvs/<name>/... -- report the venv root, since that is
+	// the unit pipx installs, upgrades and removes.
+	for index, part := range parts {
+		if part == "pipx" && index+2 < len(parts) && parts[index+1] == "venvs" {
+			return filepath.FromSlash(strings.Join(parts[:index+3], "/"))
+		}
+	}
+	return ""
 }
 
 // goVersionOK reports whether the running Go toolchain's runtime version

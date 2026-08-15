@@ -404,11 +404,13 @@ class WheelShipsNoPythonTest(unittest.TestCase):
         """The four Python trees the old wheel carried, named so a re-added
         one is a visible diff rather than a silent regression."""
         pyproject = self._pyproject()
+        # Only trees that still exist. roster/orchestration/mcp and
+        # roster/context-store/src were deleted when their Go counterparts
+        # took over, and asserting a deleted path is absent from pyproject
+        # passes for the wrong reason.
         for tree in (
             "roster/orchestration/src",
-            "roster/orchestration/mcp",
             "roster/shared/src",
-            "roster/context-store/src",
         ):
             self.assertNotIn(
                 f'"{tree}"',
