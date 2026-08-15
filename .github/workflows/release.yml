@@ -52,7 +52,7 @@ on:
       - "plugin/plugins/lifecycle-gitlab/.claude-plugin/plugin.json"
       - "plugin/plugins/lifecycle-gitlab/.codex-plugin/plugin.json"
       - "kernel/agentic_sdlc/__init__.py"
-      - "cadre_cli/_version.py"
+      - "VERSION"
   workflow_dispatch:
 
 permissions:
@@ -419,7 +419,7 @@ jobs:
         id: version
         run: |
           set -eu
-          value=$(grep '^VERSION = ' cadre_cli/_version.py | sed -n 's/^VERSION = "\([^"]*\)".*/\1/p')
+          value=$(tr -d '[:space:]' < VERSION)
           [ -n "$value" ] || { echo "CLI VERSION not found or not MAJOR.MINOR.PATCH" >&2; exit 1; }
           echo "value=$value" >> "$GITHUB_OUTPUT"
 

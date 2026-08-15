@@ -36,9 +36,13 @@ Repository = "https://github.com/deagy/cadre"
 # would generate a Python launcher into <prefix>/bin/cadre and silently
 # overwrite it, which is exactly what happened the first time this was built.
 
+# A plain text file, not a Python module. cadre_cli/_version.py was the last
+# Python in this distribution; the Go CLI already parsed it as text without
+# executing it, so nothing was gained by the .py extension and one file was
+# lost to the elimination plan by keeping it.
 [tool.hatch.version]
-path = "cadre_cli/_version.py"
-pattern = "VERSION = \"(?P<version>[^\"]+)\""
+path = "VERSION"
+pattern = "(?P<version>.+)"
 
 [tool.hatch.build.targets.wheel]
 # No `packages`. This wheel contains no Python at all: it carries the
@@ -74,7 +78,7 @@ bypass-selection = true
 # offered -- releases carry per-platform wheels instead.
 [tool.hatch.build.targets.sdist]
 include = [
-    "cadre_cli/**",
+    "VERSION",
     "roster/**",
     ".agents/skills/**",
     "provider/**",

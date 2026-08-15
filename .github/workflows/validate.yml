@@ -339,6 +339,13 @@ jobs:
 
           "$CADRE" help >/dev/null
 
+          # --version specifically, not just `help`. The version marker is
+          # resolved differently from everything else, and a smoke test that
+          # ran help and select shipped a build where `cadre --version` failed
+          # outright from an install.
+          "$CADRE" --version | grep -qE '^cadre [0-9]' \
+            || { echo "installed cadre cannot report its version" >&2; "$CADRE" --version; exit 1; }
+
           # The task text deliberately trips two context-pack keywords, and the
           # plan is asserted rather than discarded. roster/context-packs/ is a
           # runtime resource resolved from the installed wheel, so a task that

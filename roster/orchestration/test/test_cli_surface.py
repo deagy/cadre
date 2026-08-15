@@ -36,7 +36,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SUBCOMMANDS_PATH = REPO_ROOT / "bin" / "subcommands.tsv"
-VERSION_SOURCE_PATH = REPO_ROOT / "cadre_cli" / "_version.py"
+# A plain text file since Phase 2 of PYTHON_ELIMINATION_PLAN.md; it was
+# cadre_cli/_version.py, which the Go CLI already parsed as text.
+VERSION_SOURCE_PATH = REPO_ROOT / "VERSION"
 PLUGIN_ROOT = REPO_ROOT / "plugin"
 PLUGIN_VERSION_MANIFEST_PATH = PLUGIN_ROOT / ".claude-plugin" / "plugin.json"
 
@@ -173,11 +175,11 @@ class GlobalVersionTest(unittest.TestCase):
     def test_version_reports_the_pip_distribution_marker_without_mutating(self) -> None:
         """The global flag must be safe before any subcommand is selected."""
         version_match = re.search(
-            r'^VERSION = "(?P<version>[^"]+)"$',
+            r"^(?P<version>\d+\.\d+\.\d+)$",
             VERSION_SOURCE_PATH.read_text(encoding="utf-8"),
             flags=re.MULTILINE,
         )
-        self.assertIsNotNone(version_match, f"VERSION assignment missing from {VERSION_SOURCE_PATH}")
+        self.assertIsNotNone(version_match, f"no version found in {VERSION_SOURCE_PATH}")
 
         before = subprocess.run(
             ["git", "status", "--porcelain"],

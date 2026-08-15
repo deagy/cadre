@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/deagy/cadre/cli/internal/version"
 )
 
 // Port of roster/orchestration/src/generate_global_plugin.py.
@@ -35,28 +37,13 @@ const registerURL = "https://github.com/deagy/cadre"
 
 // cliVersionPattern matches VERSION = "x.y.z" or VERSION = 'x.y.z' in cadre_cli/_version.py.
 // This mirrors internal/cli/version.go's regex, reading the same marker without executing Python.
-var cliVersionPattern = regexp.MustCompile(`(?m)^VERSION\s*=\s*(?:"([^"]*)"|'([^']*)')\s*$`)
-
-// readCLIVersion reads the Cadre CLI version from cadre_cli/_version.py,
-// matching the logic in internal/cli/version.go without executing Python.
+// readCLIVersion reads the Cadre CLI version, delegating to the one
+// implementation of that parse. This file used to carry its own copy; when
+// the marker moved from cadre_cli/_version.py to VERSION, this copy kept
+// looking for the old path and `cadre generate-plugin` began failing with
+// "cannot read CLI version marker" while `cadre --version` worked.
 func readCLIVersion(repoRoot string) (string, error) {
-	versionMarker := filepath.Join(repoRoot, "cadre_cli", "_version.py")
-	contents, err := os.ReadFile(versionMarker)
-	if err != nil {
-		return "", fmt.Errorf("cannot read CLI version marker: %w", err)
-	}
-	loc := cliVersionPattern.FindSubmatchIndex(contents)
-	if loc == nil {
-		return "", fmt.Errorf("cannot find VERSION in cadre_cli/_version.py")
-	}
-	// loc[2],loc[3] = double-quoted group; loc[4],loc[5] = single-quoted group.
-	if loc[2] != -1 {
-		return string(contents[loc[2]:loc[3]]), nil
-	}
-	if loc[4] != -1 {
-		return string(contents[loc[4]:loc[5]]), nil
-	}
-	return "", fmt.Errorf("VERSION found but could not extract value")
+	return version.Resolve(repoRoot)
 }
 
 // providerBundle is the set of provider/ members copied verbatim into the

@@ -1323,15 +1323,12 @@ class RepositoryHealthTests(unittest.TestCase):
 
             positive_cases = [
                 (
-                    "cadre_cli/__init__.py",
-                    "agent-suite-governance",
-                    ["application-engineer", "debugging-engineer"],
-                    ["test-engineer", "code-reviewer"],
-                    ["technical-writer"],
-                    "agent-suite-maintenance",
-                ),
-                (
-                    "cadre_cli/_version.py",
+                    # The distribution's version marker. Was
+                    # cadre_cli/_version.py until Phase 2 of
+                    # PYTHON_ELIMINATION_PLAN.md made it a plain text file;
+                    # the route has to follow it, or a version bump stops
+                    # routing to the governance reviewers.
+                    "VERSION",
                     "agent-suite-governance",
                     ["application-engineer", "debugging-engineer"],
                     ["test-engineer", "code-reviewer"],
