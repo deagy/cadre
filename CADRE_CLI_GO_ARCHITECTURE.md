@@ -35,9 +35,14 @@
 >   imports it directly. `internal/config/` hand-rolls settings resolution
 >   against `gopkg.in/yaml.v3` instead -- see that package's own doc comment
 >   for why.
-> - **`cadre select` was not ported**, deliberately, to preserve a
->   byte-exact `selection.schema.json` v7 output contract with a
->   `dispatch_fingerprint`. See `internal/cli/select_agents.go`'s header and
+> - **`cadre select` was not ported for most of this refactor**, and that
+>   was deliberate: its `selection.schema.json` output contract carries a
+>   `dispatch_fingerprint` that makes any divergence a different plan. It
+>   was ported on 2026-08-14, behind
+>   `roster/orchestration/test/test_select_differential.py`, which runs both
+>   implementations and requires byte equality including that fingerprint.
+>   Go is now the default; `CADRE_SELECT_IMPL=python` reverses it. See
+>   `internal/cli/select_agents.go`'s header and
 >   `REMAINING_PYTHON_SCOPE.md`, which this document predates and does not
 >   reference.
 >

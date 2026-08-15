@@ -19,38 +19,43 @@ timeline — an earlier version of this document (dated the same day) claimed
 
 ## What actually remains
 
-### `cadre select` — deliberately still Python
+### `cadre select` — ported; Python retained as an escape hatch
 
-`internal/cli/select_agents.go` dispatches every invocation, argv
-unmodified, straight to `roster/orchestration/src/select_agents.py`. This
-is not an unfinished port sitting in a queue: `select_agents.go`'s own
-header explains why, at length. The plan is `selection.schema.json` v7, it
-carries a `dispatch_fingerprint` (a SHA-256 over the plan's own canonical
-form) compared byte-for-byte across invocation paths by
-`roster/orchestration/test/test_repository_health.py`, and this file's
-comments record that a from-scratch Go reimplementation briefly existed in
-this repository and diverged from the contract — smaller flag set, a
+**This is done.** `internal/selector/` is the default implementation and
+`CADRE_SELECT_IMPL=python` reverses it. The Python modules stay in the tree
+for two reasons: they are that escape hatch, and they are the other half of
+the differential gate — a parity test needs something to be at parity with.
+
+The port was gated on
+`roster/orchestration/test/test_select_differential.py` rather than
+reviewed into place. It runs both implementations on the same machine in
+the same run and requires byte equality including `dispatch_fingerprint`,
+which matters because that fingerprint is checkout-location dependent: the
+plan embeds absolute paths inside the hashed payload, so a stored value
+would have pinned one developer's directory layout.
+
+Each layer was additionally compared against Python over a space chosen to
+exercise *it*, because the 25-case corpus reaches only a handful of shapes:
+
+| layer | comparison |
+|---|---|
+| matcher (globs, keywords, `match_rule`) | 4,725 rule×case evaluations |
+| workflow precedence | 44,101 decisions — every route singly and every route *pair*, × 4 risk sets |
+| lifecycle gates | 360 decisions against the real in-tree contract |
+| canonical JSON + fingerprint | 41 encodings, then 41 fingerprints |
+| plan assembly | 25 full plans + 25 fingerprints |
+| git-derived inputs | 36 real checkouts + 11 explicit-input cases |
+| routing-overlay merge | 69 documents (24 accepted, 45 refused) |
+| text / near-miss rendering | 144 textwrap inputs, 35 plans, 11 near-miss configs |
+
+Those wider comparisons live in `roster/orchestration/test/probe_*_parity.py`
+and are run deliberately, not by CI — they build real checkouts and shell
+out to git and `go test` hundreds of times. What they proved is folded back
+into `test_select_differential.py` and into `internal/selector`'s own tests.
+
+The reimplementation that briefly existed here before — smaller flag set, a
 repurposed `--output` flag, a JSON-vs-text default mismatch, a plan of its
-own invention rather than v7 — before being replaced by dispatch-through.
-
-Remaining scope, if this is ever ported for real: roughly 1,880 lines —
-
-| File | Lines |
-|---|---:|
-| `select_agents.py` (own argparse surface + entry point) | 450 |
-| `build_dispatch_plan.py` | 940 |
-| `plan_text_format.py` | 185 |
-| `agentic_sdlc_contracts.py` | 146 |
-| `route_near_miss.py` | 130 |
-| `risk_classifier.py` | 28 |
-
-`routing_overlay`, `glob_containment`, `roster_manifest`, `provenance`, and
-`role_metadata` already have Go equivalents used elsewhere in
-`internal/orchestration/`; only the modules above are select-specific and
-still Python-only. Porting this seriously would mean reproducing the
-fingerprint, the canonical JSON encoding, catalog ordering, and the
-lifecycle-contract handshake byte-for-byte — the risk `select_agents.go`'s
-header explicitly declines to take on casually.
+own invention — is why the gate was built before the port rather than after.
 
 ### `cadre init --interactive` — deliberately not ported, fails closed
 
@@ -288,27 +293,19 @@ differently — `hashing` in the context store, `local-hashing` in the
 knowledge store — which is worth knowing before assuming one is a typo for
 the other.
 
-### 6. `cadre select` — the last Python in the shipped product
+### 6. `cadre select` — done
 
-Now that the shim execs the Go binary, `select` is the only reason a plugin
-install still needs Python at all. Porting it makes the distribution
-genuinely Python-free.
+Go by default, `CADRE_SELECT_IMPL=python` to reverse. See the section above
+for how it was verified.
 
-Roughly 1,900 lines remain (`build_dispatch_plan.py` 940,
-`select_agents.py`'s argparse surface 450, `plan_text_format.py` 185,
-`agentic_sdlc_contracts.py` 146, `route_near_miss.py` 130,
-`risk_classifier.py` 28); `routing_overlay`, `glob_containment`,
-`roster_manifest`, `provenance`, `role_metadata` and `settings` already have
-Go equivalents.
+The prediction recorded here beforehand — *"the port is not the hard part,
+the harness is"* — held up, and is worth keeping for the next port of this
+shape. The harness was built first and every increment landed behind it;
+the two bugs that got furthest were both cases where a probe and the real
+CLI fed the code different shapes, which is precisely the gap a harness
+built afterwards would not have closed either.
 
-**The port is not the hard part — the harness is.** The plan is
-`selection.schema.json` v7 and carries a `dispatch_fingerprint` that is a
-SHA-256 over its own canonical form, compared byte-for-byte across
-invocation paths. Build a differential harness that runs both
-implementations over a task corpus and asserts byte equality including the
-fingerprint, *first*; port behind it. A near-miss port is worse than no
-port, because every consumer reads the v7 plan.
-
-**Done when:** `internal/cli/select_agents.go` no longer calls
-`interop.PythonSubcommand`, and the differential harness is green over the
-corpus and committed as a regression guard.
+What is left before a plugin install is genuinely Python-free is no longer
+`select` but the *retained* Python: the escape hatch, and the modules the
+differential gate compares against. Removing those is a separate decision
+with its own trade-off, not a continuation of this work.

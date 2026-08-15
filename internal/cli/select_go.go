@@ -24,6 +24,15 @@ import (
 func runSelectGo(args []string) int {
 	options := flag.NewFlagSet("cadre select", flag.ContinueOnError)
 	options.SetOutput(os.Stderr)
+	// Go's flag package opens with "Usage of cadre select:"; argparse opens
+	// with "usage: cadre select ...". The difference is not cosmetic here --
+	// test_cli_surface.py requires every subcommand to name itself the same
+	// way, so that `cadre <thing> --help` is one recognisable shape across a
+	// CLI that is half Go and half Python.
+	options.Usage = func() {
+		fmt.Fprint(os.Stderr, selectUsage)
+		options.PrintDefaults()
+	}
 
 	task := options.String("task", "", "Task objective used for routing")
 	root := options.String("root", "", "Target repository root")
@@ -313,3 +322,20 @@ func selectInstallMessage(suiteRoot string) string {
 		"Agentic SDLC %s is required; set AGENTIC_SDLC_BIN or install https://github.com/deagy/cadre",
 		requirement)
 }
+
+// selectUsage mirrors argparse's rendering of this command's flag surface.
+// Kept as a literal rather than derived from the FlagSet: Go's flag package
+// has no notion of required arguments or mutually exclusive groups, so a
+// generated line could not distinguish --task from the rest.
+const selectUsage = `usage: cadre select [-h] --task TASK [--root ROOT] [--roster ROSTER]
+                    [--files FILES] [--base BASE] [--task-id TASK_ID]
+                    [--classification CLASSIFICATION] [--source SOURCE]
+                    [--top TOP] [--output OUTPUT] [--format {json,text}]
+                    [--require-sdlc] [--record-telemetry]
+                    [--record-telemetry-include-task]
+                    [--telemetry-path TELEMETRY_PATH] [--explain]
+
+Emit a deterministic local agent dispatch plan.
+
+options:
+`

@@ -79,8 +79,18 @@ func TestSelectAgentsFailsClosedWithoutARoster(t *testing.T) {
 	t.Setenv("CADRE_REPO_ROOT", empty)
 	t.Chdir(empty)
 
-	if code := SelectAgents(nil); code != 1 {
-		t.Errorf("SelectAgents() = %d, want 1 when the selector cannot be located", code)
+	// --task is supplied so this reaches the roster lookup. Without it the
+	// run ends earlier, at argument parsing, with a usage error -- which is
+	// also failing closed, but tests a different thing.
+	if code := SelectAgents([]string{"--task", "anything"}); code != 1 {
+		t.Errorf("SelectAgents() = %d, want 1 when the roster cannot be located", code)
+	}
+
+	// A missing --task is a usage error, matching argparse's own exit code,
+	// and is distinct from 1 so a caller can tell "you invoked this wrong"
+	// from "the invocation was fine and the work failed".
+	if code := SelectAgents(nil); code != 2 {
+		t.Errorf("SelectAgents(nil) = %d, want 2 for a missing required argument", code)
 	}
 }
 

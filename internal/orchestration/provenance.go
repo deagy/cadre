@@ -36,14 +36,20 @@ const GitTimeout = 10 * time.Second
 
 // Provenance is the dispatch plan's `provenance` object.
 type Provenance struct {
-	CatalogContentHash         string   `json:"catalog_content_hash"`
-	RoutingContentHash         string   `json:"routing_content_hash"`
-	OverlayApplied             bool     `json:"overlay_applied,omitempty"`
-	OverlayPath                string   `json:"overlay_path,omitempty"`
-	OverlayContentHash         string   `json:"overlay_content_hash,omitempty"`
-	GitCommitSHA               string   `json:"git_commit_sha,omitempty"`
-	GitDirtyPaths              []string `json:"git_dirty_paths,omitempty"`
-	AgenticSDLCContractVersion *int     `json:"agentic_sdlc_contract_version,omitempty"`
+	CatalogContentHash string `json:"catalog_content_hash"`
+	RoutingContentHash string `json:"routing_content_hash"`
+	OverlayApplied     bool   `json:"overlay_applied,omitempty"`
+	OverlayPath        string `json:"overlay_path,omitempty"`
+	OverlayContentHash string `json:"overlay_content_hash,omitempty"`
+	GitCommitSHA       string `json:"git_commit_sha,omitempty"`
+	// A pointer, not a plain slice: provenance.py emits git_dirty_paths
+	// whenever `git status` *succeeded*, including as an empty list for a
+	// clean tree, and omits it only when the command could not run. With
+	// `[]string` plus omitempty those two cases are indistinguishable, so a
+	// clean checkout silently dropped the key -- a difference invisible to
+	// the plan's fingerprint, which excludes provenance entirely.
+	GitDirtyPaths              *[]string `json:"git_dirty_paths,omitempty"`
+	AgenticSDLCContractVersion *int      `json:"agentic_sdlc_contract_version,omitempty"`
 }
 
 // HashFile returns "sha256:<hex>" over the exact bytes at path.
@@ -116,6 +122,10 @@ func GitIdentity(catalogPath, routingPath string) (commitSHA string, dirtyPaths 
 	)
 	var dirty []string
 	if statusOK {
+		// Non-nil even when nothing is dirty: a clean tree must report an
+		// empty list, not an absent key. `nil` is reserved for "git status
+		// could not run", which is a different fact about the checkout.
+		dirty = []string{}
 		seen := make(map[string]bool)
 		for _, line := range strings.Split(status, "\n") {
 			if strings.TrimSpace(line) == "" || len(line) <= 3 {
@@ -175,7 +185,9 @@ func BuildProvenance(catalogPath, routingPath string, opts BuildProvenanceOption
 
 	if sha, dirty, ok := GitIdentity(catalogPath, routingPath); ok {
 		prov.GitCommitSHA = sha
-		prov.GitDirtyPaths = dirty
+		if dirty != nil {
+			prov.GitDirtyPaths = &dirty
+		}
 	}
 
 	if opts.AgenticSDLCContractVersion != nil {

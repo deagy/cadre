@@ -1,4 +1,4 @@
-"""Differential harness for a Go port of `cadre select`.
+"""Differential harness for the two `cadre select` implementations.
 
 `cadre select` has a published, byte-level output contract: the plan is
 `selection.schema.json`, it carries a `dispatch_fingerprint` that is a
@@ -8,9 +8,14 @@ that a from-scratch Go reimplementation already existed once in this
 repository and diverged from that contract before being replaced by
 dispatch-through to Python.
 
-So the port is gated on this file, not the other way round: a Go
-implementation is only allowed to replace the Python one when it produces
-the same plan for every case in `select_corpus.json`.
+The Go implementation in `internal/selector` is now the default, and it got
+there by passing this file rather than by anyone deciding it was ready.
+Python remains as `CADRE_SELECT_IMPL=python`, which is both the escape hatch
+and the other half of every comparison here.
+
+**Both values are always set explicitly.** Since the flip, an unset
+`CADRE_SELECT_IMPL` means Go -- so a "python" branch that merely unset the
+variable would compare Go against itself and pass for the rest of time.
 
 ## What "the same plan" means here
 
@@ -45,16 +50,26 @@ Everything else is compared. A matching fingerprint is therefore a claim
 about every semantic field in the plan, which is why it is asserted
 separately from the field-by-field comparison rather than instead of it.
 
-## What this file is worth today
+## What this file covers
 
-Two of its three tests have teeth immediately, against the *Python*
-implementation: they pin the selector's output for 25 input shapes, so an
-unintended change to routing, gate derivation, team recipes or plan encoding
-fails here. That is useful independently of any port.
+- `SelectGoldenTest` pins the Python selector's output for 25 input shapes,
+  so an unintended change to routing, gate derivation, team recipes or plan
+  encoding fails here regardless of which implementation ships.
+- `SelectGoParityTest` compares the two implementations' plans and
+  fingerprints for every corpus case.
+- `SelectDiscoveryParityTest`, `SelectOverlayParityTest`,
+  `SelectPresentationParityTest` and `SelectTelemetryParityTest` cover what
+  the corpus deliberately cannot: the corpus pins `--files` and `--source`
+  so its goldens do not encode the generating machine, which leaves every
+  discovery path unexercised; overlays, `--format text`, `--explain` and
+  telemetry are similarly outside a stored plan's reach.
 
-The third activates the moment a Go implementation exists behind
-`CADRE_SELECT_IMPL=go`, and skips -- loudly, naming what is missing -- until
-then.
+The wider comparisons that this file distils -- 4,725 rule evaluations,
+44,101 workflow decisions, 69 overlay documents, 190 rendering cases -- live
+in the `probe_*_parity.py` scripts alongside it. They are run deliberately,
+not by CI: they build real checkouts and shell out to git and `go test`
+hundreds of times. What they prove is folded back into these tests and into
+`internal/selector`'s own.
 
 Regenerate goldens deliberately, never reflexively:
 
@@ -128,7 +143,9 @@ def run_select(case: dict, *, implementation: str) -> tuple[int, str, str]:
     if implementation == "go":
         environment["CADRE_SELECT_IMPL"] = "go"
     else:
-        environment.pop("CADRE_SELECT_IMPL", None)
+        # Explicit, not unset: Go is the default now, so an unset variable
+        # would quietly compare Go against itself and pass forever.
+        environment["CADRE_SELECT_IMPL"] = "python"
     completed = subprocess.run(
         [
             str(CADRE), "select",
@@ -248,6 +265,30 @@ class SelectGoParityTest(unittest.TestCase):
                 f"unimplemented (exit {code}):\n{stderr}"
             )
 
+    def test_provenance_has_the_same_shape_in_both_implementations(self) -> None:
+        """`provenance` is excluded from the fingerprint *and* from
+        canonical_form, so nothing else in this file compares it -- which is
+        how Go came to omit `git_dirty_paths` entirely on a clean checkout
+        while every parity number stayed green.
+
+        The values legitimately vary (a dirty tree, a different commit), so
+        this compares the *keys* and the type of each value, which do not.
+        """
+        case = self.corpus[0]
+        python_provenance = plan_for(case, implementation="python")["provenance"]
+        go_provenance = plan_for(case, implementation="go")["provenance"]
+
+        self.assertEqual(
+            sorted(python_provenance), sorted(go_provenance),
+            "provenance carries different keys; a key present in one and "
+            "absent in the other is invisible to every other test here",
+        )
+        for key, value in python_provenance.items():
+            self.assertIsInstance(
+                go_provenance[key], type(value),
+                f"provenance[{key!r}] has a different type between implementations",
+            )
+
     def test_go_selector_matches_the_python_plan_byte_for_byte(self) -> None:
         """Both implementations are run here, in this process, on this
         machine -- so the fingerprints are directly comparable and no stored
@@ -330,7 +371,7 @@ class SelectDiscoveryParityTest(unittest.TestCase):
         if implementation == "go":
             environment["CADRE_SELECT_IMPL"] = "go"
         else:
-            environment.pop("CADRE_SELECT_IMPL", None)
+            environment["CADRE_SELECT_IMPL"] = "python"
         arguments = [
             str(CADRE), "select",
             "--task", "add a login handler and update the deployment manifest",
@@ -494,7 +535,7 @@ class SelectOverlayParityTest(unittest.TestCase):
         if implementation == "go":
             environment["CADRE_SELECT_IMPL"] = "go"
         else:
-            environment.pop("CADRE_SELECT_IMPL", None)
+            environment["CADRE_SELECT_IMPL"] = "python"
         completed = subprocess.run(
             [
                 str(CADRE), "select",
@@ -624,7 +665,7 @@ class SelectPresentationParityTest(unittest.TestCase):
         if implementation == "go":
             environment["CADRE_SELECT_IMPL"] = "go"
         else:
-            environment.pop("CADRE_SELECT_IMPL", None)
+            environment["CADRE_SELECT_IMPL"] = "python"
         completed = subprocess.run(
             [
                 str(CADRE), "select",
@@ -751,7 +792,7 @@ class SelectTelemetryParityTest(unittest.TestCase):
 
     def _select(self, *extra: str, implementation: str, env: dict | None = None) -> int:
         environment = dict(os.environ)
-        environment.pop("CADRE_SELECT_IMPL", None)
+        environment["CADRE_SELECT_IMPL"] = "python"
         if implementation == "go":
             environment["CADRE_SELECT_IMPL"] = "go"
         environment.update(env or {})
@@ -832,7 +873,7 @@ class SelectTelemetryParityTest(unittest.TestCase):
         for implementation in ("python", "go"):
             with self.subTest(implementation=implementation):
                 environment = dict(os.environ)
-                environment.pop("CADRE_SELECT_IMPL", None)
+                environment["CADRE_SELECT_IMPL"] = "python"
                 if implementation == "go":
                     environment["CADRE_SELECT_IMPL"] = "go"
 
