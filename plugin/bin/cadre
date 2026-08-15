@@ -16,29 +16,8 @@ if [ "$command_name" = "--version" ] && [ "$#" -eq 0 ]; then
   printf 'cadre %s\n' "$plugin_version"
   exit 0
 fi
-detect_agent_python() {
-  AGENT_PYTHON=
-  for candidate in python3 python; do
-    command -v "$candidate" >/dev/null 2>&1 || continue
-    if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then AGENT_PYTHON="$candidate"; break; fi
-  done
-}
-if [ "$command_name" = "sdlc" ]; then
-  sdlc_bin="${AGENTIC_SDLC_BIN:-}"
-  if [ -z "$sdlc_bin" ]; then
-    detect_agent_python
-    if [ -n "$AGENT_PYTHON" ]; then
-      sdlc_bin=$("$AGENT_PYTHON" "$SUITE_ROOT/roster/shared/src/settings.py" resolve agentic_sdlc.bin_path) || exit 1
-    else
-      echo "cadre: no Python 3.10+ found; falling back to PATH for agentic-sdlc without reading any cadre config file (a configured agentic_sdlc.bin_path, if set, is being ignored)" >&2
-      sdlc_bin=$(command -v agentic-sdlc || true)
-    fi
-  fi
-  [ -n "$sdlc_bin" ] || { echo "cadre: install Agentic SDLC v0.13.2+ from https://github.com/deagy/cadre" >&2; exit 1; }
-  exec "$sdlc_bin" --provider "$PLUGIN_ROOT/provider.json" "$@"
-fi
 
-# Try to use the compiled Go binary if available; fall back to Python.
+# Resolve the compiled binary. Every dispatch path below needs it.
 # Resolve a cached Go binary for the current platform, downloading if necessary.
 # Sets BINARY_CACHE to the path on success, or empty on failure.
 # All download noise is suppressed; return code signals success/failure only.
@@ -257,28 +236,51 @@ plugin_version=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"
 # Regenerating plugin (via 'cadre generate-plugin') updates this to match the repository's CLI version.
 CADRE_CLI_VERSION="0.5.0"
 
-# Resolve the binary (locate in cache or download it). Make this a condition
-# so that failure does not terminate under set -eu, allowing fallback to Python.
-if [ -n "$CADRE_CLI_VERSION" ] && try_resolve_binary; then
-  CADRE_REPO_ROOT="$SUITE_ROOT" exec "$BINARY_CACHE" "$@"
+# An explicit binary wins over cache lookup and download. This is the
+# supported answer for an air-gapped install, an unsupported platform,
+# or a site that mirrors its own builds -- the cases that used to fall
+# back to a bundled Python implementation.
+if [ -n "${CADRE_BINARY:-}" ]; then
+  [ -x "$CADRE_BINARY" ] || { echo "cadre: CADRE_BINARY is set but not executable: $CADRE_BINARY" >&2; exit 1; }
+  BINARY_CACHE="$CADRE_BINARY"
+else
+  # Resolve the binary (locate in cache or download it). A condition, so a
+  # failure does not terminate under set -eu before the diagnostic below.
+  if [ -z "$CADRE_CLI_VERSION" ] || ! try_resolve_binary; then
+    echo "cadre: could not obtain the cadre binary for this platform." >&2
+    echo "" >&2
+    echo "  platform:  $(uname -s)/$(uname -m)" >&2
+    echo "  version:   ${CADRE_CLI_VERSION:-unset}" >&2
+    echo "  cache:     ${BINARY_CACHE:-<not resolved>}" >&2
+    echo "" >&2
+    echo "The plugin used to fall back to a bundled Python implementation here." >&2
+    echo "It no longer ships one: two implementations of a byte-exact dispatch" >&2
+    echo "contract is the divergence this migration exists to remove." >&2
+    echo "" >&2
+    echo "Fix one of:" >&2
+    echo "  * set CADRE_BINARY to a cadre binary you already have" >&2
+    echo "  * network access to github.com/deagy/cadre releases on first run" >&2
+    echo "  * an unsupported platform -- released binaries cover linux/amd64," >&2
+    echo "    linux/arm64, darwin/amd64, darwin/arm64 and windows/amd64" >&2
+    echo "  * a prepopulated cache: place the binary at the path above" >&2
+    exit 1
+  fi
 fi
 
-detect_agent_python
-[ -n "$AGENT_PYTHON" ] || { echo "cadre: Python 3.10+ is required" >&2; exit 1; }
-case "$command_name" in
-  select) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/orchestration/src/select_agents.py" "$@" ;;
-  selection-telemetry) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/orchestration/src/selection_telemetry.py" "$@" ;;
-  context) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/context-store/src/cli.py" "$@" ;;
-  bootstrap-codex) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/orchestration/src/sync_codex_agents.py" --source "$PLUGIN_ROOT/codex-agents" "$@" ;;
-  resolve-shared) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/shared/src/resolve.py" "$@" ;;
-  mcp-dispatch-server) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/orchestration/mcp/dispatch_server.py" "$@" ;;
-  init) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/shared/src/init_project.py" "$@" ;;
-  profile) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/orchestration/src/profile_diff.py" "$@" ;;
-  gitlab-evidence) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/orchestration/mcp/gitlab_cli.py" "$@" ;;
-  config) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/shared/src/settings.py" "$@" ;;
-  doctor) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/orchestration/src/doctor.py" "$@" ;;
-  role-fidelity) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/orchestration/src/role_fidelity.py" "$@" ;;
-  upgrade) exec "$AGENT_PYTHON" "$SUITE_ROOT/roster/orchestration/src/upgrade.py" "$@" ;;
-  help|-h|--help) echo "Usage: cadre [--interactive] {select|selection-telemetry|context|bootstrap-codex|resolve-shared|mcp-dispatch-server|init|profile|gitlab-evidence|config|doctor|role-fidelity|upgrade|sdlc} [args...]" ;;
-  *) echo "cadre: unknown subcommand $command_name" >&2; exit 1 ;;
-esac
+if [ "$command_name" = "sdlc" ]; then
+  sdlc_bin="${AGENTIC_SDLC_BIN:-}"
+  if [ -z "$sdlc_bin" ]; then
+    sdlc_bin=$(CADRE_REPO_ROOT="$SUITE_ROOT" "$BINARY_CACHE" config resolve agentic_sdlc.bin_path) || exit 1
+  fi
+  [ -n "$sdlc_bin" ] || { echo "cadre: install Agentic SDLC v0.13.2+ from https://github.com/deagy/cadre" >&2; exit 1; }
+  exec "$sdlc_bin" --provider "$PLUGIN_ROOT/provider.json" "$@"
+fi
+
+# Everything else is the binary's own dispatch, including its help and
+# unknown-subcommand handling -- one implementation, not two.
+#
+# $command_name is passed back explicitly: it was shifted off above so
+# the sdlc branch could test it, and $@ holds only the arguments after
+# it. Exec'ing just $@ silently drops the subcommand, turning
+# `cadre select --task x` into `cadre --task x`.
+CADRE_REPO_ROOT="$SUITE_ROOT" exec "$BINARY_CACHE" "$command_name" "$@"

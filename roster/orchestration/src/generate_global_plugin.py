@@ -1096,25 +1096,33 @@ PACKAGED_SUBCOMMAND_EXTRA_ARGS = {
 }
 
 
-def load_subcommand_table(repository_root: Path) -> list[tuple[str, str, str]]:
+def load_subcommand_table(repository_root: Path) -> list[tuple[str, str]]:
+    """`name\tdescription` rows.
+
+    The script column is gone. It named the Python implementation the packaged
+    wrapper exec'd when it could not resolve the Go binary; that fallback is
+    removed and the suite no longer ships those scripts, so a column naming
+    files the distribution does not contain would be stale by construction.
+    """
     table = repository_root / "bin" / "subcommands.tsv"
     rows = []
     for line in table.read_text(encoding="utf-8").splitlines():
         if not line:
             continue
-        name, script, description = line.split("\t")
-        rows.append((name, script, description))
+        name, description = line.split("\t")
+        rows.append((name, description))
     return rows
 
 
-def packaged_subcommands(repository_root: Path) -> list[tuple[str, str]]:
-    """The single derivation point for which bin/subcommands.tsv entries
-    ship in the packaged plugin's own `bin/cadre` and which script path each
-    maps to, so a script rename or new subcommand only needs to change
-    bin/subcommands.tsv -- not this generator's shell text too."""
+def packaged_subcommands(repository_root: Path) -> list[str]:
+    """The subcommand names the packaged plugin serves.
+
+    No script path any more: the wrapper execs the Go binary and lets it
+    dispatch, instead of emitting a case arm per subcommand.
+    """
     return [
-        (name, script)
-        for name, script, _description in load_subcommand_table(repository_root)
+        name
+        for name, _description in load_subcommand_table(repository_root)
         if name not in PACKAGED_SUBCOMMAND_EXCLUSIONS
     ]
 
@@ -1230,17 +1238,21 @@ def generate_main_plugin_hook(plugin_root: Path) -> list[Path]:
 
 
 def generate_bin_wrapper(plugin_root: Path) -> Path:
+    """Write a wrapper that execs the Go binary, or fails saying why.
+
+    `internal/generators/plugin_generation.go` owns the real one -- the
+    hardened launcher with binary resolution, checksum verification and a
+    sidecar-verified cache. This exists so a package generated through the
+    Python path is still runnable, and deliberately does not reimplement any
+    of that.
+
+    What it no longer does is exec Python. The packaged wrapper used to fall
+    back to `roster/**/*.py` whenever the binary could not be resolved, and
+    that fallback is what made the suite carry ~24,500 lines of Python. Both
+    it and those files are gone.
+    """
     target = plugin_root / "bin" / "cadre"
-    rows = packaged_subcommands(REPOSITORY_ROOT)
-    case_lines = [
-        '  {name}) exec "$AGENT_PYTHON" "$SUITE_ROOT/{script}" {extra}"$@" ;;'.format(
-            name=name,
-            script=script,
-            extra=(PACKAGED_SUBCOMMAND_EXTRA_ARGS[name] + " ") if name in PACKAGED_SUBCOMMAND_EXTRA_ARGS else "",
-        )
-        for name, script in rows
-    ]
-    usage = "|".join([*(name for name, _script in rows), "sdlc"])
+    names = "|".join([*packaged_subcommands(REPOSITORY_ROOT), "sdlc"])
     body = "\n".join(
         [
             "#!/bin/sh",
@@ -1253,84 +1265,21 @@ def generate_bin_wrapper(plugin_root: Path) -> Path:
             "  export CADRE_INTERACTIVE",
             "  shift",
             "fi",
-            'command_name="${1:-help}"',
-            '[ "$#" -gt 0 ] && shift || true',
-            # Release automation updates the hand-authored plugin manifests
-            # without regenerating this wrapper. Read its package-local
-            # manifest at invocation time, rather than baking a copy of that
-            # independently-versioned value into generated content.
-            'if [ "$command_name" = "--version" ] && [ "$#" -eq 0 ]; then',
-            '  plugin_version=$(sed -n \'s/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\\([^\"]*\\)".*/\\1/p\' "$PLUGIN_ROOT/.claude-plugin/plugin.json")',
-            '  [ -n "$plugin_version" ] || { echo "cadre: could not read plugin version from .claude-plugin/plugin.json" >&2; exit 1; }',
-            '  printf \'cadre %s\\n\' "$plugin_version"',
-            '  exit 0',
-            'fi',
-            "detect_agent_python() {",
-            "  AGENT_PYTHON=",
-            "  for candidate in python3 python; do",
-            '    command -v "$candidate" >/dev/null 2>&1 || continue',
-            "    if \"$candidate\" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then AGENT_PYTHON=\"$candidate\"; break; fi",
-            "  done",
-            "}",
-            'if [ "$command_name" = "sdlc" ]; then',
-            # AGENTIC_SDLC_BIN is settings.py's *highest*-precedence source
-            # for this field, so honoring it directly here needs no Python
-            # and cannot get the precedence order wrong. Everything below
-            # that -- a project/global config file (only where the field's
-            # trust scope allows it), then a bare PATH lookup as the lowest-
-            # precedence computed default -- MUST go through settings.py's
-            # resolve_optional() so the config file is actually consulted
-            # and wins over a same-named binary that merely happens to be
-            # on PATH; jumping straight to `command -v agentic-sdlc` here
-            # (as the pre-#109 wrapper did) would silently skip the config
-            # file and reintroduce the exact gap this PR exists to close.
-            # Python is only truly required for that config-file check, so
-            # its absence degrades to the same PATH-only behavior this
-            # wrapper already had, rather than becoming a new hard failure.
-            '  sdlc_bin="${AGENTIC_SDLC_BIN:-}"',
-            '  if [ -z "$sdlc_bin" ]; then',
-            "    detect_agent_python",
-            '    if [ -n "$AGENT_PYTHON" ]; then',
-            # `|| exit 1` normalizes the exit code and states the intent
-            # explicitly; `set -e` alone already aborts here (a bare
-            # `var=$(failing-cmd)` IS subject to errexit -- only forms like
-            # `export var=$(...)` are exempt). What must never be added is a
-            # fallback that swallows the failure, e.g.
-            # `|| sdlc_bin=$(command -v agentic-sdlc || true)`: a
-            # SettingsScopeError means an untrusted project-local config
-            # tried to set this global-only field, and silently exec'ing
-            # whatever is on PATH instead is exactly the bypass this whole
-            # branch exists to prevent.
-            '      sdlc_bin=$("$AGENT_PYTHON" "$SUITE_ROOT/roster/shared/src/settings.py" resolve agentic_sdlc.bin_path) || exit 1',
-            "    else",
-            # This branch cannot tell "no config file exists" from "a config
-            # file exists and pins agentic_sdlc.bin_path, but no interpreter
-            # is available to read it" -- without Python there is no way to
-            # parse YAML/JSON or apply trust-scope rules. Degrading to a bare
-            # PATH lookup keeps the pre-existing no-Python behavior working,
-            # but it must never do so *silently*: an operator who pinned a
-            # path in ~/.config/cadre/config.yaml would otherwise have that
-            # pin quietly replaced by whatever `agentic-sdlc` happens to be
-            # first on PATH, with no signal. Warn on stderr (never stdout --
-            # this branch's value is consumed via command substitution).
-            '      echo "cadre: no Python 3.10+ found; falling back to PATH for agentic-sdlc without reading any cadre config file (a configured agentic_sdlc.bin_path, if set, is being ignored)" >&2',
-            '      sdlc_bin=$(command -v agentic-sdlc || true)',
-            "    fi",
-            "  fi",
-            f'  [ -n "$sdlc_bin" ] || {{ echo "cadre: install Agentic SDLC {kernel_requirement_text()} from https://github.com/deagy/cadre" >&2; exit 1; }}',
-            '  exec "$sdlc_bin" --provider "$PLUGIN_ROOT/provider.json" "$@"',
+            'if [ -n "${CADRE_BINARY:-}" ] && [ -x "${CADRE_BINARY:-}" ]; then',
+            '  CADRE_REPO_ROOT="$SUITE_ROOT" exec "$CADRE_BINARY" "$@"',
             "fi",
-            "detect_agent_python",
-            '[ -n "$AGENT_PYTHON" ] || { echo "cadre: Python 3.10+ is required" >&2; exit 1; }',
-            'case "$command_name" in',
-            *case_lines,
-            f'  help|-h|--help) echo "Usage: cadre [--interactive] {{{usage}}} [args...]" ;;',
-            '  *) echo "cadre: unknown subcommand $command_name" >&2; exit 1 ;;',
-            "esac",
+            'echo "cadre: no cadre binary available." >&2',
+            f'echo "  subcommands: {names}" >&2',
+            'echo "" >&2',
+            'echo "This package was generated through the Python generator, which does" >&2',
+            'echo "not emit the hardened downloading launcher. Set CADRE_BINARY to a" >&2',
+            'echo "cadre binary, or regenerate with ./bin/cadre generate-plugin." >&2',
+            "exit 1",
             "",
         ]
     )
-    write(target, body)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(body, encoding="utf-8")
     target.chmod(0o755)
     return target
 
@@ -1378,28 +1327,11 @@ def generate_suite_copy(
             "commit them (git add) before regenerating the plugin: "
             + ", ".join(sorted(untracked_role_paths))
         )
-    # Same failure class as untracked_role_paths above, for
-    # bin/subcommands.tsv instead of catalog.yaml: generate_bin_wrapper()
-    # builds the packaged bin/cadre wrapper straight from
-    # packaged_subcommands() (bin/subcommands.tsv), independently of
-    # `tracked`/`selected` here. An untracked new subcommand script would
-    # otherwise get a working case-statement entry in the wrapper while the
-    # script itself silently never gets copied into suite/, producing a
-    # package whose subcommand references a file that doesn't exist. Fail
-    # loudly here instead, before either file is written.
-    subcommands_table_path = REPOSITORY_ROOT / "bin" / "subcommands.tsv"
-    subcommand_script_paths = (
-        {script for _name, script in packaged_subcommands(REPOSITORY_ROOT) if script.startswith("roster/")}
-        if subcommands_table_path.is_file()
-        else set()
-    )
-    untracked_subcommand_scripts = subcommand_script_paths - tracked
-    if untracked_subcommand_scripts:
-        raise ValueError(
-            "bin/subcommands.tsv references script(s) not tracked in git; "
-            "commit them (git add) before regenerating the plugin: "
-            + ", ".join(sorted(untracked_subcommand_scripts))
-        )
+    # The guard that used to sit here required every script named in
+    # bin/subcommands.tsv to be tracked in git, because the wrapper emitted a
+    # case arm exec'ing each one. The table has no script column now and the
+    # wrapper execs no scripts, so there is nothing left for it to check.
+
     documentation_paths = {
         "AGENTS.md",
         "CONTRIBUTING.md",

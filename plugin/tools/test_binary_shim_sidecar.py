@@ -163,7 +163,7 @@ class BinaryShimSidecarTest(unittest.TestCase):
 
     def test_tampered_cached_binary_rejected_fallback(self):
         """
-        Verify tampered cached binary is rejected and Python fallback occurs.
+        Verify a tampered cached binary is rejected rather than exec'd.
 
         BREAKING CHANGE VERIFICATION:
         Before fix (online re-verification):
@@ -208,11 +208,11 @@ class BinaryShimSidecarTest(unittest.TestCase):
                 "Tampered binary should NOT execute",
             )
 
-            # Should fall back to Python (unknown subcommand error)
+            # Should refuse: the unverified binary must not be exec'd.
             self.assertIn(
-                "unknown subcommand",
+                "could not obtain the cadre binary",
                 result.stderr,
-                "Should fall back to Python after hash mismatch",
+                "A tampered cached binary must be rejected, not exec'd",
             )
 
         finally:
@@ -258,9 +258,9 @@ class BinaryShimSidecarTest(unittest.TestCase):
 
             # Should fall back to Python
             self.assertIn(
-                "unknown subcommand",
+                "could not obtain the cadre binary",
                 result.stderr,
-                "Should fall back to Python when sidecar missing",
+                "An unverified cached binary must be rejected, not exec'd",
             )
 
         finally:

@@ -604,5 +604,8 @@ confidence value, or cross-route ranking, under any field name: it states
 which literal keywords are present or absent per group and nothing more,
 preserving this repository's deterministic-selection invariant (selection is
 a fixed rule match, never agent judgment) end to end. See
-[`roster/orchestration/src/route_near_miss.py`](../roster/orchestration/src/route_near_miss.py)
-for the full mechanism and its tests.
+`internal/selector/nearmiss.go` (and `roster/orchestration/src/route_near_miss.py`,
+its differential counterpart) for the full mechanism and its tests. Deliberately
+not a link: the packaged plugin ships neither implementation, only the data the
+binary reads, so a relative link here resolves in a checkout and dangles in the
+package.

@@ -13,8 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/deagy/cadre/cli/internal/interop"
 )
 
 // InteractiveFlag mirrors bin/cadre.py's INTERACTIVE_FLAG.
@@ -26,17 +24,25 @@ const InteractiveFlag = "--interactive"
 // reaches both dispatchers.
 const SubcommandsTableRelativePath = "bin/subcommands.tsv"
 
-// Subcommand is one row of bin/subcommands.tsv: a name, the Python script it
+// Subcommand is one row of bin/subcommands.tsv: a name and the description
+// shown in `cadre help`.
+//
+// There is no script column any more. It named the Python implementation the
+// packaged plugin's wrapper used to exec when it could not resolve the Go
+// binary; that fallback is gone (see internal/generators' wrapper), the suite
+// no longer ships those scripts, and every subcommand this dispatcher serves
+// is built in. A column naming files the distribution does not contain is
+// exactly the stale configuration this migration keeps finding.
+// Historical shape:
 // dispatches to (relative to the repository root), and a one-line
 // description used in usage text.
 type Subcommand struct {
 	Name        string
-	Script      string
 	Description string
 }
 
 // LoadSubcommands parses bin/subcommands.tsv, mirroring bin/cadre.py's
-// load_subcommands(). Each non-empty line is `name\tscript\tdescription`.
+// load_subcommands(). Each non-empty line is `name\tdescription`.
 func LoadSubcommands(path string) ([]Subcommand, error) {
 	contents, err := os.ReadFile(path)
 	if err != nil {
@@ -49,10 +55,10 @@ func LoadSubcommands(path string) ([]Subcommand, error) {
 			continue
 		}
 		fields := strings.Split(line, "\t")
-		if len(fields) != 3 {
-			return nil, fmt.Errorf("subcommands.tsv: malformed row (want 3 tab-separated fields, got %d): %q", len(fields), line)
+		if len(fields) != 2 {
+			return nil, fmt.Errorf("subcommands.tsv: malformed row (want 2 tab-separated fields, got %d): %q", len(fields), line)
 		}
-		rows = append(rows, Subcommand{Name: fields[0], Script: fields[1], Description: fields[2]})
+		rows = append(rows, Subcommand{Name: fields[0], Description: fields[1]})
 	}
 	return rows, nil
 }
@@ -121,10 +127,9 @@ type Deps struct {
 	Stdout io.Writer
 	Stderr io.Writer
 
-	RepoRoot         string
-	SubcommandsPath  string
-	PythonExecutable func(ctx context.Context, script string, args []string, env []string, stdout, stderr io.Writer, stdin io.Reader) (int, error)
-	SDLCDeps         SDLCDeps
+	RepoRoot        string
+	SubcommandsPath string
+	SDLCDeps        SDLCDeps
 }
 
 // Run is an exact behavioral replica of bin/cadre.py's main(): parse
@@ -266,42 +271,16 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 		return MCPDispatchServerCmd(rest, deps.Stdout, deps.Stderr)
 	}
 
-	var match *Subcommand
-	for i := range subcommands {
-		if subcommands[i].Name == command {
-			match = &subcommands[i]
-			break
-		}
-	}
-	if match == nil {
-		writef(deps.Stderr, "cadre: unknown subcommand '%s'\n", command)
-		writeln(deps.Stderr, Usage(subcommands))
-		return 1
-	}
-
-	runPython := deps.PythonExecutable
-	if runPython == nil {
-		runPython = defaultPythonExecutable
-	}
-	code, err := runPython(ctx, filepath.Join(deps.RepoRoot, match.Script), rest, childEnv(interactive), deps.Stdout, deps.Stderr, os.Stdin)
-	if err != nil {
-		writef(deps.Stderr, "cadre: %s\n", err)
-		return 1
-	}
-	return code
-}
-
-// defaultPythonExecutable is the production PythonExecutable: it delegates
-// to internal/interop's PythonSubcommand, which locates a Python 3.10+
-// interpreter and runs the given script as a subprocess, mirroring
-// bin/cadre.py's subprocess.run([sys.executable, script, *rest]).
-func defaultPythonExecutable(ctx context.Context, script string, args []string, env []string, stdout, stderr io.Writer, stdin io.Reader) (int, error) {
-	return interop.PythonSubcommand(ctx, script, args, interop.Options{
-		Stdin:  stdin,
-		Stdout: stdout,
-		Stderr: stderr,
-		Env:    env,
-	})
+	// Every subcommand this dispatcher serves is routed above, in Go. There
+	// used to be a fallback here that exec'd the Python script named by the
+	// matching subcommands.tsv row -- unreachable since the last of those
+	// routes landed, and removed with the script column that fed it.
+	//
+	// Reaching this point therefore means the name is not a subcommand at
+	// all, including names the table still describes but nothing implements.
+	writef(deps.Stderr, "cadre: unknown subcommand '%s'\n", command)
+	writeln(deps.Stderr, Usage(subcommands))
+	return 1
 }
 
 // writef and writeln write CLI output and deliberately discard the write

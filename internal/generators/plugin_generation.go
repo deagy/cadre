@@ -468,13 +468,6 @@ var packagedSubcommandExclusions = map[string]bool{
 	"version":                  true,
 }
 
-// packagedSubcommandExtraArgs is extra argv the packaged wrapper must inject
-// ahead of the caller's own "$@" for a subcommand whose packaged invocation
-// needs plugin-relative context bin/subcommands.tsv has no column for.
-var packagedSubcommandExtraArgs = map[string]string{
-	"bootstrap-codex": `--source "$PLUGIN_ROOT/codex-agents"`,
-}
-
 // capabilityProfile is one entry of runner-capabilities.json's capability_tiers.
 type capabilityProfile struct {
 	Tools       []string `json:"tools"`
@@ -1354,7 +1347,6 @@ func (g *pluginGenerator) generateMainPluginHook(pluginRoot string) ([]string, e
 
 type subcommandRow struct {
 	name        string
-	script      string
 	description string
 }
 
@@ -1369,19 +1361,19 @@ func loadSubcommandTable(repoRoot string) ([]subcommandRow, error) {
 			continue
 		}
 		fields := strings.Split(line, "\t")
-		if len(fields) != 3 {
-			return nil, fmt.Errorf("bin/subcommands.tsv: expected 3 tab-separated columns, got %d: %q",
+		if len(fields) != 2 {
+			return nil, fmt.Errorf("bin/subcommands.tsv: expected 2 tab-separated columns, got %d: %q",
 				len(fields), line)
 		}
-		rows = append(rows, subcommandRow{fields[0], fields[1], fields[2]})
+		rows = append(rows, subcommandRow{fields[0], fields[1]})
 	}
 	return rows, nil
 }
 
-// packagedSubcommands is the single derivation point for which
-// bin/subcommands.tsv entries ship in the packaged plugin's own bin/cadre and
-// which script path each maps to, so a script rename or a new subcommand only
-// needs to change bin/subcommands.tsv -- not this generator's shell text too.
+// packagedSubcommands is the set of bin/subcommands.tsv entries the packaged
+// plugin serves. It no longer maps each to a script path: the wrapper execs
+// the Go binary and lets it dispatch, rather than emitting a case arm per
+// subcommand pointing at a Python file.
 func packagedSubcommands(repoRoot string) ([]subcommandRow, error) {
 	rows, err := loadSubcommandTable(repoRoot)
 	if err != nil {
@@ -1446,19 +1438,17 @@ func (g *pluginGenerator) generateBinWrapper(pluginRoot string) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	caseLines := make([]string, 0, len(rows))
+	// The wrapper no longer emits a per-subcommand case block: it execs the
+	// binary, which dispatches every subcommand itself. rows is still read so
+	// a malformed subcommands.tsv fails generation rather than silently
+	// producing a wrapper for a table nobody validated.
 	names := make([]string, 0, len(rows)+1)
 	for _, row := range rows {
-		extra := ""
-		if value, ok := packagedSubcommandExtraArgs[row.name]; ok {
-			extra = value + " "
-		}
-		caseLines = append(caseLines, fmt.Sprintf(
-			`  %s) exec "$AGENT_PYTHON" "$SUITE_ROOT/%s" %s"$@" ;;`, row.name, row.script, extra))
 		names = append(names, row.name)
 	}
-	names = append(names, "sdlc")
-	usage := strings.Join(names, "|")
+	// names/usage are no longer emitted: the binary owns its own help text,
+	// so the wrapper does not carry a second copy that can drift from it.
+	_ = names
 
 	body := []string{
 		"#!/bin/sh",
@@ -1483,36 +1473,8 @@ func (g *pluginGenerator) generateBinWrapper(pluginRoot string) (string, error) 
 		`  printf 'cadre %s\n' "$plugin_version"`,
 		`  exit 0`,
 		`fi`,
-		"detect_agent_python() {",
-		"  AGENT_PYTHON=",
-		"  for candidate in python3 python; do",
-		`    command -v "$candidate" >/dev/null 2>&1 || continue`,
-		"    if \"$candidate\" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then AGENT_PYTHON=\"$candidate\"; break; fi",
-		"  done",
-		"}",
-		`if [ "$command_name" = "sdlc" ]; then`,
-		// AGENTIC_SDLC_BIN is settings.py's *highest*-precedence source for this
-		// field, so honoring it directly here needs no Python and cannot get the
-		// precedence order wrong. Everything below that MUST go through
-		// settings.py's resolve_optional() so the config file is actually
-		// consulted and wins over a same-named binary that merely happens to be
-		// on PATH.
-		`  sdlc_bin="${AGENTIC_SDLC_BIN:-}"`,
-		`  if [ -z "$sdlc_bin" ]; then`,
-		"    detect_agent_python",
-		`    if [ -n "$AGENT_PYTHON" ]; then`,
-		`      sdlc_bin=$("$AGENT_PYTHON" "$SUITE_ROOT/roster/shared/src/settings.py" resolve agentic_sdlc.bin_path) || exit 1`,
-		"    else",
-		`      echo "cadre: no Python 3.10+ found; falling back to PATH for agentic-sdlc without reading any cadre config file (a configured agentic_sdlc.bin_path, if set, is being ignored)" >&2`,
-		`      sdlc_bin=$(command -v agentic-sdlc || true)`,
-		"    fi",
-		"  fi",
-		fmt.Sprintf(`  [ -n "$sdlc_bin" ] || { echo "cadre: install Agentic SDLC %s from https://github.com/deagy/cadre" >&2; exit 1; }`,
-			g.kernelRequirementText()),
-		`  exec "$sdlc_bin" --provider "$PLUGIN_ROOT/provider.json" "$@"`,
-		"fi",
 		"",
-		"# Try to use the compiled Go binary if available; fall back to Python.",
+		"# Resolve the compiled binary. Every dispatch path below needs it.",
 	}
 	// Append binary shim functions as individual lines.
 	body = append(body, strings.Split(binaryShimFunctions, "\n")...)
@@ -1524,21 +1486,52 @@ func (g *pluginGenerator) generateBinWrapper(pluginRoot string) (string, error) 
 		`# Regenerating plugin (via 'cadre generate-plugin') updates this to match the repository's CLI version.`,
 		fmt.Sprintf(`CADRE_CLI_VERSION="%s"`, cliVersion),
 		"",
-		"# Resolve the binary (locate in cache or download it). Make this a condition",
-		"# so that failure does not terminate under set -eu, allowing fallback to Python.",
-		`if [ -n "$CADRE_CLI_VERSION" ] && try_resolve_binary; then`,
-		`  CADRE_REPO_ROOT="$SUITE_ROOT" exec "$BINARY_CACHE" "$@"`,
+		"# An explicit binary wins over cache lookup and download. This is the",
+		"# supported answer for an air-gapped install, an unsupported platform,",
+		"# or a site that mirrors its own builds -- the cases that used to fall",
+		"# back to a bundled Python implementation.",
+		`if [ -n "${CADRE_BINARY:-}" ]; then`,
+		`  [ -x "$CADRE_BINARY" ] || { echo "cadre: CADRE_BINARY is set but not executable: $CADRE_BINARY" >&2; exit 1; }`,
+		`  BINARY_CACHE="$CADRE_BINARY"`,
+		"else",
+		"  # Resolve the binary (locate in cache or download it). A condition, so a",
+		"  # failure does not terminate under set -eu before the diagnostic below.",
+		`  if [ -z "$CADRE_CLI_VERSION" ] || ! try_resolve_binary; then`,
+		`    echo "cadre: could not obtain the cadre binary for this platform." >&2`,
+		`    echo "" >&2`,
+		`    echo "  platform:  $(uname -s)/$(uname -m)" >&2`,
+		`    echo "  version:   ${CADRE_CLI_VERSION:-unset}" >&2`,
+		// ${...:-} because set -u is on and try_resolve_binary leaves this
+		// unset when it fails before assigning -- the diagnostic must not
+		// itself die on the failure path it exists to explain.
+		`    echo "  cache:     ${BINARY_CACHE:-<not resolved>}" >&2`,
+		`    echo "" >&2`,
+		`    echo "The plugin used to fall back to a bundled Python implementation here." >&2`,
+		`    echo "It no longer ships one: two implementations of a byte-exact dispatch" >&2`,
+		`    echo "contract is the divergence this migration exists to remove." >&2`,
+		`    echo "" >&2`,
+		`    echo "Fix one of:" >&2`,
+		`    echo "  * set CADRE_BINARY to a cadre binary you already have" >&2`,
+		`    echo "  * network access to github.com/deagy/cadre releases on first run" >&2`,
+		`    echo "  * an unsupported platform -- released binaries cover linux/amd64," >&2`,
+		`    echo "    linux/arm64, darwin/amd64, darwin/arm64 and windows/amd64" >&2`,
+		`    echo "  * a prepopulated cache: place the binary at the path above" >&2`,
+		`    exit 1`,
+		"  fi",
 		"fi",
 		"",
-		"detect_agent_python",
-		`[ -n "$AGENT_PYTHON" ] || { echo "cadre: Python 3.10+ is required" >&2; exit 1; }`,
-		`case "$command_name" in`,
 	)
-	body = append(body, caseLines...)
+	body = append(body, g.sdlcShellDispatch()...)
 	body = append(body,
-		fmt.Sprintf(`  help|-h|--help) echo "Usage: cadre [--interactive] {%s} [args...]" ;;`, usage),
-		`  *) echo "cadre: unknown subcommand $command_name" >&2; exit 1 ;;`,
-		"esac",
+		"",
+		"# Everything else is the binary's own dispatch, including its help and",
+		"# unknown-subcommand handling -- one implementation, not two.",
+		"#",
+		"# $command_name is passed back explicitly: it was shifted off above so",
+		"# the sdlc branch could test it, and $@ holds only the arguments after",
+		"# it. Exec'ing just $@ silently drops the subcommand, turning",
+		"# `cadre select --task x` into `cadre --task x`.",
+		`CADRE_REPO_ROOT="$SUITE_ROOT" exec "$BINARY_CACHE" "$command_name" "$@"`,
 		"",
 	)
 
@@ -1616,16 +1609,21 @@ func (g *pluginGenerator) generateSuiteCopy(pluginRoot string, writeReadme bool)
 	}
 	tracked := map[string]bool{}
 	for _, relative := range trackedList {
+		// The packaged suite carries no Python. The wrapper used to exec
+		// roster/**/*.py whenever it could not resolve the Go binary, and
+		// that fallback is what made these ~24,500 lines part of the
+		// distribution. It is gone -- the wrapper now fails with a
+		// diagnostic instead -- so the scripts it pointed at are dead weight
+		// a consumer would still have to trust and audit.
+		//
+		// Data is unaffected: role definitions, catalog.yaml, routing.json
+		// and the context packs are what the binary actually reads.
+		if strings.HasSuffix(relative, ".py") {
+			continue
+		}
 		tracked[relative] = true
 	}
-	// select_agents.py (already packaged) imports these directly, and
-	// selection_telemetry.py is also its own packaged subcommand -- they must
-	// ship even on a worktree where they are still untracked.
-	for _, helper := range []string{
-		"roster/orchestration/src/agentic_sdlc_contracts.py",
-		"roster/orchestration/src/sync_codex_agents.py",
-		"roster/orchestration/src/selection_telemetry.py",
-	} {
+	for _, helper := range []string{} {
 		if info, err := os.Stat(filepath.Join(g.repoRoot, filepath.FromSlash(helper))); err == nil && !info.IsDir() {
 			tracked[helper] = true
 		}
@@ -1651,29 +1649,14 @@ func (g *pluginGenerator) generateSuiteCopy(pluginRoot string, writeReadme bool)
 			strings.Join(untrackedRolePaths, ", "))
 	}
 
-	// Same failure class, for bin/subcommands.tsv instead of catalog.yaml: an
-	// untracked new subcommand script would otherwise get a working
-	// case-statement entry in the wrapper while the script itself silently
-	// never gets copied into suite/.
-	var untrackedSubcommandScripts []string
-	if _, err := os.Stat(filepath.Join(g.repoRoot, "bin", "subcommands.tsv")); err == nil {
-		rows, err := packagedSubcommands(g.repoRoot)
-		if err != nil {
-			return nil, err
-		}
-		for _, row := range rows {
-			if strings.HasPrefix(row.script, "roster/") && !tracked[row.script] {
-				untrackedSubcommandScripts = append(untrackedSubcommandScripts, row.script)
-			}
-		}
-	}
-	if len(untrackedSubcommandScripts) > 0 {
-		sort.Strings(untrackedSubcommandScripts)
-		return nil, fmt.Errorf(
-			"bin/subcommands.tsv references script(s) not tracked in git; "+
-				"commit them (git add) before regenerating the plugin: %s",
-			strings.Join(untrackedSubcommandScripts, ", "))
-	}
+	// The guard that used to sit here required every script named in
+	// bin/subcommands.tsv to be tracked and copied into suite/, because the
+	// wrapper emitted a case arm exec'ing each one -- an untracked script
+	// produced a wrapper pointing at a file the package did not contain.
+	//
+	// Both halves of that are gone: the table has no script column, and the
+	// wrapper execs the Go binary rather than per-subcommand scripts. There
+	// is nothing left for it to check.
 
 	rolePaths := map[string]bool{}
 	for _, agentID := range g.catalogIDs {
@@ -2268,4 +2251,29 @@ func gitTrackedFiles(repoRoot, pathspec string) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// sdlcShellDispatch is the packaged wrapper's `sdlc` branch.
+//
+// It stays a special case because `cadre sdlc` shells out to a *separately
+// installed* kernel binary and must pass the plugin's own provider.json --
+// a path only the wrapper knows, since the binary is resolved from a cache
+// directory elsewhere.
+//
+// AGENTIC_SDLC_BIN is the settings resolver's highest-precedence source, so
+// honoring it directly here cannot get the precedence order wrong. Anything
+// below it goes through `cadre config resolve`, which is the same chain
+// settings.py implemented -- the wrapper no longer needs Python for this.
+func (g *pluginGenerator) sdlcShellDispatch() []string {
+	return []string{
+		`if [ "$command_name" = "sdlc" ]; then`,
+		`  sdlc_bin="${AGENTIC_SDLC_BIN:-}"`,
+		`  if [ -z "$sdlc_bin" ]; then`,
+		`    sdlc_bin=$(CADRE_REPO_ROOT="$SUITE_ROOT" "$BINARY_CACHE" config resolve agentic_sdlc.bin_path) || exit 1`,
+		"  fi",
+		fmt.Sprintf(`  [ -n "$sdlc_bin" ] || { echo "cadre: install Agentic SDLC %s from https://github.com/deagy/cadre" >&2; exit 1; }`,
+			g.kernelRequirementText()),
+		`  exec "$sdlc_bin" --provider "$PLUGIN_ROOT/provider.json" "$@"`,
+		"fi",
+	}
 }

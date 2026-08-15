@@ -5,6 +5,7 @@ from __future__ import annotations
 import atexit
 import contextlib
 import fnmatch
+import functools
 import json
 import os
 import re
@@ -78,6 +79,48 @@ def _secure_cloud_role_count() -> int:
         (PROVIDER_ROOT / "profiles" / "secure-cloud" / "profile.json").read_text(encoding="utf-8")
     )
     return len(profile["agents"])
+
+
+def setUpModule() -> None:
+    """Give every packaged-wrapper invocation in this module a binary.
+
+    The wrapper resolves a binary or fails -- it no longer falls back to the
+    bundled Python implementation, and the suite no longer ships one. Most
+    invocations here inherit the ambient environment rather than building
+    one, so setting this once is both less invasive than threading it through
+    ~20 call sites and a more honest statement: this module needs a binary,
+    not one particular test.
+
+    Tests that construct an explicit `env=` dict still pass it themselves;
+    those are deliberately hermetic and must not inherit anything.
+    """
+    os.environ["CADRE_BINARY"] = wrapper_binary()
+
+
+@functools.lru_cache(maxsize=1)
+def wrapper_binary() -> str:
+    """A freshly built cadre binary for the packaged wrapper to exec.
+
+    The wrapper resolves a binary or fails: it no longer falls back to the
+    bundled Python implementation, and the suite no longer ships one. These
+    tests must therefore supply a binary, and CADRE_BINARY is the supported
+    way to do it -- the same escape an air-gapped or unsupported-platform
+    install uses.
+
+    Always rebuilt, never reused from disk. A stale binary here does not fail
+    cleanly: it fails with whatever the *old* code did, which cost real time
+    once already when a leftover build reported
+    "subcommands.tsv: malformed row (want 3 tab-separated fields, got 2)"
+    against a table this branch had just changed to two columns. Go's build
+    cache makes the rebuild cheap, and lru_cache keeps it to one per process.
+    """
+    target = REPOSITORY_ROOT / "dist-staging" / "cadre-test"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["go", "build", "-o", str(target), "./cmd/cadre"],
+        cwd=REPOSITORY_ROOT, check=True, capture_output=True,
+    )
+    return str(target)
 
 
 def generated_package() -> Path:
@@ -1788,6 +1831,10 @@ class RepositoryHealthTests(unittest.TestCase):
             env = os.environ.copy()
             env.pop("AGENTIC_SDLC_BIN", None)
             env["XDG_CONFIG_HOME"] = xdg_home
+            # The wrapper resolves a binary or fails; there is no Python
+            # fallback to carry it. This is also what does the resolving now:
+            # `cadre config resolve`, not settings.py.
+            env["CADRE_BINARY"] = wrapper_binary()
             with tempfile.TemporaryDirectory() as cwd:
                 result = subprocess.run(
                     [str(wrapper), "sdlc", "--version"],
@@ -1810,9 +1857,12 @@ class RepositoryHealthTests(unittest.TestCase):
             capture_output=True,
             text=True,
             encoding="utf-8",
-            env=os.environ.copy(),
+            env={**os.environ, "CADRE_BINARY": wrapper_binary()},
         )
-        self.assertIn("Usage: cadre [--interactive]", result.stdout)
+        # The wrapper no longer prints its own usage: it consumes the leading
+        # --interactive and hands everything to the binary, whose help this
+        # is. One implementation of the subcommand list, not two.
+        self.assertIn("Usage: cadre <subcommand>", result.stdout)
 
     @unittest.skipUnless(sys.platform != "win32", "bin/cadre is a POSIX sh script")
     def test_packaged_bin_wrapper_sdlc_needs_no_python_when_the_binary_is_already_locatable(self) -> None:
@@ -1856,7 +1906,7 @@ class RepositoryHealthTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
-                env={"PATH": bare_path, "AGENTIC_SDLC_BIN": str(other), "HOME": fake_bin},
+                env={"PATH": bare_path, "AGENTIC_SDLC_BIN": str(other), "HOME": fake_bin, "CADRE_BINARY": wrapper_binary()},
             )
             self.assertEqual(0, via_env.returncode, via_env.stderr)
             self.assertIn("STUB-SDLC", via_env.stdout)
@@ -1868,7 +1918,7 @@ class RepositoryHealthTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
-                env={"PATH": bare_path, "HOME": fake_bin},
+                env={"PATH": bare_path, "HOME": fake_bin, "CADRE_BINARY": wrapper_binary()},
             )
             self.assertEqual(0, via_path.returncode, via_path.stderr)
             self.assertIn("STUB-SDLC", via_path.stdout)
@@ -1883,7 +1933,7 @@ class RepositoryHealthTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
-                env={"PATH": bare_path, "HOME": fake_bin},
+                env={"PATH": bare_path, "HOME": fake_bin, "CADRE_BINARY": wrapper_binary()},
             )
             self.assertNotEqual(0, unresolvable.returncode)
             self.assertIn("install Agentic SDLC", unresolvable.stderr)
@@ -1929,6 +1979,11 @@ class RepositoryHealthTests(unittest.TestCase):
                         "PATH": "/usr/bin:/bin",
                         "HOME": fake_home,
                         "XDG_CONFIG_HOME": str(Path(fake_home) / ".config"),
+                        # The wrapper resolves a binary or fails; it no
+                        # longer falls back to Python, and this env is
+                        # hermetic so it inherits nothing.
+                        "CADRE_BINARY": wrapper_binary(),
+                        "CADRE_INTERACTIVE": "1",
                     }
                     os.execve(str(wrapper), [str(wrapper), "--interactive", "sdlc", "--version"], env)
                 except BaseException:  # noqa: BLE001 - child must never raise into the harness
@@ -2011,6 +2066,10 @@ class RepositoryHealthTests(unittest.TestCase):
                     "PATH": f"{fake_bin}:/usr/bin:/bin",
                     "HOME": fake_bin,
                     "XDG_CONFIG_HOME": str(Path(fake_bin) / ".config"),
+                    # The wrapper resolves a binary or fails; it no longer
+                    # falls back to Python. CADRE_BINARY is the supported way
+                    # to supply one, and is what an air-gapped install uses.
+                    "CADRE_BINARY": wrapper_binary(),
                 },
             )
         self.assertNotEqual(0, result.returncode)
@@ -2019,33 +2078,69 @@ class RepositoryHealthTests(unittest.TestCase):
         self.assertIn("project-local", result.stderr)
 
     @unittest.skipUnless(sys.platform != "win32", "bin/cadre is a POSIX sh script")
-    def test_packaged_bin_wrapper_generic_subcommand_still_requires_python(self) -> None:
-        """`detect_agent_python()` was extracted into a shell function with
-        two call sites; the sdlc branch is covered above, this pins the
-        other one (every non-sdlc subcommand), which no other test reaches.
+    def test_packaged_bin_wrapper_needs_no_python_at_all(self) -> None:
+        """The inverse of the test this replaces.
+
+        `test_packaged_bin_wrapper_generic_subcommand_still_requires_python`
+        pinned `detect_agent_python()`'s non-sdlc call site: with no Python on
+        PATH, every subcommand failed with "Python 3.10+ is required".
+
+        That was the fallback the packaged plugin shipped ~24,500 lines of
+        vendored Python to serve. It is gone, so the property worth pinning is
+        the opposite one: given a binary, the wrapper runs a subcommand end to
+        end on a host with no Python at all.
         """
         wrapper = generated_package() / "bin" / "cadre"
-        with tempfile.TemporaryDirectory() as empty_bin:
+        with tempfile.TemporaryDirectory() as fake_bin:
+            # A PATH with no python3/python, but enough for the wrapper's own
+            # external calls. Deliberately not /bin: it symlinks to /usr/bin
+            # on most distributions, which puts python3 back and makes this
+            # vacuous.
+            for tool in ("dirname", "uname", "sed"):
+                located = shutil.which(tool)
+                self.assertIsNotNone(located, f"{tool} not found; cannot build the test PATH")
+                os.symlink(located, Path(fake_bin) / tool)
+            self.assertIsNone(
+                shutil.which("python3", path=fake_bin),
+                "test PATH must not contain python3, or this test proves nothing",
+            )
+
             result = subprocess.run(
-                [str(wrapper), "select", "--help"],
+                # `help`, not `--version`: the version short-circuit reads
+                # .claude-plugin/plugin.json, a hand-authored file a freshly
+                # generated package does not carry, so it would fail here for
+                # a reason unrelated to Python.
+                [str(wrapper), "help"],
                 cwd=REPOSITORY_ROOT,
                 check=False,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
-                env={"PATH": empty_bin, "HOME": empty_bin},
+                env={
+                    "PATH": fake_bin,
+                    "HOME": fake_bin,
+                    "CADRE_BINARY": wrapper_binary(),
+                },
             )
-        self.assertNotEqual(0, result.returncode)
-        self.assertIn("Python 3.10+ is required", result.stderr)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotIn("Python", result.stderr)
+        self.assertIn("Usage: cadre <subcommand>", result.stdout)
 
     def test_bin_agents_subcommand_table_is_the_single_source_of_truth(self) -> None:
         table = REPOSITORY_ROOT / "bin" / "subcommands.tsv"
         self.assertTrue(table.is_file(), str(table))
         rows = [line.split("\t") for line in table.read_text(encoding="utf-8").splitlines() if line]
         self.assertTrue(rows)
-        for name, script, description in rows:
+        # Two columns: name and description. The script column named the
+        # Python implementation the packaged wrapper exec'd when it could not
+        # resolve the Go binary; that fallback is gone, the suite ships no
+        # Python, and a column naming files the distribution does not contain
+        # would be stale by construction.
+        for row in rows:
+            self.assertEqual(2, len(row), f"expected name\tdescription, got {row!r}")
+        for name, description in rows:
             with self.subTest(subcommand=name):
-                self.assertTrue((REPOSITORY_ROOT / script).is_file(), script)
+                self.assertTrue(name)
                 self.assertTrue(description)
 
         # One dispatcher owns table parsing, sdlc delegation, usage text, and
@@ -2064,13 +2159,19 @@ class RepositoryHealthTests(unittest.TestCase):
         for source in (sh_source, ps1_source):
             self.assertNotIn("subcommands.tsv", source, "shims must not also parse the subcommand table")
             self.assertIn("cmd/cadre", source, "shims must hand off to the shared dispatcher")
-            for _name, script, _description in rows:
-                self.assertNotIn(script, source, "subcommand table must not also be hardcoded in the shim")
+            for name, _description in rows:
+                self.assertNotIn(
+                    f"{name})", source,
+                    "subcommand table must not also be hardcoded in the shim")
 
-    def test_packaged_wrapper_covers_every_non_excluded_subcommand_table_entry(self) -> None:
-        """Extends the `select`-only parity check above to every packaged
-        subcommand: a bin/subcommands.tsv script-path change must show up in
-        the packaged bin/cadre wrapper, not just for `select`.
+    def test_packaged_wrapper_dispatches_nothing_itself(self) -> None:
+        """The wrapper used to carry a case arm per subcommand, each exec'ing
+        a Python script, and this test checked every row appeared there.
+
+        It no longer dispatches at all -- it resolves the binary and execs it
+        -- so the property worth pinning is the absence of that case block,
+        which is what makes the wrapper unable to drift from the binary's own
+        subcommand set.
         """
         sys.path.insert(0, str(ROOT / "orchestration" / "src"))
         try:
@@ -2078,16 +2179,25 @@ class RepositoryHealthTests(unittest.TestCase):
         finally:
             sys.path.pop(0)
 
-        rows = generate_global_plugin.packaged_subcommands(REPOSITORY_ROOT)
-        self.assertTrue(rows)
+        names = generate_global_plugin.packaged_subcommands(REPOSITORY_ROOT)
+        self.assertTrue(names)
         wrapper_source = (generated_package() / "bin" / "cadre").read_text(encoding="utf-8")
-        for name, script in rows:
+
+        # The wrapper no longer carries a case arm per subcommand: it execs
+        # the binary and lets it dispatch. What must hold is the stronger
+        # property that replaced that -- it dispatches nothing itself, so it
+        # cannot drift from the binary's own subcommand set.
+        for name in names:
             with self.subTest(subcommand=name):
-                self.assertIn(name, wrapper_source)
-                self.assertIn(script, wrapper_source)
-        for excluded in generate_global_plugin.PACKAGED_SUBCOMMAND_EXCLUSIONS:
-            with self.subTest(excluded=excluded):
-                self.assertNotIn(f"{excluded})", wrapper_source)
+                self.assertNotIn(
+                    f"  {name})", wrapper_source,
+                    "the wrapper must not dispatch subcommands itself; the binary does")
+        self.assertNotIn(
+            "AGENT_PYTHON", wrapper_source,
+            "the packaged wrapper must never exec Python")
+        self.assertIn(
+            'exec "$BINARY_CACHE"', wrapper_source,
+            "the wrapper must hand every subcommand to the binary")
 
     def _powershell_interpreter(self) -> str | None:
         return shutil.which("pwsh") or shutil.which("powershell")
