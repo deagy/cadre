@@ -3,6 +3,7 @@ package kernel
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -148,5 +149,27 @@ func TestTheOutputEndsWithExactlyOneNewline(t *testing.T) {
 		if contract[len(contract)-2] == '\n' {
 			t.Errorf("%s ends with more than one newline", name)
 		}
+	}
+}
+
+func TestTheGoKernelVersionMatchesThePythonOne(t *testing.T) {
+	// Version is a literal here and a literal in agentic_sdlc/__init__.py,
+	// because a binary cannot read the Python source and reading it at
+	// runtime would make the version depend on a checkout being present.
+	//
+	// It is not decoration: providers declare a kernel_compatibility range
+	// and are refused outside it, so a wrong version here either rejects a
+	// provider that should load or accepts one written against different gate
+	// semantics.
+	source, err := os.ReadFile(filepath.Join("..", "..", "kernel", "agentic_sdlc", "__init__.py"))
+	if err != nil {
+		t.Skipf("not running inside a source checkout: %v", err)
+	}
+	match := regexp.MustCompile(`(?m)^VERSION = "([^"]+)"`).FindSubmatch(source)
+	if match == nil {
+		t.Fatal("could not find VERSION in the Python kernel; this guard is not checking anything")
+	}
+	if got := string(match[1]); got != Version {
+		t.Errorf("kernel version disagrees: Go has %q, Python has %q", Version, got)
 	}
 }

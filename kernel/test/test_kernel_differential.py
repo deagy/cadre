@@ -305,3 +305,162 @@ class DetectDifferentialTests(unittest.TestCase):
                     f"{label} kernel named a non-absolute interpreter: {command[0]!r}",
                 )
                 self.assertEqual(command[1:], ["-m", "unittest", "discover"])
+
+
+class ProviderIntrospectionDifferentialTests(unittest.TestCase):
+    """`provider`, `profile` and `extension`: what a kernel invocation was
+    told about, and nothing more.
+
+    The interesting output is `provider inspect`, which prints what the kernel
+    *recorded* about a provider rather than the manifest it read -- an id, a
+    normalised version, a digest of the manifest bytes, a canonical digest of
+    the agent catalog, and the declared dependencies. Those digests are
+    integrity evidence a run record cites, so reprinting the manifest instead
+    would replace evidence with a copy of the input.
+
+    Written the wrong way twice before this comparison was run: first
+    reprinting the manifest, then reprinting it with the wrong CLI shape. Both
+    were caught here rather than by reading the Python.
+    """
+
+    MANIFEST = str(REPO_ROOT / "provider" / "provider.json")
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.binary = _go_binary()
+        if cls.binary is None:
+            raise unittest.SkipTest("no Go toolchain available to build the Go kernel")
+        if not Path(cls.MANIFEST).is_file():
+            raise unittest.SkipTest("no provider manifest in this checkout")
+
+    def _both(self, args: list[str]) -> tuple[tuple[int, str], tuple[int, str]]:
+        full = ["--provider", self.MANIFEST, *args]
+        py_code, py_out, _ = _run_python(full)
+        go_code, go_out, _ = _run_go(self.binary, full)
+        return (py_code, py_out), (go_code, go_out)
+
+    def test_listing_loaded_resources_is_byte_identical(self) -> None:
+        for args in (["provider", "list"], ["profile", "list"], ["extension", "list"]):
+            with self.subTest(args=args):
+                (py_code, py_out), (go_code, go_out) = self._both(args)
+                self.assertEqual(py_code, 0)
+                self.assertEqual(go_code, 0)
+                self.assertEqual(py_out, go_out)
+
+    def test_inspecting_a_provider_reports_the_same_record_and_digests(self) -> None:
+        (py_code, py_out), (go_code, go_out) = self._both(["provider", "inspect", "cadre"])
+        self.assertEqual(py_code, 0)
+        self.assertEqual(go_code, 0)
+        self.assertEqual(py_out, go_out)
+
+        record = json.loads(go_out)
+        # Self-vacuity: two implementations both printing {} would agree.
+        self.assertEqual(
+            sorted(record),
+            ["catalog_sha256", "dependencies", "id", "manifest_sha256", "version"],
+        )
+        for field in ("manifest_sha256", "catalog_sha256"):
+            self.assertTrue(
+                record[field].startswith("sha256:") and len(record[field]) == len("sha256:") + 64,
+                f"{field} is not a sha256 digest: {record[field]!r}",
+            )
+
+    def test_the_manifest_digest_is_of_the_manifest_bytes(self) -> None:
+        # Anchored outside both implementations: if each hashed the same wrong
+        # thing, the comparison above would still agree.
+        import hashlib
+
+        expected = "sha256:" + hashlib.sha256(Path(self.MANIFEST).read_bytes()).hexdigest()
+        (_, _), (_, go_out) = self._both(["provider", "inspect", "cadre"])
+        self.assertEqual(json.loads(go_out)["manifest_sha256"], expected)
+
+    def test_an_unknown_provider_and_a_bad_action_fail_the_same_way(self) -> None:
+        # Exit codes only. Wording differs between argparse and a hand-written
+        # Go parser, and pinning prose across two languages breaks on
+        # rewording while buying nothing.
+        for args in (
+            ["provider", "inspect", "no-such-provider"],
+            ["provider", "inspect"],
+            ["provider", "cadre"],
+            ["profile", "inspect"],
+            ["extension", "nonsense"],
+        ):
+            with self.subTest(args=args):
+                (py_code, py_out), (go_code, go_out) = self._both(args)
+                self.assertNotEqual(py_code, 0, f"{args} was accepted by the Python kernel")
+                self.assertEqual(py_code, go_code, f"{args}: exit codes differ")
+                self.assertEqual(py_out, "", "a refused request printed to stdout")
+                self.assertEqual(go_out, "", "a refused request printed to stdout")
+
+    def test_a_provider_the_kernel_refuses_is_refused_by_both(self) -> None:
+        import tempfile
+
+        base = json.loads(Path(self.MANIFEST).read_text(encoding="utf-8"))
+        broken = {
+            "unknown-field": {**base, "surprise": True},
+            "bad-id": {**base, "id": "Not A Valid Id"},
+            "wrong-schema": {**base, "schema_version": 2},
+            "incompatible-kernel": {
+                **base, "kernel_compatibility": {"minimum": "99.0.0", "maximum_exclusive": "100.0.0"},
+            },
+            "missing-dependency": {**base, "dependencies": [{"id": "not-loaded"}]},
+            # Escapes to a file that is *valid*, which is what makes this
+            # case distinguish containment from parsing. Pointed at
+            # /etc/passwd instead, the provider is refused either way --
+            # because the file is not JSON, not because it was out of bounds.
+            "escaping-catalog": {**base, "agent_catalog": "../.differential-outside-catalog.json"},
+        }
+        for name, manifest in broken.items():
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
+                # Written beside the real provider's resources so only the
+                # field under test is wrong.
+                path = Path(REPO_ROOT / "provider" / f".differential-{name}.json")
+                outside = REPO_ROOT / ".differential-outside-catalog.json"
+                try:
+                    path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+                    if name == "escaping-catalog":
+                        # A perfectly good catalog, in the wrong place.
+                        outside.write_text(json.dumps({
+                            "schema_version": 1,
+                            "agents": {"planted-agent": {"kind": "author", "capabilities": ["author"]}},
+                        }, indent=2), encoding="utf-8")
+                    py_code, _, _ = _run_python(["--provider", str(path), "provider", "list"])
+                    go_code, go_out, _ = _run_go(self.binary, ["--provider", str(path), "provider", "list"])
+                    self.assertNotEqual(py_code, 0, f"{name}: the Python kernel accepted it")
+                    self.assertEqual(py_code, go_code, f"{name}: exit codes differ")
+                    self.assertEqual(go_out, "", f"{name}: a refused provider printed a listing")
+                finally:
+                    path.unlink(missing_ok=True)
+                    outside.unlink(missing_ok=True)
+                _ = directory
+
+    def test_a_reviewer_that_can_author_is_refused_by_both(self) -> None:
+        # The authorship/approval invariant, in the one place the kernel can
+        # enforce it structurally: a catalog agent declared `reviewer` may hold
+        # no capability beyond reviewing. A reviewer that could author is an
+        # identity able to approve its own work.
+        import shutil
+        import tempfile
+
+        source = REPO_ROOT / "provider"
+        with tempfile.TemporaryDirectory() as directory:
+            copy = Path(directory) / "provider"
+            shutil.copytree(source, copy)
+            catalog_path = copy / "agent-catalog.json"
+            catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+            reviewer = next(
+                (agent_id for agent_id, agent in catalog["agents"].items()
+                 if agent.get("kind") == "reviewer"),
+                None,
+            )
+            if reviewer is None:
+                self.skipTest("no reviewer in the catalog to make write-capable")
+            catalog["agents"][reviewer]["capabilities"] = ["reviewer", "author"]
+            catalog_path.write_text(json.dumps(catalog, indent=2), encoding="utf-8")
+
+            manifest = str(copy / "provider.json")
+            py_code, _, _ = _run_python(["--provider", manifest, "provider", "list"])
+            go_code, go_out, _ = _run_go(self.binary, ["--provider", manifest, "provider", "list"])
+            self.assertNotEqual(py_code, 0, "the Python kernel accepted a write-capable reviewer")
+            self.assertEqual(py_code, go_code, "exit codes differ for a write-capable reviewer")
+            self.assertEqual(go_out, "", "a refused catalog still printed a listing")
