@@ -97,8 +97,17 @@ func (e DispatchUnavailable) Error() string {
 
 // ResolvedRole represents a role after file resolution and validation
 type ResolvedRole struct {
-	ID                  string
-	FilePath            string
+	ID       string
+	FilePath string
+	// Tier is which of project/global/plugin answered, recorded in the audit
+	// trail so a dispatch can be traced to the file that authorized it.
+	Tier string
+	// InstructionsSHA256 digests the developer_instructions actually used.
+	//
+	// It is the field that lets an auditor prove which role text ran: a path
+	// and a tier name say where the file was, not what it said, and a role
+	// file edited after the fact leaves no other trace.
+	InstructionsSHA256  string
 	DeveloperInstructs  string
 	Model               string
 	SandboxMode         string

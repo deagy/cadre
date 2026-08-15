@@ -1,14 +1,18 @@
 package orchestration
 
 import (
+	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // Phase 1: Role Resolution, Sandbox Management, Child Process Spawning
@@ -98,16 +102,20 @@ func ResolveRoleFileCodex(
 			return nil, &DispatchDenied{Reason: fmt.Sprintf("%s-tier role file is missing required model: %s", tier.name, candidate)}
 		}
 
-		// Create resolved role
-		_ = sha256.Sum256([]byte(developerInstructions)) // digest computed but not used in stub
-		role := &ResolvedRole{
-			ID:                 developerInstructions,
+		// The digest was computed and thrown away here, and ID was set to the
+		// instructions themselves -- so the audit record carried no way to
+		// tell which role text actually ran, and ID held a whole system
+		// prompt under a name that reads like an identifier.
+		digest := sha256.Sum256([]byte(developerInstructions))
+		return &ResolvedRole{
+			ID:                 roleID,
 			FilePath:           candidate,
+			Tier:               tier.name,
+			InstructionsSHA256: hex.EncodeToString(digest[:]),
 			DeveloperInstructs: developerInstructions,
 			Model:              model,
 			SandboxMode:        fields["sandbox_mode"],
-		}
-		return role, nil
+		}, nil
 	}
 
 	return nil, &DispatchUnavailable{Reason: fmt.Sprintf("no .toml file found for role_id %q at any resolution tier", roleID)}
@@ -189,14 +197,16 @@ func ResolveClaudeCodeRoleFile(
 	}
 
 	// Claude Code wrappers never declare sandbox_mode - always read-only
-	role := &ResolvedRole{
-		ID:                 developerInstructions,
+	digest := sha256.Sum256([]byte(developerInstructions))
+	return &ResolvedRole{
+		ID:                 roleID,
 		FilePath:           candidate,
+		Tier:               tier,
+		InstructionsSHA256: hex.EncodeToString(digest[:]),
 		DeveloperInstructs: developerInstructions,
 		Model:              model,
 		SandboxMode:        "", // Always read-only for Claude Code
-	}
-	return role, nil
+	}, nil
 }
 
 // Helper functions
@@ -211,48 +221,98 @@ func ensureContained(path, root string) error {
 		return fmt.Errorf("cannot resolve root %s: %w", root, err)
 	}
 
-	// Ensure path is under root
-	if !strings.HasPrefix(absPath, absRoot) {
+	// Compared as path components, not as a string prefix. "/srv/project"
+	// is a string prefix of "/srv/project-attacker", so the prefix form
+	// called a sibling directory contained.
+	relative, err := filepath.Rel(absRoot, absPath)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("path %s is not contained in %s", absPath, absRoot)
 	}
 	return nil
 }
 
+// gitCleanTimeout bounds each git call. Without one, a stalled git -- a
+// contended index.lock, a slow or unresponsive filesystem -- hangs the
+// dispatch forever rather than failing it. The Python original bounded this
+// at the same 10 seconds.
+const gitCleanTimeout = 10 * time.Second
+
+// isProjectTierGitClean reports whether a project-tier role file is tracked
+// and has no staged or unstaged modification.
+//
+// A project-tier role file is the one an attacker with repository write
+// access controls most directly, so in scoped-repository-edit mode it must
+// be in git history before its instructions are trusted. Every failure mode
+// -- untracked, modified, git missing, git erroring, git timing out --
+// answers "not clean". Failing open here would make the check absent exactly
+// when something is wrong with the repository.
 func isProjectTierGitClean(filePath, projectRoot string) (bool, error) {
-	// Check if file is tracked and clean in git
-	// Run: git -C <projectRoot> ls-files --error-unmatch <filePath>
-	cmd := exec.Command("git", "-C", projectRoot, "ls-files", "--error-unmatch", filePath)
-	if err := cmd.Run(); err != nil {
-		// File not tracked in git
-		return false, nil
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), gitCleanTimeout)
+	defer cancel()
 
-	// Check if file has modifications
-	cmd = exec.Command("git", "-C", projectRoot, "diff", "--quiet", filePath)
-	if err := cmd.Run(); err != nil {
-		// File has modifications
-		return false, nil
+	// Tracked at all, then unmodified in the worktree, then unmodified in
+	// the index. A file failing any one of the three is not clean.
+	for _, args := range [][]string{
+		{"ls-files", "--error-unmatch", filePath},
+		{"diff", "--quiet", filePath},
+		{"diff", "--quiet", "--cached", filePath},
+	} {
+		command := exec.CommandContext(ctx, "git", append([]string{"-C", projectRoot}, args...)...)
+		if err := command.Run(); err != nil {
+			return false, nil
+		}
 	}
-
-	// Check staged changes
-	cmd = exec.Command("git", "-C", projectRoot, "diff", "--quiet", "--cached", filePath)
-	if err := cmd.Run(); err != nil {
-		// File has staged changes
-		return false, nil
-	}
-
 	return true, nil
 }
 
+// readRoleFileCapped reads a role file, refusing anything that is not a
+// regular file the caller named directly.
+//
+// A role file is the dispatched agent's authority: its developer_instructions
+// become the child's system prompt, and its sandbox_mode helps decide what
+// the child may touch. Reading the wrong bytes here is not a file-handling
+// bug, it is a privilege decision made from an attacker's text.
+//
+// This was Lstat-for-size followed by os.ReadFile, which:
+//
+//   - followed a symlink, so a role file symlinked at any tier was read from
+//     wherever it pointed, inside the project or not;
+//   - took the size cap from the Lstat, which for a symlink is the length of
+//     the link target string -- a few dozen bytes -- so the cap did not
+//     apply to what was actually read;
+//   - left a window between the stat and the open, which matters because
+//     dispatch runs team members concurrently against one project root.
+//
+// The open now carries O_NOFOLLOW where the platform has it, the
+// regular-file check is made against the open descriptor rather than the
+// path, and the cap is enforced while reading. Exceeding it is a refusal,
+// never a truncation: a role whose instructions were silently cut in half
+// still dispatches, with authority nobody wrote.
 func readRoleFileCapped(path string, maxBytes int) ([]byte, error) {
-	fi, err := os.Lstat(path)
+	file, err := os.OpenFile(path, os.O_RDONLY|noFollowFlag, 0)
 	if err != nil {
 		return nil, err
 	}
-	if fi.Size() > int64(maxBytes) {
-		return nil, fmt.Errorf("role file exceeds maximum size %d bytes: %s (%d bytes)", maxBytes, path, fi.Size())
+	defer func() { _ = file.Close() }()
+
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
 	}
-	return os.ReadFile(path)
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("refusing non-regular role file: %s", path)
+	}
+
+	// One byte past the cap, so a file exactly at the limit is accepted and
+	// anything larger is detected without reading all of it.
+	content, err := io.ReadAll(io.LimitReader(file, int64(maxBytes)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(content) > maxBytes {
+		return nil, fmt.Errorf("role file exceeds maximum size %d bytes: %s", maxBytes, path)
+	}
+	return content, nil
 }
 
 func extractTOMLFields(content, source string) (map[string]string, error) {
