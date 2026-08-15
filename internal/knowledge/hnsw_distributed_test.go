@@ -3,6 +3,7 @@ package knowledge
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestShardCompactorCreation(t *testing.T) {
@@ -173,9 +174,17 @@ func TestCompactShardsAsync(t *testing.T) {
 		t.Fatal("Expected job")
 	}
 
-	// Initial state should be pending or in_progress
-	if state := job.State(); state != "pending" && state != "in_progress" {
-		t.Errorf("Expected pending/in_progress state, got %s", state)
+	// The state must be one the job can legitimately be in -- including
+	// "complete".
+	//
+	// This asserted pending-or-in_progress, which is a race: the compaction
+	// runs in the background and can finish before the next line executes.
+	// Five small shards on a fast runner is exactly when it does, and the test
+	// failed in CI while passing locally six times out of six. Asserting a job
+	// has *not finished yet* is asserting the implementation is slow, which is
+	// not a property worth having.
+	if state := job.State(); state != "pending" && state != "in_progress" && state != "complete" {
+		t.Errorf("Expected pending/in_progress/complete state, got %s", state)
 	}
 
 	// Job ID should be set
@@ -183,8 +192,16 @@ func TestCompactShardsAsync(t *testing.T) {
 		t.Error("Job should have ID")
 	}
 
-	// After completion, should have results
-	if results := job.Results(); job.State() == "complete" && len(results) != len(shardIDs) {
+	// What is actually worth asserting: the job reaches completion, and
+	// reports one result per shard when it does.
+	deadline := time.Now().Add(10 * time.Second)
+	for job.State() != "complete" && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if state := job.State(); state != "complete" {
+		t.Fatalf("job did not complete within the deadline; state is %s", state)
+	}
+	if results := job.Results(); len(results) != len(shardIDs) {
 		t.Errorf("Expected %d results, got %d", len(shardIDs), len(results))
 	}
 }
