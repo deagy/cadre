@@ -61,6 +61,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return validateCmd(registry, args[1:], stdout, stderr)
 	case "plan":
 		return planCmd(registry, args[1:], stdout, stderr)
+	case "decide":
+		return decideCmd(registry, args[1:], stdout, stderr)
 	case "list-gate-issues":
 		return listLedgerCmd(args[0], args[1:], stdout, stderr, ReadGateIssuesLedger)
 	case "list-github-gate-issues":
@@ -76,6 +78,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stdout, "  detect [--root ROOT]   Report what a repository looks like, changing nothing")
 		_, _ = fmt.Fprintln(stdout, "  validate [--root ROOT] Check a project's configuration and run records")
 		_, _ = fmt.Fprintln(stdout, "  plan --task-id ID --task TEXT         Create a dispatch plan and pending run record")
+		_, _ = fmt.Fprintln(stdout, "  decide --task-id ID --gate G --role R --decision D --actor-id A --evidence-uri U")
 		_, _ = fmt.Fprintln(stdout, "  list-gate-issues --task-id ID         Print the GitLab gate-issues ledger")
 		_, _ = fmt.Fprintln(stdout, "  list-github-gate-issues --task-id ID  Print the GitHub gate-issues ledger")
 		_, _ = fmt.Fprintln(stdout, "  list-gate-status --task-id ID         Print both forges' gate-status ledgers")
@@ -348,4 +351,99 @@ func planCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
 	}
 	_, _ = fmt.Fprint(stdout, RenderIndented(result.Dispatch))
 	return 0
+}
+
+// decideCmd answers `decide`: record one human decision on one gate.
+//
+// The flag names and the choice sets mirror the Python parser's, including
+// which values --gate and --role accept: an invalid choice is a usage error
+// (exit 2), not a decision the kernel tries and then refuses.
+func decideCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
+	request := DecideRequest{Root: "."}
+	fields := map[string]*string{
+		"--root": &request.Root, "--task-id": &request.TaskID, "--gate": &request.GateID,
+		"--role": &request.AuthorityRole, "--decision": &request.Decision,
+		"--actor-id": &request.ActorID, "--evidence-uri": &request.EvidenceURI,
+		"--note": &request.Note, "--decided-at": &request.DecidedAt,
+	}
+	for index := 0; index < len(args); index++ {
+		name, value, inline := strings.Cut(args[index], "=")
+		target, known := fields[name]
+		if !known {
+			_, _ = fmt.Fprintf(stderr, "agentic-sdlc decide: unknown argument %q\n", args[index])
+			return 2
+		}
+		if inline {
+			*target = value
+			continue
+		}
+		if index+1 >= len(args) {
+			_, _ = fmt.Fprintf(stderr, "agentic-sdlc decide: %s needs a value\n", name)
+			return 2
+		}
+		index++
+		*target = args[index]
+	}
+
+	var missing []string
+	for _, required := range []struct {
+		name  string
+		value string
+	}{
+		{"--task-id", request.TaskID}, {"--gate", request.GateID},
+		{"--role", request.AuthorityRole}, {"--decision", request.Decision},
+		{"--actor-id", request.ActorID}, {"--evidence-uri", request.EvidenceURI},
+	} {
+		if required.value == "" {
+			missing = append(missing, required.name)
+		}
+	}
+	if len(missing) > 0 {
+		_, _ = fmt.Fprintf(stderr,
+			"agentic-sdlc decide: error: the following arguments are required: %s\n",
+			strings.Join(missing, ", "))
+		return 2
+	}
+	if code := rejectInvalidChoice(stderr, "--gate", request.GateID, GateIDs); code != 0 {
+		return code
+	}
+	if code := rejectInvalidChoice(stderr, "--role", request.AuthorityRole,
+		sortedAuthorityRoles()); code != 0 {
+		return code
+	}
+	if code := rejectInvalidChoice(stderr, "--decision", request.Decision,
+		[]string{"approved", "rejected", "request-changes"}); code != 0 {
+		return code
+	}
+
+	result, err := registry.Decide(request)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(err))
+		return 1
+	}
+	_, _ = fmt.Fprint(stdout, RenderIndented(result))
+	return 0
+}
+
+func rejectInvalidChoice(stderr io.Writer, flag, value string, allowed []string) int {
+	for _, candidate := range allowed {
+		if candidate == value {
+			return 0
+		}
+	}
+	_, _ = fmt.Fprintf(stderr,
+		"agentic-sdlc decide: error: argument %s: invalid choice: %q (choose from %s)\n",
+		flag, value, strings.Join(allowed, ", "))
+	return 2
+}
+
+// sortedAuthorityRoles is the --role choice set, in the order argparse prints
+// it: the Python parser builds it from sorted(AUTHORITY_ROLES).
+func sortedAuthorityRoles() []string {
+	roles := make([]string, 0, len(AuthorityRoles))
+	for role := range AuthorityRoles {
+		roles = append(roles, role)
+	}
+	sort.Strings(roles)
+	return roles
 }
