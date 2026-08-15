@@ -1730,11 +1730,14 @@ func (g *pluginGenerator) generateSuiteCopy(pluginRoot string, writeReadme bool)
 			add(relative)
 		case strings.HasPrefix(relative, "roster/knowledge-store/src/") || knowledgeStoreExtras[relative]:
 			add(relative)
-		case strings.HasPrefix(relative, "roster/context-store/src/") || contextStoreExtras[relative]:
-			// The packaged bin/cadre exposes `context`, so the modules behind it
-			// have to travel with it -- shipping the subcommand without its
-			// package is the "plugin whose CLI cannot import its own code"
-			// failure the repository docs warn about.
+		case contextStoreExtras[relative]:
+			// The context store's documentation travels with the distribution;
+			// its implementation no longer does. roster/context-store/src/ was
+			// deleted once `cadre context` was served entirely by the Go
+			// binary -- and the packaged bin/cadre execs that binary for every
+			// subcommand, with no Python path at all, so the modules were
+			// dead weight rather than the "CLI cannot import its own code"
+			// hazard this branch was written to avoid.
 			add(relative)
 		}
 	}

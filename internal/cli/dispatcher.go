@@ -96,7 +96,7 @@ func Usage(subcommands []Subcommand) string {
 		{Name: "config", Description: "Show resolved operator settings, config file paths, or resolve one setting"},
 		{Name: "resolve-shared", Description: "Resolve effective shared config for the current project"},
 		{Name: "init", Description: "Guide a project through generating .agents/shared/ overlays (init_project.py)"},
-		{Name: "context", Description: "Local agent context store: put/get/list/search/export/promote/drop (context-store/src/cli.py)"},
+		{Name: "context", Description: "Local agent context store: put/get/list/search/export/promote/drop"},
 		{Name: "bootstrap-codex", Description: "Safely install namespaced Codex role wrappers (sync_codex_agents.py)"},
 		{Name: "profile", Description: "Read-only provider/profile drift report against a consuming project's copy (profile_diff.py)"},
 		{Name: "select", Description: "Deterministic agent/gate selection (select_agents.py)"},
