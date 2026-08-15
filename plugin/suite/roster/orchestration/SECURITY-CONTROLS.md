@@ -62,8 +62,8 @@ that reach per entry rather than leaving it to be inferred.
 
 | Dispatch path | What it is | Where the child's model comes from | Entries in this register that reach it |
 |---|---|---|---|
-| **MCP servers, CLI runners** (`roster/orchestration/mcp/`) | `dispatch_secure_cloud_role` / `dispatch_team` / `dispatch_team_recipe` spawning a `codex exec` or `claude` child, plus the separate create-only GitLab evidence server | the generated wrapper resolved by `resolve_role_file()` / `resolve_claude_role_file()` -- never caller-supplied, *unless* the operator configured a local provider (see "Self-hosted model providers") | every MCP entry below |
-| **MCP servers, api runner** (`roster/orchestration/mcp/api_runner.py`) | the same three tools with `runner="api"`, driving an OpenAI-compatible chat endpoint over HTTP with **no child process at all** | operator settings only (`runners.api_base_url` + `runners.local_model_<tier>`). The wrapper's own `model` field is deliberately discarded -- it names a vendor model the endpoint has never heard of -- so the wrapper decides *which role* runs but not *which model* serves it | every MCP entry below, **except** the four named as not reaching it in "API runner" |
+| **MCP servers, CLI runners** (`internal/orchestration/`) | `dispatch_secure_cloud_role` / `dispatch_team` / `dispatch_team_recipe` spawning a `codex exec` or `claude` child, plus the separate create-only GitLab evidence server | the generated wrapper resolved by `ResolveRoleFileCodex()` / `ResolveClaudeCodeRoleFile()` -- never caller-supplied, *unless* the operator configured a local provider (see "Self-hosted model providers") | every MCP entry below |
+| **MCP servers, api runner** (`internal/orchestration/api_runner_*.go`) | the same three tools with `runner="api"`, driving an OpenAI-compatible chat endpoint over HTTP with **no child process at all** | operator settings only (`runners.api_base_url` + `runners.local_model_<tier>`). The wrapper's own `model` field is deliberately discarded -- it names a vendor model the endpoint has never heard of -- so the wrapper decides *which role* runs but not *which model* serves it | every MCP entry below, **except** the four named as not reaching it in "API runner" |
 | **`cline-agents` plugin** (`cline-plugins/cline-agents/`) | `start_subagent` / `dispatch_selected_roles` starting a subagent inside a Cline session | operator environment: `CLINE_AGENTS_PROVIDER_ID` plus `CLINE_AGENTS_MODEL_<TIER>` / `CLINE_AGENTS_MODEL_DEFAULT`, or a per-call override | the role-fidelity model-validation notice, and nothing else |
 | **Claude Code plugin subagents** (`plugin/agents/*.md`) | an operator invoking a packaged subagent directly in a Claude Code session, with no MCP server in the loop | the wrapper's own `model:` frontmatter tier, resolved by Claude Code itself | none |
 | **Manual / direct invocation** | a human or agent pasting a role brief into any runner, or invoking `codex`/`claude`/an API by hand | whatever the operator chose | none |
@@ -189,11 +189,11 @@ not built in this increment.
   unmeasured in practice. Until something measures it, it is an operator and
   reviewer obligation -- do not read its presence here as a control.
 
-## MCP dispatch and evidence servers (`roster/orchestration/mcp/`)
+## MCP dispatch and evidence servers (`internal/orchestration/`)
 
-Everything in this section enumerates controls in `dispatch_core.py` /
-`dispatch_server.py` (and, in its own subsection, `gitlab_core.py` /
-`gitlab_server.py`). These entries are unchanged in substance from before
+Everything in this section enumerates controls in `dispatch_core*.go` and
+`dispatch_core_phase4_mcp_server.go` (and, in its own subsection,
+`gitlab.go` / `gitlab_mcp.go`). These entries are unchanged in substance from before
 this register was promoted to repository-wide scope; they were written to be
 accurate as of the code on disk after the H-1 (project-tier git-clean) and
 L-1 (`confirmation_required` response shape) fixes. If that code changes,
@@ -207,8 +207,9 @@ or manual dispatch paths -- see the scope table above.
 **Mechanically enforced.** `compute_effective_sandbox()` has exactly two
 inputs: the caller-supplied `mode` (constrained to the two-value `MODES` set)
 and the resolved role file's own `sandbox_mode` (never caller-supplied --
-`dispatch_server.py`'s tool schema has no `developer_instructions` or
-`sandbox_mode` parameter). When `mode == "planning-review-only"`, the
+the tool schema in
+`internal/orchestration/dispatch_core_phase4_mcp_server.go` has no
+`developer_instructions` or `sandbox_mode` parameter). When `mode == "planning-review-only"`, the
 function unconditionally returns `read-only` regardless of what the file
 declares; there is no third parameter through which a caller could request a
 wider sandbox. This is asserted directly by
@@ -454,10 +455,11 @@ support is additive, verified by
 `DispatchTeamTests.test_single_role_dispatch_is_unaffected_by_team_support`
 and the full pre-existing single-role suite passing unmodified.
 
-**`dispatch_team_recipe` (in `dispatch_server.py`) is a convenience wrapper,
-not a new control surface.** It expands a `routing.json` `team_recipes[]`
-entry into concrete `{role_id, brief}` members
-(`expand_recipe_to_members()` in `roster/orchestration/src/team_recipe_dryrun.py`)
+**`dispatch_team_recipe` is a convenience wrapper, not a new control
+surface.** It expands a `routing.json` `team_recipes[]` entry into concrete
+`{role_id, brief}` members (`ExpandRecipeToMembers` in
+`internal/orchestration/team_recipe_expand.go`, which delegates the firing
+decision to the selector's own `BuildTeams` rather than reimplementing it)
 and then calls `dispatch_team()` exactly as a caller who built the members
 list by hand would -- every control below applies identically regardless of
 which of the two tools produced the `members` list. The one thing this
@@ -786,7 +788,7 @@ allowlist entry above). All three are consumed in exactly one function,
 
 ### API runner (`runner="api"`)
 
-The first dispatch runner that spawns no coding CLI. `api_runner.py` drives
+The first dispatch runner that spawns no coding CLI. `api_runner_loop.go` drives
 an OpenAI-compatible `/chat/completions` endpoint directly and supplies both
 halves a child CLI would otherwise provide: the agent loop, and the sandbox.
 That second half is the whole risk of this runner, and this section is
@@ -892,8 +894,8 @@ written to be read before enabling it, not after.
   asserts which commands can start and deliberately asserts nothing about
   what an allowlisted command then does.
 - **Network posture: the first outbound-HTTP entry for a dispatch path.**
-  `dispatch_server.py` is stdio-only and `requirements-mcp.txt` forbids a
-  networked transport extra; this runner nonetheless opens outbound HTTP,
+  `cadre mcp-dispatch-server` is stdio-only and has no networked transport
+  at all; this runner nonetheless opens outbound HTTP,
   which is new ground for this register. Bounded by: an operator-configured
   `base_url` only (never caller- or model-supplied, and `global_only` so a
   cloned repository cannot redirect it); redirects refused outright
@@ -1004,11 +1006,11 @@ written to be read before enabling it, not after.
      enabling it grants the dispatched role the ability to run
      repository-controlled code with this server process's own file access.
 
-### GitLab evidence MCP server (`gitlab_core.py` / `gitlab_server.py`)
+### GitLab evidence MCP server (`gitlab.go` / `gitlab_mcp.go`)
 
 A separate, create-only MCP surface (`create_review_subtask`, `write_wiki_page`,
 `write_evidence_comment`) for recording human-reviewable evidence in a single,
-pre-configured, docs-only GitLab project. It shares `dispatch_core.py`'s
+pre-configured, docs-only GitLab project. It shares the dispatch core's
 `ConfirmationGate`, `wrap_untrusted_output`, and audit-record mechanism
 directly (not a reimplementation) but is otherwise an independent module with
 its own token, transport, and retry logic. This section uses the same
@@ -1056,8 +1058,8 @@ mechanically-enforced/advisory classification as above.
   at two distinct layers -- Python call-graph shape, and GitLab body-text
   interpretation. Be precise about what each layer actually covers; neither
   alone is the whole guarantee.**
-  - *Python-level structural guarantee.* This module implements no function,
-    and calls no function anywhere in its own source or `dispatch_core.py`'s,
+  - *Source-level structural guarantee.* This module implements no function,
+    and calls no function anywhere in its own source or the dispatch core's,
     that closes, reopens, resolves, or relabels-away-from-open-review a
     GitLab issue. `create_review_subtask` only ever performs a `GET`
     (idempotency search) and at most one `POST`. Tested by
@@ -1207,7 +1209,7 @@ mechanically-enforced/advisory classification as above.
   depth backstop against any future call site accidentally passing raw
   content under one of those names.
 - **Human-confirmation gate for `write_wiki_page`: same mechanism and same
-  honest limit as `dispatch_core.py`'s own `ConfirmationGate` above.** Every
+  honest limit as the dispatch core's own `ConfirmationGate` above.** Every
   call, with no exception, must round-trip through a first
   `confirmation_required` response and a second call replaying the token
   bound to the exact `(slug, title, format, content hash)` tuple before any
@@ -1249,13 +1251,13 @@ mechanically-enforced/advisory classification as above.
   wiki/comment/issue body content. Tested by `AuditTrailTests`.
 - **Deliberate, stated scope boundary: `classification` is intentionally not
   an in-code parameter on any of this module's three tools.** Unlike
-  `dispatch_core.py`'s `dispatch_secure_cloud_role`/`dispatch_team`, this
+  the dispatch core's `dispatch_secure_cloud_role`/`dispatch_team`, this
   module performs no classification check at all. This is a recorded,
   human-accepted residual-risk decision, not an oversight: containment is
   achieved operationally, by pointing `GITLAB_BASE_URL`/`GITLAB_DOCS_PROJECT_ID`
   at a dedicated, docs-only GitLab project and issuing a least-privilege
   service token scoped to only that project, rather than by an in-code
-  classification gate. See `gitlab_core.py`'s module docstring for the same
+  classification gate. See `gitlab.go`'s package doc for the same
   statement. If this integration is ever pointed at a project that also holds
   higher-classification content, this boundary must be revisited before that
   happens, not assumed to still hold. Both `GITLAB_BASE_URL` and
@@ -1285,10 +1287,16 @@ mechanically-enforced/advisory classification as above.
 
 ### Not covered above (MCP servers)
 
-M-2 (hash-pinning the `mcp` dependency in `requirements-mcp.txt`) and M-3
-(verifying the `codex exec` invocation shape in `build_child_argv()` against
-a real `codex` binary) remain open, tracked via dated `TODO` comments at
-their respective locations in the source. Neither could be meaningfully
+**M-2 (hash-pinning the `mcp` dependency in `requirements-mcp.txt`) is
+closed, by removal rather than by pinning.** The Python MCP servers are gone
+and `cadre mcp-dispatch-server` / `cadre mcp-gitlab-server` are served by the
+Go CLI, so there is no `mcp` Python package to pin -- the dependency whose
+integrity the item was about no longer exists in the distribution.
+
+M-3 (verifying the `codex exec` invocation shape against a real `codex`
+binary) remains open, and now applies to `spawnCodexChildIn` in
+`internal/orchestration/dispatch_core_phase3_spawn.go`. It is tracked via a
+dated `TODO` comment at that location in the source. Neither could be meaningfully
 resolved in this sandbox (no network/package access to fetch a verified
 package hash or invoke a real Codex CLI binary), and both were categorized
 by the security reviewer as shippable with a tracked follow-up rather than

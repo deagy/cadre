@@ -38,7 +38,6 @@ from unittest import mock
 
 ORCHESTRATION_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = ORCHESTRATION_ROOT / "src"
-MCP_DIR = ORCHESTRATION_ROOT / "mcp"
 ROSTER_DIR = ORCHESTRATION_ROOT.parent
 REPO_ROOT = ROSTER_DIR.parent
 KNOWLEDGE_SRC = ROSTER_DIR / "knowledge-store" / "src"
@@ -51,6 +50,13 @@ for candidate in (SRC_DIR, ROSTER_DIR / "shared" / "src"):
 # revisions of the requirements baseline -- the module list is the part of a
 # guard most likely to be quietly incomplete, which is why the self-vacuity
 # check below asserts membership rather than merely non-emptiness.
+#
+# The two mcp/ entries are gone because the files are: dispatch moved to Go,
+# and roster/orchestration/mcp/ was deleted. The surface they covered is
+# guarded by internal/orchestration/platform_role_ids_test.go, which carries
+# this list's lesson with it -- including the membership check, because the
+# failure this boundary actually suffered was an incomplete list rather than
+# an empty one.
 PLATFORM_MODULES = (
     SRC_DIR / "select_agents.py",
     SRC_DIR / "build_dispatch_plan.py",
@@ -58,8 +64,6 @@ PLATFORM_MODULES = (
     SRC_DIR / "routing.py",
     SRC_DIR / "routing_overlay.py",
     SRC_DIR / "roster_manifest.py",
-    MCP_DIR / "dispatch_core.py",
-    MCP_DIR / "dispatch_server.py",
 )
 
 # Filenames a roster package owns. Naming one in a resolution path means the
@@ -201,16 +205,16 @@ class TestGuardIsNotVacuous(unittest.TestCase):
             with self.subTest(module=module.name):
                 self.assertTrue(module.is_file(), f"{module} does not exist")
 
-    def test_the_second_dispatch_surface_is_in_scope(self) -> None:
+    def test_the_selection_surface_is_in_scope(self) -> None:
         names = {module.name for module in PLATFORM_MODULES}
-        for required in ("dispatch_core.py", "dispatch_server.py"):
+        for required in ("select_agents.py", "build_dispatch_plan.py"):
             self.assertIn(
                 required,
                 names,
-                f"{required} dropped out of the platform module list. It is the "
-                "second selection entry point and was absent from five revisions "
-                "of the requirements baseline; a guard that omits it covers the "
-                "surface everyone already remembers.",
+                f"{required} dropped out of the platform module list. A guard that "
+                "omits an entry point covers only the surface everyone already "
+                "remembers -- which is how mcp/dispatch_core.py went unchecked "
+                "through five revisions of the requirements baseline.",
             )
 
 

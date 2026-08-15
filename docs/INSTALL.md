@@ -91,7 +91,8 @@ args = ["mcp-dispatch-server"]
 ```
 
 This needs `cadre` on your shell `PATH` (the install script's symlink) and
-the MCP extra: `pip install -r roster/orchestration/mcp/requirements-mcp.txt`.
+nothing else -- the server is part of the Go CLI, so there is no Python
+package to install. `cadre mcp-gitlab-server` is registered the same way.
 
 ### Self-hosted models (llama.cpp, Ollama, LM Studio, vLLM)
 

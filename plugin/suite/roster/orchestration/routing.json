@@ -1651,7 +1651,8 @@
       "id": "gitlab-evidence",
       "workflow_shape": "unclassified",
       "paths": [
-        "roster/orchestration/mcp/gitlab_*.py"
+        "internal/orchestration/gitlab*.go",
+        "internal/cli/mcp_gitlab_server.go"
       ],
       "keywords": [
         "gitlab issue",

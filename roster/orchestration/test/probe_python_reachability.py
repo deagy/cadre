@@ -52,10 +52,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 ROOTS = [ROOT / "roster", ROOT / "cadre_cli", ROOT / "plugin" / "tools"]
 
-# Entry scripts of the MCP surface. Named explicitly rather than treating the
-# whole directory as entry points, so a genuinely orphaned helper in there is
-# still reported.
-MCP_ENTRY_SCRIPTS = ("dispatch_server", "gitlab_cli", "api_runner")
+# Entry scripts of the MCP surface. Empty now that roster/orchestration/mcp/
+# is deleted and the MCP servers are Go (`cadre mcp-dispatch-server`,
+# `cadre mcp-gitlab-server`). Kept rather than removed: the next Python entry
+# point that is reachable only by being executed directly belongs here, and a
+# missing hook is how a module gets reported as orphaned when it is not.
+MCP_ENTRY_SCRIPTS: tuple[str, ...] = ()
 
 SKIP_PARTS = ("/.venv/", "/__pycache__/", "/plugin/suite/", "/node_modules/")
 

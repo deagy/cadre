@@ -698,14 +698,12 @@ class NonInteractivePathNeverPromptsTests(SettingsTestCase):
                 )
 
 
-class EnvAllowlistTests(unittest.TestCase):
-    def test_cadre_interactive_is_absent_from_dispatch_core_env_allowlist(self) -> None:
-        mcp_dir = Path(__file__).resolve().parents[2] / "orchestration" / "mcp"
-        if str(mcp_dir) not in sys.path:
-            sys.path.append(str(mcp_dir))
-        import dispatch_core  # noqa: E402  (sys.path set above)
-
-        self.assertNotIn(settings.INTERACTIVE_ENV_VAR, dispatch_core.ENV_ALLOWLIST)
+# EnvAllowlistTests lived here and asserted that CADRE_INTERACTIVE is absent
+# from dispatch_core.py's ENV_ALLOWLIST. The dispatch env allowlist moved to Go
+# with the rest of dispatch, and roster/orchestration/mcp/ is deleted, so that
+# assertion now lives beside the code it guards:
+# internal/orchestration's TestTheInteractiveFlagNeverReachesAChild, which
+# checks both the allowlist and the environment BuildChildEnv actually returns.
 
 
 class EffectiveSettingsAndCliTests(SettingsTestCase):
