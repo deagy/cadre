@@ -63,6 +63,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return planCmd(registry, args[1:], stdout, stderr)
 	case "decide":
 		return decideCmd(registry, args[1:], stdout, stderr)
+	case "status":
+		return statusCmd(registry, args[1:], stdout, stderr)
 	case "invalidate":
 		return recordSurgeryCmd(registry, args[0], args[1:], stdout, stderr)
 	case "reenter":
@@ -85,6 +87,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stdout, "  validate [--root ROOT] Check a project's configuration and run records")
 		_, _ = fmt.Fprintln(stdout, "  plan --task-id ID --task TEXT         Create a dispatch plan and pending run record")
 		_, _ = fmt.Fprintln(stdout, "  decide --task-id ID --gate G --role R --decision D --actor-id A --evidence-uri U")
+		_, _ = fmt.Fprintln(stdout, "  status --task-id ID                   Show a task's gate state (and advance it)")
 		_, _ = fmt.Fprintln(stdout, "  invalidate --task-id ID --earliest-gate G --reason R --actor A")
 		_, _ = fmt.Fprintln(stdout, "  reenter --task-id ID --earliest-gate G --reason R --actor A")
 		_, _ = fmt.Fprintln(stdout, "  upgrade (--check | --apply)            Check or apply a kernel lock upgrade")
@@ -550,4 +553,26 @@ func rejectInvalidChoice(stderr io.Writer, command, flag, value string, allowed 
 		"agentic-sdlc %s: error: argument %s: invalid choice: %q (choose from %s)\n",
 		command, flag, value, strings.Join(allowed, ", "))
 	return 2
+}
+
+// statusCmd answers `status`, which despite its name writes -- see status.go.
+func statusCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
+	root, taskID := ".", ""
+	fields := map[string]*string{"--root": &root, "--task-id": &taskID}
+	if code := parseFlags("status", args, fields, stderr); code != 0 {
+		return code
+	}
+	if taskID == "" {
+		_, _ = fmt.Fprintln(stderr,
+			"agentic-sdlc status: error: the following arguments are required: --task-id")
+		return 2
+	}
+
+	result, err := registry.Status(root, taskID)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(err))
+		return 1
+	}
+	_, _ = fmt.Fprint(stdout, RenderIndented(result))
+	return 0
 }
