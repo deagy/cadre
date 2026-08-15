@@ -79,8 +79,9 @@ The Cadre CLI currently consists of:
 > native Go in the checkout CLI. The knowledge store in particular was not
 > kept as a Python fallback -- `roster/knowledge-store/src/` was deleted
 > outright, and `internal/knowledge/` is the only implementation left. Only
-> `cadre select` still runs Python at runtime (deliberately; see
-> `REMAINING_PYTHON_SCOPE.md`), and `cadre init --interactive`'s
+> `cadre select` also ran Python at runtime until 2026-08-14, when the Go
+> port landed behind a differential gate (see the Decision Log entry for
+> that date); `cadre init --interactive`'s
 > questionnaire flow was deliberately *not* ported and fails closed rather
 > than falling back to Python. This is a case where the plan changed during
 > implementation, not a case where this document was wrong when written --
@@ -262,7 +263,7 @@ The Cadre CLI currently consists of:
 - ✅ `internal/orchestration/manifest.go` — Roster manifest loading + validation
 - ✅ `internal/orchestration/routing.go` — Routing config loading + validation
 - ✅ Unit tests: manifest containment checks, routing validation (147 routes verified)
-- 🐍 `cadre select` remains Python (routed through Go dispatcher)
+- 🐍 `cadre select` remained Python here (routed through Go dispatcher); ported to Go 2026-08-14 — see §8
 - 🐍 `cadre selection-telemetry` remains Python (routed through Go dispatcher)
 - 🐍 `cadre profile` remains Python (routed through Go dispatcher)
 
@@ -395,12 +396,12 @@ written:
   the knowledge store (with its Python source deleted, not kept as
   fallback) all shipped as native Go, none of it itemized as in-scope
   above.
-- One command was never ported and is not merely "not yet done": `cadre
-  select` dispatches to Python by deliberate design, to preserve a
-  byte-exact schema-v7 output contract. See
-  `internal/cli/select_agents.go`'s header and `REMAINING_PYTHON_SCOPE.md`.
-  `cadre init --interactive`'s questionnaire flow is likewise deliberately
-  unported and fails closed rather than silently falling back to Python.
+- One command was, at the time of this pass, not ported and not merely
+  "not yet done": `cadre select` dispatched to Python by deliberate design,
+  to preserve a byte-exact output contract. That changed later the same
+  day — see the second 2026-08-14 entry below. `cadre init --interactive`'s
+  questionnaire flow remains deliberately unported and fails closed rather
+  than silently falling back to Python.
 - A previously-undocumented risk was found during this pass, not created by
   it: `internal/orchestration/{routing,route_matching,dispatch_plan,
   workflow}.go` implement a second `DispatchPlan` shape, incompatible with
@@ -432,6 +433,42 @@ records what the tree now contains against what this ADR said would happen.
 Whether the sections above should be edited further, marked historical, or
 left as-is is an editorial question for whoever next revises this ADR, not
 decided here.
+
+**`cadre select` ported to Go (2026-08-14, later the same day):** The
+command this ADR's §7 and `REMAINING_PYTHON_SCOPE.md` both recorded as
+deliberately-Python is now Go by default, with `CADRE_SELECT_IMPL=python`
+as an escape hatch.
+
+The earlier position was not wrong, and the reason it changed is worth
+recording precisely: the objection was never "Go cannot do this", it was
+that a from-scratch reimplementation had already diverged from the output
+contract once, and nothing in review would have caught it. So the thing
+built first was not the port but the gate —
+`roster/orchestration/test/test_select_differential.py`, which runs both
+implementations on the same machine in the same run and requires byte
+equality including `dispatch_fingerprint`. The port then landed in seven
+increments behind it, each measured against Python over a space chosen to
+exercise that increment (4,725 rule evaluations, 44,101 workflow
+decisions, 69 overlay documents, 190 rendering cases, among others).
+
+Two findings worth carrying forward to any similar port:
+
+- The two bugs that got furthest were both cases where a probe and the
+  real CLI handed the same code different value shapes — JSON-decoded
+  versus assembled in-process. Every parity number was green while the
+  CLI printed "NO AGENTS SELECTED" for fully staffed changes. A gate that
+  compares two implementations does not, by itself, check that the thing
+  it compares is the thing that ships.
+- Several falsification attempts failed to compile or patched a comment
+  rather than the branch under test. Those were discarded rather than
+  counted; a falsification that does not run is not evidence, and it looks
+  exactly like one that does.
+
+**Approval status unchanged.** This entry records a scope change made
+under the initiative already authorized on 2026-08-13, not a new
+authorization. Whether retaining the Python selector indefinitely is the
+right long-term call — it is currently both the escape hatch and the other
+half of the gate — is a separate decision nobody has made.
 
 ---
 

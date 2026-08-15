@@ -1,0 +1,18 @@
+{
+  "empty_object": {},
+  "empty_array": [],
+  "nulls_and_bools": {"a": null, "b": true, "c": false},
+  "key_sorting": {"zebra": 1, "Alpha": 2, "_under": 3, "10": 4, "2": 5, "é": 6},
+  "ascii_punctuation": {"s": "a/b<c>d&e'f"},
+  "quotes_and_backslash": {"s": "he said \"hi\" \\ then left"},
+  "control_characters": {"s": "tab\there\nnewline\rcr\bback\fform"},
+  "unicode_latin": {"s": "café naïve résumé"},
+  "unicode_punctuation": {"s": "“smart quotes” and em—dash"},
+  "unicode_astral": {"s": "emoji 🚀 rocket"},
+  "unicode_keys": {"café": "value", "zebra": "v2"},
+  "numbers": {"zero": 0, "one": 1, "neg": -42, "float": 1.5, "negfloat": -0.25, "big": 1000000},
+  "nested": {"a": [{"b": [1, 2, {"c": "d"}]}], "e": {"f": {"g": []}}},
+  "array_of_strings": ["one", "two", "three"],
+  "empty_string": {"s": ""},
+  "line_separators": {"s": "a b c"}
+}
