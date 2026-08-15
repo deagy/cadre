@@ -38,49 +38,55 @@ func DispatchSecureCloudRole(
 ) map[string]any {
 	// Input validation
 	if roleID == "" {
-		return map[string]any{
-			"status": "denied",
-			"reason": "role_id is required",
-		}
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			map[string]any{
+				"status": "denied",
+				"reason": "role_id is required",
+			})
 	}
 
 	if brief == "" {
-		return map[string]any{
-			"status": "denied",
-			"reason": "brief is required",
-		}
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			map[string]any{
+				"status": "denied",
+				"reason": "brief is required",
+			})
 	}
 
 	if len(brief) > MaxBriefBytes {
-		return map[string]any{
-			"status": "denied",
-			"reason": fmt.Sprintf("brief exceeds maximum size %d bytes", MaxBriefBytes),
-		}
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			map[string]any{
+				"status": "denied",
+				"reason": fmt.Sprintf("brief exceeds maximum size %d bytes", MaxBriefBytes),
+			})
 	}
 
 	// Validate mode
 	if mode != ModePlanningOnly && mode != ModeRepositoryEdit {
-		return map[string]any{
-			"status": "denied",
-			"reason": fmt.Sprintf("mode must be '%s' or '%s'", ModePlanningOnly, ModeRepositoryEdit),
-		}
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			map[string]any{
+				"status": "denied",
+				"reason": fmt.Sprintf("mode must be '%s' or '%s'", ModePlanningOnly, ModeRepositoryEdit),
+			})
 	}
 
 	// Validate classification
 	if !Classifications[classification] {
-		return map[string]any{
-			"status": "denied",
-			"reason": fmt.Sprintf("invalid classification: %q", classification),
-		}
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			map[string]any{
+				"status": "denied",
+				"reason": fmt.Sprintf("invalid classification: %q", classification),
+			})
 	}
 
 	// Validate dispatch depth
 	currentDepth := currentDispatchDepth()
 	if currentDepth >= MaxDispatchDepth {
-		return map[string]any{
-			"status": "denied",
-			"reason": fmt.Sprintf("dispatch depth %d exceeds maximum %d", currentDepth, MaxDispatchDepth),
-		}
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			map[string]any{
+				"status": "denied",
+				"reason": fmt.Sprintf("dispatch depth %d exceeds maximum %d", currentDepth, MaxDispatchDepth),
+			})
 	}
 
 	// The role is resolved before anything is decided about it. Its
@@ -97,15 +103,17 @@ func DispatchSecureCloudRole(
 	}
 	role, err := ResolveRoleForDispatch(roleID, runner, roots.ProjectRoot, roots.GlobalRoot, roots.PluginRoot, mode)
 	if err != nil {
-		return dispatchErrorResult(err)
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			dispatchErrorResult(err))
 	}
 
 	effectiveSandbox, err := EffectiveSandboxForDispatch(role, mode)
 	if err != nil {
-		return map[string]any{
-			"status": "denied",
-			"reason": err.Error(),
-		}
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			map[string]any{
+				"status": "denied",
+				"reason": err.Error(),
+			})
 	}
 
 	gate := NewConfirmationGate()
@@ -157,6 +165,63 @@ func DispatchSecureCloudRole(
 		return dispatchAsync(roots, dispatchCtx, role, classification, taskID, sessionID, runner, effectiveSandbox, mode)
 	}
 	return dispatchSync(roots, dispatchCtx, role, classification, taskID, sessionID, runner, effectiveSandbox, mode)
+}
+
+// auditDecision records a dispatch outcome that never reached a child.
+//
+// Audit records were written only after a child ran, so every refusal --
+// a role the catalog does not name, a tampered or uncommitted role file, a
+// classification above the ceiling, a depth or concurrency cap -- left no
+// trace at all. Refusals are exactly what an auditor most needs to see, and
+// a log that records only successes cannot show an attempt that was stopped.
+func auditDecision(roleID, taskID, sessionID, classification, mode, runner string, result map[string]any) map[string]any {
+	fields := map[string]any{
+		"event":          "dispatch",
+		"role_id":        roleID,
+		"task_id":        taskID,
+		"session_id":     sessionID,
+		"classification": classification,
+		"mode":           mode,
+		"runner":         runner,
+	}
+	if status, ok := result["status"].(string); ok {
+		fields["decision"] = status
+	}
+	// The reason is this module's own generated wording, never the brief,
+	// the instructions, or the child's output -- BuildAuditRecord rejects
+	// those keys outright.
+	if reason, ok := result["reason"].(string); ok {
+		fields["reason"] = reason
+	}
+	if record, err := BuildAuditRecord(fields); err == nil {
+		writeAuditBestEffort(record)
+	}
+	return result
+}
+
+// writeAuditBestEffort writes a record without ever failing the dispatch.
+//
+// Used where a side effect has already happened, or where the caller must
+// still get a terminal answer: a missing audit line for one event is better
+// than a caller with no way to observe that the event happened at all. The
+// failure is reported to stderr rather than swallowed, so an operator has a
+// trace to grep for.
+func writeAuditBestEffort(record map[string]any) {
+	if err := WriteAuditLog(record); err != nil {
+		fmt.Fprintf(os.Stderr, "cadre: audit write failed (decision=%v id=%v): %v\n",
+			record["decision"], auditTraceID(record), err)
+	}
+}
+
+// auditTraceID names the record in the stderr trace, falling back through the
+// identifiers a record might carry so the line is never anonymous.
+func auditTraceID(record map[string]any) any {
+	for _, key := range []string{"job_id", "team_id", "task_id", "role_id"} {
+		if value, ok := record[key]; ok && value != "" {
+			return value
+		}
+	}
+	return "unknown"
 }
 
 // dispatchErrorResult maps a resolution failure onto the result vocabulary.
@@ -214,7 +279,7 @@ func recordDispatchAudit(
 	if err != nil {
 		return
 	}
-	_ = WriteAuditLog(record)
+	writeAuditBestEffort(record)
 }
 
 // dispatchSync runs the child and waits for it.

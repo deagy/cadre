@@ -1,6 +1,7 @@
 package orchestration
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -493,5 +494,143 @@ func TestTheCatalogAllowlistFailsClosedOnAnUnreadableCatalog(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "absent.yaml")
 	if _, err := LoadKnownRoleIDs(missing); err == nil {
 		t.Error("an unreadable catalog was accepted as an allowlist")
+	}
+}
+
+// auditIsolated points the audit log at a temp file for the duration of a
+// test, so assertions read only what that test wrote.
+func auditIsolated(t *testing.T) string {
+	t.Helper()
+	directory := t.TempDir()
+	path := filepath.Join(directory, "audit.jsonl")
+	originalDir, originalPath := AuditLogDir, AuditLogPath
+	AuditLogDir, AuditLogPath = directory, path
+	t.Cleanup(func() { AuditLogDir, AuditLogPath = originalDir, originalPath })
+	return path
+}
+
+func auditLines(t *testing.T, path string) []map[string]any {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var records []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(string(content)), "\n") {
+		if line == "" {
+			continue
+		}
+		var record map[string]any
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			t.Fatalf("audit line is not JSON: %q", line)
+		}
+		records = append(records, record)
+	}
+	return records
+}
+
+func TestARefusedDispatchIsAudited(t *testing.T) {
+	// Audit records were written only after a child ran, so every refusal --
+	// a role the catalog does not name, a tampered or uncommitted role file,
+	// a classification above the ceiling -- left no trace at all. A log that
+	// records only successes cannot show an attempt that was stopped, which
+	// is the case an auditor most needs.
+	path := auditIsolated(t)
+	server := NewDispatchMCPServer(DispatchMCPServerConfig{
+		ProjectRoot: t.TempDir(), GlobalRoot: t.TempDir(), PluginRoot: t.TempDir(),
+	})
+	response := server.HandleDispatchSecureCloudRole(&DispatchSecureCloudRoleRequest{
+		RoleID: "not-a-catalog-role", Brief: "b",
+		Mode: ModePlanningOnly, Classification: "internal", TaskID: "TASK-7", Wait: true,
+	})
+	if response.Status != "denied" {
+		t.Fatalf("status = %q, want denied", response.Status)
+	}
+
+	records := auditLines(t, path)
+	if len(records) == 0 {
+		t.Fatal("a refused dispatch wrote no audit record")
+	}
+	last := records[len(records)-1]
+	if last["decision"] != "denied" {
+		t.Errorf("decision = %v, want denied", last["decision"])
+	}
+	if last["role_id"] != "not-a-catalog-role" || last["task_id"] != "TASK-7" {
+		t.Errorf("the record does not identify the attempt: %v", last)
+	}
+}
+
+func TestAnAuditRecordNeverCarriesTheBriefOrInstructions(t *testing.T) {
+	// The record says what was decided, never what was said. BuildAuditRecord
+	// rejects the forbidden keys outright rather than dropping them, so a
+	// future change that tries to log one fails loudly.
+	path := auditIsolated(t)
+	server := NewDispatchMCPServer(DispatchMCPServerConfig{
+		ProjectRoot: t.TempDir(), GlobalRoot: t.TempDir(), PluginRoot: t.TempDir(),
+	})
+	const secret = "SENSITIVE-BRIEF-CONTENT"
+	server.HandleDispatchSecureCloudRole(&DispatchSecureCloudRoleRequest{
+		RoleID: "code-reviewer", Brief: secret,
+		Mode: ModePlanningOnly, Classification: "internal", Wait: true,
+	})
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(content), secret) {
+		t.Error("the brief reached the audit log")
+	}
+	for _, forbidden := range []string{"brief", "developer_instructions", "prompt", "output"} {
+		for _, record := range auditLines(t, path) {
+			if _, present := record[forbidden]; present {
+				t.Errorf("audit record carries %q", forbidden)
+			}
+		}
+	}
+}
+
+func TestAnAuditWriteFailureIsReportedAndNeverFailsTheDispatch(t *testing.T) {
+	// The caller must still reach a terminal outcome: a missing audit line
+	// for one event is better than a caller with no way to observe that the
+	// event happened. Not silent, though -- an operator gets a stderr trace.
+	original := AuditLogDir
+	// A path that cannot be created: an existing regular file where the
+	// directory must go.
+	blocker := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	AuditLogDir = filepath.Join(blocker, "nested")
+	AuditLogPath = filepath.Join(AuditLogDir, "audit.jsonl")
+	t.Cleanup(func() { AuditLogDir = original })
+
+	server := NewDispatchMCPServer(DispatchMCPServerConfig{
+		ProjectRoot: t.TempDir(), GlobalRoot: t.TempDir(), PluginRoot: t.TempDir(),
+	})
+	response := server.HandleDispatchSecureCloudRole(&DispatchSecureCloudRoleRequest{
+		RoleID: "not-a-catalog-role", Brief: "b",
+		Mode: ModePlanningOnly, Classification: "internal", Wait: true,
+	})
+	// The decision still reaches the caller.
+	if response.Status != "denied" {
+		t.Errorf("status = %q; an audit failure must not change the outcome", response.Status)
+	}
+}
+
+func TestTheAuditLogIsNotWorldReadable(t *testing.T) {
+	// It records role ids, task ids and decisions for every dispatch on the
+	// machine. Correct by construction today; pinned because a permissive
+	// mode here is invisible until it matters.
+	path := auditIsolated(t)
+	if err := WriteAuditLog(map[string]any{"event": "probe"}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode := info.Mode().Perm(); mode&0o077 != 0 {
+		t.Errorf("audit log mode = %04o, want no group or other access", mode)
 	}
 }
