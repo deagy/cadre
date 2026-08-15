@@ -66,11 +66,14 @@ func runSelectGo(args []string) int {
 	if *rosterFlag != "" {
 		rosterRoot = *rosterFlag
 	}
-	targetRoot := *root
-	if targetRoot == "" {
-		if working, err := os.Getwd(); err == nil {
-			targetRoot = working
-		}
+	// repository_root is embedded in the plan and therefore in the hashed
+	// payload, so it must be the same string Python would produce: expanded,
+	// absolutised, and symlink-resolved. `--root .` and `--root $PWD` are the
+	// same checkout and must not fingerprint differently.
+	targetRoot, err := resolveRepositoryRoot(*root)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre select: %s\n", err)
+		return 1
 	}
 
 	catalogPath := filepath.Join(rosterRoot, "catalog.yaml")
@@ -128,19 +131,34 @@ func runSelectGo(args []string) int {
 		contractVersion = contract.Version
 	}
 
-	changedFiles := splitChangedFiles(files)
+	// Explicit files answer "route these paths"; a base ref answers "route
+	// what this branch changes". Asking both at once is two different
+	// questions, and silently preferring one would route on a set the caller
+	// did not intend.
+	changedFiles := selector.ExplicitFiles(files)
 	changedFileSource := "explicit"
-	if len(changedFiles) == 0 {
-		fmt.Fprintln(os.Stderr,
-			"cadre select: the Go selector requires --files; git-status discovery is not ported yet")
-		return 2
+	if len(files) > 0 && *base != "" {
+		fmt.Fprintln(os.Stderr, "cadre select: --base cannot be combined with --files")
+		return 1
+	}
+	if len(files) == 0 {
+		discovered, err := selector.DiscoverChangedFiles(*base, targetRoot)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cadre select: %s\n", err)
+			return 1
+		}
+		changedFiles = discovered.Files
+		changedFileSource = discovered.Source
 	}
 
-	knowledgeSources := []string(sources)
-	if len(knowledgeSources) == 0 {
-		fmt.Fprintln(os.Stderr,
-			"cadre select: the Go selector requires --source; origin-derived defaults are not ported yet")
-		return 2
+	knowledgeSources := selector.ResolveKnowledgeSources(targetRoot)
+	if len(sources) > 0 {
+		normalized, err := selector.NormalizeExplicitSources(sources)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cadre select: %s\n", err)
+			return 1
+		}
+		knowledgeSources = normalized
 	}
 
 	var provenance map[string]any
@@ -190,17 +208,37 @@ func runSelectGo(args []string) int {
 	return 0
 }
 
-// splitChangedFiles flattens repeatable --files values, each of which may
-// itself be comma-separated.
-func splitChangedFiles(values []string) []string {
-	var out []string
-	for _, value := range values {
-		for _, part := range strings.Split(value, ",") {
-			part = strings.TrimSpace(part)
-			if part != "" {
-				out = append(out, part)
-			}
+// resolveRepositoryRoot mirrors Path(root).expanduser().resolve(), defaulting
+// to the working directory, and refuses a path that is not a directory.
+func resolveRepositoryRoot(root string) (string, error) {
+	if root == "" {
+		working, err := os.Getwd()
+		if err != nil {
+			return "", err
 		}
+		root = working
+	} else if root == "~" || strings.HasPrefix(root, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		root = filepath.Join(home, strings.TrimPrefix(strings.TrimPrefix(root, "~"), "/"))
 	}
-	return out
+
+	absolute, err := filepath.Abs(root)
+	if err != nil {
+		return "", err
+	}
+	// EvalSymlinks is the .resolve() half that matters: a checkout reached
+	// through a symlink must produce the same plan as one reached directly.
+	// It fails on a path that does not exist, which the directory check below
+	// reports in the caller's own terms.
+	if resolved, err := filepath.EvalSymlinks(absolute); err == nil {
+		absolute = resolved
+	}
+	info, err := os.Stat(absolute)
+	if err != nil || !info.IsDir() {
+		return "", fmt.Errorf("Repository root is not a directory: %s", absolute) //nolint:staticcheck // ported message
+	}
+	return absolute, nil
 }

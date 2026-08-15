@@ -69,7 +69,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -272,6 +274,170 @@ class SelectGoParityTest(unittest.TestCase):
                     f"both implementations agree but differ from the recorded plan "
                     f"for {case['id']!r}",
                 )
+
+
+class SelectDiscoveryParityTest(unittest.TestCase):
+    """Parity for the inputs the golden corpus deliberately cannot cover.
+
+    Every corpus case pins `--files` and `--source` so its golden does not
+    encode the generating machine's working tree or git origin. That is the
+    right call for a golden -- and it leaves the discovery paths that run when
+    those flags are *absent* completely unexercised by the gate, which is how
+    a real invocation is almost always made.
+
+    So this class builds throwaway checkouts and runs both implementations
+    against them with neither flag. Nothing is stored: the comparison is
+    Python against Go, here, on this machine, which is exactly the comparison
+    that stays valid on a fork, a clone, or a contributor's laptop.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        if shutil.which("git") is None:
+            raise unittest.SkipTest("git is not available")
+
+        probe = load_corpus()[0]
+        code, _, stderr = run_select(probe, implementation="go")
+        if code == GO_NOT_IMPLEMENTED_EXIT:
+            raise unittest.SkipTest(
+                "no Go select implementation yet: CADRE_SELECT_IMPL=go returns "
+                f"exit {GO_NOT_IMPLEMENTED_EXIT}"
+            )
+        if code != 0:
+            raise AssertionError(f"CADRE_SELECT_IMPL=go failed (exit {code}):\n{stderr}")
+
+    def _git(self, root: Path, *args: str) -> None:
+        subprocess.run(
+            ["git", *args], cwd=root, check=True, capture_output=True,
+            env={**os.environ, "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0"},
+        )
+
+    def _checkout(self, parent: Path, name: str, origin: str | None) -> Path:
+        root = parent / name
+        root.mkdir(parents=True)
+        self._git(root, "init", "-q", "-b", "main")
+        self._git(root, "config", "user.email", "test@example.invalid")
+        self._git(root, "config", "user.name", "Test")
+        (root / "seed.txt").write_text("seed\n", encoding="utf-8")
+        self._git(root, "add", "-A")
+        self._git(root, "commit", "-q", "-m", "seed", "--no-gpg-sign")
+        if origin:
+            self._git(root, "remote", "add", "origin", origin)
+        return root
+
+    def _plan(self, root: Path, *, base: str | None, implementation: str) -> dict:
+        environment = dict(os.environ)
+        if implementation == "go":
+            environment["CADRE_SELECT_IMPL"] = "go"
+        else:
+            environment.pop("CADRE_SELECT_IMPL", None)
+        arguments = [
+            str(CADRE), "select",
+            "--task", "add a login handler and update the deployment manifest",
+            "--task-id", "DISCOVERY-1",
+            "--classification", "internal",
+            "--root", str(root),
+        ]
+        if base:
+            arguments += ["--base", base]
+        completed = subprocess.run(
+            arguments, capture_output=True, text=True, timeout=180,
+            cwd=REPO_ROOT, env=environment,
+        )
+        if completed.returncode != 0:
+            raise AssertionError(
+                f"`cadre select` failed ({implementation}, exit "
+                f"{completed.returncode}):\n{completed.stderr}"
+            )
+        return json.loads(completed.stdout)
+
+    def _assert_parity(self, root: Path, why: str, *, base: str | None = None) -> dict:
+        python_plan = self._plan(root, base=base, implementation="python")
+        go_plan = self._plan(root, base=base, implementation="go")
+        self.assertEqual(
+            canonical_form(python_plan), canonical_form(go_plan),
+            f"the Go plan differs from the Python one. This case exists because: {why}",
+        )
+        self.assertEqual(
+            python_plan["dispatch_fingerprint"], go_plan["dispatch_fingerprint"],
+            f"dispatch_fingerprint differs; the Go plan is a different plan. Case: {why}",
+        )
+        return python_plan
+
+    def test_changed_files_discovered_from_the_working_tree_agree(self) -> None:
+        with tempfile.TemporaryDirectory() as workspace:
+            root = self._checkout(Path(workspace), "worktree", None)
+            # A modification, a deletion, a rename and two untracked files,
+            # because the rename is what appends an extra NUL-separated field
+            # and an untracked file is exactly the change routing most needs.
+            (root / "seed.txt").write_text("modified\n", encoding="utf-8")
+            (root / "to-rename.txt").write_text("body\n", encoding="utf-8")
+            self._git(root, "add", "-A")
+            self._git(root, "commit", "-q", "-m", "second", "--no-gpg-sign")
+            self._git(root, "mv", "to-rename.txt", "renamed.txt")
+            (root / "handler.go").write_text("package main\n", encoding="utf-8")
+            (root / "café.tsx").write_text("export const x = 1\n", encoding="utf-8")
+
+            plan = self._assert_parity(root, "git-status discovery, including a rename and a quotable path")
+            self.assertEqual(plan["inputs"]["changed_file_source"], "git-status")
+            discovered = plan["inputs"]["changed_files"]
+            self.assertIn("handler.go", discovered)
+            self.assertIn("café.tsx", discovered)
+            self.assertNotIn("to-rename.txt", discovered, "the rename's original path is not a changed file")
+
+    def test_changed_files_discovered_from_a_base_ref_agree(self) -> None:
+        with tempfile.TemporaryDirectory() as workspace:
+            root = self._checkout(Path(workspace), "branch", None)
+            self._git(root, "checkout", "-q", "-b", "feature")
+            (root / "handler.go").write_text("package main\n", encoding="utf-8")
+            self._git(root, "add", "-A")
+            self._git(root, "commit", "-q", "-m", "feature", "--no-gpg-sign")
+            (root / "uncommitted.txt").write_text("x\n", encoding="utf-8")
+
+            plan = self._assert_parity(root, "base-ref diff discovery", base="main")
+            self.assertEqual(plan["inputs"]["changed_file_source"], "git-diff:main...HEAD")
+            self.assertEqual(plan["inputs"]["changed_files"], ["handler.go"])
+
+    def test_knowledge_sources_derived_from_the_origin_remote_agree(self) -> None:
+        with tempfile.TemporaryDirectory() as workspace:
+            root = self._checkout(Path(workspace), "with-origin", "git@github.com:example/demo.git")
+            (root / "handler.go").write_text("package main\n", encoding="utf-8")
+
+            plan = self._assert_parity(root, "origin-derived knowledge source")
+            self.assertEqual(plan["knowledge_context"]["source_filter"], ["example/demo"])
+
+    def test_knowledge_sources_without_an_origin_agree(self) -> None:
+        with tempfile.TemporaryDirectory() as workspace:
+            root = self._checkout(Path(workspace), "no-origin", None)
+            (root / "handler.go").write_text("package main\n", encoding="utf-8")
+
+            plan = self._assert_parity(root, "local-<name>-<digest> fallback with no origin remote")
+            sources = plan["knowledge_context"]["source_filter"]
+            self.assertEqual(len(sources), 1)
+            self.assertTrue(sources[0].startswith("local-no-origin-"), sources)
+
+    def test_the_staged_source_appears_only_with_a_project_local_store(self) -> None:
+        """The store refuses to read `proposed-knowledge` from the shared
+        global-fallback store, and refuses per call rather than per source --
+        so naming it without a project-local partition would return the agent
+        nothing at all. Both implementations have to draw that line together.
+        """
+        with tempfile.TemporaryDirectory() as workspace:
+            root = self._checkout(Path(workspace), "local-store", "git@github.com:example/demo.git")
+            (root / "handler.go").write_text("package main\n", encoding="utf-8")
+
+            before = self._assert_parity(root, "no project-local store: staged source omitted")
+            self.assertEqual(before["knowledge_context"]["source_filter"], ["example/demo"])
+
+            store = root / ".agents" / "knowledge-store"
+            store.mkdir(parents=True)
+            (store / "config.json").write_text("{}\n", encoding="utf-8")
+
+            after = self._assert_parity(root, "project-local store makes the staged source legal")
+            self.assertEqual(
+                after["knowledge_context"]["source_filter"],
+                ["example/demo", "proposed-knowledge"],
+            )
 
 
 if __name__ == "__main__":
