@@ -182,7 +182,7 @@ differential harness. Two have real surface area worth calling out:
 
 **Breaks:** nothing user-visible.
 
-### `mcp/` is blocked: the Go dispatch engine is not wired up
+### `mcp/` was blocked: the Go dispatch engine was not wired up — **now fixed**
 
 **Measured 2026-08-15, on `fix/untrusted-fencing`.** Every tool in `mcp/` now
 has a Go counterpart, which is what this plan treated as the precondition for
@@ -237,6 +237,27 @@ function nothing in production calls.
 directly, so they pass while nothing calls them. Nothing tested the seam. This
 is the same shape as the fencing regressions found the same day: a test that
 asserts a component works, with no test that the component is *reached*.
+
+**Fixed 2026-08-15** on `fix/untrusted-fencing`. `DispatchSecureCloudRole` and
+`DispatchTeam` take `DispatchRoots` explicitly, resolve the role before
+deciding anything about it, and call `ExecuteDispatchChild`. Both CLI spawners
+were rebuilt: `SpawnCodexChild` was a stub, and `SpawnClaudeCodeChild` invoked
+a command form the CLI does not accept while passing no `--permission-mode`,
+so the sandbox never reached the child. They share one spawner that feeds the
+prompt on stdin, runs the child in its own process group, enforces a deadline,
+caps output, and pins the working directory.
+
+The gate is `dispatch_reaches_child_test.go`, which points the runner binary
+at a script that echoes stdin: the role file's own text coming back out of a
+child process is the assertion. That is the behavioural gate this section
+called for, and it is what a protocol-level conformance suite would have
+missed.
+
+**Still open before `mcp/` can go.** The remaining Python suites have not been
+compared yet: `test_mcp_dispatch.py` (294 tests) is roughly a third worked
+through, and `test_gitlab_integration.py` (89) is untouched. Every batch
+compared so far has found something, so the rate does not yet justify
+stopping.
 
 ## Phase 5 — Kernel to Go, distributed as binaries
 
