@@ -243,17 +243,35 @@ func CheckCommandAllowed(command string, allowlist []string) (string, error) {
 
 // AvailableToolNames is the tool set a role may use.
 //
-// Write tools appear only when the role is authorized to write, and the
-// command tool only when the operator has configured a non-empty allowlist --
-// an unconfigured allowlist means the capability is unavailable, not that
-// everything is permitted.
-func AvailableToolNames(writesAllowed bool, commandAllowlist []string) []string {
-	names := []string{"read_file", "list_files", "search"}
-	if writesAllowed {
-		names = append(names, "write_file", "edit_file")
+// Three independent conditions gate the write tools, and all must hold:
+//
+//   - the role's *declared* capability tier includes Edit or Write, from
+//     runner-capabilities.json -- the same manifest the wrapper generators
+//     read, consulted here at dispatch time. A read-only tier never reaches
+//     the write tools however the operator has configured things.
+//   - writesAllowed, which carries the caller's mode, the narrowed sandbox,
+//     the consumed confirmation token and runners.api_allow_writes.
+//
+// run_command needs a third: a non-empty operator allowlist AND a declared
+// Bash capability AND writes allowed. A read-only review role does not get to
+// execute anything.
+//
+// capabilityTools nil means nothing was declared, which is the fail-closed
+// direction: an unreadable manifest withholds the write tools rather than
+// assuming them.
+func AvailableToolNames(capabilityTools []string, writesAllowed bool, commandAllowlist []string) []string {
+	declared := map[string]bool{}
+	for _, tool := range capabilityTools {
+		declared[tool] = true
 	}
-	if len(commandAllowlist) > 0 {
-		names = append(names, "run_command")
+	tierCanWrite := declared["Edit"] || declared["Write"]
+
+	names := []string{"read_file", "list_files", "search"}
+	if writesAllowed && tierCanWrite {
+		names = append(names, "write_file", "edit_file")
+		if len(commandAllowlist) > 0 && declared["Bash"] {
+			names = append(names, "run_command")
+		}
 	}
 	return names
 }

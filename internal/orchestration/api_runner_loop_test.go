@@ -187,34 +187,51 @@ func TestTheIterationCapStopsARunawayLoop(t *testing.T) {
 }
 
 func TestParseToolCallsDecodesArgumentsFromTheWireFormat(t *testing.T) {
-	// Arguments arrive as a JSON *string*, not an object. Decoding here means
-	// a malformed blob is one refused tool call rather than a failed
-	// dispatch.
-	calls := ParseToolCalls(map[string]any{
+	calls, err := ParseToolCalls(map[string]any{
 		"tool_calls": []any{
 			map[string]any{"id": "c1", "function": map[string]any{
 				"name": "read_file", "arguments": `{"path":"a.txt"}`}},
-			map[string]any{"id": "c2", "function": map[string]any{
-				"name": "search", "arguments": `not valid json`}},
-			map[string]any{"id": "c3", "function": map[string]any{"name": ""}},
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 1 || calls[0].Arguments["path"] != "a.txt" {
+		t.Errorf("calls = %+v, want the decoded arguments", calls)
+	}
 
-	if len(calls) != 2 {
-		t.Fatalf("parsed %d calls, want 2 (the unnamed one is dropped)", len(calls))
+	// No tool_calls at all is how a model says it is finished, not a
+	// malformed message.
+	calls, err = ParseToolCalls(map[string]any{"content": "done"})
+	if err != nil || len(calls) != 0 {
+		t.Errorf("an absent tool_calls must be clean: %v %v", calls, err)
 	}
-	if calls[0].Arguments["path"] != "a.txt" {
-		t.Errorf("arguments = %v, want the decoded object", calls[0].Arguments)
-	}
-	// A malformed blob yields an empty argument set, which the tool then
-	// refuses by name -- not a parse failure that ends everything.
-	if len(calls[1].Arguments) != 0 {
-		t.Errorf("a malformed argument blob must yield no arguments: %v", calls[1].Arguments)
+}
+
+func TestAMalformedToolCallFailsRatherThanBeingGuessedAt(t *testing.T) {
+	// Dropping an unparseable call, or executing it with empty arguments,
+	// both amount to guessing what the model meant to invoke -- and a wrong
+	// guess runs a tool against arguments nobody chose.
+	//
+	// Found by probe_api_runner_parity.py: this implementation originally
+	// decoded a malformed blob to empty arguments and let the tool refuse it
+	// by name, which counted a tool call Python never made.
+	for _, message := range []map[string]any{
+		{"tool_calls": "not a list"},
+		{"tool_calls": []any{"not an object"}},
+		{"tool_calls": []any{map[string]any{"id": "c1"}}},
+		{"tool_calls": []any{map[string]any{"id": "c1", "function": map[string]any{"name": ""}}}},
+		{"tool_calls": []any{map[string]any{"id": "c1", "function": map[string]any{
+			"name": "read_file", "arguments": "not valid json"}}}},
+	} {
+		if _, err := ParseToolCalls(message); err == nil {
+			t.Errorf("a malformed message must fail: %v", message)
+		}
 	}
 }
 
 func TestOnlyAuthorizedToolsAreOffered(t *testing.T) {
-	readOnly := buildToolSchemas(AvailableToolNames(false, nil))
+	readOnly := buildToolSchemas(AvailableToolNames(nil, false, nil))
 	for _, schema := range readOnly {
 		name := schema["function"].(map[string]any)["name"]
 		if name == "write_file" || name == "run_command" {
