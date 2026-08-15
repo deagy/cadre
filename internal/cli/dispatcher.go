@@ -85,7 +85,8 @@ func Usage(subcommands []Subcommand) string {
 		{Name: "generate-role-metadata", Description: "Regenerate roster/catalog.yaml and routing.json from role metadata"},
 		{Name: "generate-authority-aides", Description: "Regenerate roster/authority/*-aide AGENT.md files"},
 		{Name: "upgrade", Description: "Check for Cadre updates and upgrade the CLI (--check, --force, --help)"},
-		{Name: "mcp-dispatch-server", Description: "Run the Codex MCP dispatch server (stdio; requires the mcp package)"},
+		{Name: "mcp-dispatch-server", Description: "Run the MCP dispatch server (stdio)"},
+		{Name: "mcp-gitlab-server", Description: "Run the GitLab evidence MCP server (stdio; three create-only tools)"},
 		{Name: "knowledge", Description: "Vectorized knowledge store (init, stats, search, context)"},
 		{Name: "doctor", Description: "Report which cadre binary is running, what kind of install it is, and warn on a cwd/checkout mismatch"},
 		{Name: "selection-telemetry", Description: "Summarize opt-in, local cadre select telemetry"},
@@ -269,6 +270,10 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 
 	if command == "mcp-dispatch-server" {
 		return MCPDispatchServerCmd(rest, deps.Stdout, deps.Stderr)
+	}
+
+	if command == "mcp-gitlab-server" {
+		return MCPGitLabServerCmd(rest, deps.Stdout, deps.Stderr)
 	}
 
 	// Every subcommand this dispatcher serves is routed above, in Go. There

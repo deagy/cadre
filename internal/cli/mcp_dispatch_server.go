@@ -72,7 +72,7 @@ func MCPDispatchServerCmd(args []string, stdout, stderr io.Writer) int {
 	}
 
 	// Run the MCP server loop on stdio
-	if err := runMCPDispatchServer(ctx, server, os.Stdin, os.Stdout, os.Stderr); err != nil {
+	if err := runMCPServer(ctx, "cadre-dispatch", server, os.Stdin, os.Stdout, os.Stderr); err != nil {
 		_, _ = fmt.Fprintf(stderr, "cadre: mcp-dispatch-server error: %v\n", err)
 		return 1
 	}
@@ -80,7 +80,17 @@ func MCPDispatchServerCmd(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// runMCPDispatchServer serves the Model Context Protocol on stdio.
+// mcpToolServer is the whole of what the transport needs from a tool server:
+// what it offers, and what happens when one is called. Both stdio servers --
+// dispatch and GitLab evidence -- satisfy it, so the protocol is written and
+// tested once. Two hand-rolled JSON-RPC loops would be two chances to make
+// the framing mistakes documented below.
+type mcpToolServer interface {
+	GetToolDefinitions() []orchestration.MCPToolDefinition
+	DispatchToolCall(name string, args json.RawMessage) *orchestration.MCPToolResponse
+}
+
+// runMCPServer serves the Model Context Protocol on stdio.
 //
 // MCP is JSON-RPC 2.0: every message carries "jsonrpc":"2.0", requests carry
 // an "id" and a "method", and notifications carry a method with no id and get
@@ -94,9 +104,10 @@ func MCPDispatchServerCmd(args []string, stdout, stderr io.Writer) int {
 // docs/INSTALL.md documents (`command = "cadre"`, `args =
 // ["mcp-dispatch-server"]`) fail on the first message. The Python server it
 // replaced used the official SDK and spoke the real protocol.
-func runMCPDispatchServer(
+func runMCPServer(
 	_ context.Context,
-	server *orchestration.DispatchMCPServer,
+	serverName string,
+	server mcpToolServer,
 	stdin io.Reader,
 	stdout, stderr io.Writer,
 ) error {
@@ -156,7 +167,7 @@ func runMCPDispatchServer(
 					// calls it would have to refuse.
 					"capabilities": map[string]any{"tools": map[string]any{}},
 					"serverInfo": map[string]any{
-						"name":    "cadre-dispatch",
+						"name":    serverName,
 						"version": CLIVersionOrUnknown(),
 					},
 				}),
