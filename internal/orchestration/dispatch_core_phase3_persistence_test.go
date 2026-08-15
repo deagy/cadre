@@ -3,6 +3,7 @@ package orchestration
 import (
 	"database/sql"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -15,6 +16,13 @@ func newTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("failed to create test database: %v", err)
 	}
+	// One connection, deliberately. Every connection to ":memory:" gets its
+	// own private database, and database/sql opens as many as it likes: a
+	// concurrent test could write on one connection and then read from a
+	// different, empty one. That made TestConcurrentAccess fail intermittently
+	// with "concurrent access failed", which reads like a locking problem and
+	// is not one.
+	db.SetMaxOpenConns(1)
 	return db
 }
 
@@ -332,16 +340,22 @@ func TestConcurrentJobAccess(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		go func(idx int) {
-			jobID := "job_concurrent_" + string(rune(idx))
+			// strconv, not string(rune(idx)): the latter turns 0..9 into
+			// control characters, so every id was "job_concurrent_" followed
+			// by an invisible byte -- including a NUL for idx 0. The failure
+			// message then named them all identically.
+			jobID := "job_concurrent_" + strconv.Itoa(idx)
 			result := map[string]any{"index": idx, "status": "success"}
 
-			// Record
-			_ = store.RecordJob(jobID, result)
-
-			// Retrieve
-			retrieved := store.GetJob(jobID)
-			if retrieved == nil {
-				t.Errorf("concurrent access failed for job %s", jobID)
+			// The write's error is checked. Discarding it meant a failed
+			// write surfaced later as a nil read, reported as "concurrent
+			// access failed" -- which points at locking rather than at the
+			// write that actually failed.
+			if err := store.RecordJob(jobID, result); err != nil {
+				t.Errorf("concurrent write failed for job %s: %v", jobID, err)
+			}
+			if retrieved := store.GetJob(jobID); retrieved == nil {
+				t.Errorf("concurrent read found nothing for job %s", jobID)
 			}
 
 			done <- true

@@ -212,13 +212,28 @@ func ExecuteDispatchChild(
 	}
 
 	switch runner {
-	case RunnerClaudeCode:
-		return spawnClaudeCodeChildIn(ctx.ProjectRoot, ctx.Prompt, ctx.Model, ctx.Sandbox,
-			ctx.ReasoningEffort, env, timeout)
+	case RunnerClaudeCode, RunnerCodex:
+		// Only the CLI runners get a final-handoff channel: they are the ones
+		// that speak to this process through a pipe, so a structured result
+		// needs somewhere to go that is not the transcript. The api runner
+		// already returns structure directly.
+		childEnv, prompt, channel := prepareFinalHandoffChannel(env, ctx.Prompt)
+		defer channel.cleanup()
 
-	case RunnerCodex:
-		return spawnCodexChildIn(ctx.ProjectRoot, ctx.Prompt, ctx.Model, ctx.Sandbox,
-			ctx.ReasoningEffort, ctx.ModelTier, env, timeout)
+		var result map[string]any
+		if runner == RunnerClaudeCode {
+			result = spawnClaudeCodeChildIn(ctx.ProjectRoot, prompt, ctx.Model, ctx.Sandbox,
+				ctx.ReasoningEffort, childEnv, timeout)
+		} else {
+			result = spawnCodexChildIn(ctx.ProjectRoot, prompt, ctx.Model, ctx.Sandbox,
+				ctx.ReasoningEffort, ctx.ModelTier, childEnv, timeout)
+		}
+		// Read on every outcome, including a failed or timed-out child: a
+		// child that wrote its handoff and then crashed still said something,
+		// and discarding it because the exit code was non-zero loses the one
+		// structured account of what it did.
+		channel.read(result)
+		return result
 
 	case RunnerAPI:
 		// Spawns no child process: it drives a chat endpoint and executes the
