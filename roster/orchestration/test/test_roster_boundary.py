@@ -369,8 +369,8 @@ class TestPlatformAnchorsDoNotFollowTheRoster(unittest.TestCase):
             "_PLATFORM_ROSTER_ROOT",
             names,
             "_SHARED_SRC_DIR must stay platform-anchored: it is the sys.path "
-            "bootstrap through which settings, routing_overlay, text_embedding "
-            "and content_protection are imported, so a roster-driven value "
+            "bootstrap through which settings and routing_overlay are "
+            "imported, so a roster-driven value "
             "would let a resolved roster supply the platform's own resolver.",
         )
 
