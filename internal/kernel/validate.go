@@ -23,10 +23,10 @@ import (
 // `ready` is separate from `valid`, and why unresolved applicability blocks
 // rather than defaulting to "probably not applicable".
 //
-// This file is the configuration half. Run-record validation is the other
-// half, and until both are here the subcommand stays unwired: a validate that
-// skipped run records would answer "valid" for a repository it never looked
-// at properly.
+// This file is the configuration half; validate_runrecord.go is the other.
+// ValidateProject runs both, and the subcommand calls that rather than either
+// alone -- a validate that skipped run records would answer "valid" for a
+// repository it never looked at properly.
 
 // ValidationReport is what `validate` prints.
 type ValidationReport struct {
@@ -67,14 +67,37 @@ func (a *validationAccumulator) report() ValidationReport {
 	}
 }
 
+// ValidateProject is the whole answer: configuration and run records.
+//
+// `validate` reports both together because either alone would be misleading.
+// A project whose configuration is impeccable can still hold a run record
+// claiming a gate was approved by its own author, and a project with a
+// spotless record history can still be pointed at a profile nobody installed.
+func (r *Registry) ValidateProject(root string, overlay *ProjectOverlay) ValidationReport {
+	accumulator := &validationAccumulator{}
+	policy := r.validateConfigurationInto(accumulator, overlay)
+	r.validateRunRecords(accumulator, root, overlay, policy)
+	return accumulator.report()
+}
+
 // ValidateConfiguration checks a project's overlay: its profile, approval
 // policy, environments, command confirmation, version lock, authorities,
 // impact profile and routing.
 //
-// Run records are validated separately. This function is exported so the two
-// halves can be tested apart, not so either can be run alone as an answer.
+// Exported so the two halves can be tested apart -- not so either can be run
+// alone as an answer. `validate` calls ValidateProject.
 func (r *Registry) ValidateConfiguration(root string, overlay *ProjectOverlay) ValidationReport {
 	accumulator := &validationAccumulator{}
+	r.validateConfigurationInto(accumulator, overlay)
+	return accumulator.report()
+}
+
+// validateConfigurationInto runs the configuration checks and hands back the
+// approval policy, which the run-record half needs: whether an approval must
+// be backed by a forge review is a property of the project, not of the gate.
+func (r *Registry) validateConfigurationInto(
+	accumulator *validationAccumulator, overlay *ProjectOverlay,
+) ApprovalPolicy {
 
 	// The profile must be one that is actually installed. A project naming a
 	// profile no provider supplies has gate bindings nobody can resolve.
@@ -145,7 +168,7 @@ func (r *Registry) ValidateConfiguration(root string, overlay *ProjectOverlay) V
 	validateImpact(accumulator, overlay.Impact)
 	r.validateRouting(accumulator, overlay.Routing)
 
-	return accumulator.report()
+	return policy
 }
 
 // validateAuthorities checks that every role a gate can require is resolved.

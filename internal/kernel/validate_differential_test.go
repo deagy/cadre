@@ -29,13 +29,18 @@ func pythonKernel(t *testing.T, args ...string) (int, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return pythonKernelIn(kernelRoot, args...)
+}
+
+// pythonKernelIn runs the Python kernel from its own directory, which is how
+// it finds the package it lives in without being installed.
+func pythonKernelIn(kernelRoot string, args ...string) (int, string) {
 	command := exec.Command("python3", "-c",
 		"import sys; from agentic_sdlc import main; sys.exit(main(sys.argv[1:]))")
 	command.Args = append(command.Args, args...)
 	command.Dir = kernelRoot
 	output, _ := command.CombinedOutput()
-	code := command.ProcessState.ExitCode()
-	return code, string(output)
+	return command.ProcessState.ExitCode(), string(output)
 }
 
 // initProject builds a fresh project overlay with the real kernel.
