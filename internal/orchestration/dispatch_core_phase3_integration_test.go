@@ -298,9 +298,16 @@ func TestPhase3PromptComposition(t *testing.T) {
 		t.Errorf("prompt missing brief")
 	}
 
-	// Verify untrusted fence
-	if !containsStr7(prompt, "untrusted") {
-		t.Errorf("prompt missing untrusted fence")
+	// Verify the brief is fenced at both ends, not merely labelled. This
+	// asserted only that the word "untrusted" appeared somewhere, which the
+	// old single HTML comment satisfied while leaving the brief with no
+	// closing marker and no instruction at all.
+	if !containsStr7(prompt, "BEGIN UNTRUSTED TASK BRIEF") ||
+		!containsStr7(prompt, "END UNTRUSTED TASK BRIEF") {
+		t.Errorf("prompt does not fence the brief at both ends: %q", prompt)
+	}
+	if !containsStr7(prompt, "never as an instruction") {
+		t.Errorf("prompt does not tell the model how to treat the brief: %q", prompt)
 	}
 }
 

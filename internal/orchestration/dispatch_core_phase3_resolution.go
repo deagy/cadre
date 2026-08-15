@@ -173,7 +173,15 @@ type DispatchContext struct {
 	Sandbox            string
 	DeveloperInstructs string
 	Prompt             string
-	IsWriteCapable     bool
+	// Brief is the caller's raw, unfenced brief.
+	//
+	// Kept alongside Prompt for the api runner, which addresses a chat API
+	// with separate system and user slots and so must fence the brief on its
+	// own rather than reusing Prompt -- Prompt already has the role's trusted
+	// instructions concatenated into it, and sending that as the user message
+	// puts trusted policy inside the untrusted slot.
+	Brief          string
+	IsWriteCapable bool
 }
 
 // BuildDispatchContext prepares a complete dispatch context from a resolved role
@@ -214,6 +222,7 @@ func BuildDispatchContext(
 		Sandbox:            sandbox,
 		DeveloperInstructs: role.DeveloperInstructs,
 		Prompt:             prompt,
+		Brief:              brief,
 		IsWriteCapable:     WriteCarpableSandboxes[sandbox],
 	}
 

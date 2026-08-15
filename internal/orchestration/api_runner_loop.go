@@ -515,11 +515,22 @@ func SpawnAPIChild(ctx DispatchContext, config APIRunnerConfig, timeout time.Dur
 	}
 	tools := buildToolSchemas(available)
 
+	// A chat API has separate system and user slots, so the split the stdio
+	// runners fake by concatenation is available for real: the role's own
+	// instructions are the system message, and the user message is the
+	// fenced brief and nothing else.
+	//
+	// This sent ctx.Prompt as the user message, which is
+	// ComposePrompt(instructions, brief) -- so the role's trusted
+	// instructions were both the system message and the opening of the
+	// untrusted user message. Beyond the duplication, that puts trusted
+	// policy inside the slot the model is told to treat as caller-supplied
+	// data, which is the boundary the fence exists to draw.
 	messages := []ChatMessage{}
 	if ctx.DeveloperInstructs != "" {
 		messages = append(messages, ChatMessage{Role: "system", Content: ctx.DeveloperInstructs})
 	}
-	messages = append(messages, ChatMessage{Role: "user", Content: ctx.Prompt})
+	messages = append(messages, ChatMessage{Role: "user", Content: FenceUntrustedBrief(ctx.Brief)})
 
 	result, err := RunAPIDispatch(context.Background(), endpoint, box, messages, tools, timeout)
 	if err != nil {
