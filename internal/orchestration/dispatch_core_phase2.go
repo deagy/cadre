@@ -162,9 +162,9 @@ func DispatchSecureCloudRole(
 	dispatchCtx.ProjectRoot = roots.ProjectRoot
 
 	if !wait {
-		return dispatchAsync(roots, dispatchCtx, role, classification, taskID, sessionID, runner, effectiveSandbox, mode)
+		return dispatchAsync(roots, dispatchCtx, role, classification, parentClassification, taskID, sessionID, runner, effectiveSandbox, mode)
 	}
-	return dispatchSync(roots, dispatchCtx, role, classification, taskID, sessionID, runner, effectiveSandbox, mode)
+	return dispatchSync(roots, dispatchCtx, role, classification, parentClassification, taskID, sessionID, runner, effectiveSandbox, mode)
 }
 
 // auditDecision records a dispatch outcome that never reached a child.
@@ -294,7 +294,7 @@ func dispatchSync(
 	roots DispatchRoots,
 	dispatchCtx *DispatchContext,
 	role *ResolvedRole,
-	classification, taskID, sessionID, runner, effectiveSandbox, mode string,
+	classification, parentClassification, taskID, sessionID, runner, effectiveSandbox, mode string,
 ) map[string]any {
 	if !dispatchLimiter.TryAcquire() {
 		return map[string]any{
@@ -308,6 +308,11 @@ func dispatchSync(
 	env[ParentClassificationVar] = classification
 
 	result := ExecuteDispatchChild(dispatchCtx, runner, env, DefaultTimeoutSeconds)
+	// Capture before the audit, so the audit record can say whether the
+	// handoff was stored -- and best-effort, because a capture that failed
+	// must not change whether the child completed.
+	result["context_capture"] = AutomaticContextCapture(roots.ProjectRoot,
+		result, dispatchCtx.RoleID, taskID, sessionID, parentClassification, classification)
 	recordDispatchAudit(role, dispatchCtx.RoleID, taskID, sessionID,
 		classification, mode, effectiveSandbox, runner, result)
 	return result
@@ -318,7 +323,7 @@ func dispatchAsync(
 	roots DispatchRoots,
 	dispatchCtx *DispatchContext,
 	role *ResolvedRole,
-	classification, taskID, sessionID, runner, effectiveSandbox, mode string,
+	classification, parentClassification, taskID, sessionID, runner, effectiveSandbox, mode string,
 ) map[string]any {
 	jobID, err := generateJobID()
 	if err != nil {
@@ -344,6 +349,8 @@ func dispatchAsync(
 	go func() {
 		defer dispatchLimiter.Release()
 		result := ExecuteDispatchChild(dispatchCtx, runner, env, DefaultTimeoutSeconds)
+		result["context_capture"] = AutomaticContextCapture(roots.ProjectRoot,
+			result, dispatchCtx.RoleID, taskID, sessionID, parentClassification, classification)
 		recordDispatchAudit(role, dispatchCtx.RoleID, taskID, sessionID,
 			classification, mode, effectiveSandbox, runner, result)
 
