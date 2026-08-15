@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -117,7 +118,16 @@ func Open(dbPath string) (*Store, error) {
 	}
 
 	// Open SQLite database
-	db, err := sql.Open("sqlite3", dbPath)
+	// Pragmas go in the DSN, not in Exec calls afterwards.
+	//
+	// database/sql hands out connections from a pool, so a `PRAGMA` run via
+	// db.Exec applies to whichever connection served it and to no other. A
+	// busy_timeout set that way is absent on the next connection, which is
+	// how two concurrent `cadre knowledge ingest` runs failed with
+	// "cannot open store: failed to set pragma: database is locked" -- the
+	// timeout was set on one connection while journal_mode blocked on
+	// another. In the DSN, every connection the pool opens carries them.
+	db, err := sql.Open("sqlite3", dsn(dbPath))
 	if err != nil {
 		return nil, fmt.Errorf("cannot open knowledge store database: %w", err)
 	}
@@ -137,12 +147,59 @@ func Open(dbPath string) (*Store, error) {
 	return &Store{db: db, path: dbPath}, nil
 }
 
-// configureDB sets SQLite pragmas for consistency and performance.
-func configureDB(db *sql.DB) error {
-	pragmas := []string{
-		"PRAGMA foreign_keys = ON",
-		"PRAGMA journal_mode = WAL",
+// execWithBusyRetry runs a statement, waiting out a locked database.
+//
+// Bounded by BusyTimeout so a genuinely stuck lock fails rather than hanging
+// a CLI invocation forever. Only "database is locked" is retried: every other
+// error is returned immediately, so a schema mistake does not spend the
+// timeout before surfacing.
+func execWithBusyRetry(db *sql.DB, statement string) error {
+	deadline := time.Now().Add(BusyTimeout)
+	delay := 10 * time.Millisecond
+	for {
+		_, err := db.Exec(statement)
+		if err == nil {
+			return nil
+		}
+		if !strings.Contains(err.Error(), "database is locked") || time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(delay)
+		if delay < 200*time.Millisecond {
+			delay *= 2
+		}
 	}
+}
+
+// dsn builds the connection string, carrying every pragma so the pool cannot
+// hand out a connection configured differently from its siblings.
+func dsn(dbPath string) string {
+	return fmt.Sprintf("file:%s?_busy_timeout=%d&_journal_mode=WAL&_foreign_keys=on",
+		dbPath, BusyTimeout.Milliseconds())
+}
+
+// BusyTimeout is how long a connection waits for a lock before giving up.
+//
+// Without it SQLite returns SQLITE_BUSY the instant a lock is held, and two
+// processes opening the same store at once means one of them simply fails.
+// The knowledge store is opened per CLI invocation, so "at once" is the
+// ordinary case whenever anything ingests concurrently.
+const BusyTimeout = 5 * time.Second
+
+// configureDB sets SQLite pragmas for consistency and performance.
+//
+// busy_timeout is first, and that order is load-bearing: `journal_mode = WAL`
+// itself needs a brief exclusive lock, so setting it before a timeout is
+// configured is exactly the call that fails under concurrency. Two concurrent
+// `cadre knowledge ingest` runs failed with
+// "cannot open store: failed to set pragma: database is locked" -- the store
+// could not be opened twice at once at all.
+func configureDB(db *sql.DB) error {
+	// Empty on purpose: every pragma is in the DSN above, where it applies to
+	// every pooled connection rather than to whichever one Exec happened to
+	// get. Left as a named seam so a future pragma has an obvious home and
+	// the reason it must go in the DSN is written down next to it.
+	pragmas := []string{}
 	for _, pragma := range pragmas {
 		if _, err := db.Exec(pragma); err != nil {
 			return fmt.Errorf("failed to set pragma: %w", err)
@@ -152,8 +209,18 @@ func configureDB(db *sql.DB) error {
 }
 
 // initSchema creates tables and indexes. Idempotent: safe to call multiple times.
+//
+// Retries while the database is locked, which busy_timeout alone does not
+// cover. Every CLI invocation opens the store and runs this, so two
+// concurrent `cadre knowledge ingest` calls both attempt DDL; SQLite does not
+// apply busy_timeout to a lock upgrade inside a transaction, so the loser
+// fails immediately with "database is locked" rather than waiting. That is
+// not a rare race -- it reproduced in roughly half of ten runs.
+//
+// Retrying is correct rather than merely convenient: the statement is
+// idempotent, so the retry either finds the work already done or does it.
 func initSchema(db *sql.DB) error {
-	if _, err := db.Exec(schema); err != nil {
+	if err := execWithBusyRetry(db, schema); err != nil {
 		return fmt.Errorf("cannot initialize schema: %w", err)
 	}
 	// Add any new columns via migration function (for schema evolution)

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 )
 
 // Integration tests for Python interoperability and cross-language workflows.
@@ -514,42 +513,56 @@ func TestPythonInteropConcurrentOperations(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "test-concurrent.db")
 	cfgPath := writeIntegrationConfig(t, tmpDir, dbPath)
 
-	// Simulate concurrent Python scripts writing to same store
-	// (tests that store handles multiple simultaneous operations)
+	// Two writers against one store, to prove the store serialises them
+	// rather than losing one.
+	//
+	// This used to launch both in bare goroutines, sleep 500ms, and hope --
+	// while discarding both subprocess errors and the stats decode. It flaked
+	// twice in CI, and when it did the only symptom was "expected 2, got 1"
+	// with no way to tell a lost write from a slow one. A WaitGroup removes
+	// the timing guess; checking the errors makes a real failure say what
+	// happened.
+	messages := []struct{ source, payload string }{
+		{"script-1", `{"message_id": "c1", "conversation_id": "concurrent", "role": "user", "content": "from script 1"}`},
+		{"script-2", `{"message_id": "c2", "conversation_id": "concurrent", "role": "user", "content": "from script 2"}`},
+	}
 
-	// Script 1: Ingest
-	go func() {
-		msg := `{"message_id": "c1", "conversation_id": "concurrent", "role": "user", "content": "from script 1"}`
-		cmd := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest",
-			"--source", "script-1",
-			"--classification", "internal")
-		cmd.Stdin = bytes.NewBufferString(msg)
-		cmd.CombinedOutput()
-	}()
+	var waitGroup sync.WaitGroup
+	failures := make([]string, len(messages))
 
-	// Script 2: Ingest
-	go func() {
-		msg := `{"message_id": "c2", "conversation_id": "concurrent", "role": "user", "content": "from script 2"}`
-		cmd := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest",
-			"--source", "script-2",
-			"--classification", "internal")
-		cmd.Stdin = bytes.NewBufferString(msg)
-		cmd.CombinedOutput()
-	}()
+	for index, message := range messages {
+		waitGroup.Add(1)
+		go func(index int, source, payload string) {
+			defer waitGroup.Done()
+			command := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "ingest",
+				"--source", source, "--classification", "internal")
+			command.Stdin = bytes.NewBufferString(payload)
+			if output, err := command.CombinedOutput(); err != nil {
+				failures[index] = fmt.Sprintf("%s: %v\n%s", source, err, output)
+			}
+		}(index, message.source, message.payload)
+	}
+	waitGroup.Wait()
 
-	// Wait for goroutines
-	time.Sleep(500 * time.Millisecond)
+	for _, failure := range failures {
+		if failure != "" {
+			t.Fatalf("a concurrent ingest failed:\n%s", failure)
+		}
+	}
 
-	// Verify both messages ingested
-	cmd := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "stats", "--json")
-	output, _ := cmd.CombinedOutput()
-
-	var stats map[string]interface{}
-	json.Unmarshal(output, &stats)
+	output, err := exec.Command(cliBinaryPath(t), "knowledge", "--config", cfgPath, "stats", "--json").CombinedOutput()
+	if err != nil {
+		t.Fatalf("stats failed: %v\n%s", err, output)
+	}
+	var stats map[string]any
+	if err := json.Unmarshal(output, &stats); err != nil {
+		t.Fatalf("stats returned output that is not JSON: %v\n%s", err, output)
+	}
 
 	totalMessages, _ := stats["total_messages"].(float64)
-	if int(totalMessages) != 2 {
-		t.Errorf("Expected 2 concurrent ingestions, got: %v", totalMessages)
+	if int(totalMessages) != len(messages) {
+		t.Errorf("total_messages = %v, want %d -- a concurrent write was lost",
+			stats["total_messages"], len(messages))
 	}
 }
 
