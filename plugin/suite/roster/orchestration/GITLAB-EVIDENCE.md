@@ -3,16 +3,16 @@
 # GitLab evidence MCP server: setup and usage
 
 Operator setup, configuration, and usage reference for
-`gitlab_core.py`/`gitlab_server.py` (this directory) — a separate, create-only
+`internal/orchestration/gitlab.go`/`gitlab_mcp.go` — a separate, create-only
 MCP surface that lets any dispatched agent record human-reviewable evidence
 in a single, pre-configured, docs-only GitLab project: a review-subtask issue,
 a wiki page, or an evidence comment. It is intentionally narrower than the
-agents dispatch MCP server (`dispatch_server.py`, see
+agents dispatch MCP server (`cadre mcp-dispatch-server`, see
 `.agents/skills/run-agent-orchestration/references/runner-adapters.md`'s
 "Register the MCP dispatch server" step) — different module, different token,
 different transport — and is documented separately here.
 
-Read `../SECURITY-CONTROLS.md`'s "GitLab evidence MCP server" section for the
+Read `SECURITY-CONTROLS.md`'s "GitLab evidence MCP server" section for the
 control-by-control (mechanically-enforced vs. advisory) detail before relying
 on this integration for anything beyond local development; this document
 does not repeat that detail, only cross-references it.
@@ -49,7 +49,7 @@ one; `GITLAB_SVC_TOKEN` is never accepted from any config file at all, and
 
 | Variable | Required | Meaning |
 | --- | --- | --- |
-| `GITLAB_SVC_TOKEN` | yes | The GitLab service-account (project access) token. This is the **only** recognized name — `GL_SVC_TOKEN` and `GITLAB_SERVICE_TOKEN` are explicitly *not* honored as aliases; there is no alias-lookup code in `gitlab_core.py` at all. Read lazily, only from inside a tool call that needs it, never at import/startup time; never written to a log line, exception message, or audit record. |
+| `GITLAB_SVC_TOKEN` | yes | The GitLab service-account (project access) token. This is the **only** recognized name — `GL_SVC_TOKEN` and `GITLAB_SERVICE_TOKEN` are explicitly *not* honored as aliases; there is no alias-lookup code in `internal/orchestration/gitlab.go` at all. Read lazily, only from inside a tool call that needs it, never at import/startup time; never written to a log line, exception message, or audit record. |
 | `GITLAB_BASE_URL` | yes | The GitLab instance base URL. Must start with `https://` — there is no code path in this module that accepts `http://` or disables TLS certificate verification. Also rejected: a URL containing URL userinfo (an `@` in the host component, e.g. `https://gitlab.example.com@attacker.com/`), which would otherwise cause the client to actually connect to the host after the `@` while looking, at a glance, like it targets the expected instance. |
 | `GITLAB_DOCS_PROJECT_ID` | yes | The target project: a numeric project ID or a `namespace/project` path. |
 | `GITLAB_SUPPORTS_WORK_ITEM_HIERARCHY` | no | `"true"`/`"false"`, informational only. **Setting this to `true` does not change client behavior.** `create_review_subtask` always uses the documented fallback shape (an explicit `Parent: #<iid>` reference plus a `/relate` quick action in the subtask's description) regardless of this flag's value — the value is only threaded through into the tool's result (`hierarchy_supported`) so a caller can see what the instance is believed to support. A verified GraphQL work-item-hierarchy mutation was deliberately not implemented (its exact schema could not be verified against a real instance) and is tracked as follow-up work, not shipped here. Do not expect GraphQL-hierarchy issue linking from setting this flag; it is a status report, not a switch. |
@@ -59,33 +59,37 @@ to a fixed path, `~/.agents/mcp-gitlab/audit.jsonl` (distinct from the
 dispatch MCP server's own `~/.agents/mcp-dispatch/audit.jsonl`), covering
 every `confirmation-requested`/`confirmed`/`denied`/`unavailable`/`ok`
 outcome, not only final success. **As of the code on disk, this path is not
-configurable by an environment variable** — `gitlab_core.py` exposes an
-internal `audit_path` parameter used only by its own tests, and neither
-`gitlab_server.py`'s three registered MCP tools nor any documented env var
-lets a caller redirect it. Records never contain the token, the wiki/comment/
+configurable by an environment variable** — `cadre mcp-gitlab-server` takes
+an `--audit-path` flag (and `cadre gitlab-evidence` an `--audit-path`
+option), but neither the three registered MCP tools nor any documented env
+var lets a *caller* redirect it: the path is an operator decision made when
+the server is started, and an audit trail its caller can redirect is not an
+audit trail. Records never contain the token, the wiki/comment/
 issue body content, a raw confirmation-token value, or a raw GitLab error
 response body — only identifiers, content hashes/lengths, and the decision.
-`build_audit_record`'s `_FORBIDDEN_AUDIT_KEYS` set includes `token`,
-`confirmation_token`, and (as of this fix) `content`/`body`/`description` as
+the audit writer's `forbiddenAuditKeys` set includes `token`,
+`confirmation_token`, and `content` as
 a defense-in-depth backstop, failing loudly rather than silently dropping the
 value if a future change ever tries to log one of those directly; a GitLab
 error response body specifically is never passed to the audit writer at all
-(not even under a different key) — `gitlab_core.py` logs a body-free,
+(not even under a different key) — `gitlab.go` logs a body-free,
 this-module-generated reason plus, when available, a hash/length of the
 error body, never the body's content.
 
-**Running the server.** There is currently no `bin/cadre` subcommand wired to
-`gitlab_server.py` (unlike `cadre mcp-dispatch-server` for the dispatch
-server) — invoke it directly:
+**Running the server.**
 
 ```sh
-pip install -r roster/orchestration/mcp/requirements-mcp.txt  # stdio transport only
-python3 roster/orchestration/mcp/gitlab_server.py
+cadre mcp-gitlab-server            # stdio; add --audit-path to relocate the log
 ```
 
 Register it in your MCP-capable host the same way you would register the
-dispatch server (an `[mcp_servers]` entry pointing `command`/`args` at the
-line above), substituting your host's own config syntax.
+dispatch server — an `[mcp_servers]` entry with `command = "cadre"` and
+`args = ["mcp-gitlab-server"]`, substituting your host's own config syntax.
+
+This was `python3 roster/orchestration/mcp/gitlab_server.py` plus a
+`pip install mcp`, with no `bin/cadre` subcommand of its own. Both the Python
+server and that dependency are gone: the tools are served by the same Go
+JSON-RPC transport `cadre mcp-dispatch-server` uses.
 
 ## Operator setup requirements (not optional guidance)
 
@@ -133,7 +137,7 @@ list: that file's existing entries are organization-wide technology
 decisions (e.g. "no compliance framework applies"), and this exception is
 scoped to one MCP integration's one credential, not to a stack-wide standard.
 
-- **Description:** the GitLab evidence MCP server (`gitlab_core.py`) reads a
+- **Description:** the GitLab evidence MCP server (`internal/orchestration/gitlab.go`) reads a
   single static, long-lived service-account (project access) token from
   `GITLAB_SVC_TOKEN`, rather than a short-lived credential issued by OpenBao
   through the External Secrets Operator.
@@ -146,11 +150,11 @@ scoped to one MCP integration's one credential, not to a stack-wide standard.
   matching the cadence of `team-profile.yaml`'s existing
   `out_of_scope_standards` entries).
 - **Scope note:** this exception covers only `GITLAB_SVC_TOKEN` as consumed
-  by `gitlab_core.py`/`gitlab_server.py`. It does not exempt this
+  by `internal/orchestration/gitlab.go`. It does not exempt this
   integration from the baseline secret-hygiene practice `team-profile.yaml`
   still requires regardless of framework applicability: the token must never
   appear in logs, audit records, or generated documentation (mechanically
-  enforced here — see `../SECURITY-CONTROLS.md`'s "Token handling" entry), and
+  enforced here — see `SECURITY-CONTROLS.md`'s "Token handling" entry), and
   must remain scoped to the single dedicated project described above.
 - **Compensating control:** residual risk is mitigated operationally, not
   in code — by isolating the token to a dedicated project with no CI/CD
@@ -173,14 +177,14 @@ oversight: containment is achieved entirely by the operator setup above
 (a dedicated, docs-only project; a least-privilege token scoped to only that
 project), not by an in-code gate here. If this integration is ever pointed at
 a project that also holds higher-classification content, this boundary must
-be revisited before that happens — see `gitlab_core.py`'s module docstring and
-`../SECURITY-CONTROLS.md`'s matching entry for the same statement.
+be revisited before that happens — see `gitlab.go`'s package doc and
+`SECURITY-CONTROLS.md`'s matching entry for the same statement.
 
 ## What the three tools do
 
 Full control-by-control detail (mechanically-enforced vs. advisory, retry/
 idempotency behavior, confirmation-gate mechanics) lives in
-`../SECURITY-CONTROLS.md`'s "GitLab evidence MCP server" section — this is a
+`SECURITY-CONTROLS.md`'s "GitLab evidence MCP server" section — this is a
 usage reference, not a restatement of that detail.
 
 - **`create_review_subtask(parent_issue_iid, title, description, gate_id, task_id)`**
@@ -258,7 +262,7 @@ wording is returned unwrapped.
 - `roster/orchestration/SECURITY-CONTROLS.md` — control-by-control
   security detail for this module and the dispatch MCP server it shares
   `ConfirmationGate`/`wrap_untrusted_output`/audit-record machinery with.
-- `roster/orchestration/mcp/gitlab_core.py`'s module docstring — the settled
+- `internal/orchestration/gitlab.go`'s package doc — the settled
   design decisions (why `ConfirmationGate` is reused rather than
   reimplemented, why the classification boundary is operational rather than
   in-code, the hierarchy-fallback rationale) in the implementer's own words.

@@ -99,8 +99,11 @@ func (server *DispatchMCPServer) HandleDispatchSecureCloudRole(req *DispatchSecu
 		}
 	}
 
-	// Call the dispatch function
+	// The server's own roots, not the caller's: a dispatched child that could
+	// name the directories its role file is looked up in could point them at
+	// a tree it wrote.
 	result := DispatchSecureCloudRole(
+		server.dispatchRoots(),
 		req.RoleID,
 		req.Brief,
 		req.Mode,
@@ -140,6 +143,7 @@ func (server *DispatchMCPServer) HandleDispatchTeam(req *DispatchTeamRequest) *M
 
 	// Call the dispatch function
 	result := DispatchTeam(
+		server.dispatchRoots(),
 		req.Members,
 		req.Mode,
 		req.Classification,
@@ -245,6 +249,14 @@ func (server *DispatchMCPServer) DispatchToolCall(toolName string, args json.Raw
 	if response, handled := server.dispatchContextToolCall(toolName, args); handled {
 		return response
 	}
+	if toolName == "dispatch_team_recipe" {
+		var request DispatchTeamRecipeRequest
+		if err := json.Unmarshal(args, &request); err != nil {
+			return &MCPToolResponse{Status: "error", IsError: true,
+				Error: fmt.Sprintf("failed to parse arguments: %v", err)}
+		}
+		return server.DispatchTeamRecipe(request)
+	}
 
 	switch toolName {
 	case "dispatch_secure_cloud_role":
@@ -318,6 +330,15 @@ func (server *DispatchMCPServer) ValidateConfig() error {
 	return nil
 }
 
+// dispatchRoots hands the server's configured tiers to the dispatch layer.
+func (server *DispatchMCPServer) dispatchRoots() DispatchRoots {
+	return DispatchRoots{
+		ProjectRoot: server.projectRoot,
+		GlobalRoot:  server.globalRoot,
+		PluginRoot:  server.pluginRoot,
+	}
+}
+
 // MCPToolDefinition describes an MCP tool
 type MCPToolDefinition struct {
 	Name        string
@@ -327,7 +348,8 @@ type MCPToolDefinition struct {
 
 // GetToolDefinitions returns the definitions of all MCP tools
 func (server *DispatchMCPServer) GetToolDefinitions() []MCPToolDefinition {
-	return append(dispatchToolDefinitions(), contextToolDefinitions()...)
+	tools := append(dispatchToolDefinitions(), contextToolDefinitions()...)
+	return append(tools, teamRecipeToolDefinition())
 }
 
 func dispatchToolDefinitions() []MCPToolDefinition {

@@ -40,6 +40,10 @@ type Toolbox struct {
 	CommandAllowlist []string
 	Deadline         time.Time
 
+	// AvailableTools is the set this dispatch may call. Empty means the
+	// caller did not narrow it, which only tests do.
+	AvailableTools []string
+
 	FilesWritten []string
 	CommandsRun  []string
 	ToolCalls    int
@@ -64,7 +68,20 @@ func (box *Toolbox) Execute(call ToolCall) string {
 	return TruncateToolResult(result)
 }
 
+func containsTool(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
+}
+
 func (box *Toolbox) execute(call ToolCall) (string, error) {
+	if len(box.AvailableTools) > 0 && !containsTool(box.AvailableTools, call.Name) {
+		return "", toolDeniedf("%q is not available to this dispatch", call.Name)
+	}
+
 	stringArg := func(name string) (string, error) {
 		value, _ := call.Arguments[name].(string)
 		if strings.TrimSpace(value) == "" {
@@ -258,26 +275,37 @@ type APIDispatchResult struct {
 // ParseToolCalls reads the tool calls out of one assistant message.
 //
 // Arguments arrive as a JSON *string*, not an object -- that is the wire
-// format, and decoding it here means a malformed argument blob is one
-// refused tool call rather than a failed dispatch.
-func ParseToolCalls(message map[string]any) []ToolCall {
-	raw, ok := message["tool_calls"].([]any)
-	if !ok {
-		return nil
+// format.
+//
+// A malformed message fails the dispatch rather than being partially
+// salvaged. Dropping an unparseable call, or executing it with empty
+// arguments, both amount to guessing what the model meant to invoke, and a
+// wrong guess here runs a tool against arguments nobody chose. Absence of
+// tool_calls is not malformed -- that is how a model says it is finished.
+func ParseToolCalls(message map[string]any) ([]ToolCall, error) {
+	rawValue, present := message["tool_calls"]
+	if !present || rawValue == nil {
+		return nil, nil
 	}
+	raw, ok := rawValue.([]any)
+	if !ok {
+		return nil, apiRunnerErrorf("tool_calls must be a list")
+	}
+
 	var calls []ToolCall
-	for _, entry := range raw {
+	for index, entry := range raw {
 		object, ok := entry.(map[string]any)
 		if !ok {
-			continue
+			return nil, apiRunnerErrorf("tool_calls[%d] must be an object", index)
 		}
 		function, ok := object["function"].(map[string]any)
 		if !ok {
-			continue
+			return nil, apiRunnerErrorf("tool_calls[%d].function must be an object", index)
 		}
 		name, _ := function["name"].(string)
 		if name == "" {
-			continue
+			return nil, apiRunnerErrorf(
+				"tool_calls[%d].function.name must be a non-empty string", index)
 		}
 		identifier, _ := object["id"].(string)
 
@@ -285,14 +313,17 @@ func ParseToolCalls(message map[string]any) []ToolCall {
 		switch encoded := function["arguments"].(type) {
 		case string:
 			if strings.TrimSpace(encoded) != "" {
-				_ = json.Unmarshal([]byte(encoded), &arguments)
+				if err := json.Unmarshal([]byte(encoded), &arguments); err != nil {
+					return nil, apiRunnerErrorf(
+						"tool_calls[%d].function.arguments is not valid JSON: %s", index, err)
+				}
 			}
 		case map[string]any:
 			arguments = encoded
 		}
 		calls = append(calls, ToolCall{ID: identifier, Name: name, Arguments: arguments})
 	}
-	return calls
+	return calls, nil
 }
 
 // RunAPIDispatch drives the endpoint until the model stops asking for tools,
@@ -351,7 +382,19 @@ func RunAPIDispatch(
 			transcript = append(transcript, content)
 		}
 
-		calls := ParseToolCalls(assistantRaw(message))
+		calls, parseErr := ParseToolCalls(assistantRaw(message))
+		if parseErr != nil {
+			// Classified exactly as an endpoint failure is: with nothing
+			// mutated it is an infrastructure problem, and past a mutation
+			// the accounting must survive.
+			if !box.Mutated() {
+				return nil, parseErr
+			}
+			transcript = append(transcript,
+				fmt.Sprintf("\n[dispatch stopped: %s]", parseErr))
+			result.ExitCode = 1
+			break
+		}
 		if len(calls) == 0 {
 			result.Completed = true
 			break
@@ -434,6 +477,12 @@ type APIRunnerConfig struct {
 	Model            string
 	CommandAllowlist []string
 	WritesAllowed    bool
+
+	// CapabilityTools is the role's declared tier from
+	// runner-capabilities.json. Nil means nothing was declared, which
+	// withholds the write tools -- an unreadable manifest must not be read as
+	// permission.
+	CapabilityTools []string
 }
 
 // SpawnAPIChild runs one API dispatch and returns the same result shape the
@@ -454,18 +503,34 @@ func SpawnAPIChild(ctx DispatchContext, config APIRunnerConfig, timeout time.Dur
 	// that flow correctly.
 	writesAllowed := config.WritesAllowed && ctx.IsWriteCapable
 
+	available := AvailableToolNames(config.CapabilityTools, writesAllowed, config.CommandAllowlist)
 	box := &Toolbox{
 		ProjectRoot:      config.ProjectRoot,
-		WritesAllowed:    writesAllowed,
 		CommandAllowlist: config.CommandAllowlist,
+		// Enforced from the same list that is advertised. Offering a tool the
+		// toolbox would refuse, or refusing one it offered, are both ways for
+		// the two to drift.
+		AvailableTools: available,
+		WritesAllowed:  containsTool(available, "write_file"),
 	}
-	tools := buildToolSchemas(AvailableToolNames(writesAllowed, config.CommandAllowlist))
+	tools := buildToolSchemas(available)
 
+	// A chat API has separate system and user slots, so the split the stdio
+	// runners fake by concatenation is available for real: the role's own
+	// instructions are the system message, and the user message is the
+	// fenced brief and nothing else.
+	//
+	// This sent ctx.Prompt as the user message, which is
+	// ComposePrompt(instructions, brief) -- so the role's trusted
+	// instructions were both the system message and the opening of the
+	// untrusted user message. Beyond the duplication, that puts trusted
+	// policy inside the slot the model is told to treat as caller-supplied
+	// data, which is the boundary the fence exists to draw.
 	messages := []ChatMessage{}
 	if ctx.DeveloperInstructs != "" {
 		messages = append(messages, ChatMessage{Role: "system", Content: ctx.DeveloperInstructs})
 	}
-	messages = append(messages, ChatMessage{Role: "user", Content: ctx.Prompt})
+	messages = append(messages, ChatMessage{Role: "user", Content: FenceUntrustedBrief(ctx.Brief)})
 
 	result, err := RunAPIDispatch(context.Background(), endpoint, box, messages, tools, timeout)
 	if err != nil {

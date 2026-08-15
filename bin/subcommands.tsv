@@ -6,7 +6,8 @@ generate-authority-aides	Regenerate roster/authority/*-aide AGENT.md files (gene
 generate-role-metadata	Regenerate roster/catalog.yaml and routing.json knowledge_focus from role metadata (generate_role_metadata.py)
 bootstrap-codex	Safely install namespaced Codex role wrappers
 resolve-shared	Resolve effective shared config for the current project (resolve.py)
-mcp-dispatch-server	Run the Codex MCP dispatch server (stdio; requires the mcp package)
+mcp-dispatch-server	Run the MCP dispatch server (stdio)
+mcp-gitlab-server	Run the GitLab evidence MCP server (stdio; three create-only tools)
 init	Guide a project through generating .agents/shared/ overlays (init_project.py)
 profile	Read-only provider/profile drift report against a consuming project's copy (profile_diff.py)
 gitlab-evidence	Non-MCP CLI over the GitLab evidence tools (create-review-subtask/write-wiki-page/write-evidence-comment)

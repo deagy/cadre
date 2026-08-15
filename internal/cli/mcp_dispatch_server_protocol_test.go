@@ -29,8 +29,8 @@ func serve(t *testing.T, requests ...string) []map[string]any {
 		ProjectRoot: t.TempDir(), GlobalRoot: t.TempDir(), PluginRoot: t.TempDir(),
 	})
 	var out strings.Builder
-	_ = runMCPDispatchServer(
-		context.Background(), server,
+	_ = runMCPServer(
+		context.Background(), "cadre-dispatch", server,
 		strings.NewReader(strings.Join(requests, "\n")+"\n"),
 		&out, io.Discard,
 	)

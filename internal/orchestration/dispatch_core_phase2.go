@@ -1,6 +1,7 @@
 package orchestration
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -17,66 +18,102 @@ var (
 	globalTeamJobStoreMu sync.Mutex
 )
 
+// DispatchRoots are the three tiers a role file is looked up in.
+//
+// Passed explicitly rather than resolved inside the dispatch functions so the
+// compiler requires every caller to supply them. They used not to be passed
+// at all, which is how dispatch came to run without ever opening a role file.
+type DispatchRoots struct {
+	ProjectRoot string
+	GlobalRoot  string
+	PluginRoot  string
+}
+
 // DispatchSecureCloudRole is the main dispatch entry point
 // Validates inputs, resolves role, spawns child, captures output, logs audit
 func DispatchSecureCloudRole(
+	roots DispatchRoots,
 	roleID, brief, mode, classification, confirmationToken, taskID, sessionID, parentClassification, runner string,
 	wait bool,
 ) map[string]any {
 	// Input validation
 	if roleID == "" {
-		return map[string]any{
-			"status": "denied",
-			"reason": "role_id is required",
-		}
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			map[string]any{
+				"status": "denied",
+				"reason": "role_id is required",
+			})
 	}
 
 	if brief == "" {
-		return map[string]any{
-			"status": "denied",
-			"reason": "brief is required",
-		}
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			map[string]any{
+				"status": "denied",
+				"reason": "brief is required",
+			})
 	}
 
 	if len(brief) > MaxBriefBytes {
-		return map[string]any{
-			"status": "denied",
-			"reason": fmt.Sprintf("brief exceeds maximum size %d bytes", MaxBriefBytes),
-		}
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			map[string]any{
+				"status": "denied",
+				"reason": fmt.Sprintf("brief exceeds maximum size %d bytes", MaxBriefBytes),
+			})
 	}
 
 	// Validate mode
 	if mode != ModePlanningOnly && mode != ModeRepositoryEdit {
-		return map[string]any{
-			"status": "denied",
-			"reason": fmt.Sprintf("mode must be '%s' or '%s'", ModePlanningOnly, ModeRepositoryEdit),
-		}
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			map[string]any{
+				"status": "denied",
+				"reason": fmt.Sprintf("mode must be '%s' or '%s'", ModePlanningOnly, ModeRepositoryEdit),
+			})
 	}
 
 	// Validate classification
 	if !Classifications[classification] {
-		return map[string]any{
-			"status": "denied",
-			"reason": fmt.Sprintf("invalid classification: %q", classification),
-		}
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			map[string]any{
+				"status": "denied",
+				"reason": fmt.Sprintf("invalid classification: %q", classification),
+			})
 	}
 
 	// Validate dispatch depth
 	currentDepth := currentDispatchDepth()
 	if currentDepth >= MaxDispatchDepth {
-		return map[string]any{
-			"status": "denied",
-			"reason": fmt.Sprintf("dispatch depth %d exceeds maximum %d", currentDepth, MaxDispatchDepth),
-		}
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			map[string]any{
+				"status": "denied",
+				"reason": fmt.Sprintf("dispatch depth %d exceeds maximum %d", currentDepth, MaxDispatchDepth),
+			})
 	}
 
-	// Check confirmation requirement (write-capable mode needs token replay)
-	effectiveSandbox, _, err := ComputeEffectiveSandbox(mode, "")
+	// The role is resolved before anything is decided about it. Its
+	// sandbox_mode is an input to the effective sandbox, which is what
+	// decides whether human confirmation is required -- so a dispatch that
+	// has not read its role file cannot know whether it needs a gate.
+	//
+	// This previously called ComputeEffectiveSandbox(mode, "") with a
+	// hard-coded empty sandbox mode, which always resolved to read-only, so
+	// the write-capable branch below never fired and no dispatch ever asked
+	// for confirmation.
+	if runner == "" {
+		runner = DefaultRunner
+	}
+	role, err := ResolveRoleForDispatch(roleID, runner, roots.ProjectRoot, roots.GlobalRoot, roots.PluginRoot, mode)
 	if err != nil {
-		return map[string]any{
-			"status": "denied",
-			"reason": err.Error(),
-		}
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			dispatchErrorResult(err))
+	}
+
+	effectiveSandbox, err := EffectiveSandboxForDispatch(role, mode)
+	if err != nil {
+		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
+			map[string]any{
+				"status": "denied",
+				"reason": err.Error(),
+			})
 	}
 
 	gate := NewConfirmationGate()
@@ -115,70 +152,179 @@ func DispatchSecureCloudRole(
 		}
 	}
 
-	// Dispatch logic for async vs sync
-	if !wait {
-		// Async dispatch - return job ID immediately
-		return dispatchAsync(roleID, brief, mode, classification, taskID, sessionID, parentClassification, runner, gate)
+	// The dispatch context carries the composed prompt: the role's own
+	// instructions, then the caller's brief behind an unforgeable fence.
+	dispatchCtx, err := BuildDispatchContext(roleID, role, brief, mode)
+	if err != nil {
+		return map[string]any{"status": "denied", "reason": err.Error()}
 	}
+	dispatchCtx.Sandbox = effectiveSandbox
+	dispatchCtx.ProjectRoot = roots.ProjectRoot
 
-	// Sync dispatch - wait for completion
-	return dispatchSync(roleID, brief, mode, classification, taskID, sessionID, parentClassification, runner, gate)
+	if !wait {
+		return dispatchAsync(roots, dispatchCtx, role, classification, parentClassification, taskID, sessionID, runner, effectiveSandbox, mode)
+	}
+	return dispatchSync(roots, dispatchCtx, role, classification, parentClassification, taskID, sessionID, runner, effectiveSandbox, mode)
 }
 
-// dispatchSync handles synchronous dispatch
-func dispatchSync(
-	roleID, brief, mode, classification, taskID, sessionID, parentClassification, runner string,
-	gate *ConfirmationGate,
-) map[string]any {
-	// Build child environment
-	env := BuildChildEnv(currentDispatchDepth()+1, "")
-	env[ParentClassificationVar] = classification
-
-	// Compose prompt
-	developerInstructions := "Role instructions would be loaded from role file here"
-	prompt := ComposePrompt(developerInstructions, brief)
-
-	// Spawn and wait for child
-	result, err := SpawnAndWait("echo", []string{prompt}, env, DefaultTimeoutSeconds)
-	if err != nil {
-		return map[string]any{
-			"status": "error",
-			"reason": fmt.Sprintf("child process error: %v", err),
-		}
-	}
-
-	// Log audit record
-	exitCode := -1
-	if ec, ok := result["exit_code"]; ok {
-		if v, ok := ec.(int); ok {
-			exitCode = v
-		}
-	}
-	auditRecord, err := BuildAuditRecord(map[string]any{
+// auditDecision records a dispatch outcome that never reached a child.
+//
+// Audit records were written only after a child ran, so every refusal --
+// a role the catalog does not name, a tampered or uncommitted role file, a
+// classification above the ceiling, a depth or concurrency cap -- left no
+// trace at all. Refusals are exactly what an auditor most needs to see, and
+// a log that records only successes cannot show an attempt that was stopped.
+func auditDecision(roleID, taskID, sessionID, classification, mode, runner string, result map[string]any) map[string]any {
+	fields := map[string]any{
+		"event":          "dispatch",
 		"role_id":        roleID,
 		"task_id":        taskID,
 		"session_id":     sessionID,
 		"classification": classification,
 		"mode":           mode,
-		"sandbox_mode":   result["status"],
-		"exit_code":      exitCode,
-	})
-	if err == nil {
-		_ = WriteAuditLog(auditRecord)
+		"runner":         runner,
 	}
+	if status, ok := result["status"].(string); ok {
+		fields["decision"] = status
+	}
+	// The reason is this module's own generated wording, never the brief,
+	// the instructions, or the child's output -- BuildAuditRecord rejects
+	// those keys outright.
+	if reason, ok := result["reason"].(string); ok {
+		fields["reason"] = reason
+	}
+	if record, err := BuildAuditRecord(fields); err == nil {
+		writeAuditBestEffort(record)
+	}
+	return result
+}
 
-	return map[string]any{
-		"status": "success",
-		"result": result,
+// writeAuditBestEffort writes a record without ever failing the dispatch.
+//
+// Used where a side effect has already happened, or where the caller must
+// still get a terminal answer: a missing audit line for one event is better
+// than a caller with no way to observe that the event happened at all. The
+// failure is reported to stderr rather than swallowed, so an operator has a
+// trace to grep for.
+func writeAuditBestEffort(record map[string]any) {
+	if err := WriteAuditLog(record); err != nil {
+		fmt.Fprintf(os.Stderr, "cadre: audit write failed (decision=%v id=%v): %v\n",
+			record["decision"], auditTraceID(record), err)
 	}
 }
 
-// dispatchAsync handles asynchronous dispatch
-func dispatchAsync(
-	roleID, brief, mode, classification, taskID, sessionID, parentClassification, runner string,
-	gate *ConfirmationGate,
+// auditTraceID names the record in the stderr trace, falling back through the
+// identifiers a record might carry so the line is never anonymous.
+func auditTraceID(record map[string]any) any {
+	for _, key := range []string{"job_id", "team_id", "task_id", "role_id"} {
+		if value, ok := record[key]; ok && value != "" {
+			return value
+		}
+	}
+	return "unknown"
+}
+
+// dispatchErrorResult maps a resolution failure onto the result vocabulary.
+//
+// Denied and unavailable are different answers: denied means the request was
+// refused on its merits (a tampered role file, an uncommitted one in write
+// mode), unavailable means the role could not be found at all. Collapsing
+// them would tell a caller to fix the wrong thing.
+func dispatchErrorResult(err error) map[string]any {
+	var unavailable *DispatchUnavailable
+	if errors.As(err, &unavailable) {
+		return map[string]any{"status": "unavailable", "reason": unavailable.Reason}
+	}
+	var denied *DispatchDenied
+	if errors.As(err, &denied) {
+		return map[string]any{"status": "denied", "reason": denied.Reason}
+	}
+	var notClean *ProjectTierNotGitCleanError
+	if errors.As(err, &notClean) {
+		return map[string]any{"status": "denied", "reason": notClean.Reason}
+	}
+	return map[string]any{"status": "denied", "reason": err.Error()}
+}
+
+// recordDispatchAudit writes the record that says which role text ran.
+//
+// resolved_path and resolution_tier say where the file was; instructions_
+// sha256 says what it contained, which is the only field that survives the
+// file being edited afterwards. Mirrors the Python original's field set.
+func recordDispatchAudit(
+	role *ResolvedRole,
+	roleID, taskID, sessionID, classification, mode, effectiveSandbox, runner string,
+	result map[string]any,
+) {
+	fields := map[string]any{
+		"event":               "dispatch",
+		"role_id":             roleID,
+		"task_id":             taskID,
+		"session_id":          sessionID,
+		"classification":      classification,
+		"mode":                mode,
+		"runner":              runner,
+		"effective_sandbox":   effectiveSandbox,
+		"resolved_path":       role.FilePath,
+		"resolution_tier":     role.Tier,
+		"model":               role.Model,
+		"instructions_sha256": role.InstructionsSHA256,
+	}
+	for _, key := range []string{"exit_code", "timed_out", "duration_seconds", "pid", "status"} {
+		if value, ok := result[key]; ok {
+			fields[key] = value
+		}
+	}
+	record, err := BuildAuditRecord(fields)
+	if err != nil {
+		return
+	}
+	writeAuditBestEffort(record)
+}
+
+// dispatchSync runs the child and waits for it.
+//
+// This used to compose a prompt from the literal string "Role instructions
+// would be loaded from role file here" and spawn `echo`, then report
+// {"status": "success", "exit_code": 0}. The role file was never opened, so
+// every guard in front of it -- tier resolution, the git-clean gate, symlink
+// refusal, sandbox narrowing -- was unreachable from the MCP tool that is the
+// only production caller.
+func dispatchSync(
+	roots DispatchRoots,
+	dispatchCtx *DispatchContext,
+	role *ResolvedRole,
+	classification, parentClassification, taskID, sessionID, runner, effectiveSandbox, mode string,
 ) map[string]any {
-	// Generate job ID
+	if !dispatchLimiter.TryAcquire() {
+		return map[string]any{
+			"status": "denied",
+			"reason": fmt.Sprintf("too many concurrent dispatches (limit %d); retry later", MaxConcurrentChildren),
+		}
+	}
+	defer dispatchLimiter.Release()
+
+	env := BuildChildEnv(currentDispatchDepth()+1, roots.ProjectRoot)
+	env[ParentClassificationVar] = classification
+
+	result := ExecuteDispatchChild(dispatchCtx, runner, env, DefaultTimeoutSeconds)
+	// Capture before the audit, so the audit record can say whether the
+	// handoff was stored -- and best-effort, because a capture that failed
+	// must not change whether the child completed.
+	result["context_capture"] = AutomaticContextCapture(roots.ProjectRoot,
+		result, dispatchCtx.RoleID, taskID, sessionID, parentClassification, classification)
+	recordDispatchAudit(role, dispatchCtx.RoleID, taskID, sessionID,
+		classification, mode, effectiveSandbox, runner, result)
+	return result
+}
+
+// dispatchAsync starts the child and returns a job id to poll.
+func dispatchAsync(
+	roots DispatchRoots,
+	dispatchCtx *DispatchContext,
+	role *ResolvedRole,
+	classification, parentClassification, taskID, sessionID, runner, effectiveSandbox, mode string,
+) map[string]any {
 	jobID, err := generateJobID()
 	if err != nil {
 		return map[string]any{
@@ -187,15 +333,26 @@ func dispatchAsync(
 		}
 	}
 
-	// Spawn in background (stub - would spawn actual subprocess)
+	// The slot is taken before returning, not inside the goroutine: an async
+	// dispatch that reported a job id and then queued behind the limiter
+	// would have told the caller work had started when it had not.
+	if !dispatchLimiter.TryAcquire() {
+		return map[string]any{
+			"status": "denied",
+			"reason": fmt.Sprintf("too many concurrent dispatches (limit %d); retry later", MaxConcurrentChildren),
+		}
+	}
+
+	env := BuildChildEnv(currentDispatchDepth()+1, roots.ProjectRoot)
+	env[ParentClassificationVar] = classification
+
 	go func() {
-		env := BuildChildEnv(currentDispatchDepth()+1, "")
-		env[ParentClassificationVar] = classification
-
-		developerInstructions := "Role instructions would be loaded from role file here"
-		prompt := ComposePrompt(developerInstructions, brief)
-
-		result, _ := SpawnAndWait("echo", []string{prompt}, env, DefaultTimeoutSeconds)
+		defer dispatchLimiter.Release()
+		result := ExecuteDispatchChild(dispatchCtx, runner, env, DefaultTimeoutSeconds)
+		result["context_capture"] = AutomaticContextCapture(roots.ProjectRoot,
+			result, dispatchCtx.RoleID, taskID, sessionID, parentClassification, classification)
+		recordDispatchAudit(role, dispatchCtx.RoleID, taskID, sessionID,
+			classification, mode, effectiveSandbox, runner, result)
 
 		globalJobStoreMu.Lock()
 		globalJobStore.RecordJob(jobID, result)
@@ -227,6 +384,7 @@ func PollDispatchStatus(jobID string) map[string]any {
 
 // DispatchTeam dispatches multiple roles as a team
 func DispatchTeam(
+	roots DispatchRoots,
 	members []map[string]string,
 	mode, classification, confirmationToken, taskID, sessionID, parentClassification, runner string,
 	wait bool,
@@ -291,7 +449,7 @@ func DispatchTeam(
 
 	if !wait {
 		// Async team dispatch
-		go dispatchTeamAsync(teamID, members, mode, classification, taskID, sessionID, parentClassification, runner)
+		go dispatchTeamAsync(roots, teamID, members, mode, classification, taskID, sessionID, parentClassification, runner)
 		return map[string]any{
 			"status":  "team_dispatched_async",
 			"team_id": teamID,
@@ -300,11 +458,11 @@ func DispatchTeam(
 	}
 
 	// Sync team dispatch
-	results := dispatchTeamSync(teamID, members, mode, classification, taskID, sessionID, parentClassification, runner)
+	results := dispatchTeamSync(roots, teamID, members, mode, classification, taskID, sessionID, parentClassification, runner)
 	return results
 }
 
-func dispatchTeamSync(teamID string, members []map[string]string, mode, classification, taskID, sessionID, parentClassification, runner string) map[string]any {
+func dispatchTeamSync(roots DispatchRoots, teamID string, members []map[string]string, mode, classification, taskID, sessionID, parentClassification, runner string) map[string]any {
 	memberResults := make([]map[string]any, 0, len(members))
 
 	// Dispatch members concurrently with limit
@@ -322,7 +480,7 @@ func dispatchTeamSync(teamID string, members []map[string]string, mode, classifi
 				brief = "No brief provided"
 			}
 
-			result := DispatchSecureCloudRole(roleID, brief, mode, classification, "", taskID, sessionID, parentClassification, runner, true)
+			result := DispatchSecureCloudRole(roots, roleID, brief, mode, classification, "", taskID, sessionID, parentClassification, runner, true)
 			result["member_index"] = idx
 			result["role_id"] = roleID
 			resultsChan <- result
@@ -350,8 +508,8 @@ func dispatchTeamSync(teamID string, members []map[string]string, mode, classifi
 	}
 }
 
-func dispatchTeamAsync(teamID string, members []map[string]string, mode, classification, taskID, sessionID, parentClassification, runner string) {
-	result := dispatchTeamSync(teamID, members, mode, classification, taskID, sessionID, parentClassification, runner)
+func dispatchTeamAsync(roots DispatchRoots, teamID string, members []map[string]string, mode, classification, taskID, sessionID, parentClassification, runner string) {
+	result := dispatchTeamSync(roots, teamID, members, mode, classification, taskID, sessionID, parentClassification, runner)
 	globalTeamJobStoreMu.Lock()
 	globalTeamJobStore.RecordTeamJob(teamID, result)
 	globalTeamJobStoreMu.Unlock()
@@ -465,16 +623,44 @@ func (cl *ConcurrencyLimiter) Acquire() {
 	cl.semaphore <- struct{}{}
 }
 
+// TryAcquire takes a slot if one is free and reports whether it did.
+//
+// Dispatch needs the non-blocking form: a caller waiting on a channel is a
+// tool call that never returns, and "too many concurrent dispatches, retry
+// later" is an answer the caller can act on.
+func (cl *ConcurrencyLimiter) TryAcquire() bool {
+	select {
+	case cl.semaphore <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
 func (cl *ConcurrencyLimiter) Release() {
 	<-cl.semaphore
 }
 
-// Helper to get current dispatch depth from environment
+// dispatchLimiter caps how many children this process runs at once, across
+// every dispatch path -- single, team, sync and async alike. Process-wide
+// because the resource it protects is the machine, not one call.
+var dispatchLimiter = NewConcurrencyLimiter(MaxConcurrentChildren)
+
+// currentDispatchDepth reads the nesting counter a parent set for its child.
+//
+// An unparseable value is treated as already at the limit, not as zero. The
+// counter exists to stop a dispatch chain recursing without bound, and the
+// Atoi error was discarded here -- so a garbage value (including one a child
+// could set for a grandchild) read as depth 0 and reset the limit that
+// variable exists to enforce.
 func currentDispatchDepth() int {
-	depthStr := os.Getenv(DepthEnvVar)
-	if depthStr == "" {
+	raw := os.Getenv(DepthEnvVar)
+	if raw == "" {
 		return 0
 	}
-	depth, _ := strconv.Atoi(depthStr)
+	depth, err := strconv.Atoi(raw)
+	if err != nil {
+		return MaxDispatchDepth
+	}
 	return depth
 }

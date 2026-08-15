@@ -237,7 +237,7 @@ func TestOnlyAllowlistedCommandsRun(t *testing.T) {
 }
 
 func TestToolAvailabilityFollowsAuthorization(t *testing.T) {
-	readOnly := AvailableToolNames(false, nil)
+	readOnly := AvailableToolNames(nil, false, nil)
 	for _, forbidden := range []string{"write_file", "edit_file", "run_command"} {
 		for _, name := range readOnly {
 			if name == forbidden {
@@ -246,7 +246,9 @@ func TestToolAvailabilityFollowsAuthorization(t *testing.T) {
 		}
 	}
 
-	full := AvailableToolNames(true, []string{"ls"})
+	// All three conditions: a declared write tier, writes allowed, and a
+	// non-empty allowlist with Bash declared.
+	full := AvailableToolNames([]string{"Edit", "Write", "Bash"}, true, []string{"ls"})
 	has := func(want string) bool {
 		for _, name := range full {
 			if name == want {
@@ -263,8 +265,25 @@ func TestToolAvailabilityFollowsAuthorization(t *testing.T) {
 	}
 	// An unconfigured allowlist means the capability is unavailable, not that
 	// everything is permitted.
-	if AvailableToolNames(true, nil)[len(AvailableToolNames(true, nil))-1] == "run_command" {
-		t.Error("run_command must not appear without a configured allowlist")
+	for _, name := range AvailableToolNames([]string{"Edit", "Write", "Bash"}, true, nil) {
+		if name == "run_command" {
+			t.Error("run_command must not appear without a configured allowlist")
+		}
+	}
+
+	// The third gate, found missing by probe_api_runner_parity.py: a role
+	// whose declared tier has no Edit/Write never reaches the write tools,
+	// however the operator has configured things.
+	for _, name := range AvailableToolNames([]string{"Read"}, true, []string{"ls"}) {
+		if name == "write_file" || name == "edit_file" || name == "run_command" {
+			t.Errorf("%s offered to a role whose tier declares no write capability", name)
+		}
+	}
+	// ...and Bash specifically gates run_command, separately from writing.
+	for _, name := range AvailableToolNames([]string{"Edit", "Write"}, true, []string{"ls"}) {
+		if name == "run_command" {
+			t.Error("run_command needs a declared Bash capability, not just an allowlist")
+		}
 	}
 }
 

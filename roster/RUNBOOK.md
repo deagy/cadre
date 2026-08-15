@@ -625,7 +625,7 @@ The accountable control or risk owner—not an agent—approves exceptions. Ever
 
 ### Record evidence in GitLab
 
-Follow `orchestration/mcp/GITLAB-EVIDENCE.md` and read
+Follow `orchestration/GITLAB-EVIDENCE.md` and read
 `orchestration/SECURITY-CONTROLS.md`'s "GitLab evidence MCP server"
 section first. `orchestration/mcp/gitlab_server.py` exposes three create-only
 tools (`create_review_subtask`, `write_wiki_page`, `write_evidence_comment`)

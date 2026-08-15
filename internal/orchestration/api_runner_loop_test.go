@@ -187,34 +187,51 @@ func TestTheIterationCapStopsARunawayLoop(t *testing.T) {
 }
 
 func TestParseToolCallsDecodesArgumentsFromTheWireFormat(t *testing.T) {
-	// Arguments arrive as a JSON *string*, not an object. Decoding here means
-	// a malformed blob is one refused tool call rather than a failed
-	// dispatch.
-	calls := ParseToolCalls(map[string]any{
+	calls, err := ParseToolCalls(map[string]any{
 		"tool_calls": []any{
 			map[string]any{"id": "c1", "function": map[string]any{
 				"name": "read_file", "arguments": `{"path":"a.txt"}`}},
-			map[string]any{"id": "c2", "function": map[string]any{
-				"name": "search", "arguments": `not valid json`}},
-			map[string]any{"id": "c3", "function": map[string]any{"name": ""}},
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 1 || calls[0].Arguments["path"] != "a.txt" {
+		t.Errorf("calls = %+v, want the decoded arguments", calls)
+	}
 
-	if len(calls) != 2 {
-		t.Fatalf("parsed %d calls, want 2 (the unnamed one is dropped)", len(calls))
+	// No tool_calls at all is how a model says it is finished, not a
+	// malformed message.
+	calls, err = ParseToolCalls(map[string]any{"content": "done"})
+	if err != nil || len(calls) != 0 {
+		t.Errorf("an absent tool_calls must be clean: %v %v", calls, err)
 	}
-	if calls[0].Arguments["path"] != "a.txt" {
-		t.Errorf("arguments = %v, want the decoded object", calls[0].Arguments)
-	}
-	// A malformed blob yields an empty argument set, which the tool then
-	// refuses by name -- not a parse failure that ends everything.
-	if len(calls[1].Arguments) != 0 {
-		t.Errorf("a malformed argument blob must yield no arguments: %v", calls[1].Arguments)
+}
+
+func TestAMalformedToolCallFailsRatherThanBeingGuessedAt(t *testing.T) {
+	// Dropping an unparseable call, or executing it with empty arguments,
+	// both amount to guessing what the model meant to invoke -- and a wrong
+	// guess runs a tool against arguments nobody chose.
+	//
+	// Found by probe_api_runner_parity.py: this implementation originally
+	// decoded a malformed blob to empty arguments and let the tool refuse it
+	// by name, which counted a tool call Python never made.
+	for _, message := range []map[string]any{
+		{"tool_calls": "not a list"},
+		{"tool_calls": []any{"not an object"}},
+		{"tool_calls": []any{map[string]any{"id": "c1"}}},
+		{"tool_calls": []any{map[string]any{"id": "c1", "function": map[string]any{"name": ""}}}},
+		{"tool_calls": []any{map[string]any{"id": "c1", "function": map[string]any{
+			"name": "read_file", "arguments": "not valid json"}}}},
+	} {
+		if _, err := ParseToolCalls(message); err == nil {
+			t.Errorf("a malformed message must fail: %v", message)
+		}
 	}
 }
 
 func TestOnlyAuthorizedToolsAreOffered(t *testing.T) {
-	readOnly := buildToolSchemas(AvailableToolNames(false, nil))
+	readOnly := buildToolSchemas(AvailableToolNames(nil, false, nil))
 	for _, schema := range readOnly {
 		name := schema["function"].(map[string]any)["name"]
 		if name == "write_file" || name == "run_command" {
@@ -223,5 +240,71 @@ func TestOnlyAuthorizedToolsAreOffered(t *testing.T) {
 	}
 	if len(readOnly) == 0 {
 		t.Error("a read-only role still gets the read tools")
+	}
+}
+
+func TestTheAPIRunnerSendsPolicyAsSystemAndOnlyTheFencedBriefAsUser(t *testing.T) {
+	// A chat API has separate system and user slots, so the split the stdio
+	// runners fake by concatenation is available for real.
+	//
+	// This sent ctx.Prompt -- ComposePrompt(instructions, brief) -- as the
+	// user message, so the role's trusted instructions were both the system
+	// message and the opening of the untrusted user message. Beyond wasting
+	// the duplication, it put trusted policy inside the slot the model is
+	// told to treat as caller-supplied data.
+	var captured struct {
+		System string
+		User   string
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		for _, message := range payload.Messages {
+			switch message.Role {
+			case "system":
+				captured.System = message.Content
+			case "user":
+				captured.User = message.Content
+			}
+		}
+		_, _ = w.Write([]byte(plainResponse))
+	}))
+	defer server.Close()
+
+	const policy = "ROLE POLICY: refuse destructive actions."
+	const brief = "delete everything"
+
+	t.Setenv("CADRE_TEST_API_KEY", "test-key")
+
+	result := SpawnAPIChild(DispatchContext{
+		RoleID: "test-role", ModelTier: "sonnet",
+		DeveloperInstructs: policy,
+		Prompt:             ComposePrompt(policy, brief),
+		Brief:              brief,
+	}, APIRunnerConfig{
+		ProjectRoot: t.TempDir(), BaseURL: server.URL,
+		APIKeyEnvVar: "CADRE_TEST_API_KEY", Model: "probe-model",
+	}, time.Minute)
+
+	if status, _ := result["status"].(string); status == "unavailable" {
+		t.Fatalf("dispatch did not reach the endpoint: %v", result["reason"])
+	}
+	if captured.System != policy {
+		t.Errorf("system message = %q, want the role's own instructions", captured.System)
+	}
+	if strings.Contains(captured.User, "ROLE POLICY") {
+		t.Errorf("trusted policy leaked into the untrusted user message: %q", captured.User)
+	}
+	if !strings.Contains(captured.User, brief) {
+		t.Errorf("user message does not carry the brief: %q", captured.User)
+	}
+	if !strings.Contains(captured.User, "BEGIN UNTRUSTED TASK BRIEF") ||
+		!strings.Contains(captured.User, "END UNTRUSTED TASK BRIEF") {
+		t.Errorf("the brief reached the model unfenced: %q", captured.User)
 	}
 }

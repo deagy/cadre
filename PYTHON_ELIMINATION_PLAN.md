@@ -182,6 +182,145 @@ differential harness. Two have real surface area worth calling out:
 
 **Breaks:** nothing user-visible.
 
+### `mcp/` was blocked: the Go dispatch engine was not wired up — **now fixed**
+
+**Measured 2026-08-15, on `fix/untrusted-fencing`.** Every tool in `mcp/` now
+has a Go counterpart, which is what this plan treated as the precondition for
+deleting it. That precondition was the wrong one.
+
+`dispatch_secure_cloud_role` — the flagship tool — routes
+`HandleDispatchSecureCloudRole` → `DispatchSecureCloudRole`
+(`dispatch_core_phase2.go`) → `dispatchSync`, which does this:
+
+```go
+developerInstructions := "Role instructions would be loaded from role file here"
+prompt := ComposePrompt(developerInstructions, brief)
+result, err := SpawnAndWait("echo", []string{prompt}, env, DefaultTimeoutSeconds)
+```
+
+It never resolves a role file, spawns `echo`, and returns
+`{"status": "success", "exit_code": 0}`. Driven end-to-end against a real role
+file with a marker string in its `developer_instructions`, the marker never
+appears in the result — the file is not opened.
+
+`dispatch_team` routes each member through the same function, so it is hollow
+too, and so is `dispatch_team_recipe`, which feeds into it.
+
+Meanwhile the *real* engine exists and is tested: `ResolveRoleFileCodex`,
+`ResolveClaudeCodeRoleFile`, `BuildDispatchContext`, `ExecuteDispatchChild`,
+`SpawnCodexChild`, `SpawnClaudeCodeChild`, `SpawnAPIChild`. Reachability says
+it is production-dead — `BuildDispatchContext` and `ExecuteDispatchChild` have
+**no non-test callers**. `ResolveRoleForRunner` still answers
+`runner "api" not yet implemented`, months after the API runner was ported.
+
+So the entire hardened path — tier resolution, the git-clean gate, sandbox
+narrowing, symlink refusal, the classification ceiling — sits behind a
+function nothing in production calls.
+
+**What this changes:**
+
+1. `roster/orchestration/mcp/` is the only working dispatch implementation in
+   this repository. Deleting it removes dispatch and leaves a stub that
+   reports success for work it did not do. **Do not delete it on the strength
+   of tool-for-tool parity.**
+2. The precondition for Phase 4's `mcp/` half is not "every tool has a Go
+   counterpart", it is "the Go dispatch path resolves a role, spawns the
+   named runner, and records what it did". Wiring phase2 to phase3 is the
+   work; the pieces already exist and are tested individually.
+3. The gate must be behavioural, not protocol-level. A JSON-RPC conformance
+   suite compares framing, and the framing was already correct here — the
+   stub answers `tools/call` perfectly well. What it cannot do is dispatch.
+   The gate has to assert that a named role's instructions reached a child
+   process.
+
+**Why nothing caught it.** Every phase-3 test calls the phase-3 functions
+directly, so they pass while nothing calls them. Nothing tested the seam. This
+is the same shape as the fencing regressions found the same day: a test that
+asserts a component works, with no test that the component is *reached*.
+
+**Fixed 2026-08-15** on `fix/untrusted-fencing`. `DispatchSecureCloudRole` and
+`DispatchTeam` take `DispatchRoots` explicitly, resolve the role before
+deciding anything about it, and call `ExecuteDispatchChild`. Both CLI spawners
+were rebuilt: `SpawnCodexChild` was a stub, and `SpawnClaudeCodeChild` invoked
+a command form the CLI does not accept while passing no `--permission-mode`,
+so the sandbox never reached the child. They share one spawner that feeds the
+prompt on stdin, runs the child in its own process group, enforces a deadline,
+caps output, and pins the working directory.
+
+The gate is `dispatch_reaches_child_test.go`, which points the runner binary
+at a script that echoes stdin: the role file's own text coming back out of a
+child process is the assertion. That is the behavioural gate this section
+called for, and it is what a protocol-level conformance suite would have
+missed.
+
+### What the comparison found, and what is left
+
+`test_mcp_dispatch.py` (294 tests) is now largely worked through.
+`test_gitlab_integration.py` (89) is untouched.
+
+Fixed on `fix/untrusted-fencing`:
+
+| Gap | Effect |
+| --- | --- |
+| Dispatch never dispatched | `echo` and a placeholder; role file never opened |
+| Confirmation gate could not fire | Sandbox computed from a hard-coded `""`, always read-only |
+| `SpawnCodexChild` was a stub | The **default** runner could not run |
+| `SpawnClaudeCodeChild` invented a CLI shape | No `--permission-mode`: the sandbox never reached the child |
+| `runner="api"` unreachable | `not yet implemented`, long after the runner was ported |
+| Both fences degraded | Static/absent markers, no per-call token |
+| Context content relayed unfenced | While the tool description said it was fenced |
+| Role files followed symlinks | Cap measured the link, not the target |
+| `ensureContained` compared string prefixes | `/srv/project` contained `/srv/project-attacker` |
+| Instructions digest discarded | No record of *which* role text ran |
+| Catalog allowlist was an empty-map stub | Any pattern-matching id was dispatchable |
+| `runners.forward_env` never consumed | Registered, validated, ignored |
+| `runners.local_model_<tier>` never consumed | Tier semantics lost on self-hosted models |
+| Refusals never audited | The log recorded only successes |
+| Unparseable dispatch depth read as `0` | Failed open on the recursion cap |
+| No child timeout, process group, or output cap | A hung child hung the dispatch |
+| git-clean gate had no timeout and no test | — |
+
+**The final-handoff channel is ported** (`internal/orchestration/final_handoff.go`).
+The private fd-based result file, the protocol paragraph appended to the
+prompt, the size cap, and the identity-checked cleanup are all present, with
+tests for the properties that justify it: the retained descriptor is read
+rather than a replacement, a substituted FIFO cannot block the read, cleanup
+removes nested content but refuses a directory it did not create, and
+malformed content is reported rather than stored.
+
+Not yet ported alongside it: `automatic_context_capture`, which takes the
+captured handoff and writes it into the context store. The capture itself now
+happens and lands in the dispatch result; what is missing is the automatic
+*storage* step and its dispatch-derived source/scope rules.
+
+`automatic_context_capture` is ported
+(`internal/orchestration/final_handoff_capture.go`), including the envelope
+validation that decides what may be stored: five top-level keys only, free
+text bounded in bytes *and* lines, artifacts as identifiers rather than
+locations, provenance limited to handles this store issued, and every cited
+handle also declared as provenance.
+
+`test_gitlab_integration.py` has been compared.
+`internal/orchestration/gitlab.go` was already correct on every transport and
+validation property — quick-action rejection, no ambient proxy, certificate
+verification, cross-host and scheme-downgrade redirect refusals. What was
+missing was the *structural* half of the create-only invariant, now added in
+`gitlab_create_only_test.go`: no function named for a state transition, no
+`state_event` outside a comment, no DELETE or PATCH, and exactly three
+exposed tools.
+
+**`mcp/` is now unblocked.** Every module has a Go counterpart that is
+reached, and every Python suite has been compared. The deletion itself is the
+next change: remove `roster/orchestration/mcp/` (6,822 lines) and the Python
+suites that test it, keeping the Go seam tests as the gate.
+
+**The pattern worth carrying forward.** Every gap above shares one shape: a
+component was implemented and tested in isolation, and nothing tested that it
+was *reached*. Component tests cannot fail for a component nobody calls. Where
+a port is gated, gate it on observable behaviour at the seam — for dispatch
+that meant pointing the runner binary at a script that echoes stdin, so the
+role file's own text coming back out of a child process is the assertion.
+
 ## Phase 5 — Kernel to Go, distributed as binaries
 
 **Scope:** 9,626 production lines across 30 CLI subcommands, plus 6,883
