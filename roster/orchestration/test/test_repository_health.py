@@ -957,7 +957,12 @@ class RepositoryHealthTests(unittest.TestCase):
         self.assertEqual(EXPECTED_ROLE_COUNT, len(catalog["agents"]))
 
     def test_codex_bootstrap_preserves_bare_files_and_rejects_unowned_collision(self) -> None:
-        script = ROOT / "orchestration" / "src" / "sync_codex_agents.py"
+        # `cadre bootstrap-codex`, not sync_codex_agents.py: that module is
+        # deleted, and internal/cli/bootstrap_codex.go is the implementation.
+        # The properties below -- symlink refusal, unowned-collision
+        # rejection, role-index pruning -- are unchanged and are why these
+        # tests were retargeted rather than dropped with the module.
+        script = wrapper_binary()
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
             source = temporary / "source"
@@ -973,7 +978,7 @@ class RepositoryHealthTests(unittest.TestCase):
             bare.write_text("user-owned bare wrapper\n", encoding="utf-8")
 
             installed = subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=True, capture_output=True, text=True,
             )
             self.assertIn("Installed 1", installed.stdout)
@@ -982,25 +987,32 @@ class RepositoryHealthTests(unittest.TestCase):
             namespaced = target / "agents-code-reviewer.toml"
             namespaced.write_text("", encoding="utf-8")
             empty_rejected = subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=False, capture_output=True, text=True,
             )
             self.assertNotEqual(0, empty_rejected.returncode)
-            self.assertIn("Refusing to overwrite unowned", empty_rejected.stderr)
+            self.assertIn(
+                "refusing to overwrite unowned", empty_rejected.stderr.lower())
             self.assertEqual("", namespaced.read_text(encoding="utf-8"))
 
             namespaced.write_text("user-owned collision\n", encoding="utf-8")
             rejected = subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=False, capture_output=True, text=True,
             )
             self.assertNotEqual(0, rejected.returncode)
-            self.assertIn("Refusing to overwrite unowned", rejected.stderr)
+            self.assertIn(
+                "refusing to overwrite unowned", rejected.stderr.lower())
             self.assertEqual("user-owned collision\n", namespaced.read_text(encoding="utf-8"))
 
     @unittest.skipIf(sys.platform == "win32", "POSIX symlink behavior is required")
     def test_codex_bootstrap_rejects_symlinked_wrappers(self) -> None:
-        script = ROOT / "orchestration" / "src" / "sync_codex_agents.py"
+        # `cadre bootstrap-codex`, not sync_codex_agents.py: that module is
+        # deleted, and internal/cli/bootstrap_codex.go is the implementation.
+        # The properties below -- symlink refusal, unowned-collision
+        # rejection, role-index pruning -- are unchanged and are why these
+        # tests were retargeted rather than dropped with the module.
+        script = wrapper_binary()
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
             source = temporary / "source"
@@ -1017,11 +1029,12 @@ class RepositoryHealthTests(unittest.TestCase):
             os.symlink(real_source, symlinked_source)
 
             source_rejected = subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=False, capture_output=True, text=True,
             )
             self.assertNotEqual(0, source_rejected.returncode)
-            self.assertIn("Refusing non-regular source wrapper", source_rejected.stderr)
+            self.assertIn(
+                "refusing non-regular source wrapper", source_rejected.stderr.lower())
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
@@ -1035,15 +1048,21 @@ class RepositoryHealthTests(unittest.TestCase):
             os.symlink(real_destination, target / "agents-code-reviewer.toml")
 
             destination_rejected = subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=False, capture_output=True, text=True,
             )
             self.assertNotEqual(0, destination_rejected.returncode)
-            self.assertIn("Refusing symlinked destination wrapper", destination_rejected.stderr)
+            self.assertIn(
+                "refusing symlinked destination wrapper", destination_rejected.stderr.lower())
             self.assertEqual("user-owned destination\n", real_destination.read_text(encoding="utf-8"))
 
     def test_codex_bootstrap_writes_role_index_with_resolved_paths_and_models(self) -> None:
-        script = ROOT / "orchestration" / "src" / "sync_codex_agents.py"
+        # `cadre bootstrap-codex`, not sync_codex_agents.py: that module is
+        # deleted, and internal/cli/bootstrap_codex.go is the implementation.
+        # The properties below -- symlink refusal, unowned-collision
+        # rejection, role-index pruning -- are unchanged and are why these
+        # tests were retargeted rather than dropped with the module.
+        script = wrapper_binary()
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
             source = temporary / "source"
@@ -1063,7 +1082,7 @@ class RepositoryHealthTests(unittest.TestCase):
             )
 
             result = subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=True, capture_output=True, text=True,
             )
             self.assertIn("Index installed", result.stdout)
@@ -1087,7 +1106,12 @@ class RepositoryHealthTests(unittest.TestCase):
             )
 
     def test_codex_bootstrap_role_index_is_byte_identical_across_unchanged_reruns(self) -> None:
-        script = ROOT / "orchestration" / "src" / "sync_codex_agents.py"
+        # `cadre bootstrap-codex`, not sync_codex_agents.py: that module is
+        # deleted, and internal/cli/bootstrap_codex.go is the implementation.
+        # The properties below -- symlink refusal, unowned-collision
+        # rejection, role-index pruning -- are unchanged and are why these
+        # tests were retargeted rather than dropped with the module.
+        script = wrapper_binary()
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
             source = temporary / "source"
@@ -1103,21 +1127,26 @@ class RepositoryHealthTests(unittest.TestCase):
             index_path = target / "agents-index.json"
 
             first = subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=True, capture_output=True, text=True,
             )
             self.assertIn("Index installed", first.stdout)
             first_bytes = index_path.read_bytes()
 
             second = subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=True, capture_output=True, text=True,
             )
             self.assertIn("Index unchanged", second.stdout)
             self.assertEqual(first_bytes, index_path.read_bytes())
 
     def test_codex_bootstrap_role_index_updates_when_source_model_changes(self) -> None:
-        script = ROOT / "orchestration" / "src" / "sync_codex_agents.py"
+        # `cadre bootstrap-codex`, not sync_codex_agents.py: that module is
+        # deleted, and internal/cli/bootstrap_codex.go is the implementation.
+        # The properties below -- symlink refusal, unowned-collision
+        # rejection, role-index pruning -- are unchanged and are why these
+        # tests were retargeted rather than dropped with the module.
+        script = wrapper_binary()
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
             source = temporary / "source"
@@ -1134,7 +1163,7 @@ class RepositoryHealthTests(unittest.TestCase):
             index_path = target / "agents-index.json"
 
             subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=True, capture_output=True, text=True,
             )
             self.assertEqual("gpt-5-mini", json.loads(index_path.read_text(encoding="utf-8"))["roles"]["code-reviewer"]["model"])
@@ -1146,14 +1175,19 @@ class RepositoryHealthTests(unittest.TestCase):
                 encoding="utf-8",
             )
             updated = subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=True, capture_output=True, text=True,
             )
             self.assertIn("Index installed", updated.stdout)
             self.assertEqual("gpt-5", json.loads(index_path.read_text(encoding="utf-8"))["roles"]["code-reviewer"]["model"])
 
     def test_codex_bootstrap_role_index_rejects_unowned_collision(self) -> None:
-        script = ROOT / "orchestration" / "src" / "sync_codex_agents.py"
+        # `cadre bootstrap-codex`, not sync_codex_agents.py: that module is
+        # deleted, and internal/cli/bootstrap_codex.go is the implementation.
+        # The properties below -- symlink refusal, unowned-collision
+        # rejection, role-index pruning -- are unchanged and are why these
+        # tests were retargeted rather than dropped with the module.
+        script = wrapper_binary()
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
             source = temporary / "source"
@@ -1169,16 +1203,22 @@ class RepositoryHealthTests(unittest.TestCase):
             index_path.write_text('{"unowned": true}', encoding="utf-8")
 
             rejected = subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=False, capture_output=True, text=True,
             )
             self.assertNotEqual(0, rejected.returncode)
-            self.assertIn("Refusing to overwrite unowned", rejected.stderr)
+            self.assertIn(
+                "refusing to overwrite unowned", rejected.stderr.lower())
             self.assertEqual('{"unowned": true}', index_path.read_text(encoding="utf-8"))
 
     @unittest.skipIf(sys.platform == "win32", "POSIX symlink behavior is required")
     def test_codex_bootstrap_rejects_symlinked_role_index(self) -> None:
-        script = ROOT / "orchestration" / "src" / "sync_codex_agents.py"
+        # `cadre bootstrap-codex`, not sync_codex_agents.py: that module is
+        # deleted, and internal/cli/bootstrap_codex.go is the implementation.
+        # The properties below -- symlink refusal, unowned-collision
+        # rejection, role-index pruning -- are unchanged and are why these
+        # tests were retargeted rather than dropped with the module.
+        script = wrapper_binary()
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
             source = temporary / "source"
@@ -1195,15 +1235,21 @@ class RepositoryHealthTests(unittest.TestCase):
             os.symlink(real_destination, target / "agents-index.json")
 
             rejected = subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=False, capture_output=True, text=True,
             )
             self.assertNotEqual(0, rejected.returncode)
-            self.assertIn("Refusing symlinked destination wrapper", rejected.stderr)
+            self.assertIn(
+                "refusing symlinked destination wrapper", rejected.stderr.lower())
             self.assertEqual("user-owned index\n", real_destination.read_text(encoding="utf-8"))
 
     def test_codex_bootstrap_role_index_left_unchanged_when_a_wrapper_write_fails(self) -> None:
-        script = ROOT / "orchestration" / "src" / "sync_codex_agents.py"
+        # `cadre bootstrap-codex`, not sync_codex_agents.py: that module is
+        # deleted, and internal/cli/bootstrap_codex.go is the implementation.
+        # The properties below -- symlink refusal, unowned-collision
+        # rejection, role-index pruning -- are unchanged and are why these
+        # tests were retargeted rather than dropped with the module.
+        script = wrapper_binary()
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
             source = temporary / "source"
@@ -1226,7 +1272,7 @@ class RepositoryHealthTests(unittest.TestCase):
 
             # First run: no collision yet, establishes an installed index.
             first = subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=True, capture_output=True, text=True,
             )
             self.assertIn("Index installed", first.stdout)
@@ -1239,11 +1285,12 @@ class RepositoryHealthTests(unittest.TestCase):
                 "user-owned collision\n", encoding="utf-8",
             )
             failing = subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=False, capture_output=True, text=True,
             )
             self.assertNotEqual(0, failing.returncode)
-            self.assertIn("Refusing to overwrite unowned", failing.stderr)
+            self.assertIn(
+                "refusing to overwrite unowned", failing.stderr.lower())
             self.assertTrue(
                 (target / "agents-code-reviewer.toml").read_text(encoding="utf-8").startswith(
                     "# GENERATED FILE:"
@@ -1257,7 +1304,12 @@ class RepositoryHealthTests(unittest.TestCase):
             )
 
     def test_codex_bootstrap_role_index_prunes_roles_removed_from_source(self) -> None:
-        script = ROOT / "orchestration" / "src" / "sync_codex_agents.py"
+        # `cadre bootstrap-codex`, not sync_codex_agents.py: that module is
+        # deleted, and internal/cli/bootstrap_codex.go is the implementation.
+        # The properties below -- symlink refusal, unowned-collision
+        # rejection, role-index pruning -- are unchanged and are why these
+        # tests were retargeted rather than dropped with the module.
+        script = wrapper_binary()
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = Path(temporary_directory)
             source = temporary / "source"
@@ -1278,7 +1330,7 @@ class RepositoryHealthTests(unittest.TestCase):
             index_path = target / "agents-index.json"
 
             subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=True, capture_output=True, text=True,
             )
             first_roles = json.loads(index_path.read_text(encoding="utf-8"))["roles"]
@@ -1286,40 +1338,31 @@ class RepositoryHealthTests(unittest.TestCase):
 
             code_reviewer_source.unlink()
             subprocess.run(
-                [sys.executable, str(script), "--source", str(source), "--target", str(target)],
+                [script, "bootstrap-codex", "--source", str(source), "--target", str(target)],
                 check=True, capture_output=True, text=True,
             )
             second_roles = json.loads(index_path.read_text(encoding="utf-8"))["roles"]
             self.assertEqual({"test-engineer"}, set(second_roles))
 
-    @unittest.skipUnless(hasattr(os, "O_NOFOLLOW"), "O_NOFOLLOW support is required")
-    def test_codex_bootstrap_no_follow_guards_run_at_open_time(self) -> None:
-        import importlib.util
-
-        script = ROOT / "orchestration" / "src" / "sync_codex_agents.py"
-        spec = importlib.util.spec_from_file_location("sync_codex_agents_under_test", script)
-        self.assertIsNotNone(spec)
-        self.assertIsNotNone(spec.loader)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            temporary = Path(temporary_directory)
-            source_target = temporary / "source-target.toml"
-            source_target.write_text("source content\n", encoding="utf-8")
-            source_link = temporary / "agents-source.toml"
-            os.symlink(source_target, source_link)
-            with self.assertRaises(OSError):
-                module._read_regular_file(source_link)
-
-            destination_target = temporary / "destination-target.toml"
-            destination_target.write_text("destination content\n", encoding="utf-8")
-            destination_link = temporary / "agents-destination.toml"
-            os.symlink(destination_target, destination_link)
-            with mock.patch.object(Path, "is_symlink", return_value=False):
-                with self.assertRaises(OSError):
-                    module._write_owned_wrapper(destination_link, b"new content\n")
-            self.assertEqual("destination content\n", destination_target.read_text(encoding="utf-8"))
+    # test_codex_bootstrap_no_follow_guards_run_at_open_time is deleted with
+    # its subject. It was a white-box test of sync_codex_agents.py's private
+    # _read_regular_file/_write_owned_wrapper, asserting the O_NOFOLLOW guards
+    # ran at *open* time -- closing the TOCTOU gap between "is this a symlink"
+    # and "open it" entirely.
+    #
+    # Worth recording rather than quietly dropping: the Go port does not
+    # provide that stronger guarantee. syscall.O_NOFOLLOW is not defined on
+    # every platform this CLI cross-builds for, so internal/orchestration/
+    # sync_codex_agents.go does an os.Lstat check immediately before opening
+    # and re-verifies regular-file-ness on the open handle -- narrowing the
+    # race rather than closing it, as its own header states. That trade was
+    # made when the port landed; deleting the Python module means there is no
+    # longer an implementation with the stronger property to fall back to.
+    #
+    # The refusal behaviour itself is still covered:
+    # TestSyncWrappersRefusesSymlinkedSource and
+    # TestSyncWrappersRefusesSymlinkedDestination in
+    # internal/orchestration/sync_codex_agents_test.go.
 
     @unittest.skipUnless(sys.platform != "win32", "packaged wrapper is a POSIX sh script")
     def test_packaged_selector_targets_callers_git_repository(self) -> None:
