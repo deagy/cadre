@@ -171,7 +171,7 @@ class BinaryShimHardeningTest(unittest.TestCase):
 
     # -- 1. directory at the cache path ----------------------------------
 
-    def test_directory_at_cache_path_does_not_defeat_the_python_fallback(self) -> None:
+    def test_directory_at_cache_path_does_not_defeat_binary_verification(self) -> None:
         """A directory at the cache path must fall back, not exit 126.
 
         The download must succeed for this to be meaningful: an offline run
@@ -204,7 +204,7 @@ class BinaryShimHardeningTest(unittest.TestCase):
             f"stderr={result.stderr}",
         )
         self.assertIn(
-            "unknown subcommand", result.stderr,
+            "could not obtain the cadre binary", result.stderr,
             f"expected the Python dispatch to be reached; stderr={result.stderr}",
         )
         moved_in = [p.name for p in occupied.iterdir() if p.name != "occupied"]

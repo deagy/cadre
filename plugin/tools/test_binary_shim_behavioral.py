@@ -127,7 +127,9 @@ class BinaryShimBehavioralTest(unittest.TestCase):
             )
 
             # H1 fix: stub is found but fails checksum re-verification, so Python fallback occurs.
-            # Expected: exit 1 (Python unknown subcommand), NOT exit 126 (exec failure).
+            # Expected: the shim refuses with its diagnostic, NOT exit 126
+            # (exec failure). The rejection is the point; what changed is
+            # that refusing replaced falling back to Python.
             self.assertNotEqual(
                 result.returncode,
                 126,
@@ -137,7 +139,7 @@ class BinaryShimBehavioralTest(unittest.TestCase):
 
             # Verify Python fallback occurred (re-verification failed, so stub not executed)
             self.assertIn(
-                "unknown subcommand",
+                "could not obtain the cadre binary",
                 result.stderr,
                 f"Expected Python fallback after checksum verification, got: {result.stderr}",
             )
@@ -218,7 +220,8 @@ class BinaryShimBehavioralTest(unittest.TestCase):
             )
 
             # H1 fix: stub is found (at CLI-versioned path) but fails checksum re-verification.
-            # Expected: Python fallback (exit 1, unknown subcommand)
+            # Expected: the shim refuses -- proof the cached binary was
+            # rejected rather than exec'd. There is no Python fallback.
             # If reverted to plugin_version: stub NOT found, different Python error
             self.assertNotEqual(
                 result.returncode,
@@ -228,7 +231,7 @@ class BinaryShimBehavioralTest(unittest.TestCase):
             )
 
             self.assertIn(
-                "unknown subcommand",
+                "could not obtain the cadre binary",
                 result.stderr,
                 "Expected Python fallback (re-verification failed). "
                 "If checksum verification is bypassed, stub would execute (exit 42).",

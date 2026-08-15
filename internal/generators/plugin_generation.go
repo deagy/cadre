@@ -1526,7 +1526,12 @@ func (g *pluginGenerator) generateBinWrapper(pluginRoot string) (string, error) 
 		"",
 		"# Everything else is the binary's own dispatch, including its help and",
 		"# unknown-subcommand handling -- one implementation, not two.",
-		`CADRE_REPO_ROOT="$SUITE_ROOT" exec "$BINARY_CACHE" "$@"`,
+		"#",
+		"# $command_name is passed back explicitly: it was shifted off above so",
+		"# the sdlc branch could test it, and $@ holds only the arguments after",
+		"# it. Exec'ing just $@ silently drops the subcommand, turning",
+		"# `cadre select --task x` into `cadre --task x`.",
+		`CADRE_REPO_ROOT="$SUITE_ROOT" exec "$BINARY_CACHE" "$command_name" "$@"`,
 		"",
 	)
 

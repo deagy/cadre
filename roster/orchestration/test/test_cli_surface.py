@@ -58,13 +58,20 @@ _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 _NO_USAGE_BLOCK = {"generate-plugin"}
 
 
-def _load_subcommands() -> list[tuple[str, str, str]]:
+def _load_subcommands() -> list[tuple[str, str]]:
+    """`name\tdescription` rows.
+
+    The script column is gone. It named the Python implementation the
+    packaged wrapper exec'd when it could not resolve the Go binary; that
+    fallback is removed and the suite ships no Python, so a column naming
+    files the distribution does not contain would be stale by construction.
+    """
     rows = []
     for line in SUBCOMMANDS_PATH.read_text(encoding="utf-8").splitlines():
         if not line:
             continue
-        name, script, description = line.split("\t")
-        rows.append((name, script, description))
+        name, description = line.split("\t")
+        rows.append((name, description))
     return rows
 
 
@@ -105,18 +112,24 @@ class SubcommandNamingTest(unittest.TestCase):
         self.assertGreaterEqual(len(SUBCOMMANDS), 10, SUBCOMMANDS_PATH)
 
     def test_every_subcommand_names_itself_by_its_public_name(self) -> None:
-        for name, script, _description in SUBCOMMANDS:
+        for name, _description in SUBCOMMANDS:
             with self.subTest(subcommand=name):
                 result = _run_help(name)
                 output = _ANSI.sub("", result.stdout + result.stderr)
 
-                script_basename = Path(script).name
-                self.assertNotIn(
-                    script_basename,
-                    output,
-                    f"`cadre {name} --help` exposes its implementation filename "
-                    f"({script_basename}). Set prog='cadre {name}' on its "
-                    "ArgumentParser so errors name the command the user typed.",
+                # A command must not expose an implementation filename. The
+                # table no longer records one to check against, so this looks
+                # for the shape instead -- any *.py in help output is a
+                # command naming its implementation rather than itself.
+                leaked = [
+                    token for token in output.split()
+                    if token.endswith(".py") or token.endswith(".py:")
+                ]
+                self.assertEqual(
+                    [],
+                    leaked,
+                    f"`cadre {name} --help` exposes an implementation filename "
+                    f"({leaked}). Name the command the user typed instead.",
                 )
                 self.assertIn(
                     f"cadre {name}",
@@ -158,7 +171,7 @@ class SubcommandNamingTest(unittest.TestCase):
             ).stdout
 
         before = tree_state()
-        for name, _script, _description in SUBCOMMANDS:
+        for name, _description in SUBCOMMANDS:
             _run_help(name)
         after = tree_state()
 
