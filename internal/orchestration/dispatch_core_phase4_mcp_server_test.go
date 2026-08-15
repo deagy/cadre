@@ -312,16 +312,24 @@ func TestGetToolDefinitions(t *testing.T) {
 		return
 	}
 
-	if len(definitions) != 4 {
-		t.Errorf("expected 4 tool definitions, got %d", len(definitions))
+	// The dispatch tools plus the four context-store tools. Counted rather
+	// than fixed at 4: the server grew the context tools when they were
+	// ported from context_tools.py, and pinning a literal here would make
+	// every future tool a test edit rather than a definition.
+	if len(definitions) != len(dispatchToolDefinitions())+len(contextToolDefinitions()) {
+		t.Errorf("expected every dispatch and context tool, got %d", len(definitions))
 	}
 
-	// Verify all tools are defined
+	// Every tool that must be present, dispatch and context alike.
 	toolNames := map[string]bool{
 		"dispatch_secure_cloud_role": false,
 		"dispatch_team":              false,
 		"poll_dispatch_status":       false,
 		"poll_team_status":           false,
+		"context_put":                false,
+		"context_get":                false,
+		"context_list":               false,
+		"context_search":             false,
 	}
 
 	for _, def := range definitions {

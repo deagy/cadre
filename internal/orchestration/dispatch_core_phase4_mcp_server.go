@@ -240,6 +240,12 @@ func (server *DispatchMCPServer) HandlePollTeamStatus(req *PollTeamStatusRequest
 
 // DispatchToolCall routes an MCP tool call to the appropriate handler
 func (server *DispatchMCPServer) DispatchToolCall(toolName string, args json.RawMessage) *MCPToolResponse {
+	// The context-store tools live in mcp_context_tools.go beside their own
+	// definitions, so adding one cannot leave the two out of step.
+	if response, handled := server.dispatchContextToolCall(toolName, args); handled {
+		return response
+	}
+
 	switch toolName {
 	case "dispatch_secure_cloud_role":
 		var req DispatchSecureCloudRoleRequest
@@ -321,6 +327,10 @@ type MCPToolDefinition struct {
 
 // GetToolDefinitions returns the definitions of all MCP tools
 func (server *DispatchMCPServer) GetToolDefinitions() []MCPToolDefinition {
+	return append(dispatchToolDefinitions(), contextToolDefinitions()...)
+}
+
+func dispatchToolDefinitions() []MCPToolDefinition {
 	return []MCPToolDefinition{
 		{
 			Name:        "dispatch_secure_cloud_role",
