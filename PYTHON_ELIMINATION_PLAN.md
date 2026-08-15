@@ -293,15 +293,26 @@ captured handoff and writes it into the context store. The capture itself now
 happens and lands in the dispatch result; what is missing is the automatic
 *storage* step and its dispatch-derived source/scope rules.
 
-**Remaining before `mcp/` can be deleted:**
+`automatic_context_capture` is ported
+(`internal/orchestration/final_handoff_capture.go`), including the envelope
+validation that decides what may be stored: five top-level keys only, free
+text bounded in bytes *and* lines, artifacts as identifiers rather than
+locations, provenance limited to handles this store issued, and every cited
+handle also declared as provenance.
 
-1. `automatic_context_capture` — store the captured handoff in the context
-   store, with the dispatch-derived source and scope its ten Python tests
-   describe.
-2. Compare `test_gitlab_integration.py` (89 tests) against
-   `internal/orchestration/gitlab.go`.
+`test_gitlab_integration.py` has been compared.
+`internal/orchestration/gitlab.go` was already correct on every transport and
+validation property — quick-action rejection, no ambient proxy, certificate
+verification, cross-host and scheme-downgrade redirect refusals. What was
+missing was the *structural* half of the create-only invariant, now added in
+`gitlab_create_only_test.go`: no function named for a state transition, no
+`state_event` outside a comment, no DELETE or PATCH, and exactly three
+exposed tools.
 
-Then delete, gated on the behavioural seam tests rather than tool parity.
+**`mcp/` is now unblocked.** Every module has a Go counterpart that is
+reached, and every Python suite has been compared. The deletion itself is the
+next change: remove `roster/orchestration/mcp/` (6,822 lines) and the Python
+suites that test it, keeping the Go seam tests as the gate.
 
 **The pattern worth carrying forward.** Every gap above shares one shape: a
 component was implemented and tested in isolation, and nothing tested that it
