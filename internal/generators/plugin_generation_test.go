@@ -272,9 +272,9 @@ func TestPackagedSubcommandsExcludesRegisterOnlyEntries(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	table := strings.Join([]string{
-		"select\troster/orchestration/src/select_agents.py\tSelect agents",
-		"generate-plugin\troster/orchestration/src/generate_global_plugin.py\tRegenerate",
-		"config\troster/shared/src/settings.py\tSettings",
+		"select\tSelect agents",
+		"generate-plugin\tRegenerate",
+		"config\tSettings",
 		"",
 	}, "\n")
 	if err := os.WriteFile(filepath.Join(root, "bin", "subcommands.tsv"), []byte(table), 0o644); err != nil {

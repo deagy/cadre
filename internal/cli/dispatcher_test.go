@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,13 +10,11 @@ import (
 	"testing"
 )
 
-var errInteropUnavailable = errors.New("interop: unavailable in test")
-
-func writeSubcommandsTSV(t *testing.T, dir string, rows [][3]string) string {
+func writeSubcommandsTSV(t *testing.T, dir string, rows [][2]string) string {
 	t.Helper()
 	var b strings.Builder
 	for _, row := range rows {
-		b.WriteString(row[0] + "\t" + row[1] + "\t" + row[2] + "\n")
+		b.WriteString(row[0] + "\t" + row[1] + "\n")
 	}
 	path := filepath.Join(dir, "subcommands.tsv")
 	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
@@ -28,9 +25,9 @@ func writeSubcommandsTSV(t *testing.T, dir string, rows [][3]string) string {
 
 func TestLoadSubcommands(t *testing.T) {
 	dir := t.TempDir()
-	path := writeSubcommandsTSV(t, dir, [][3]string{
-		{"select", "roster/orchestration/src/select_agents.py", "Deterministic agent/gate selection"},
-		{"config", "roster/shared/src/settings.py", "Show resolved operator settings"},
+	path := writeSubcommandsTSV(t, dir, [][2]string{
+		{"select", "Deterministic agent/gate selection"},
+		{"config", "Show resolved operator settings"},
 	})
 
 	rows, err := LoadSubcommands(path)
@@ -40,7 +37,7 @@ func TestLoadSubcommands(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("LoadSubcommands() len = %d, want 2", len(rows))
 	}
-	if rows[0].Name != "select" || rows[0].Script != "roster/orchestration/src/select_agents.py" {
+	if rows[0].Name != "select" {
 		t.Errorf("rows[0] = %+v, unexpected", rows[0])
 	}
 }
@@ -48,7 +45,7 @@ func TestLoadSubcommands(t *testing.T) {
 func TestLoadSubcommands_MalformedRow(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "subcommands.tsv")
-	if err := os.WriteFile(path, []byte("only-two\tfields\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("only\tone\ttoo-many\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := LoadSubcommands(path); err == nil {
@@ -58,8 +55,8 @@ func TestLoadSubcommands_MalformedRow(t *testing.T) {
 
 func TestRun_Help(t *testing.T) {
 	dir := t.TempDir()
-	subPath := writeSubcommandsTSV(t, dir, [][3]string{
-		{"select", "roster/orchestration/src/select_agents.py", "Deterministic agent/gate selection"},
+	subPath := writeSubcommandsTSV(t, dir, [][2]string{
+		{"select", "Deterministic agent/gate selection"},
 	})
 
 	var stdout, stderr bytes.Buffer
@@ -107,183 +104,106 @@ func TestRun_UnknownSubcommand(t *testing.T) {
 	}
 }
 
-func TestRun_RoutesToSubcommandScript(t *testing.T) {
+func TestRun_RefusesATableEntryWithNoGoRoute(t *testing.T) {
+	// This replaces TestRun_RoutesToSubcommandScript, which asserted that a
+	// subcommands.tsv row dispatched to the Python script it named.
+	//
+	// That fallback is gone. Every subcommand this dispatcher serves is
+	// routed in Go before the table is consulted, so the fallback had become
+	// unreachable, and the script column that fed it was removed along with
+	// the packaged plugin's Python fallback -- the two shipped as one
+	// mechanism.
+	//
+	// A name the table describes but nothing implements is therefore an
+	// unknown subcommand, not a silent exec of whatever the row pointed at.
 	dir := t.TempDir()
-	// "widget" is a synthetic placeholder name for this test's own table
-	// entry, deliberately not any real subcommand name -- both "select"
-	// and "config" (a plausible earlier choice) are now intercepted by
-	// Run() ahead of the subcommands.tsv table, which would make this test
-	// exercise the Go-native command instead of the generic
-	// Python-script-dispatch path it means to test.
-	subPath := writeSubcommandsTSV(t, dir, [][3]string{
-		{"widget", "roster/shared/src/settings.py", "Show resolved operator settings"},
+	subPath := writeSubcommandsTSV(t, dir, [][2]string{
+		{"widget", "A described subcommand with no implementation"},
 	})
 
-	var gotScript string
-	var gotArgs []string
-	var gotEnv []string
-
-	deps := Deps{
+	var stderr strings.Builder
+	code := Run(context.Background(), []string{"widget", "--task", "foo"}, Deps{
 		Stdout:          io.Discard,
-		Stderr:          io.Discard,
+		Stderr:          &stderr,
 		RepoRoot:        dir,
 		SubcommandsPath: subPath,
-		PythonExecutable: func(ctx context.Context, script string, args []string, env []string, stdout, stderr io.Writer, stdin io.Reader) (int, error) {
-			gotScript = script
-			gotArgs = append([]string(nil), args...)
-			gotEnv = env
-			return 0, nil
-		},
-	}
+	})
 
-	code := Run(context.Background(), []string{"widget", "--task", "foo"}, deps)
-	if code != 0 {
-		t.Fatalf("Run() code = %d, want 0", code)
+	if code != 1 {
+		t.Errorf("Run() code = %d, want 1 for a name with no implementation", code)
 	}
-	wantScript := filepath.Join(dir, "roster/shared/src/settings.py")
-	if gotScript != wantScript {
-		t.Errorf("script = %q, want %q", gotScript, wantScript)
-	}
-	if len(gotArgs) != 2 || gotArgs[0] != "--task" || gotArgs[1] != "foo" {
-		t.Errorf("args = %v, want [--task foo]", gotArgs)
-	}
-	if gotEnv != nil {
-		t.Errorf("env = %v, want nil for non-interactive dispatch", gotEnv)
+	if !strings.Contains(stderr.String(), "unknown subcommand 'widget'") {
+		t.Errorf("stderr = %q, want an unknown-subcommand message", stderr.String())
 	}
 }
 
-func TestRun_InteractiveFlagSetsChildEnv(t *testing.T) {
-	dir := t.TempDir()
-	// See TestRun_RoutesToSubcommandScript's comment on why this uses a
-	// synthetic "widget" name rather than "config".
-	subPath := writeSubcommandsTSV(t, dir, [][3]string{
-		{"widget", "roster/shared/src/settings.py", "Show resolved operator settings"},
-	})
-
-	var gotEnv []string
-	var gotArgs []string
-	deps := Deps{
-		Stdout:          io.Discard,
-		Stderr:          io.Discard,
-		RepoRoot:        dir,
-		SubcommandsPath: subPath,
-		PythonExecutable: func(ctx context.Context, script string, args []string, env []string, stdout, stderr io.Writer, stdin io.Reader) (int, error) {
-			gotEnv = env
-			gotArgs = args
-			return 0, nil
-		},
-	}
-
-	code := Run(context.Background(), []string{InteractiveFlag, "widget", "show"}, deps)
-	if code != 0 {
-		t.Fatalf("Run() code = %d, want 0", code)
-	}
-	if len(gotArgs) != 1 || gotArgs[0] != "show" {
-		t.Errorf("args = %v, want [show] (the --interactive flag must be consumed, not forwarded)", gotArgs)
-	}
+func TestChildEnvCarriesTheInteractiveOptIn(t *testing.T) {
+	// Was TestRun_InteractiveFlagSetsChildEnv, which observed the env through
+	// the Python-script fallback. That fallback is gone, so the env-building
+	// itself is what there is to test -- and it is a pure function, which is
+	// a better place to assert it than a dispatch path that happened to
+	// expose it.
+	env := childEnv(true)
 	found := false
-	for _, kv := range gotEnv {
+	for _, kv := range env {
 		if kv == "CADRE_INTERACTIVE=1" {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("env = %v, want CADRE_INTERACTIVE=1 present", gotEnv)
+		t.Error("childEnv(true) must set CADRE_INTERACTIVE=1")
 	}
-}
-
-// TestRun_InteractiveFlagOnlyHonoredWhenLeading. `--interactive` is a
-// dispatcher-level flag, recognised only in front of the subcommand name.
-// Anywhere else it belongs to the subcommand, which may define its own (see
-// `cadre init --interactive`, a different thing entirely: the shared-policy
-// questionnaire, not a prompt for one missing operator setting). Consuming a
-// trailing one would both swallow an argument the subcommand was given and
-// silently turn a non-interactive invocation interactive.
-//
-// Ported from roster/orchestration/test/test_agents_dispatcher.py's
-// `test_interactive_flag_only_honored_when_leading`, which tested the deleted
-// bin/cadre.py and had no Go counterpart.
-func TestRun_InteractiveFlagOnlyHonoredWhenLeading(t *testing.T) {
-	dir := t.TempDir()
-	subPath := writeSubcommandsTSV(t, dir, [][3]string{
-		{"widget", "roster/shared/src/settings.py", "Show resolved operator settings"},
-	})
-
-	var gotEnv []string
-	var gotArgs []string
-	deps := Deps{
-		Stdout:          io.Discard,
-		Stderr:          io.Discard,
-		RepoRoot:        dir,
-		SubcommandsPath: subPath,
-		PythonExecutable: func(ctx context.Context, script string, args []string, env []string, stdout, stderr io.Writer, stdin io.Reader) (int, error) {
-			gotEnv = env
-			gotArgs = append([]string(nil), args...)
-			return 0, nil
-		},
-	}
-
-	code := Run(context.Background(), []string{"widget", InteractiveFlag, "show"}, deps)
-	if code != 0 {
-		t.Fatalf("Run() code = %d, want 0", code)
-	}
-	if len(gotArgs) != 2 || gotArgs[0] != InteractiveFlag || gotArgs[1] != "show" {
-		t.Errorf("args = %v, want [%s show] forwarded verbatim", gotArgs, InteractiveFlag)
-	}
-	for _, kv := range gotEnv {
-		if kv == "CADRE_INTERACTIVE=1" {
-			t.Errorf("a trailing %s set CADRE_INTERACTIVE=1; only a leading one may", InteractiveFlag)
+	for _, kv := range childEnv(false) {
+		if strings.HasPrefix(kv, "CADRE_INTERACTIVE=") {
+			t.Errorf("childEnv(false) must not set CADRE_INTERACTIVE, got %q", kv)
 		}
 	}
 }
 
+func TestRun_InteractiveFlagOnlyHonoredWhenLeading(t *testing.T) {
+	// A leading --interactive is consumed; anywhere else it is the
+	// subcommand name and must not be silently swallowed.
+	dir := t.TempDir()
+	subPath := writeSubcommandsTSV(t, dir, [][2]string{{"widget", "described only"}})
+
+	var leading strings.Builder
+	Run(context.Background(), []string{InteractiveFlag, "does-not-exist"}, Deps{
+		Stdout: io.Discard, Stderr: &leading, RepoRoot: dir, SubcommandsPath: subPath,
+	})
+	if !strings.Contains(leading.String(), "unknown subcommand 'does-not-exist'") {
+		t.Errorf("a leading %s must be consumed; stderr = %q", InteractiveFlag, leading.String())
+	}
+
+	var trailing strings.Builder
+	Run(context.Background(), []string{"does-not-exist", InteractiveFlag}, Deps{
+		Stdout: io.Discard, Stderr: &trailing, RepoRoot: dir, SubcommandsPath: subPath,
+	})
+	if !strings.Contains(trailing.String(), "unknown subcommand 'does-not-exist'") {
+		t.Errorf("a non-leading %s must not be consumed; stderr = %q", InteractiveFlag, trailing.String())
+	}
+}
+
 func TestRun_SubcommandExitCodePropagates(t *testing.T) {
+	// Was measured through the Python fallback's return value. Now measured
+	// through a Go-routed subcommand, which is the only kind there is: a
+	// usage error must surface as a non-zero exit rather than being
+	// swallowed by the dispatcher.
 	dir := t.TempDir()
-	// See TestRun_RoutesToSubcommandScript's comment on why this uses a
-	// synthetic "widget" name rather than "config".
-	subPath := writeSubcommandsTSV(t, dir, [][3]string{
-		{"widget", "roster/shared/src/settings.py", "desc"},
+	subPath := writeSubcommandsTSV(t, dir, [][2]string{{"widget", "described only"}})
+
+	code := Run(context.Background(), []string{"config", "--no-such-flag"}, Deps{
+		Stdout: io.Discard, Stderr: io.Discard, RepoRoot: dir, SubcommandsPath: subPath,
 	})
-
-	deps := Deps{
-		Stdout:          io.Discard,
-		Stderr:          io.Discard,
-		RepoRoot:        dir,
-		SubcommandsPath: subPath,
-		PythonExecutable: func(ctx context.Context, script string, args []string, env []string, stdout, stderr io.Writer, stdin io.Reader) (int, error) {
-			return 7, nil
-		},
-	}
-
-	code := Run(context.Background(), []string{"widget"}, deps)
-	if code != 7 {
-		t.Errorf("Run() code = %d, want 7", code)
+	if code == 0 {
+		t.Error("a subcommand's non-zero exit must propagate through Run()")
 	}
 }
 
-func TestRun_SubcommandExecutionErrorReturnsOne(t *testing.T) {
-	dir := t.TempDir()
-	// See TestRun_RoutesToSubcommandScript's comment on why this uses a
-	// synthetic "widget" name rather than "config".
-	subPath := writeSubcommandsTSV(t, dir, [][3]string{
-		{"widget", "roster/shared/src/settings.py", "desc"},
-	})
-
-	deps := Deps{
-		Stdout:          io.Discard,
-		Stderr:          io.Discard,
-		RepoRoot:        dir,
-		SubcommandsPath: subPath,
-		PythonExecutable: func(ctx context.Context, script string, args []string, env []string, stdout, stderr io.Writer, stdin io.Reader) (int, error) {
-			return 1, errInteropUnavailable
-		},
-	}
-
-	code := Run(context.Background(), []string{"widget"}, deps)
-	if code != 1 {
-		t.Errorf("Run() code = %d, want 1", code)
-	}
-}
+// TestRun_SubcommandExecutionErrorReturnsOne is gone with the mechanism it
+// covered: an error from the Python-script fallback. There is no such
+// fallback and no PythonExecutable hook to inject a failure through --
+// TestRun_RefusesATableEntryWithNoGoRoute covers what reaching the end of
+// dispatch means now.
 
 func TestRun_MissingSubcommandsFile(t *testing.T) {
 	dir := t.TempDir()
@@ -301,7 +221,7 @@ func TestRun_MissingSubcommandsFile(t *testing.T) {
 
 func TestUsage_ListsAllSubcommandsAndSDLC(t *testing.T) {
 	subs := []Subcommand{
-		{Name: "select", Script: "x.py", Description: "Deterministic selection"},
+		{Name: "select", Description: "Deterministic selection"},
 	}
 	out := Usage(subs)
 	if !strings.Contains(out, "select") {
@@ -318,7 +238,7 @@ func TestUsage_ListsAllSubcommandsAndSDLC(t *testing.T) {
 func TestRun_GenerateRoleMetadataRouting(t *testing.T) {
 	// Test that generate-role-metadata is properly routed to the Go CLI
 	dir := t.TempDir()
-	subPath := writeSubcommandsTSV(t, dir, [][3]string{})
+	subPath := writeSubcommandsTSV(t, dir, [][2]string{})
 
 	var stderr bytes.Buffer
 	deps := Deps{
@@ -342,7 +262,7 @@ func TestRun_GenerateRoleMetadataRouting(t *testing.T) {
 func TestRun_GeneratePluginRouting(t *testing.T) {
 	// Test that generate-plugin is properly routed to the Go CLI
 	dir := t.TempDir()
-	subPath := writeSubcommandsTSV(t, dir, [][3]string{})
+	subPath := writeSubcommandsTSV(t, dir, [][2]string{})
 
 	var stderr bytes.Buffer
 	deps := Deps{
@@ -364,7 +284,7 @@ func TestRun_GeneratePluginRouting(t *testing.T) {
 func TestRun_SelectRouting(t *testing.T) {
 	// Test that select is properly routed to the Go CLI
 	dir := t.TempDir()
-	subPath := writeSubcommandsTSV(t, dir, [][3]string{})
+	subPath := writeSubcommandsTSV(t, dir, [][2]string{})
 
 	var stderr bytes.Buffer
 	deps := Deps{

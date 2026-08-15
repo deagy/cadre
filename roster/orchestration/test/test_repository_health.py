@@ -80,6 +80,29 @@ def _secure_cloud_role_count() -> int:
     return len(profile["agents"])
 
 
+def wrapper_binary() -> str:
+    """A cadre binary for the packaged wrapper to exec.
+
+    The wrapper resolves a binary or fails: it no longer falls back to the
+    bundled Python implementation, and the suite no longer ships one. These
+    tests must therefore supply a binary rather than relying on that fallback,
+    and CADRE_BINARY is the supported way to do it -- the same escape an
+    air-gapped or unsupported-platform install uses.
+    """
+    built = REPOSITORY_ROOT / "dist-staging" / "cadre"
+    if not built.is_file():
+        built = REPOSITORY_ROOT / "dist" / "cadre"
+    if not built.is_file():
+        target = REPOSITORY_ROOT / "dist-staging" / "cadre"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ["go", "build", "-o", str(target), "./cmd/cadre"],
+            cwd=REPOSITORY_ROOT, check=True, capture_output=True,
+        )
+        built = target
+    return str(built)
+
+
 def generated_package() -> Path:
     """A freshly generated plugin package, built once and reused.
 
@@ -1856,7 +1879,7 @@ class RepositoryHealthTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
-                env={"PATH": bare_path, "AGENTIC_SDLC_BIN": str(other), "HOME": fake_bin},
+                env={"PATH": bare_path, "AGENTIC_SDLC_BIN": str(other), "HOME": fake_bin, "CADRE_BINARY": wrapper_binary()},
             )
             self.assertEqual(0, via_env.returncode, via_env.stderr)
             self.assertIn("STUB-SDLC", via_env.stdout)
@@ -1868,7 +1891,7 @@ class RepositoryHealthTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
-                env={"PATH": bare_path, "HOME": fake_bin},
+                env={"PATH": bare_path, "HOME": fake_bin, "CADRE_BINARY": wrapper_binary()},
             )
             self.assertEqual(0, via_path.returncode, via_path.stderr)
             self.assertIn("STUB-SDLC", via_path.stdout)
@@ -1883,7 +1906,7 @@ class RepositoryHealthTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
-                env={"PATH": bare_path, "HOME": fake_bin},
+                env={"PATH": bare_path, "HOME": fake_bin, "CADRE_BINARY": wrapper_binary()},
             )
             self.assertNotEqual(0, unresolvable.returncode)
             self.assertIn("install Agentic SDLC", unresolvable.stderr)
@@ -2033,7 +2056,7 @@ class RepositoryHealthTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
-                env={"PATH": empty_bin, "HOME": empty_bin},
+                env={"PATH": empty_bin, "HOME": empty_bin, "CADRE_BINARY": wrapper_binary()},
             )
         self.assertNotEqual(0, result.returncode)
         self.assertIn("Python 3.10+ is required", result.stderr)
@@ -2043,9 +2066,16 @@ class RepositoryHealthTests(unittest.TestCase):
         self.assertTrue(table.is_file(), str(table))
         rows = [line.split("\t") for line in table.read_text(encoding="utf-8").splitlines() if line]
         self.assertTrue(rows)
-        for name, script, description in rows:
+        # Two columns: name and description. The script column named the
+        # Python implementation the packaged wrapper exec'd when it could not
+        # resolve the Go binary; that fallback is gone, the suite ships no
+        # Python, and a column naming files the distribution does not contain
+        # would be stale by construction.
+        for row in rows:
+            self.assertEqual(2, len(row), f"expected name\tdescription, got {row!r}")
+        for name, description in rows:
             with self.subTest(subcommand=name):
-                self.assertTrue((REPOSITORY_ROOT / script).is_file(), script)
+                self.assertTrue(name)
                 self.assertTrue(description)
 
         # One dispatcher owns table parsing, sdlc delegation, usage text, and
@@ -2064,13 +2094,19 @@ class RepositoryHealthTests(unittest.TestCase):
         for source in (sh_source, ps1_source):
             self.assertNotIn("subcommands.tsv", source, "shims must not also parse the subcommand table")
             self.assertIn("cmd/cadre", source, "shims must hand off to the shared dispatcher")
-            for _name, script, _description in rows:
-                self.assertNotIn(script, source, "subcommand table must not also be hardcoded in the shim")
+            for name, _description in rows:
+                self.assertNotIn(
+                    f"{name})", source,
+                    "subcommand table must not also be hardcoded in the shim")
 
-    def test_packaged_wrapper_covers_every_non_excluded_subcommand_table_entry(self) -> None:
-        """Extends the `select`-only parity check above to every packaged
-        subcommand: a bin/subcommands.tsv script-path change must show up in
-        the packaged bin/cadre wrapper, not just for `select`.
+    def test_packaged_wrapper_dispatches_nothing_itself(self) -> None:
+        """The wrapper used to carry a case arm per subcommand, each exec'ing
+        a Python script, and this test checked every row appeared there.
+
+        It no longer dispatches at all -- it resolves the binary and execs it
+        -- so the property worth pinning is the absence of that case block,
+        which is what makes the wrapper unable to drift from the binary's own
+        subcommand set.
         """
         sys.path.insert(0, str(ROOT / "orchestration" / "src"))
         try:
@@ -2078,16 +2114,25 @@ class RepositoryHealthTests(unittest.TestCase):
         finally:
             sys.path.pop(0)
 
-        rows = generate_global_plugin.packaged_subcommands(REPOSITORY_ROOT)
-        self.assertTrue(rows)
+        names = generate_global_plugin.packaged_subcommands(REPOSITORY_ROOT)
+        self.assertTrue(names)
         wrapper_source = (generated_package() / "bin" / "cadre").read_text(encoding="utf-8")
-        for name, script in rows:
+
+        # The wrapper no longer carries a case arm per subcommand: it execs
+        # the binary and lets it dispatch. What must hold is the stronger
+        # property that replaced that -- it dispatches nothing itself, so it
+        # cannot drift from the binary's own subcommand set.
+        for name in names:
             with self.subTest(subcommand=name):
-                self.assertIn(name, wrapper_source)
-                self.assertIn(script, wrapper_source)
-        for excluded in generate_global_plugin.PACKAGED_SUBCOMMAND_EXCLUSIONS:
-            with self.subTest(excluded=excluded):
-                self.assertNotIn(f"{excluded})", wrapper_source)
+                self.assertNotIn(
+                    f"  {name})", wrapper_source,
+                    "the wrapper must not dispatch subcommands itself; the binary does")
+        self.assertNotIn(
+            "AGENT_PYTHON", wrapper_source,
+            "the packaged wrapper must never exec Python")
+        self.assertIn(
+            'exec "$BINARY_CACHE"', wrapper_source,
+            "the wrapper must hand every subcommand to the binary")
 
     def _powershell_interpreter(self) -> str | None:
         return shutil.which("pwsh") or shutil.which("powershell")
