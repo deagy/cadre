@@ -592,5 +592,152 @@ class SelectOverlayParityTest(unittest.TestCase):
                     )
 
 
+class SelectPresentationParityTest(unittest.TestCase):
+    """Parity for `--format text`, `--explain` and `--output`.
+
+    None of these touch the JSON plan or the fingerprint, which is exactly
+    why they need their own gate: the corpus comparison would stay green
+    while every line break moved.
+
+    `--format text` is compared byte for byte across the whole corpus. That
+    is a stronger claim than it looks -- the rendering is produced by a port
+    of `textwrap.fill`, since Go has no equivalent, so every wrapped line is
+    a reimplementation agreeing with the original rather than a translation
+    of it.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.corpus = load_corpus()
+        probe = load_corpus()[0]
+        code, _, stderr = run_select(probe, implementation="go")
+        if code == GO_NOT_IMPLEMENTED_EXIT:
+            raise unittest.SkipTest(
+                "no Go select implementation yet: CADRE_SELECT_IMPL=go returns "
+                f"exit {GO_NOT_IMPLEMENTED_EXIT}"
+            )
+        if code != 0:
+            raise AssertionError(f"CADRE_SELECT_IMPL=go failed (exit {code}):\n{stderr}")
+
+    def _run(self, case: dict, *extra: str, implementation: str) -> tuple[int, str, str]:
+        environment = dict(os.environ)
+        if implementation == "go":
+            environment["CADRE_SELECT_IMPL"] = "go"
+        else:
+            environment.pop("CADRE_SELECT_IMPL", None)
+        completed = subprocess.run(
+            [
+                str(CADRE), "select",
+                "--task", case["task"], "--files", case["files"],
+                "--classification", case["classification"], "--task-id", case["id"].upper(),
+                "--source", "deagy/cadre", "--source", "proposed-knowledge",
+                *extra,
+            ],
+            capture_output=True, text=True, timeout=180, cwd=REPO_ROOT, env=environment,
+        )
+        return completed.returncode, completed.stdout, completed.stderr
+
+    def test_text_rendering_is_identical_for_every_corpus_case(self) -> None:
+        for case in self.corpus:
+            with self.subTest(case=case["id"]):
+                python_code, python_out, python_err = self._run(case, "--format", "text", implementation="python")
+                go_code, go_out, go_err = self._run(case, "--format", "text", implementation="go")
+
+                self.assertEqual(python_code, 0, python_err)
+                self.assertEqual(go_code, 0, go_err)
+                self.assertEqual(
+                    python_out, go_out,
+                    f"the text rendering differs for {case['id']!r}. This case exists "
+                    f"because: {case['why']}",
+                )
+
+    def test_text_rendering_is_a_view_of_the_same_plan(self) -> None:
+        """Guard the guard: two implementations could render identical text
+        from different plans if the renderer dropped the fields that differed.
+        The fingerprint is in the rendering precisely so this is checkable."""
+        case = self.corpus[0]
+        _, text_out, _ = self._run(case, "--format", "text", implementation="go")
+        _, json_out, _ = self._run(case, implementation="go")
+
+        fingerprint = json.loads(json_out)["dispatch_fingerprint"]
+        self.assertIn(
+            fingerprint, text_out,
+            "the text rendering must carry the same fingerprint as the JSON plan",
+        )
+
+    def test_explain_writes_to_stderr_and_leaves_the_plan_untouched(self) -> None:
+        """--explain is diagnostic. It must never alter the plan on stdout --
+        otherwise a diagnostic flag would change the artifact being
+        diagnosed, and the fingerprint with it."""
+        case = self.corpus[0]
+        for implementation in ("python", "go"):
+            with self.subTest(implementation=implementation):
+                _, plain_out, _ = self._run(case, implementation=implementation)
+                _, explain_out, explain_err = self._run(case, "--explain", implementation=implementation)
+
+                # canonical_form, not raw bytes: two invocations always
+                # differ on generated_at and provenance, so comparing stdout
+                # verbatim would fail for one implementation against itself.
+                self.assertEqual(
+                    canonical_form(json.loads(plain_out)),
+                    canonical_form(json.loads(explain_out)),
+                    "--explain changed the JSON plan on stdout",
+                )
+                self.assertTrue(explain_err.strip(), "--explain produced no reasoning on stderr")
+
+        _, _, python_err = self._run(case, "--explain", implementation="python")
+        _, _, go_err = self._run(case, "--explain", implementation="go")
+        self.assertEqual(python_err, go_err, "--explain reasoning differs between implementations")
+
+    def test_output_writes_the_same_bytes_in_both_formats(self) -> None:
+        case = self.corpus[0]
+        for arguments in ([], ["--format", "text"]):
+            with self.subTest(format=arguments or ["json"]):
+                written = {}
+                for implementation in ("python", "go"):
+                    with tempfile.TemporaryDirectory() as workspace:
+                        # A nested path, so the parent-directory creation is
+                        # exercised rather than assumed.
+                        destination = Path(workspace) / "nested" / "deeper" / "plan.out"
+                        code, stdout, stderr = self._run(
+                            case, "--output", str(destination), *arguments,
+                            implementation=implementation,
+                        )
+                        self.assertEqual(code, 0, stderr)
+                        self.assertEqual(
+                            stdout, "",
+                            f"{implementation} wrote to stdout as well as --output",
+                        )
+                        self.assertTrue(destination.is_file(), f"{implementation} wrote no file")
+                        written[implementation] = destination.read_bytes()
+
+                self.assertEqual(
+                    canonicalize_written(written["python"]),
+                    canonicalize_written(written["go"]),
+                    "--output produced different bytes",
+                )
+
+    def test_an_invalid_format_is_refused_by_both(self) -> None:
+        case = self.corpus[0]
+        for implementation in ("python", "go"):
+            code, stdout, _ = self._run(case, "--format", "yaml", implementation=implementation)
+            self.assertNotEqual(code, 0, f"{implementation} accepted --format yaml")
+            self.assertEqual(stdout, "", f"{implementation} emitted a plan for an invalid --format")
+
+
+def canonicalize_written(payload: bytes) -> object:
+    """A written plan compared the way the corpus comparison does.
+
+    JSON output carries `generated_at` and `provenance`, which differ between
+    two runs of the *same* implementation, so comparing raw bytes would fail
+    for reasons that have nothing to do with the port. Text output has no
+    such fields and is compared verbatim.
+    """
+    try:
+        return canonical_form(json.loads(payload.decode("utf-8")))
+    except json.JSONDecodeError:
+        return payload
+
+
 if __name__ == "__main__":
     unittest.main()

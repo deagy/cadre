@@ -33,6 +33,9 @@ func runSelectGo(args []string) int {
 	classification := options.String("classification", "", "Authorized knowledge classification")
 	top := options.Int("top", 5, "Maximum knowledge results per agent")
 	format := options.String("format", "json", "json or text")
+	output := options.String("output", "", "Write the plan to this path, in the --format chosen")
+	explain := options.Bool("explain", false,
+		"Additionally print, to stderr, near-miss reasoning for routes that did NOT match this task")
 	var files stringSliceFlag
 	options.Var(&files, "files", "Changed path or comma-separated paths; repeatable")
 	var sources stringSliceFlag
@@ -45,14 +48,9 @@ func runSelectGo(args []string) int {
 		fmt.Fprintln(os.Stderr, "cadre select: error: the following arguments are required: --task")
 		return 2
 	}
-	// Fail closed rather than silently answering a different question. These
-	// flags exist in the Python surface; until this implementation reproduces
-	// them, saying so is the only honest response -- a plan that quietly
-	// ignored --explain or wrote no --output file would be wrong in a way the
-	// caller could not see.
-	if *format != "json" {
-		fmt.Fprintf(os.Stderr, "cadre select: --format=%s is not implemented by the Go selector yet; unset %s\n",
-			*format, SelectImplEnv)
+	if *format != "json" && *format != "text" {
+		fmt.Fprintf(os.Stderr,
+			"cadre select: argument --format: invalid choice: %q (choose from 'json', 'text')\n", *format)
 		return 2
 	}
 
@@ -195,12 +193,43 @@ func runSelectGo(args []string) int {
 		return 1
 	}
 
-	rendered, err := selector.RenderPlanJSON(plan)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "cadre select: %s\n", err)
-		return 1
+	var rendered []byte
+	if *format == "text" {
+		rendered = []byte(selector.FormatPlanText(plan))
+	} else {
+		rendered, err = selector.RenderPlanJSON(plan)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cadre select: %s\n", err)
+			return 1
+		}
 	}
-	_, _ = os.Stdout.Write(rendered)
+
+	if *output != "" {
+		destination, err := filepath.Abs(*output)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cadre select: %s\n", err)
+			return 1
+		}
+		if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+			fmt.Fprintf(os.Stderr, "cadre select: %s\n", err)
+			return 1
+		}
+		if err := os.WriteFile(destination, rendered, 0o644); err != nil {
+			fmt.Fprintf(os.Stderr, "cadre select: %s\n", err)
+			return 1
+		}
+	} else {
+		_, _ = os.Stdout.Write(rendered)
+	}
+
+	if *explain {
+		// Printed to stderr, after the machine-readable plan, and derived
+		// only from data the plan already exposes plus the effective routing
+		// config. It never touches the plan or the rendered bytes, so the
+		// output is byte-identical with and without --explain.
+		nearMisses := selector.FindNearMisses(config, *task, selector.MatchedRouteIDs(plan))
+		fmt.Fprint(os.Stderr, selector.FormatNearMissesText(nearMisses))
+	}
 	return 0
 }
 
