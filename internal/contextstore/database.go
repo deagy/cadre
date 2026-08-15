@@ -196,6 +196,41 @@ func isDuplicateColumnError(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "duplicate column name")
 }
 
+// retryWhileLocked runs an idempotent database step, retrying while SQLite
+// reports the file as locked.
+//
+// Bounded, and it gives up by returning the last error rather than a
+// substitute: a store that is genuinely unavailable must fail the open, not
+// hang and not succeed with an unmigrated schema.
+func retryWhileLocked(step func() error) error {
+	delay := time.Millisecond
+	var err error
+	for attempt := 0; attempt < 12; attempt++ {
+		if err = step(); err == nil || !isLockedError(err) {
+			return err
+		}
+		time.Sleep(delay)
+		if delay < 200*time.Millisecond {
+			delay *= 2
+		}
+	}
+	return err
+}
+
+// isLockedError matches SQLite's two lock messages.
+//
+// Matched on the message for the same reason isDuplicateColumnError is: the
+// driver surfaces these as a generic error, and the code that would
+// distinguish them is not carried through.
+func isLockedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := err.Error()
+	return strings.Contains(message, "database is locked") ||
+		strings.Contains(message, "database table is locked")
+}
+
 // OpenStore opens (creating if absent) and, by default, sweeps expired
 // entries. sweep=false exists for `expire --dry-run`, which needs to read
 // the expired set without destroying it.
@@ -207,11 +242,22 @@ func OpenStore(databasePath string, sweep bool) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := db.Exec(schema); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	if err := migrateAdditiveColumns(db); err != nil {
+	// Retried, because the schema statements race other openers of the same
+	// file. `_busy_timeout` covers an ordinary write that has to wait for a
+	// lock, but it does not cover this one: while the first connection is
+	// converting the journal to WAL, SQLite returns SQLITE_BUSY to the others
+	// without invoking the busy handler at all -- the failure comes back
+	// immediately rather than after the ten seconds the timeout suggests.
+	//
+	// Safe to retry because every statement involved is idempotent: the schema
+	// is CREATE ... IF NOT EXISTS throughout, and the migration tolerates a
+	// duplicate column for the same reason.
+	if err := retryWhileLocked(func() error {
+		if _, err := db.Exec(schema); err != nil {
+			return err
+		}
+		return migrateAdditiveColumns(db)
+	}); err != nil {
 		_ = db.Close()
 		return nil, err
 	}

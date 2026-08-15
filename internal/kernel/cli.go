@@ -1,8 +1,6 @@
 package kernel
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
@@ -61,6 +59,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return detectCmd(args[1:], stdout, stderr)
 	case "validate":
 		return validateCmd(registry, args[1:], stdout, stderr)
+	case "plan":
+		return planCmd(registry, args[1:], stdout, stderr)
 	case "list-gate-issues":
 		return listLedgerCmd(args[0], args[1:], stdout, stderr, ReadGateIssuesLedger)
 	case "list-github-gate-issues":
@@ -75,6 +75,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stdout, "  show-contract <name>   Print a bundled lifecycle contract as JSON")
 		_, _ = fmt.Fprintln(stdout, "  detect [--root ROOT]   Report what a repository looks like, changing nothing")
 		_, _ = fmt.Fprintln(stdout, "  validate [--root ROOT] Check a project's configuration and run records")
+		_, _ = fmt.Fprintln(stdout, "  plan --task-id ID --task TEXT         Create a dispatch plan and pending run record")
 		_, _ = fmt.Fprintln(stdout, "  list-gate-issues --task-id ID         Print the GitLab gate-issues ledger")
 		_, _ = fmt.Fprintln(stdout, "  list-github-gate-issues --task-id ID  Print the GitHub gate-issues ledger")
 		_, _ = fmt.Fprintln(stdout, "  list-gate-status --task-id ID         Print both forges' gate-status ledgers")
@@ -92,12 +93,15 @@ func Run(args []string, stdout, stderr io.Writer) int {
 
 // jsonError matches the Python kernel's top-level error document, which is
 // what a caller parsing stderr expects to find there.
+//
+// Rendered rather than marshalled: encoding/json escapes <, > and & inside
+// strings, and several of these messages tell an operator to "rerun with
+// --provider <manifest>". Marshalling turned that into \u003cmanifest\u003e,
+// which is still valid JSON and still unreadable in a terminal -- caught by
+// comparing stderr with the Python kernel's.
 func jsonError(err error) string {
-	encoded, marshalErr := json.MarshalIndent(map[string]string{"error": err.Error()}, "", "  ")
-	if marshalErr != nil {
-		return `{"error": "` + err.Error() + `"}`
-	}
-	return string(encoded)
+	rendered := RenderIndented(ordered("error", err.Error()))
+	return strings.TrimSuffix(rendered, "\n")
 }
 
 // introspectionCmd answers `provider`, `profile` and `extension`: what this
@@ -157,7 +161,7 @@ func introspectionCmd(registry *Registry, args []string, stdout, stderr io.Write
 	}
 
 	if action == "list" {
-		return printJSON(registry.Providers, stdout, stderr)
+		return printJSON(registry.Providers, stdout)
 	}
 	if len(positional) < 2 {
 		// argparse makes provider_id optional, so `provider inspect` with no
@@ -168,7 +172,7 @@ func introspectionCmd(registry *Registry, args []string, stdout, stderr io.Write
 	wanted := positional[1]
 	for _, provider := range registry.Providers {
 		if provider.ID == wanted {
-			return printJSON(provider, stdout, stderr)
+			return printJSON(provider, stdout)
 		}
 	}
 	_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(fmt.Errorf("unknown loaded provider: %s", wanted)))
@@ -181,19 +185,14 @@ func printSortedIDs(ids map[string]bool, stdout, stderr io.Writer) int {
 		sorted = append(sorted, id)
 	}
 	sort.Strings(sorted)
-	return printJSON(sorted, stdout, stderr)
+	return printJSON(sorted, stdout)
 }
 
-func printJSON(value any, stdout, stderr io.Writer) int {
-	var buffer bytes.Buffer
-	encoder := json.NewEncoder(&buffer)
-	encoder.SetEscapeHTML(false)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(value); err != nil {
-		_, _ = fmt.Fprintf(stderr, "agentic-sdlc: %v\n", err)
-		return 1
-	}
-	_, _ = fmt.Fprint(stdout, buffer.String())
+// printJSON writes a value as the Python kernel's print(json.dumps(value,
+// indent=2)) does. RenderIndented rather than encoding/json: Go escapes <, >
+// and & and leaves non-ASCII raw, and Python does the exact opposite of both.
+func printJSON(value any, stdout io.Writer) int {
+	_, _ = fmt.Fprint(stdout, RenderIndented(value))
 	return 0
 }
 
@@ -292,17 +291,61 @@ func validateCmd(registry *Registry, args []string, stdout, stderr io.Writer) in
 }
 
 // printReport writes the report as the Python kernel does: two-space indent,
-// a trailing newline, and no HTML escaping. Go escapes <, > and & inside
-// strings by default, which would mangle any finding quoting a path or a
-// comparison operator.
+// a trailing newline, <, > and & unescaped, and non-ASCII escaped. A finding
+// naming a path is the common case for all three.
 func printReport(stdout io.Writer, report ValidationReport) {
-	var buffer bytes.Buffer
-	encoder := json.NewEncoder(&buffer)
-	encoder.SetEscapeHTML(false)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(report); err != nil {
-		_, _ = fmt.Fprintf(stdout, `{"valid": false, "ready": false, "errors": ["%v"], "blockers": []}`, err)
-		return
+	_, _ = fmt.Fprint(stdout, RenderIndented(report))
+}
+
+// planCmd answers `plan`: build a task's dispatch plan and run record.
+//
+// The plan is printed and both documents are written. Printing the plan is
+// what a caller pipes into `cadre select`-adjacent tooling; writing it is what
+// makes the task exist as far as every other subcommand is concerned.
+func planCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
+	request := PlanRequest{Root: "."}
+	for index := 0; index < len(args); index++ {
+		switch {
+		case args[index] == "--root" && index+1 < len(args):
+			index++
+			request.Root = args[index]
+		case strings.HasPrefix(args[index], "--root="):
+			request.Root = strings.TrimPrefix(args[index], "--root=")
+		case args[index] == "--task-id" && index+1 < len(args):
+			index++
+			request.TaskID = args[index]
+		case strings.HasPrefix(args[index], "--task-id="):
+			request.TaskID = strings.TrimPrefix(args[index], "--task-id=")
+		case args[index] == "--task" && index+1 < len(args):
+			index++
+			request.Task = args[index]
+		case strings.HasPrefix(args[index], "--task="):
+			request.Task = strings.TrimPrefix(args[index], "--task=")
+		default:
+			_, _ = fmt.Fprintln(stderr,
+				"usage: agentic-sdlc plan [--root ROOT] --task-id TASK_ID --task TASK")
+			return 2
+		}
 	}
-	_, _ = stdout.Write(buffer.Bytes())
+	var missing []string
+	if request.TaskID == "" {
+		missing = append(missing, "--task-id")
+	}
+	if request.Task == "" {
+		missing = append(missing, "--task")
+	}
+	if len(missing) > 0 {
+		_, _ = fmt.Fprintf(stderr,
+			"agentic-sdlc plan: error: the following arguments are required: %s\n",
+			strings.Join(missing, ", "))
+		return 2
+	}
+
+	result, err := registry.Plan(request)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(err))
+		return 1
+	}
+	_, _ = fmt.Fprint(stdout, RenderIndented(result.Dispatch))
+	return 0
 }

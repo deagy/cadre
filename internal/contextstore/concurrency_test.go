@@ -234,30 +234,42 @@ func TestOnlyADuplicateColumnIsTolerated(t *testing.T) {
 }
 
 func TestConcurrentOpensOfTheSameStoreAllSucceed(t *testing.T) {
-	// The end-to-end form of the same property. It reproduces the defect only
-	// intermittently -- see the note above -- so it is kept as a smoke test of
-	// the whole open path rather than as the regression gate.
-	path := filepath.Join(t.TempDir(), "store.db")
+	// Sixteen openers racing on a store that does not exist yet, repeated,
+	// because the failure it guards is rare per attempt: roughly one opener in
+	// five hundred used to come back "database is locked" immediately.
+	//
+	// Immediately is the point. `_busy_timeout=10000` is set on every
+	// connection, so a lock this open path actually waited on would surface
+	// after ten seconds or not at all. This one surfaced at once, because
+	// SQLite does not invoke the busy handler while another connection is
+	// converting the journal to WAL. OpenStore retries it; without that retry
+	// this test fails within a few rounds.
+	const rounds, openers = 25, 16
+	for round := 0; round < rounds; round++ {
+		path := filepath.Join(t.TempDir(), "store.db")
 
-	const openers = 16
-	var group sync.WaitGroup
-	errs := make(chan error, openers)
-	for index := 0; index < openers; index++ {
-		group.Add(1)
-		go func(n int) {
-			defer group.Done()
-			db, err := OpenStore(path, true)
-			if err != nil {
-				errs <- fmt.Errorf("opener %d: %w", n, err)
-				return
-			}
-			_ = db.Close()
-		}(index)
-	}
-	group.Wait()
-	close(errs)
+		var group sync.WaitGroup
+		errs := make(chan error, openers)
+		for index := 0; index < openers; index++ {
+			group.Add(1)
+			go func(n int) {
+				defer group.Done()
+				db, err := OpenStore(path, true)
+				if err != nil {
+					errs <- fmt.Errorf("round %d opener %d: %w", round, n, err)
+					return
+				}
+				_ = db.Close()
+			}(index)
+		}
+		group.Wait()
+		close(errs)
 
-	for err := range errs {
-		t.Error(err)
+		for err := range errs {
+			t.Error(err)
+		}
+		if t.Failed() {
+			return // one round's worth of failures is enough to read
+		}
 	}
 }
