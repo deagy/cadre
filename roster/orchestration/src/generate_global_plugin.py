@@ -1299,19 +1299,11 @@ def generate_suite_copy(
         ).stdout.splitlines()
         if (REPOSITORY_ROOT / relative).is_file()
     }
-    contract_helper = "roster/orchestration/src/agentic_sdlc_contracts.py"
-    if (REPOSITORY_ROOT / contract_helper).is_file():
-        tracked.add(contract_helper)
-    bootstrap_helper = "roster/orchestration/src/sync_codex_agents.py"
-    if (REPOSITORY_ROOT / bootstrap_helper).is_file():
-        tracked.add(bootstrap_helper)
-    # select_agents.py (already packaged) imports this module directly, and
-    # it is also its own packaged subcommand (selection-telemetry, see
-    # bin/subcommands.tsv) -- it must ship even on a worktree where it is
-    # still untracked/uncommitted, same carve-out as the two helpers above.
-    telemetry_helper = "roster/orchestration/src/selection_telemetry.py"
-    if (REPOSITORY_ROOT / telemetry_helper).is_file():
-        tracked.add(telemetry_helper)
+    # Three carve-outs used to sit here, forcing agentic_sdlc_contracts.py,
+    # sync_codex_agents.py and selection_telemetry.py into the packaged suite
+    # even when untracked, because the packaged wrapper exec'd them. The
+    # wrapper execs the Go binary now and the suite ships no Python at all,
+    # so a carve-out for a Python helper has nothing to carve out.
     role_paths = {f"roster/{metadata['definition']}" for metadata in catalog.values()}
     # `catalog` was parsed straight off the worktree copy of catalog.yaml, but
     # `tracked` only reflects git's index -- an uncommitted new role's
