@@ -3,6 +3,7 @@ package knowledge
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestShardCompactorCreation(t *testing.T) {
@@ -173,9 +174,17 @@ func TestCompactShardsAsync(t *testing.T) {
 		t.Fatal("Expected job")
 	}
 
-	// Initial state should be pending or in_progress
-	if state := job.State(); state != "pending" && state != "in_progress" {
-		t.Errorf("Expected pending/in_progress state, got %s", state)
+	// The state must be one the job can legitimately be in -- including
+	// "complete".
+	//
+	// This asserted pending-or-in_progress, which is a race: the compaction
+	// runs in the background and can finish before the next line executes.
+	// Five small shards on a fast runner is exactly when it does, and the test
+	// failed in CI while passing locally six times out of six. Asserting a job
+	// has *not finished yet* is asserting the implementation is slow, which is
+	// not a property worth having.
+	if state := job.State(); state != "pending" && state != "in_progress" && state != "complete" {
+		t.Errorf("Expected pending/in_progress/complete state, got %s", state)
 	}
 
 	// Job ID should be set
@@ -183,8 +192,16 @@ func TestCompactShardsAsync(t *testing.T) {
 		t.Error("Job should have ID")
 	}
 
-	// After completion, should have results
-	if results := job.Results(); job.State() == "complete" && len(results) != len(shardIDs) {
+	// What is actually worth asserting: the job reaches completion, and
+	// reports one result per shard when it does.
+	deadline := time.Now().Add(10 * time.Second)
+	for job.State() != "complete" && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if state := job.State(); state != "complete" {
+		t.Fatalf("job did not complete within the deadline; state is %s", state)
+	}
+	if results := job.Results(); len(results) != len(shardIDs) {
 		t.Errorf("Expected %d results, got %d", len(shardIDs), len(results))
 	}
 }
@@ -321,26 +338,58 @@ func TestMultiShardDistributed(t *testing.T) {
 		t.Error("At least some shards should need compaction")
 	}
 
-	// Compact all needed
+	// Before compaction: 200 inserted, 50 tombstoned, 150 live.
+	//
+	// Read before the job starts, not after. TotalEntries counts tombstones,
+	// so compaction is exactly what changes it -- asserting 200 after starting
+	// an async compaction is asserting the compaction has not got there yet.
+	// It usually had not, locally; in CI it had, and reported 155.
+	before := compactor.GetGlobalStats()
+	if before.TotalShards != 4 {
+		t.Errorf("Expected 4 shards, got %d", before.TotalShards)
+	}
+	if before.TotalEntries != 200 {
+		t.Errorf("Expected 200 total entries before compaction, got %d", before.TotalEntries)
+	}
+	if before.TotalDeleted != 50 {
+		t.Errorf("Expected 50 tombstones before compaction, got %d", before.TotalDeleted)
+	}
+
 	job := compactor.CompactAllNeeded()
-
-	if job != nil && len(job.ShardIDs) > 0 {
-		// Job shards may exceed max concurrent - that's handled internally
-		// Verify job was created successfully
-		if job.ID == "" {
-			t.Error("Job should have ID")
-		}
+	if job == nil || len(job.ShardIDs) == 0 {
+		t.Fatal("Expected a compaction job for the shards that need one")
+	}
+	if job.ID == "" {
+		t.Error("Job should have ID")
 	}
 
-	// Get global stats
-	stats := compactor.GetGlobalStats()
-
-	if stats.TotalShards != 4 {
-		t.Errorf("Expected 4 shards, got %d", stats.TotalShards)
+	deadline := time.Now().Add(10 * time.Second)
+	for job.State() != "complete" && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if state := job.State(); state != "complete" {
+		t.Fatalf("job did not complete within the deadline; state is %s", state)
 	}
 
-	if stats.TotalEntries != 200 {
-		t.Errorf("Expected 200 total entries, got %d", stats.TotalEntries)
+	// After compaction: 45 tombstones reclaimed, 5 left behind.
+	//
+	// Not 50. Shard 1 deleted 5 of 50, a ratio of exactly 10%, and the default
+	// policy's DeletionThreshold is 10.0 compared with a strict `>` -- so it
+	// does not qualify and is left alone. CompactAllNeeded compacts what needs
+	// compacting, not everything, and that boundary is worth pinning: relaxing
+	// the comparison to `>=` would start compacting a shard on every pass for
+	// the sake of five tombstones.
+	after := compactor.GetGlobalStats()
+	if after.TotalDeleted != 5 {
+		t.Errorf("Expected shard 1's 5 tombstones to survive, got %d", after.TotalDeleted)
+	}
+	if after.TotalEntries != 155 {
+		t.Errorf("Expected 155 entries after compaction, got %d", after.TotalEntries)
+	}
+	liveBefore := before.TotalEntries - before.TotalDeleted
+	if after.TotalEntries-after.TotalDeleted != liveBefore {
+		t.Errorf("compaction changed the live vector count: %d before, %d after",
+			liveBefore, after.TotalEntries-after.TotalDeleted)
 	}
 }
 

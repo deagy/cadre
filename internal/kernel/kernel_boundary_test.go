@@ -114,6 +114,22 @@ func TestNoRosterSidePackageImportsTheKernel(t *testing.T) {
 	}
 }
 
+// neutralPackages are internal packages the kernel may import.
+//
+// The bar is deliberately high, and one package clears it. internal/canonicaljson
+// is a byte-exact JSON encoder with no knowledge of routes, roles, gates or
+// projects -- the shared half of a hash the selector computes and the kernel
+// re-checks. It is shared precisely so the two cannot drift: they disagreed
+// once, and the kernel then rejected every plan the selector produced.
+//
+// Importing the *selector* to get that encoder would have been the coupling
+// this guard forbids, which is why the encoder was extracted instead. Adding
+// anything else here needs the same argument: no lifecycle knowledge, and a
+// concrete failure that duplication has already caused.
+var neutralPackages = map[string]bool{
+	modulePath + "/internal/canonicaljson": true,
+}
+
 func TestTheKernelDoesNotImportRosterSideCode(t *testing.T) {
 	// The other direction, and the more tempting one: the kernel reaching for
 	// the selector's routing or the context store would make gate evaluation
@@ -126,9 +142,62 @@ func TestTheKernelDoesNotImportRosterSideCode(t *testing.T) {
 		if path == kernelPkg || strings.HasPrefix(path, kernelPkg+"/") {
 			continue
 		}
+		if neutralPackages[path] {
+			continue
+		}
 		t.Errorf("the kernel imports %s in %v.\n"+
 			"Gate evaluation must not depend on any particular roster's code.", path, files)
 	}
+}
+
+func TestANeutralPackageStaysNeutral(t *testing.T) {
+	// Without this, the exemption above is a laundering channel: the kernel
+	// could reach any roster-side package by way of one that is allowed to be
+	// imported. A neutral package earns the name by importing nothing of ours.
+	checked := 0
+	for path := range neutralPackages {
+		directory := filepath.Join("..", strings.TrimPrefix(path, modulePath+"/internal/"))
+		if _, err := os.Stat(directory); err != nil {
+			t.Errorf("%s is exempted but does not exist; the exemption covers nothing", path)
+			continue
+		}
+		checked++
+		// Compiled code only. The agreement test that holds the two
+		// fingerprint implementations together lives in this package's
+		// external test package and imports both by necessity -- it is a
+		// comparison, not a dependency, and nothing it imports ships.
+		for imported, files := range packageImportsIn(t, directory) {
+			if allExternalTestFiles(t, directory, files) {
+				continue
+			}
+			if strings.HasPrefix(imported, modulePath+"/") {
+				t.Errorf("%s imports %s in %v.\n"+
+					"A package the kernel may import must carry no repository code of its own, "+
+					"or the boundary is crossed one hop later.", path, imported, files)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no exempted package was checked; this guard asserted nothing")
+	}
+}
+
+// allExternalTestFiles reports whether every file naming an import belongs to
+// an external test package (`package foo_test`), which is compiled only for
+// `go test` and linked into nothing.
+func allExternalTestFiles(t *testing.T, directory string, files []string) bool {
+	t.Helper()
+	fileSet := token.NewFileSet()
+	for _, name := range files {
+		file, err := parser.ParseFile(fileSet, filepath.Join(directory, name), nil, parser.PackageClauseOnly)
+		if err != nil {
+			t.Fatalf("parsing %s: %v", name, err)
+		}
+		if !strings.HasSuffix(file.Name.Name, "_test") {
+			return false
+		}
+	}
+	return len(files) > 0
 }
 
 func TestTheKernelShipsAsItsOwnBinary(t *testing.T) {

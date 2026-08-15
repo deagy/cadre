@@ -328,10 +328,12 @@ role file's own text coming back out of a child process is the assertion.
 under `kernel/contracts/` are **data, not code** — they stay exactly as they
 are.
 
-**Progress: 5 of 32.** `show-contract` (#290), `detect`, and the `provider` /
-`profile` / `extension` introspection trio (#291), each behind
-`kernel/test/test_kernel_differential.py`, which runs both kernels on the
-same machine.
+**Progress: 10 of 32.** `show-contract` (#290), `detect`, the `provider` /
+`profile` / `extension` introspection trio (#291), `validate`, and the four `list-*` readers (#292),
+each behind a differential that runs both kernels on the same machine
+(`kernel/test/test_kernel_differential.py`, and for `validate` the Go-side
+`internal/kernel/validate_differential_test.go` and
+`validate_runrecord_differential_test.go`).
 
 **`status` is not read-only, whatever its name says.** It is documented as
 "Show a task's gate state" and it calls `advance_lifecycle` and then
@@ -341,17 +343,37 @@ a caller running `status` to look at something changes it. Group it with the
 mutating subcommands, not the inspecting ones — it was mis-grouped here, and
 the mistake is easy to repeat because the name invites it.
 
-Genuinely read-only and still unported: `validate`, and the `list-*` sidecar
-readers (`list-gate-issues`, `list-github-gate-issues`, `list-gate-status`,
-`list-reviewer-nudge` — the last is documented "zero network").
+The `list-*` sidecar readers (`list-gate-issues`,
+`list-github-gate-issues`, `list-gate-status`, `list-reviewer-nudge`)
+landed with it, compared byte for byte rather than as parsed values —
+these print a document other tooling reads, so key order, Python's
+`\uXXXX` escaping and exact indentation are all part of the contract.
+`internal/kernel/echo.go` is the piece that reproduces
+`json.dumps(value, indent=2)`; every remaining subcommand that echoes a
+JSON document needs it.
 
-**`validate` is the next substantial piece**, and it is not a small slice: it
-needs the overlay loader, `approval_source_policy`, the agent catalog, path
-confinement, and JSON Schema Draft 2020-12 over run records.
-`github.com/santhosh-tekuri/jsonschema/v5` is already a direct dependency
-(`cadre schema-validate` uses it), so the schema half is available.
+**With that, the read-only group is done.** What remains all writes:
+`init`, `repair`, `plan`, `status`, `decide`, `invalidate`, `reenter`,
+`upgrade`, and the GitHub/GitLab gate-approval plumbing.
 
-This is the largest single item and the one with a real consumer cost.
+**`validate` landed in #292**, and it was the largest single read-only item:
+the overlay loader, `approval_source_policy`, the agent catalog, path
+confinement, and JSON Schema Draft 2020-12 over both run records and dispatch
+plans, via `github.com/santhosh-tekuri/jsonschema/v5`.
+
+Two things are worth carrying forward from it:
+
+- **Schema *messages* are not portable.** Both sides report a violation at
+  the same location; the sentence after it belongs to the validating library
+  ("'owner' is a required property" against "missing properties: 'owner'").
+  The differential compares file and location exactly and drops that
+  sentence. Everything the kernel words itself is compared in full.
+- **The fingerprint is now shared at the encoder and duplicated at the
+  policy.** `internal/canonicaljson` holds the byte-exact JSON encoder both
+  the selector and the kernel hash with; each still owns its own excluded-key
+  set, held together by `internal/canonicaljson/agreement_test.go`. That
+  split exists because the two sides disagreed once over `provenance` and
+  the kernel then rejected every plan the selector produced.
 
 **Must survive the port, without exception:**
 

@@ -1348,12 +1348,32 @@ def fingerprint(value: Any) -> str:
     return "sha256:" + hashlib.sha256(canonical).hexdigest()
 
 
+#: Keys excluded from the dispatch fingerprint's hashed payload.
+#:
+#: This set must match the selector's, because `validate` recomputes the
+#: fingerprint and compares it to the one the selector stored. It did not:
+#: the selector excludes `provenance` and this excluded only `generated_at`
+#: and `dispatch_fingerprint`, so every plan carrying a `provenance` key --
+#: which is every plan `cadre select` produces -- recomputed to a different
+#: value here and was reported as "stored dispatch fingerprint does not match
+#: current dispatch content". A correct plan, called invalid, by the component
+#: whose job is to say so.
+#:
+#: The selector's exclusion is the deliberate one (PB-FR-9, AC-10):
+#: `provenance` varies by generation-time environment -- working-tree dirty
+#: state, which files were passed in -- rather than being part of what the
+#: selector decided, so hashing it would make the fingerprint a checksum over
+#: environment noise instead of a determinism check. This side simply predates
+#: `provenance` existing.
+FINGERPRINT_EXCLUDED_KEYS = {"generated_at", "dispatch_fingerprint", "provenance"}
+
+
 def dispatch_fingerprint(dispatch: dict[str, Any]) -> str:
     """Bind every decision-relevant dispatch field, excluding only generated metadata."""
     payload = {
         key: value
         for key, value in dispatch.items()
-        if key not in {"generated_at", "dispatch_fingerprint"}
+        if key not in FINGERPRINT_EXCLUDED_KEYS
     }
     return fingerprint(payload)
 

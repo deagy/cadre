@@ -59,11 +59,26 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return showContractCmd(args[1:], stdout, stderr)
 	case "detect":
 		return detectCmd(args[1:], stdout, stderr)
+	case "validate":
+		return validateCmd(registry, args[1:], stdout, stderr)
+	case "list-gate-issues":
+		return listLedgerCmd(args[0], args[1:], stdout, stderr, ReadGateIssuesLedger)
+	case "list-github-gate-issues":
+		return listLedgerCmd(args[0], args[1:], stdout, stderr, ReadGitHubGateIssuesLedger)
+	case "list-gate-status":
+		return listLedgerCmd(args[0], args[1:], stdout, stderr, ReadGateStatusLedgers)
+	case "list-reviewer-nudge":
+		return listLedgerCmd(args[0], args[1:], stdout, stderr, ReadReviewerNudgeLedger)
 	case "-h", "--help":
 		_, _ = fmt.Fprintln(stdout, "usage: agentic-sdlc <subcommand> [args...]")
 		_, _ = fmt.Fprintln(stdout, "\nSubcommands ported to Go so far:")
 		_, _ = fmt.Fprintln(stdout, "  show-contract <name>   Print a bundled lifecycle contract as JSON")
 		_, _ = fmt.Fprintln(stdout, "  detect [--root ROOT]   Report what a repository looks like, changing nothing")
+		_, _ = fmt.Fprintln(stdout, "  validate [--root ROOT] Check a project's configuration and run records")
+		_, _ = fmt.Fprintln(stdout, "  list-gate-issues --task-id ID         Print the GitLab gate-issues ledger")
+		_, _ = fmt.Fprintln(stdout, "  list-github-gate-issues --task-id ID  Print the GitHub gate-issues ledger")
+		_, _ = fmt.Fprintln(stdout, "  list-gate-status --task-id ID         Print both forges' gate-status ledgers")
+		_, _ = fmt.Fprintln(stdout, "  list-reviewer-nudge --task-id ID      Print the reviewer-nudge ledger")
 		return 0
 	}
 
@@ -223,4 +238,71 @@ func showContractCmd(args []string, stdout, stderr io.Writer) int {
 	}
 	_, _ = fmt.Fprint(stdout, contract)
 	return 0
+}
+
+// validateCmd answers `validate`: is this project coherent, and is it ready?
+//
+// Three exit codes, and the middle one is the point: 0 valid and ready, 2
+// valid but blocked on a decision no automation may make, 1 invalid. A caller
+// that treats non-zero as failure still stops on a blocker, and one that reads
+// the code can tell "somebody needs to decide something" apart from "this
+// project contradicts itself".
+func validateCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
+	root := "."
+	for index := 0; index < len(args); index++ {
+		switch {
+		case args[index] == "--root" && index+1 < len(args):
+			index++
+			root = args[index]
+		case strings.HasPrefix(args[index], "--root="):
+			root = strings.TrimPrefix(args[index], "--root=")
+		default:
+			_, _ = fmt.Fprintf(stderr, "usage: agentic-sdlc validate [--root ROOT]\n")
+			return 2
+		}
+	}
+
+	resolved, err := resolveExisting(root)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "agentic-sdlc validate: %v\n", err)
+		return 1
+	}
+
+	// An unreadable overlay is reported in the same document shape as any
+	// other finding rather than as a crash: a caller parsing this output
+	// should not need a second code path for "the project could not be read".
+	overlay, err := LoadOverlay(resolved)
+	if err != nil {
+		printReport(stdout, ValidationReport{
+			Valid: false, Ready: false, Errors: []string{err.Error()}, Blockers: []string{},
+		})
+		return 1
+	}
+
+	report := registry.ValidateProject(resolved, overlay)
+	printReport(stdout, report)
+	switch {
+	case len(report.Errors) > 0:
+		return 1
+	case len(report.Blockers) > 0:
+		return 2
+	default:
+		return 0
+	}
+}
+
+// printReport writes the report as the Python kernel does: two-space indent,
+// a trailing newline, and no HTML escaping. Go escapes <, > and & inside
+// strings by default, which would mangle any finding quoting a path or a
+// comparison operator.
+func printReport(stdout io.Writer, report ValidationReport) {
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(report); err != nil {
+		_, _ = fmt.Fprintf(stdout, `{"valid": false, "ready": false, "errors": ["%v"], "blockers": []}`, err)
+		return
+	}
+	_, _ = stdout.Write(buffer.Bytes())
 }
