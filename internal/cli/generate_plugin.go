@@ -44,6 +44,13 @@ func GeneratePlugin(args []string) int {
 		return 1
 	}
 
+	// Generating a distribution requires the full source tree, including the
+	// files an installed copy does not carry. From an install it produces a
+	// package silently missing them rather than failing.
+	if !*checkMode && !requireCheckout("generate-plugin", repoRoot) {
+		return 2
+	}
+
 	result, err := generators.RunGeneratePlugin(repoRoot, *outputFlag, generators.GeneratePluginOptions{
 		Check:       *checkMode,
 		ForceReadme: *forceReadme,

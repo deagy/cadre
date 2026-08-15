@@ -33,6 +33,12 @@ func GenerateRoleMetadata(args []string) int {
 		return 1
 	}
 
+	// --check is read-only; the write mode rewrites catalog.yaml, routing.json
+	// and provider/ in place and is a maintainer operation.
+	if !*checkMode && !requireCheckout("generate-role-metadata", repoRoot) {
+		return 2
+	}
+
 	// Generate role metadata files
 	generated, err := generators.GenerateRoleMetadata(repoRoot)
 	if err != nil {

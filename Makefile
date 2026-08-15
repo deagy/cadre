@@ -82,3 +82,57 @@ cross-build:
 	CGO_ENABLED=1 GOOS=darwin  GOARCH=amd64 go build -o dist/cadre-darwin-amd64        ./cmd/cadre
 	CGO_ENABLED=1 GOOS=darwin  GOARCH=arm64 go build -o dist/cadre-darwin-arm64        ./cmd/cadre
 	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o dist/cadre-windows-amd64.exe   ./cmd/cadre
+
+# --- pip/pipx distribution -------------------------------------------------
+#
+# Phase 2 of PYTHON_ELIMINATION_PLAN.md: `pip install cadre` ships the Go
+# binary, not Python. One wheel per platform, each carrying its own binary
+# plus the roster data that binary reads.
+#
+# Two steps rather than one, because hatchling cannot do the second:
+# shared-data maps *files only*, and a directory source produces no files and
+# no error -- a wheel that builds cleanly and is missing every role
+# definition. So hatchling packs the binary, and this unpacks the result,
+# copies the data tree in, and repacks it. `wheel pack` regenerates RECORD,
+# so the hashes stay correct.
+#
+# Copying with exclusions, rather than enumerating 583 paths, is what keeps a
+# newly added role from silently missing the next release.
+#
+# Usage:
+#   make wheel                                  # host platform
+#   make wheel GOOS=linux GOARCH=arm64 PLATFORM_TAG=manylinux_2_17_aarch64
+WHEEL_PYTHON ?= python3
+PLATFORM_TAG ?=
+
+# Paths under the checkout that an installed binary reads at runtime.
+# roster/ minus its development-only subtrees, plus the skills and the
+# provider bundle. Excludes are stated once here and nowhere else.
+WHEEL_DATA_EXCLUDES = \
+	--exclude='test' --exclude='tests' --exclude='examples' --exclude='runs' \
+	--exclude='proposed-knowledge' --exclude='__pycache__' --exclude='*.py' \
+	--exclude='*.pyc' --exclude='.venv' --exclude='data/store.db'
+
+wheel:
+	@rm -rf dist dist-staging build/wheel
+	@mkdir -p dist-staging
+	CGO_ENABLED=1 go build -o dist-staging/cadre ./cmd/cadre
+	$(WHEEL_PYTHON) -m build --wheel --outdir dist
+	@# Unpack, add the data tree, repack. `wheel pack` rewrites RECORD.
+	@mkdir -p build/wheel
+	$(WHEEL_PYTHON) -m wheel unpack dist/*.whl --dest build/wheel
+	@set -eu; \
+	  unpacked=$$(find build/wheel -mindepth 1 -maxdepth 1 -type d); \
+	  datadir=$$(find $$unpacked -mindepth 1 -maxdepth 1 -type d -name '*.data')/data/share/cadre; \
+	  mkdir -p $$datadir; \
+	  tar -c $(WHEEL_DATA_EXCLUDES) roster .agents/skills provider | tar -x -C $$datadir; \
+	  rm -f dist/*.whl; \
+	  $(WHEEL_PYTHON) -m wheel pack $$unpacked --dest-dir dist
+	@# Retag. A wheel carrying a native binary is not pure Python, and
+	@# publishing it as py3-none-any would serve a linux binary to macOS.
+	@if [ -n "$(PLATFORM_TAG)" ]; then \
+	  $(WHEEL_PYTHON) -m wheel tags --platform-tag $(PLATFORM_TAG) --remove dist/*.whl; \
+	fi
+	@ls -la dist/*.whl
+
+.PHONY: wheel

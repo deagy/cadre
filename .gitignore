@@ -123,3 +123,8 @@ cline-plugins/node_modules/
 /build/
 cadre
 /.cadre-build-cache/
+
+# `make wheel` staging: the per-platform binary and the unpacked wheel it is
+# repacked from. Both are build artifacts, rebuilt from scratch every run.
+/dist-staging/
+/build/wheel/

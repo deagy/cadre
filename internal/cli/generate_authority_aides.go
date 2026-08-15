@@ -33,6 +33,12 @@ func GenerateAuthorityAides(args []string) int {
 		return 1
 	}
 
+	// --check is read-only and legitimate from any install; the write mode
+	// edits the tree in place and is a maintainer operation.
+	if !*checkMode && !requireCheckout("generate-authority-aides", repoRoot) {
+		return 2
+	}
+
 	authorityRoot := filepath.Join(repoRoot, "roster", "authority")
 	aidesPath := filepath.Join(authorityRoot, "aides.yaml")
 	templatePath := filepath.Join(authorityRoot, "_template.md.tmpl")

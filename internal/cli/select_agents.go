@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/deagy/cadre/cli/internal/interop"
+	"github.com/deagy/cadre/cli/internal/platform"
 )
 
 // SelectorScriptRelativePath is where the authoritative deterministic
@@ -160,6 +161,20 @@ func FindCadreFile(relativePath string) (string, error) {
 	}
 	if workingDirectory, err := os.Getwd(); err == nil {
 		candidates = append(candidates, ancestorCandidates(workingDirectory, relative)...)
+	}
+	// Last: whatever platform.FindInstallationRoot resolves. The ancestor
+	// scans above only find a file sitting directly under an ancestor, which
+	// covers a checkout and nothing else -- a packaged plugin
+	// (<plugin>/suite/roster/...) and a pip/pipx wheel
+	// (<prefix>/share/cadre/roster/...) both nest the roster one or two
+	// levels deeper, and until now only an explicit CADRE_REPO_ROOT made
+	// those work.
+	//
+	// Delegating rather than repeating the layout list is the point: two
+	// resolvers that each know the layouts independently will disagree the
+	// first time one of them gains a layout the other does not.
+	if installation, err := platform.FindInstallationRoot(); err == nil {
+		candidates = append(candidates, filepath.Join(installation, relative))
 	}
 
 	for _, candidate := range candidates {
