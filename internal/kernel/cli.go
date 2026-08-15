@@ -61,12 +61,24 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return detectCmd(args[1:], stdout, stderr)
 	case "validate":
 		return validateCmd(registry, args[1:], stdout, stderr)
+	case "list-gate-issues":
+		return listLedgerCmd(args[0], args[1:], stdout, stderr, ReadGateIssuesLedger)
+	case "list-github-gate-issues":
+		return listLedgerCmd(args[0], args[1:], stdout, stderr, ReadGitHubGateIssuesLedger)
+	case "list-gate-status":
+		return listLedgerCmd(args[0], args[1:], stdout, stderr, ReadGateStatusLedgers)
+	case "list-reviewer-nudge":
+		return listLedgerCmd(args[0], args[1:], stdout, stderr, ReadReviewerNudgeLedger)
 	case "-h", "--help":
 		_, _ = fmt.Fprintln(stdout, "usage: agentic-sdlc <subcommand> [args...]")
 		_, _ = fmt.Fprintln(stdout, "\nSubcommands ported to Go so far:")
 		_, _ = fmt.Fprintln(stdout, "  show-contract <name>   Print a bundled lifecycle contract as JSON")
 		_, _ = fmt.Fprintln(stdout, "  detect [--root ROOT]   Report what a repository looks like, changing nothing")
 		_, _ = fmt.Fprintln(stdout, "  validate [--root ROOT] Check a project's configuration and run records")
+		_, _ = fmt.Fprintln(stdout, "  list-gate-issues --task-id ID         Print the GitLab gate-issues ledger")
+		_, _ = fmt.Fprintln(stdout, "  list-github-gate-issues --task-id ID  Print the GitHub gate-issues ledger")
+		_, _ = fmt.Fprintln(stdout, "  list-gate-status --task-id ID         Print both forges' gate-status ledgers")
+		_, _ = fmt.Fprintln(stdout, "  list-reviewer-nudge --task-id ID      Print the reviewer-nudge ledger")
 		return 0
 	}
 

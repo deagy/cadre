@@ -95,7 +95,7 @@ func Write(builder *strings.Builder, value any) error {
 		}
 		builder.WriteString("false")
 	case string:
-		writeString(builder, typed)
+		WriteString(builder, typed)
 	case json.Number:
 		// UseNumber keeps the literal the document carried, which is what
 		// Python would have re-emitted for an int. A float that arrived as
@@ -127,7 +127,7 @@ func Write(builder *strings.Builder, value any) error {
 			if index > 0 {
 				builder.WriteByte(',')
 			}
-			writeString(builder, key)
+			WriteString(builder, key)
 			builder.WriteByte(':')
 			if err := Write(builder, typed[key]); err != nil {
 				return err
@@ -159,7 +159,7 @@ func canonicalNumber(text string) string {
 	return text
 }
 
-// writeString escapes exactly as Python's json.dumps does with its
+// WriteString escapes exactly as Python's json.dumps does with its
 // default ensure_ascii=True.
 //
 // Python's escape table: `"` and `\` are backslash-escaped; \b \f \n \r \t
@@ -167,7 +167,10 @@ func canonicalNumber(text string) string {
 // character above 0x7e becomes \uXXXX, with astral planes written as a
 // surrogate pair. Notably `<`, `>`, `&` and `/` are NOT escaped -- Go escapes
 // the first three by default, which is why this cannot delegate.
-func writeString(builder *strings.Builder, value string) {
+// WriteString is exported because Python's escaping is the same in every
+// mode this repository emits -- only key ordering, separators and
+// indentation vary between the canonical form and the human-readable one.
+func WriteString(builder *strings.Builder, value string) {
 	builder.WriteByte('"')
 	for _, runeValue := range value {
 		switch runeValue {
