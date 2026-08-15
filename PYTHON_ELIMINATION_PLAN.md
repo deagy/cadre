@@ -328,7 +328,7 @@ role file's own text coming back out of a child process is the assertion.
 under `kernel/contracts/` are **data, not code** — they stay exactly as they
 are.
 
-**Progress: 10 of 32.** `show-contract` (#290), `detect`, the `provider` /
+**Progress: 11 of 32.** `show-contract` (#290), `detect`, the `provider` /
 `profile` / `extension` introspection trio (#291), `validate`, and the four `list-*` readers (#292),
 each behind a differential that runs both kernels on the same machine
 (`kernel/test/test_kernel_differential.py`, and for `validate` the Go-side
@@ -352,9 +352,17 @@ these print a document other tooling reads, so key order, Python's
 `json.dumps(value, indent=2)`; every remaining subcommand that echoes a
 JSON document needs it.
 
-**With that, the read-only group is done.** What remains all writes:
-`init`, `repair`, `plan`, `status`, `decide`, `invalidate`, `reenter`,
-`upgrade`, and the GitHub/GitLab gate-approval plumbing.
+**With that, the read-only group is done.** `plan` followed it as the
+first of the writers, compared byte for byte on all three documents it
+produces — the printed plan, `dispatch-plan.json`, and `run-record.json`
+— with only the two wall-clock timestamps blanked. Those are precisely
+the fields the dispatch fingerprint excludes, so the fingerprint itself
+is part of the comparison.
+
+Still to write: `init`, `repair`, `status`, `decide`, `invalidate`,
+`reenter`, `upgrade`, and the GitHub/GitLab gate-approval plumbing.
+`decide` is the next one that matters — it is where an approval is
+recorded, so it is the first port where a defect would forge one.
 
 **`validate` landed in #292**, and it was the largest single read-only item:
 the overlay loader, `approval_source_policy`, the agent catalog, path
