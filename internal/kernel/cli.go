@@ -63,6 +63,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return planCmd(registry, args[1:], stdout, stderr)
 	case "decide":
 		return decideCmd(registry, args[1:], stdout, stderr)
+	case "invalidate":
+		return recordSurgeryCmd(registry, args[0], args[1:], stdout, stderr)
+	case "reenter":
+		return recordSurgeryCmd(registry, args[0], args[1:], stdout, stderr)
+	case "upgrade":
+		return upgradeCmd(registry, args[1:], stdout, stderr)
 	case "list-gate-issues":
 		return listLedgerCmd(args[0], args[1:], stdout, stderr, ReadGateIssuesLedger)
 	case "list-github-gate-issues":
@@ -79,6 +85,9 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stdout, "  validate [--root ROOT] Check a project's configuration and run records")
 		_, _ = fmt.Fprintln(stdout, "  plan --task-id ID --task TEXT         Create a dispatch plan and pending run record")
 		_, _ = fmt.Fprintln(stdout, "  decide --task-id ID --gate G --role R --decision D --actor-id A --evidence-uri U")
+		_, _ = fmt.Fprintln(stdout, "  invalidate --task-id ID --earliest-gate G --reason R --actor A")
+		_, _ = fmt.Fprintln(stdout, "  reenter --task-id ID --earliest-gate G --reason R --actor A")
+		_, _ = fmt.Fprintln(stdout, "  upgrade (--check | --apply)            Check or apply a kernel lock upgrade")
 		_, _ = fmt.Fprintln(stdout, "  list-gate-issues --task-id ID         Print the GitLab gate-issues ledger")
 		_, _ = fmt.Fprintln(stdout, "  list-github-gate-issues --task-id ID  Print the GitHub gate-issues ledger")
 		_, _ = fmt.Fprintln(stdout, "  list-gate-status --task-id ID         Print both forges' gate-status ledgers")
@@ -366,23 +375,8 @@ func decideCmd(registry *Registry, args []string, stdout, stderr io.Writer) int 
 		"--actor-id": &request.ActorID, "--evidence-uri": &request.EvidenceURI,
 		"--note": &request.Note, "--decided-at": &request.DecidedAt,
 	}
-	for index := 0; index < len(args); index++ {
-		name, value, inline := strings.Cut(args[index], "=")
-		target, known := fields[name]
-		if !known {
-			_, _ = fmt.Fprintf(stderr, "agentic-sdlc decide: unknown argument %q\n", args[index])
-			return 2
-		}
-		if inline {
-			*target = value
-			continue
-		}
-		if index+1 >= len(args) {
-			_, _ = fmt.Fprintf(stderr, "agentic-sdlc decide: %s needs a value\n", name)
-			return 2
-		}
-		index++
-		*target = args[index]
+	if code := parseFlags("decide", args, fields, stderr); code != 0 {
+		return code
 	}
 
 	var missing []string
@@ -404,14 +398,14 @@ func decideCmd(registry *Registry, args []string, stdout, stderr io.Writer) int 
 			strings.Join(missing, ", "))
 		return 2
 	}
-	if code := rejectInvalidChoice(stderr, "--gate", request.GateID, GateIDs); code != 0 {
+	if code := rejectInvalidChoice(stderr, "decide", "--gate", request.GateID, GateIDs); code != 0 {
 		return code
 	}
-	if code := rejectInvalidChoice(stderr, "--role", request.AuthorityRole,
+	if code := rejectInvalidChoice(stderr, "decide", "--role", request.AuthorityRole,
 		sortedAuthorityRoles()); code != 0 {
 		return code
 	}
-	if code := rejectInvalidChoice(stderr, "--decision", request.Decision,
+	if code := rejectInvalidChoice(stderr, "decide", "--decision", request.Decision,
 		[]string{"approved", "rejected", "request-changes"}); code != 0 {
 		return code
 	}
@@ -425,18 +419,6 @@ func decideCmd(registry *Registry, args []string, stdout, stderr io.Writer) int 
 	return 0
 }
 
-func rejectInvalidChoice(stderr io.Writer, flag, value string, allowed []string) int {
-	for _, candidate := range allowed {
-		if candidate == value {
-			return 0
-		}
-	}
-	_, _ = fmt.Fprintf(stderr,
-		"agentic-sdlc decide: error: argument %s: invalid choice: %q (choose from %s)\n",
-		flag, value, strings.Join(allowed, ", "))
-	return 2
-}
-
 // sortedAuthorityRoles is the --role choice set, in the order argparse prints
 // it: the Python parser builds it from sorted(AUTHORITY_ROLES).
 func sortedAuthorityRoles() []string {
@@ -446,4 +428,126 @@ func sortedAuthorityRoles() []string {
 	}
 	sort.Strings(roles)
 	return roles
+}
+
+// recordSurgeryCmd answers `invalidate` and `reenter`, which take the same
+// four arguments and differ only in what they do with them.
+func recordSurgeryCmd(
+	registry *Registry, name string, args []string, stdout, stderr io.Writer,
+) int {
+	request := RecordSurgeryRequest{Root: "."}
+	fields := map[string]*string{
+		"--root": &request.Root, "--task-id": &request.TaskID,
+		"--earliest-gate": &request.EarliestGate, "--reason": &request.Reason,
+		"--actor": &request.Actor,
+	}
+	if code := parseFlags(name, args, fields, stderr); code != 0 {
+		return code
+	}
+
+	var missing []string
+	for _, required := range []struct{ name, value string }{
+		{"--task-id", request.TaskID}, {"--earliest-gate", request.EarliestGate},
+		{"--reason", request.Reason}, {"--actor", request.Actor},
+	} {
+		if required.value == "" {
+			missing = append(missing, required.name)
+		}
+	}
+	if len(missing) > 0 {
+		_, _ = fmt.Fprintf(stderr,
+			"agentic-sdlc %s: error: the following arguments are required: %s\n",
+			name, strings.Join(missing, ", "))
+		return 2
+	}
+	if code := rejectInvalidChoice(stderr, name, "--earliest-gate",
+		request.EarliestGate, GateIDs); code != 0 {
+		return code
+	}
+
+	var result *orderedObject
+	var err error
+	if name == "invalidate" {
+		result, err = registry.Invalidate(request)
+	} else {
+		result, err = registry.Reenter(request)
+	}
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(err))
+		return 1
+	}
+	_, _ = fmt.Fprint(stdout, RenderIndented(result))
+	return 0
+}
+
+// upgradeCmd answers `upgrade`. The two modes are mutually exclusive and one
+// is required, matching the Python parser: an `upgrade` with neither is
+// ambiguous about whether it was meant to write.
+func upgradeCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
+	root, check, apply := ".", false, false
+	for index := 0; index < len(args); index++ {
+		switch {
+		case args[index] == "--root" && index+1 < len(args):
+			index++
+			root = args[index]
+		case strings.HasPrefix(args[index], "--root="):
+			root = strings.TrimPrefix(args[index], "--root=")
+		case args[index] == "--check":
+			check = true
+		case args[index] == "--apply":
+			apply = true
+		default:
+			_, _ = fmt.Fprintln(stderr,
+				"usage: agentic-sdlc upgrade [--root ROOT] (--check | --apply)")
+			return 2
+		}
+	}
+	if check == apply {
+		_, _ = fmt.Fprintln(stderr,
+			"agentic-sdlc upgrade: error: exactly one of --check or --apply is required")
+		return 2
+	}
+
+	result, err := registry.Upgrade(root, apply)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(err))
+		return 1
+	}
+	_, _ = fmt.Fprint(stdout, RenderIndented(result))
+	return 0
+}
+
+// parseFlags reads `--name value` and `--name=value` into the named targets.
+func parseFlags(command string, args []string, fields map[string]*string, stderr io.Writer) int {
+	for index := 0; index < len(args); index++ {
+		name, value, inline := strings.Cut(args[index], "=")
+		target, known := fields[name]
+		if !known {
+			_, _ = fmt.Fprintf(stderr, "agentic-sdlc %s: unknown argument %q\n", command, args[index])
+			return 2
+		}
+		if inline {
+			*target = value
+			continue
+		}
+		if index+1 >= len(args) {
+			_, _ = fmt.Fprintf(stderr, "agentic-sdlc %s: %s needs a value\n", command, name)
+			return 2
+		}
+		index++
+		*target = args[index]
+	}
+	return 0
+}
+
+func rejectInvalidChoice(stderr io.Writer, command, flag, value string, allowed []string) int {
+	for _, candidate := range allowed {
+		if candidate == value {
+			return 0
+		}
+	}
+	_, _ = fmt.Fprintf(stderr,
+		"agentic-sdlc %s: error: argument %s: invalid choice: %q (choose from %s)\n",
+		command, flag, value, strings.Join(allowed, ", "))
+	return 2
 }
