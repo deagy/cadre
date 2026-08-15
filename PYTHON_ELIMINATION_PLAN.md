@@ -328,7 +328,7 @@ role file's own text coming back out of a child process is the assertion.
 under `kernel/contracts/` are **data, not code** — they stay exactly as they
 are.
 
-**Progress: 12 of 32.** `show-contract` (#290), `detect`, the `provider` /
+**Progress: 16 of 32.** `show-contract` (#290), `detect`, the `provider` /
 `profile` / `extension` introspection trio (#291), `validate`, and the four `list-*` readers (#292),
 each behind a differential that runs both kernels on the same machine
 (`kernel/test/test_kernel_differential.py`, and for `validate` the Go-side
@@ -371,8 +371,25 @@ resulting run record byte for byte, because a refusal that reports
 itself correctly while still writing the approval would pass any weaker
 check.
 
-Still to write: `init`, `repair`, `status`, `invalidate`, `reenter`,
-`upgrade`, and the GitHub/GitLab gate-approval plumbing.
+`invalidate`, `reenter` and `upgrade` followed as a group — the three
+commands that reach into a record, or a lock, after the fact. They are
+compared against a fixture whose G1 is genuinely approved, with bound
+artifacts and a source link populating a top-level record field:
+invalidating a run where nothing had been decided would agree
+trivially.
+
+`status` came next, and the warning above it stands: it is documented
+as "show a task's gate state" and it writes, advancing the next
+eligible gate to `ready` and persisting the record. Ported as-is — a Go
+`status` that only read would quietly stop advancing gates for every
+project relying on it, a worse surprise than the one already there. The
+read-only projection stays separate, because the gate-status publishers
+render a task onto a pull request and that render must not move the
+task on.
+
+Still to write: `init`, `repair`, and the GitHub/GitLab gate-approval
+plumbing — which is now the bulk of what remains, and the only part
+that talks to a network.
 
 **`validate` landed in #292**, and it was the largest single read-only item:
 the overlay loader, `approval_source_policy`, the agent catalog, path
