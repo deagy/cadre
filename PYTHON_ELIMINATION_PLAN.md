@@ -328,7 +328,7 @@ role file's own text coming back out of a child process is the assertion.
 under `kernel/contracts/` are **data, not code** — they stay exactly as they
 are.
 
-**Progress: 11 of 32.** `show-contract` (#290), `detect`, the `provider` /
+**Progress: 12 of 32.** `show-contract` (#290), `detect`, the `provider` /
 `profile` / `extension` introspection trio (#291), `validate`, and the four `list-*` readers (#292),
 each behind a differential that runs both kernels on the same machine
 (`kernel/test/test_kernel_differential.py`, and for `validate` the Go-side
@@ -359,10 +359,20 @@ produces — the printed plan, `dispatch-plan.json`, and `run-record.json`
 the fields the dispatch fingerprint excludes, so the fingerprint itself
 is part of the comparison.
 
-Still to write: `init`, `repair`, `status`, `decide`, `invalidate`,
-`reenter`, `upgrade`, and the GitHub/GitLab gate-approval plumbing.
-`decide` is the next one that matters — it is where an approval is
-recorded, so it is the first port where a defect would forge one.
+`decide` followed it, and it is the port where the standard changes:
+every other subcommand so far reads, while this one writes an approval
+into a run record. A defect here would not miss a problem, it would
+manufacture one. So its four refusals are synchronous, at write time,
+rather than left to `validate` — the actor must be the assigned
+identity, must not have prepared the work, must not have verified it,
+and an approval under a forge-review policy must cite a well-formed
+review URI. Each is falsified individually, and each case compares the
+resulting run record byte for byte, because a refusal that reports
+itself correctly while still writing the approval would pass any weaker
+check.
+
+Still to write: `init`, `repair`, `status`, `invalidate`, `reenter`,
+`upgrade`, and the GitHub/GitLab gate-approval plumbing.
 
 **`validate` landed in #292**, and it was the largest single read-only item:
 the overlay loader, `approval_source_policy`, the agent catalog, path
