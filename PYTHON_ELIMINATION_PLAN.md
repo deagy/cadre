@@ -59,31 +59,55 @@ Three constraints, not preference:
   kernel must keep that CLI surface byte-compatible, or `select` breaks on
   the same day the kernel ships.
 - **Three distribution channels, and a channel is only Python-free when all
-  of them are.** Checkout and plugin are done. PyPI is not, and nothing else
-  in this plan depends on fixing it — which is why it comes early.
+  of them are.** Checkout and plugin are done. PyPI is not — and Phase 1's
+  measurement showed the PyPI wheel is what keeps nearly all of `roster/`
+  alive, so closing that channel is the precondition for deleting any of
+  it, not merely an independent convenience.
 
 ---
 
-## Phase 1 — Delete what is provably dead
+## Phase 1 — Delete what is provably dead — **COMPLETE: nothing was**
 
-**Scope:** Python modules with a Go replacement that nothing references any
-more. Candidates surfaced so far: `upgrade.py`, and probably parts of
-`doctor.py`, `profile_diff.py`, `schema_validate.py`, `role_fidelity.py`,
-`sync_codex_agents.py`.
+**Result, measured 2026-08-15: zero deletable lines.** Every non-test Python
+module in the checkout is reachable from a live entry point. Phase 1 is
+closed without a deletion, and that is the finding rather than a failure to
+find one.
 
-**Method:** reachability, not grep. A symbol grep wrongly flagged three
-files as removable earlier in this migration; the compiler and the
-subcommand routing table are the authorities. For each candidate: confirm no
-Go call site, no `subcommands.tsv` row reaching it, no test importing it, no
-`cadre_cli/_SUBCOMMANDS` entry, no workflow invoking it.
+`roster/orchestration/test/probe_python_reachability.py` is the instrument,
+committed so every later phase can re-ask the question after the previous
+phase changes the answer. It walks real entry points and follows real
+imports; run it with `--production` to exclude tests and surface modules
+that nothing but their own test uses.
 
-**Gate:** full Go and Python suites, `generate-plugin --check`,
-`generate-role-metadata --check`.
+**Why the yield is zero, and why that matters for the ordering:**
 
-**Breaks:** nothing. If something breaks, the module was not dead and the
-reachability check was wrong — which is the finding.
+`cadre_cli/_SUBCOMMANDS` keeps almost all of `roster/` alive on its own. The
+PyPI wheel dispatches to Python for `select`, `context`, `upgrade`, the
+generators and more, so a module the checkout and plugin channels never
+touch is still live for anyone who ran `pip install cadre`. **Phase 2 is not
+an independent track that happens to be convenient — it is the precondition
+for deleting any of `roster/`.** The plan's earlier claim that Phases 1 and 2
+were independent was wrong, and this measurement is what corrected it.
 
-**Size:** unknown until measured; likely 1,000–3,000 lines.
+**Three false-positive classes, each of which cost real time:**
+
+- **Documented operator commands are entry points.** A first pass reported
+  `routing_health.py` and `validate_runner_capabilities.py` as dead. Both are
+  invoked by hand per `RUNBOOK.md`, and *neither has a Go equivalent* —
+  deleting them would have removed capability, not duplication.
+  `glob_containment.py` fell out of the same mistake, being imported by the
+  first.
+- **Data modules consumed by their own contract test are alive.**
+  `plugin/tools/binary_platforms.py` is the platform-matrix source of truth
+  cited in `DISTRIBUTION.md`; its test importing it is the guard working, not
+  evidence of orphanhood.
+- **A function can share a module's name.** `generated_package` matched
+  dozens of times in `test_repository_health.py` — all of them a local
+  function, none of them the module. Grep could not tell the difference.
+
+A symbol grep had already wrongly flagged three files earlier in this
+migration. That is now four separate occasions on which grep produced a
+delete list that would have removed working code.
 
 ## Phase 2 — Close the PyPI channel
 
@@ -263,16 +287,16 @@ itself.
 
 ## Sequencing at a glance
 
-Phases 1 and 2 are independent and can run in either order or together.
+Phase 1 is complete and deleted nothing; its measurement moved Phase 2 from
+"independent, do it early" to "precondition for Phase 4".
 Phase 3 is trigger-gated and can land any time after its trigger. Phase 4 is
 independent of 3. Phase 5 must port `show-contract` first and land its
 boundary guard with it. Phase 6 should build the graph runtime before
 anything depends on it. Phase 7 is last by construction.
 
 ```
-1 ──┐
-2 ──┼──▶ 4 ──▶ 5 ──▶ 6 ──▶ 7
-3 ──┘
+1 (done, empty) ──▶ 2 ──▶ 4 ──▶ 5 ──▶ 6 ──▶ 7
+                3 ──────┘  (trigger-gated, independent)
 ```
 
 ## What I would revisit before starting Phase 5 or 6
