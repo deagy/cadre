@@ -328,8 +328,8 @@ role file's own text coming back out of a child process is the assertion.
 under `kernel/contracts/` are **data, not code** — they stay exactly as they
 are.
 
-**Progress: 6 of 32.** `show-contract` (#290), `detect`, the `provider` /
-`profile` / `extension` introspection trio (#291), and `validate` (#292),
+**Progress: 10 of 32.** `show-contract` (#290), `detect`, the `provider` /
+`profile` / `extension` introspection trio (#291), `validate`, and the four `list-*` readers (#292),
 each behind a differential that runs both kernels on the same machine
 (`kernel/test/test_kernel_differential.py`, and for `validate` the Go-side
 `internal/kernel/validate_differential_test.go` and
@@ -343,9 +343,18 @@ a caller running `status` to look at something changes it. Group it with the
 mutating subcommands, not the inspecting ones — it was mis-grouped here, and
 the mistake is easy to repeat because the name invites it.
 
-Genuinely read-only and still unported: the `list-*` sidecar readers
-(`list-gate-issues`, `list-github-gate-issues`, `list-gate-status`,
-`list-reviewer-nudge` — the last is documented "zero network").
+The `list-*` sidecar readers (`list-gate-issues`,
+`list-github-gate-issues`, `list-gate-status`, `list-reviewer-nudge`)
+landed with it, compared byte for byte rather than as parsed values —
+these print a document other tooling reads, so key order, Python's
+`\uXXXX` escaping and exact indentation are all part of the contract.
+`internal/kernel/echo.go` is the piece that reproduces
+`json.dumps(value, indent=2)`; every remaining subcommand that echoes a
+JSON document needs it.
+
+**With that, the read-only group is done.** What remains all writes:
+`init`, `repair`, `plan`, `status`, `decide`, `invalidate`, `reenter`,
+`upgrade`, and the GitHub/GitLab gate-approval plumbing.
 
 **`validate` landed in #292**, and it was the largest single read-only item:
 the overlay loader, `approval_source_policy`, the agent catalog, path
