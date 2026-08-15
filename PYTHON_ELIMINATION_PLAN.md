@@ -280,20 +280,28 @@ Fixed on `fix/untrusted-fencing`:
 | No child timeout, process group, or output cap | A hung child hung the dispatch |
 | git-clean gate had no timeout and no test | — |
 
-**Known remaining gap: the final-handoff channel.** `MaxFinalHandoffResultBytes`
-and `FinalHandoffResultEnvVar` are declared in Go and used nowhere. Python's
-`_prepare_cli_final_handoff_channel` / `_read_cli_final_handoff` /
-`_cleanup_cli_final_handoff_channel` create a private, fd-based result file so
-a CLI child can return a *structured* handoff instead of having its stdout
-parsed, and `automatic_context_capture` stores it. Ten tests
-(`AutomaticContextCaptureDispatchTests`) cover properties that are not
-incidental — the retained descriptor is read rather than a replacement, a FIFO
-substituted at the path is ignored without blocking, cleanup does not follow
-symlinks. This is a feature port, not a repair, and it is the last known
-blocker for `mcp/`.
+**The final-handoff channel is ported** (`internal/orchestration/final_handoff.go`).
+The private fd-based result file, the protocol paragraph appended to the
+prompt, the size cap, and the identity-checked cleanup are all present, with
+tests for the properties that justify it: the retained descriptor is read
+rather than a replacement, a substituted FIFO cannot block the read, cleanup
+removes nested content but refuses a directory it did not create, and
+malformed content is reported rather than stored.
 
-**Also not yet compared:** `test_gitlab_integration.py` (89 tests) against
-`internal/orchestration/gitlab.go`.
+Not yet ported alongside it: `automatic_context_capture`, which takes the
+captured handoff and writes it into the context store. The capture itself now
+happens and lands in the dispatch result; what is missing is the automatic
+*storage* step and its dispatch-derived source/scope rules.
+
+**Remaining before `mcp/` can be deleted:**
+
+1. `automatic_context_capture` — store the captured handoff in the context
+   store, with the dispatch-derived source and scope its ten Python tests
+   describe.
+2. Compare `test_gitlab_integration.py` (89 tests) against
+   `internal/orchestration/gitlab.go`.
+
+Then delete, gated on the behavioural seam tests rather than tool parity.
 
 **The pattern worth carrying forward.** Every gap above shares one shape: a
 component was implemented and tested in isolation, and nothing tested that it
