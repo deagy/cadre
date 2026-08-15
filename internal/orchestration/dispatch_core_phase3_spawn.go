@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	cadreconfig "github.com/deagy/cadre/cli/internal/config"
@@ -105,11 +106,11 @@ func SpawnCodexChild(
 	env map[string]string,
 	timeout float64,
 ) map[string]any {
-	return spawnCodexChildIn("", prompt, model, SandboxReadOnly, "", env, timeout)
+	return spawnCodexChildIn("", prompt, model, SandboxReadOnly, "", "", env, timeout)
 }
 
 func spawnCodexChildIn(
-	projectRoot, prompt, model, sandboxMode, reasoningEffort string,
+	projectRoot, prompt, model, sandboxMode, reasoningEffort, modelTier string,
 	env map[string]string,
 	timeout float64,
 ) map[string]any {
@@ -136,8 +137,18 @@ func spawnCodexChildIn(
 	profile := runnerSetting("runners.codex_profile", projectRoot)
 	if profile != "" {
 		argv = append(argv, "--profile", profile)
-	} else if model != "" {
-		argv = append(argv, "--model", model)
+	}
+	// runners.local_model_<tier> overrides the wrapper's vendor identifier
+	// for this role's catalog tier, so tier semantics (opus/sonnet/haiku)
+	// survive a switch to a self-hosted model instead of being lost with the
+	// vendor name. An override wins over both; with neither, the wrapper's
+	// own identifier is used unless a profile already supplies one.
+	effectiveModel := localModelForTier(modelTier, projectRoot)
+	if effectiveModel == "" && profile == "" {
+		effectiveModel = model
+	}
+	if effectiveModel != "" {
+		argv = append(argv, "--model", effectiveModel)
 	}
 	if reasoningEffort != "" {
 		// No dedicated flag exists; the CLI's generic -c override is the
@@ -207,7 +218,7 @@ func ExecuteDispatchChild(
 
 	case RunnerCodex:
 		return spawnCodexChildIn(ctx.ProjectRoot, ctx.Prompt, ctx.Model, ctx.Sandbox,
-			ctx.ReasoningEffort, env, timeout)
+			ctx.ReasoningEffort, ctx.ModelTier, env, timeout)
 
 	case RunnerAPI:
 		// Spawns no child process: it drives a chat endpoint and executes the
@@ -380,4 +391,22 @@ func SpawnWithContextTimeout(
 	}
 
 	return parseCommandOutput(cmd.ProcessState, output, err)
+}
+
+// localModelForTier resolves runners.local_model_<tier>, or "" for no
+// override.
+//
+// The key is built from the tier only after checking it against the known
+// set, so an unexpected tier value cannot reach the settings resolver as an
+// attacker-influenced key.
+func localModelForTier(modelTier, projectRoot string) string {
+	if modelTier == "" {
+		return ""
+	}
+	switch strings.ToLower(modelTier) {
+	case "opus", "sonnet", "haiku":
+	default:
+		return ""
+	}
+	return runnerSetting("runners.local_model_"+strings.ToLower(modelTier), projectRoot)
 }

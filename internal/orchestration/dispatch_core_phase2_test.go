@@ -27,7 +27,7 @@ func TestDispatchSecureCloudRoleValidation(t *testing.T) {
 		},
 		{
 			name:           "missing brief",
-			roleID:         "test-role",
+			roleID:         "code-reviewer",
 			brief:          "",
 			mode:           ModePlanningOnly,
 			classification: "public",
@@ -35,7 +35,7 @@ func TestDispatchSecureCloudRoleValidation(t *testing.T) {
 		},
 		{
 			name:           "invalid mode",
-			roleID:         "test-role",
+			roleID:         "code-reviewer",
 			brief:          "test",
 			mode:           "invalid-mode",
 			classification: "public",
@@ -43,7 +43,7 @@ func TestDispatchSecureCloudRoleValidation(t *testing.T) {
 		},
 		{
 			name:           "invalid classification",
-			roleID:         "test-role",
+			roleID:         "code-reviewer",
 			brief:          "test",
 			mode:           ModePlanningOnly,
 			classification: "invalid",
@@ -51,7 +51,7 @@ func TestDispatchSecureCloudRoleValidation(t *testing.T) {
 		},
 		{
 			name:           "valid planning-only",
-			roleID:         "test-role",
+			roleID:         "code-reviewer",
 			brief:          "test brief",
 			mode:           ModePlanningOnly,
 			classification: "public",
@@ -59,7 +59,7 @@ func TestDispatchSecureCloudRoleValidation(t *testing.T) {
 		},
 		{
 			name:           "valid repository-edit",
-			roleID:         "test-role",
+			roleID:         "code-reviewer",
 			brief:          "test brief",
 			mode:           ModeRepositoryEdit,
 			classification: "internal",
@@ -97,8 +97,8 @@ func TestDispatchSecureCloudRoleValidation(t *testing.T) {
 func TestDispatchConfirmationRequired(t *testing.T) {
 	// Repository edit mode should require confirmation for write-capable sandbox
 	result := DispatchSecureCloudRole(
-		testRoots(t, "test-role"),
-		"test-role", "test brief", ModeRepositoryEdit, "public",
+		testRoots(t, "code-reviewer"),
+		"code-reviewer", "test brief", ModeRepositoryEdit, "public",
 		"", "task123", "session123", "public", DefaultRunner, true,
 	)
 
@@ -119,8 +119,8 @@ func TestDispatchConfirmationRequired(t *testing.T) {
 func TestPollDispatchStatus(t *testing.T) {
 	// Async dispatch should return job_id immediately
 	result := DispatchSecureCloudRole(
-		testRoots(t, "test-role"),
-		"test-role", "test brief", ModePlanningOnly, "public",
+		testRoots(t, "code-reviewer"),
+		"code-reviewer", "test brief", ModePlanningOnly, "public",
 		"", "task123", "session123", "public", DefaultRunner, false, // wait=false
 	)
 
@@ -159,15 +159,15 @@ func TestDispatchTeamValidation(t *testing.T) {
 		{
 			name: "valid single member",
 			members: []map[string]string{
-				{"role_id": "test-role", "brief": "test"},
+				{"role_id": "code-reviewer", "brief": "test"},
 			},
 			expectStatus: "team_dispatched",
 		},
 		{
 			name: "valid multiple members",
 			members: []map[string]string{
-				{"role_id": "role1", "brief": "brief1"},
-				{"role_id": "role2", "brief": "brief2"},
+				{"role_id": "code-reviewer", "brief": "brief1"},
+				{"role_id": "security-reviewer", "brief": "brief2"},
 			},
 			expectStatus: "team_dispatched",
 		},
@@ -211,8 +211,8 @@ func TestDispatchTeamValidation(t *testing.T) {
 
 func TestDispatchTeamConcurrency(t *testing.T) {
 	members := []map[string]string{
-		{"role_id": "role1", "brief": "brief1"},
-		{"role_id": "role2", "brief": "brief2"},
+		{"role_id": "code-reviewer", "brief": "brief1"},
+		{"role_id": "security-reviewer", "brief": "brief2"},
 		{"role_id": "role3", "brief": "brief3"},
 	}
 
@@ -246,7 +246,7 @@ func TestTeamConfirmationGate(t *testing.T) {
 
 	data := map[string]any{
 		"members": []map[string]string{
-			{"role_id": "role1", "brief": "brief1"},
+			{"role_id": "code-reviewer", "brief": "brief1"},
 		},
 		"mode": ModePlanningOnly,
 	}
@@ -352,7 +352,7 @@ func TestConcurrencyLimiter(t *testing.T) {
 func TestPollTeamStatus(t *testing.T) {
 	// Async team dispatch
 	members := []map[string]string{
-		{"role_id": "role1", "brief": "brief1"},
+		{"role_id": "code-reviewer", "brief": "brief1"},
 	}
 
 	result := DispatchTeam(
@@ -386,8 +386,8 @@ func TestPollTeamStatus(t *testing.T) {
 func TestDispatchSyncWait(t *testing.T) {
 	// Sync dispatch with wait=true should block and return result
 	result := DispatchSecureCloudRole(
-		testRoots(t, "test-role"),
-		"test-role", "test brief", ModePlanningOnly, "public",
+		testRoots(t, "code-reviewer"),
+		"code-reviewer", "test brief", ModePlanningOnly, "public",
 		"", "task123", "session123", "public", DefaultRunner, true, // wait=true
 	)
 
@@ -402,8 +402,8 @@ func TestDispatchSyncWait(t *testing.T) {
 func TestDispatchAsyncNoWait(t *testing.T) {
 	// Async dispatch with wait=false should return immediately with job_id
 	result := DispatchSecureCloudRole(
-		testRoots(t, "test-role"),
-		"test-role", "test brief", ModePlanningOnly, "public",
+		testRoots(t, "code-reviewer"),
+		"code-reviewer", "test brief", ModePlanningOnly, "public",
 		"", "task123", "session123", "public", DefaultRunner, false, // wait=false
 	)
 

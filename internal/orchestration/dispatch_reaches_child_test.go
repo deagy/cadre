@@ -72,13 +72,13 @@ func stdinEchoRunner(t *testing.T) {
 
 func TestDispatchActuallyOpensTheNamedRoleFile(t *testing.T) {
 	stdinEchoRunner(t)
-	global := codexRoleTier(t, "probe-role", roleMarker)
+	global := codexRoleTier(t, "code-reviewer", roleMarker)
 	server := NewDispatchMCPServer(DispatchMCPServerConfig{
 		ProjectRoot: t.TempDir(), GlobalRoot: global, PluginRoot: t.TempDir(),
 	})
 
 	response := server.HandleDispatchSecureCloudRole(&DispatchSecureCloudRoleRequest{
-		RoleID: "probe-role", Brief: "do the thing",
+		RoleID: "code-reviewer", Brief: "do the thing",
 		Mode: ModePlanningOnly, Classification: "internal", Wait: true,
 	})
 
@@ -108,12 +108,12 @@ func TestTheChildReceivesThePromptOnStdinNotInItsArgv(t *testing.T) {
 	// The echo runner copies stdin, so finding the brief in the output is
 	// direct evidence it arrived there rather than as an argument.
 	stdinEchoRunner(t)
-	global := codexRoleTier(t, "probe-role", roleMarker)
+	global := codexRoleTier(t, "code-reviewer", roleMarker)
 	server := NewDispatchMCPServer(DispatchMCPServerConfig{
 		ProjectRoot: t.TempDir(), GlobalRoot: global, PluginRoot: t.TempDir(),
 	})
 	response := server.HandleDispatchSecureCloudRole(&DispatchSecureCloudRoleRequest{
-		RoleID: "probe-role", Brief: "BRIEF-ON-STDIN",
+		RoleID: "code-reviewer", Brief: "BRIEF-ON-STDIN",
 		Mode: ModePlanningOnly, Classification: "internal", Wait: true,
 	})
 	if !strings.Contains(renderResult(response.Result), "BRIEF-ON-STDIN") {
@@ -130,9 +130,9 @@ func TestTheEffectiveSandboxReachesTheChild(t *testing.T) {
 	// the narrowing decision instead: planning-review-only forces read-only
 	// no matter what the role file declares.
 	stdinEchoRunner(t)
-	global := codexRoleTierWithSandbox(t, "wide-role", roleMarker, SandboxDangerFullAccess)
+	global := codexRoleTierWithSandbox(t, "security-reviewer", roleMarker, SandboxDangerFullAccess)
 
-	role, err := ResolveRoleForDispatch("wide-role", RunnerCodex, t.TempDir(), global, t.TempDir(), ModePlanningOnly)
+	role, err := ResolveRoleForDispatch("security-reviewer", RunnerCodex, t.TempDir(), global, t.TempDir(), ModePlanningOnly)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,19 +157,41 @@ func TestTheEffectiveSandboxReachesTheChild(t *testing.T) {
 	}
 }
 
-func TestAnUnknownRoleIsUnavailableRatherThanASuccessfulNoOp(t *testing.T) {
-	// The stub reported success for every role id, including ones that did
-	// not exist anywhere -- the single clearest symptom, and one no component
-	// test could show.
+func TestARoleTheCatalogDoesNotNameIsRefusedBeforeTheFilesystem(t *testing.T) {
+	// The catalog is an allowlist. LoadKnownRoleIDs returned an empty map with
+	// a comment calling itself a stub, and had no callers -- so any id
+	// matching the pattern was dispatchable if a file with that name happened
+	// to sit in a searched tier, and planting a new role file in a writable
+	// tier was enough.
 	server := NewDispatchMCPServer(DispatchMCPServerConfig{
 		ProjectRoot: t.TempDir(), GlobalRoot: t.TempDir(), PluginRoot: t.TempDir(),
 	})
 	response := server.HandleDispatchSecureCloudRole(&DispatchSecureCloudRoleRequest{
-		RoleID: "no-such-role", Brief: "b",
+		RoleID: "not-a-catalog-role", Brief: "b",
 		Mode: ModePlanningOnly, Classification: "internal", Wait: true,
 	})
 	if response.Status == "success" {
-		t.Fatal("dispatching a role that does not exist reported success")
+		t.Fatal("dispatching a role the catalog does not name reported success")
+	}
+	// Denied, not unavailable: the request was refused on its merits, which
+	// is a different answer from a catalog role whose file is missing.
+	if response.Status != "denied" {
+		t.Errorf("status = %q, want denied", response.Status)
+	}
+}
+
+func TestACatalogRoleWithNoFileIsUnavailableNotASuccessfulNoOp(t *testing.T) {
+	// The stub reported success for every role id. This is the other half of
+	// the distinction: the role is real, but nothing on disk defines it here.
+	server := NewDispatchMCPServer(DispatchMCPServerConfig{
+		ProjectRoot: t.TempDir(), GlobalRoot: t.TempDir(), PluginRoot: t.TempDir(),
+	})
+	response := server.HandleDispatchSecureCloudRole(&DispatchSecureCloudRoleRequest{
+		RoleID: "code-reviewer", Brief: "b",
+		Mode: ModePlanningOnly, Classification: "internal", Wait: true,
+	})
+	if response.Status == "success" {
+		t.Fatal("dispatching a role with no file anywhere reported success")
 	}
 	if response.Status != "unavailable" {
 		t.Errorf("status = %q, want unavailable", response.Status)
@@ -186,13 +208,13 @@ func TestARoleDeclaringAWriteSandboxRequiresConfirmation(t *testing.T) {
 	// mode -- which is still write-capable, so asserting only "some write
 	// sandbox" cannot tell the two apart. Naming the declared value is what
 	// makes this a test of the seam rather than of the gate.
-	global := codexRoleTierWithSandbox(t, "writer-role", roleMarker, SandboxDangerFullAccess)
+	global := codexRoleTierWithSandbox(t, "security-reviewer", roleMarker, SandboxDangerFullAccess)
 	server := NewDispatchMCPServer(DispatchMCPServerConfig{
 		ProjectRoot: t.TempDir(), GlobalRoot: global, PluginRoot: t.TempDir(),
 	})
 
 	response := server.HandleDispatchSecureCloudRole(&DispatchSecureCloudRoleRequest{
-		RoleID: "writer-role", Brief: "edit the repository",
+		RoleID: "security-reviewer", Brief: "edit the repository",
 		Mode: ModeRepositoryEdit, Classification: "internal", Wait: true,
 	})
 
@@ -214,12 +236,12 @@ func TestPlanningOnlyNeedsNoConfirmationBecauseItCannotWrite(t *testing.T) {
 	// The other half: if the gate fired for read-only dispatch too, it would
 	// be a prompt with nothing behind it, and operators learn to clear those
 	// without reading them.
-	global := codexRoleTier(t, "reader-role", roleMarker)
+	global := codexRoleTier(t, "test-engineer", roleMarker)
 	server := NewDispatchMCPServer(DispatchMCPServerConfig{
 		ProjectRoot: t.TempDir(), GlobalRoot: global, PluginRoot: t.TempDir(),
 	})
 	response := server.HandleDispatchSecureCloudRole(&DispatchSecureCloudRoleRequest{
-		RoleID: "reader-role", Brief: "read the repository",
+		RoleID: "test-engineer", Brief: "read the repository",
 		Mode: ModePlanningOnly, Classification: "internal", Wait: true,
 	})
 	if response.Status == "confirmation_required" {
@@ -233,8 +255,8 @@ func TestTeamDispatchRunsEachMembersOwnRole(t *testing.T) {
 	// resolved separately.
 	tier := t.TempDir()
 	for _, role := range []struct{ id, marker string }{
-		{"member-one", "MARKER-ONE"},
-		{"member-two", "MARKER-TWO"},
+		{"code-reviewer", "MARKER-ONE"},
+		{"security-reviewer", "MARKER-TWO"},
 	} {
 		body := "model = \"claude-sonnet-5\"\ndeveloper_instructions = \"" + role.marker + "\"\n"
 		if err := os.WriteFile(filepath.Join(tier, role.id+".toml"), []byte(body), 0o644); err != nil {
@@ -247,8 +269,8 @@ func TestTeamDispatchRunsEachMembersOwnRole(t *testing.T) {
 	})
 	response := server.HandleDispatchTeam(&DispatchTeamRequest{
 		Members: []map[string]string{
-			{"role_id": "member-one", "brief": "first"},
-			{"role_id": "member-two", "brief": "second"},
+			{"role_id": "code-reviewer", "brief": "first"},
+			{"role_id": "security-reviewer", "brief": "second"},
 		},
 		Mode: ModePlanningOnly, Classification: "internal", Wait: true,
 	})
@@ -258,7 +280,7 @@ func TestTeamDispatchRunsEachMembersOwnRole(t *testing.T) {
 		t.Fatal("team members are still running on the placeholder instructions")
 	}
 	// Each member is accounted for by name, whatever the spawn outcome.
-	for _, id := range []string{"member-one", "member-two"} {
+	for _, id := range []string{"code-reviewer", "security-reviewer"} {
 		if !strings.Contains(rendered, id) {
 			t.Errorf("member %q is missing from the team result: %s", id, rendered)
 		}
@@ -269,8 +291,8 @@ func TestTheAPIRunnerIsReachableThroughDispatch(t *testing.T) {
 	// ResolveRoleForDispatch answered `runner "api" not yet implemented`
 	// long after the api runner was ported, so the whole runner was
 	// unreachable through the tool that is supposed to select it.
-	global := codexRoleTier(t, "api-role", roleMarker)
-	role, err := ResolveRoleForDispatch("api-role", RunnerAPI, t.TempDir(), global, t.TempDir(), ModePlanningOnly)
+	global := codexRoleTier(t, "debugging-engineer", roleMarker)
+	role, err := ResolveRoleForDispatch("debugging-engineer", RunnerAPI, t.TempDir(), global, t.TempDir(), ModePlanningOnly)
 	if err != nil {
 		t.Fatalf("the api runner cannot resolve a role: %v", err)
 	}
@@ -429,5 +451,47 @@ func TestTheChildAlwaysHasAPath(t *testing.T) {
 	t.Setenv("PATH", "/opt/probe/bin")
 	if got := BuildChildEnv(1, "")["PATH"]; got != "/opt/probe/bin" {
 		t.Errorf("PATH = %q, want this process's own", got)
+	}
+}
+
+func TestALocalModelOverrideReplacesTheWrapperIdentifier(t *testing.T) {
+	// runners.local_model_<tier> exists so tier semantics survive a switch to
+	// a self-hosted model: a local endpoint has never heard of the vendor
+	// identifier the wrapper carries, but "this is the sonnet-tier role" is
+	// still meaningful. The Codex spawner consulted only runners.codex_profile
+	// and passed the wrapper's identifier through regardless.
+	t.Setenv("SECURE_CLOUD_AGENTS_LOCAL_MODEL_SONNET", "local-llama-70b")
+	if got := localModelForTier("sonnet", t.TempDir()); got != "local-llama-70b" {
+		t.Errorf("local model = %q, want the operator's override", got)
+	}
+	// A tier nobody declared gets no override.
+	//
+	// This does not prove the tier-name check in localModelForTier: removing
+	// it leaves the behaviour identical, because an unregistered settings key
+	// resolves to nothing anyway. The check is defence in depth -- it keeps an
+	// unexpected tier from reaching the settings resolver as a key built from
+	// it at all -- and is deliberately not claimed to be pinned here.
+	if got := localModelForTier("nonsense-tier", t.TempDir()); got != "" {
+		t.Errorf("an unknown tier resolved to %q, want no override", got)
+	}
+	if got := localModelForTier("", t.TempDir()); got != "" {
+		t.Errorf("an empty tier resolved to %q, want no override", got)
+	}
+}
+
+func TestTheCatalogAllowlistFailsClosedOnAnUnreadableCatalog(t *testing.T) {
+	// An empty allowlist read as "allow everything" would turn an unreadable
+	// or restructured catalog into no gate at all.
+	empty := filepath.Join(t.TempDir(), "catalog.yaml")
+	if err := os.WriteFile(empty, []byte("version: 1\nagents: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadKnownRoleIDs(empty); err == nil {
+		t.Error("a catalog with no agents was accepted as an allowlist")
+	}
+
+	missing := filepath.Join(t.TempDir(), "absent.yaml")
+	if _, err := LoadKnownRoleIDs(missing); err == nil {
+		t.Error("an unreadable catalog was accepted as an allowlist")
 	}
 }

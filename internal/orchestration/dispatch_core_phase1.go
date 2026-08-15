@@ -12,17 +12,106 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/deagy/cadre/cli/internal/platform"
+	"gopkg.in/yaml.v3"
 )
 
 // Phase 1: Role Resolution, Sandbox Management, Child Process Spawning
 
-// LoadKnownRoleIDs loads the set of valid role IDs from the catalog
+// knownRoleIDCache memoises the catalog read.
+//
+// Role resolution happens on every dispatch, including once per member of a
+// team, and the catalog is a few hundred entries that do not change while the
+// process runs.
+var (
+	knownRoleIDMu    sync.Mutex
+	knownRoleIDCache = map[string]map[string]bool{}
+)
+
+// LoadKnownRoleIDs loads the set of valid role IDs from the catalog.
+//
+// This returned an empty map with a comment saying it was a stub, and had no
+// callers -- so the catalog allowlist Python enforces before touching the
+// filesystem did not exist here at all. Without it, any role id matching the
+// id pattern is dispatchable if a file with that name happens to sit in a
+// searched tier, so planting a *new* role file in a writable tier is enough.
+// With it, only a role the catalog already names can be dispatched, and an
+// attacker has to shadow an existing one -- which is what tier ordering and
+// the git-clean gate are there for.
 func LoadKnownRoleIDs(catalogPath string) (map[string]bool, error) {
-	// This requires reading and parsing the catalog YAML
-	// For now, stub - full implementation requires YAML parsing
-	// In production, this reads roster/catalog.yaml and extracts role IDs
-	return make(map[string]bool), nil
+	knownRoleIDMu.Lock()
+	defer knownRoleIDMu.Unlock()
+	if cached, ok := knownRoleIDCache[catalogPath]; ok {
+		return cached, nil
+	}
+
+	content, err := os.ReadFile(catalogPath)
+	if err != nil {
+		return nil, &DispatchUnavailable{
+			Reason: fmt.Sprintf("could not read catalog at %s: %v", catalogPath, err),
+		}
+	}
+	var catalog struct {
+		Agents map[string]any `yaml:"agents"`
+	}
+	if err := yaml.Unmarshal(content, &catalog); err != nil {
+		return nil, &DispatchUnavailable{
+			Reason: fmt.Sprintf("could not parse catalog at %s: %v", catalogPath, err),
+		}
+	}
+	if len(catalog.Agents) == 0 {
+		// Fails closed. An empty allowlist read as "allow everything" would
+		// turn an unreadable or restructured catalog into no gate at all.
+		return nil, &DispatchUnavailable{
+			Reason: fmt.Sprintf("no agents found in %s", catalogPath),
+		}
+	}
+
+	known := make(map[string]bool, len(catalog.Agents))
+	for id := range catalog.Agents {
+		known[id] = true
+	}
+	knownRoleIDCache[catalogPath] = known
+	return known, nil
+}
+
+// requireKnownRoleID refuses a role the catalog does not name.
+//
+// Skipped when no catalog can be located rather than failing every dispatch:
+// a consuming project that installed only the binary has no roster checkout,
+// and the tier search below is still the real gate there. Where a catalog
+// does exist, it is enforced.
+func requireKnownRoleID(roleID string) error {
+	catalogPath, err := locateCatalog()
+	if err != nil || catalogPath == "" {
+		return nil
+	}
+	known, err := LoadKnownRoleIDs(catalogPath)
+	if err != nil {
+		return err
+	}
+	if !known[roleID] {
+		return &DispatchDenied{
+			Reason: fmt.Sprintf("role_id is not present in %s: %q", catalogPath, roleID),
+		}
+	}
+	return nil
+}
+
+// locateCatalog finds the installation's own roster/catalog.yaml.
+func locateCatalog() (string, error) {
+	root, err := platform.FindInstallationRoot()
+	if err != nil {
+		return "", err
+	}
+	candidate := filepath.Join(root, "roster", "catalog.yaml")
+	if _, err := os.Stat(candidate); err != nil {
+		return "", err
+	}
+	return candidate, nil
 }
 
 // ResolveRoleFileCodex resolves a Codex role by searching through tiers
@@ -34,6 +123,9 @@ func ResolveRoleFileCodex(
 	mode string,
 ) (*ResolvedRole, error) {
 	if err := ValidateRoleID(roleID); err != nil {
+		return nil, err
+	}
+	if err := requireKnownRoleID(roleID); err != nil {
 		return nil, err
 	}
 
@@ -129,6 +221,9 @@ func ResolveClaudeCodeRoleFile(
 	mode string,
 ) (*ResolvedRole, error) {
 	if err := ValidateRoleID(roleID); err != nil {
+		return nil, err
+	}
+	if err := requireKnownRoleID(roleID); err != nil {
 		return nil, err
 	}
 

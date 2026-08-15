@@ -16,14 +16,14 @@ func TestPhase3SyncDispatchWorkflow(t *testing.T) {
 	// 4. Log audit record
 
 	role := &ResolvedRole{
-		ID:                 "test-role",
+		ID:                 "code-reviewer",
 		FilePath:           "/tmp/test.toml",
 		DeveloperInstructs: "You are a helpful assistant",
 		Model:              "claude-sonnet-5",
 		SandboxMode:        SandboxReadOnly,
 	}
 
-	ctx, err := BuildDispatchContext("test-role", role, "test brief", ModePlanningOnly)
+	ctx, err := BuildDispatchContext("code-reviewer", role, "test brief", ModePlanningOnly)
 	if err != nil {
 		t.Fatalf("BuildDispatchContext failed: %v", err)
 	}
@@ -63,8 +63,8 @@ func TestPhase3AsyncDispatchWorkflow(t *testing.T) {
 	// 3. Verify job persists in memory store
 
 	result := DispatchSecureCloudRole(
-		claudeRoleRoots(t, "test-role"),
-		"test-role",
+		claudeRoleRoots(t, "code-reviewer"),
+		"code-reviewer",
 		"test brief",
 		ModePlanningOnly,
 		"public",
@@ -104,8 +104,8 @@ func TestPhase3ConfirmationWorkflow(t *testing.T) {
 	// 3. Replay with token
 
 	result := DispatchSecureCloudRole(
-		claudeRoleRoots(t, "test-role"),
-		"test-role",
+		claudeRoleRoots(t, "code-reviewer"),
+		"code-reviewer",
 		"test brief",
 		ModeRepositoryEdit,
 		"public",
@@ -139,7 +139,7 @@ func TestPhase3RoleResolutionTierSearch(t *testing.T) {
 
 	// Create minimal role for Codex resolution
 	role := &ResolvedRole{
-		ID:                 "test-role",
+		ID:                 "code-reviewer",
 		FilePath:           "/tmp/test.toml",
 		DeveloperInstructs: "You are helpful",
 		Model:              "claude-sonnet-5",
@@ -209,7 +209,7 @@ func TestPhase3ModelTierValidation(t *testing.T) {
 
 	for _, model := range validModels {
 		role := &ResolvedRole{
-			ID:                 "test-role",
+			ID:                 "code-reviewer",
 			FilePath:           "/tmp/test.toml",
 			DeveloperInstructs: "test",
 			Model:              model,
@@ -223,7 +223,7 @@ func TestPhase3ModelTierValidation(t *testing.T) {
 
 	// Test invalid model
 	role := &ResolvedRole{
-		ID:                 "test-role",
+		ID:                 "code-reviewer",
 		FilePath:           "/tmp/test.toml",
 		DeveloperInstructs: "test",
 		Model:              "invalid-model-xyz",
@@ -239,12 +239,12 @@ func TestPhase3TeamDispatchWorkflow(t *testing.T) {
 	// Test: Multi-role team dispatch coordination
 
 	members := []map[string]string{
-		{"role_id": "role1", "brief": "task 1"},
-		{"role_id": "role2", "brief": "task 2"},
+		{"role_id": "code-reviewer", "brief": "task 1"},
+		{"role_id": "security-reviewer", "brief": "task 2"},
 	}
 
 	result := DispatchTeam(
-		testRoots(t, "role1"),
+		testRoots(t, "code-reviewer"),
 		members,
 		ModePlanningOnly,
 		"public",
@@ -278,7 +278,7 @@ func TestPhase3PromptComposition(t *testing.T) {
 	// Test: Prompt building from role + brief
 
 	role := &ResolvedRole{
-		ID:                 "test-role",
+		ID:                 "code-reviewer",
 		FilePath:           "/tmp/test.toml",
 		DeveloperInstructs: "You are a code reviewer",
 		Model:              "claude-sonnet-5",
@@ -318,7 +318,7 @@ func TestPhase3InteractiveFlowNonInteractive(t *testing.T) {
 	// Test: Confirmation flow in non-interactive environment
 
 	data := map[string]any{
-		"role_id": "test-role",
+		"role_id": "code-reviewer",
 		"mode":    "scoped-repository-edit",
 	}
 
@@ -353,7 +353,7 @@ func TestPhase3ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Immediately cancel
 
-	data := map[string]any{"role_id": "test-role"}
+	data := map[string]any{"role_id": "code-reviewer"}
 
 	_, err := PromptForConfirmation(ctx, data, time.Second)
 
@@ -370,7 +370,7 @@ func TestPhase3AuditLogging(t *testing.T) {
 	// Test: Audit record building with forbidden keys
 
 	validRecord, err := BuildAuditRecord(map[string]any{
-		"role_id":   "test-role",
+		"role_id":   "code-reviewer",
 		"task_id":   "task_123",
 		"exit_code": 0,
 	})

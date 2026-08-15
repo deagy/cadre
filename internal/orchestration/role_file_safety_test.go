@@ -22,7 +22,7 @@ func writeRole(t *testing.T, path, instructions string) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	body := "model = \"sonnet\"\ndeveloper_instructions = \"" + instructions + "\"\n"
+	body := "model = \"claude-sonnet-5\"\ndeveloper_instructions = \"" + instructions + "\"\n"
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -39,11 +39,11 @@ func TestASymlinkedRoleFileIsRefused(t *testing.T) {
 	writeRole(t, outside, "INSTRUCTIONS FROM OUTSIDE THE PROJECT")
 
 	tier := t.TempDir()
-	if err := os.Symlink(outside, filepath.Join(tier, "probe-role.toml")); err != nil {
+	if err := os.Symlink(outside, filepath.Join(tier, "code-reviewer.toml")); err != nil {
 		t.Skipf("cannot create symlinks here: %v", err)
 	}
 
-	_, err := readRoleFileCapped(filepath.Join(tier, "probe-role.toml"), MaxRoleFileBytes)
+	_, err := readRoleFileCapped(filepath.Join(tier, "code-reviewer.toml"), MaxRoleFileBytes)
 	if err == nil {
 		t.Fatal("a symlinked role file was read")
 	}
@@ -54,7 +54,7 @@ func TestANonRegularRoleFileIsRefused(t *testing.T) {
 	// regular-file check on the descriptor is the whole defence, so it is
 	// asserted separately rather than folded into the symlink test.
 	tier := t.TempDir()
-	directory := filepath.Join(tier, "probe-role.toml")
+	directory := filepath.Join(tier, "code-reviewer.toml")
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -110,15 +110,15 @@ func TestASymlinkAtAHigherTierDoesNotFallThroughToALowerOne(t *testing.T) {
 	project, global, plugin := t.TempDir(), t.TempDir(), t.TempDir()
 
 	// A valid role exists at the global tier...
-	writeRole(t, filepath.Join(global, "probe-role.toml"), "LEGITIMATE GLOBAL ROLE")
+	writeRole(t, filepath.Join(global, "code-reviewer.toml"), "LEGITIMATE GLOBAL ROLE")
 	// ...and a symlink shadows it at the project tier.
 	outside := filepath.Join(t.TempDir(), "attacker.toml")
 	writeRole(t, outside, "ATTACKER INSTRUCTIONS")
-	if err := os.Symlink(outside, filepath.Join(project, "probe-role.toml")); err != nil {
+	if err := os.Symlink(outside, filepath.Join(project, "code-reviewer.toml")); err != nil {
 		t.Skipf("cannot create symlinks here: %v", err)
 	}
 
-	role, err := ResolveRoleFileCodex("probe-role", project, global, plugin, ModePlanningOnly)
+	role, err := ResolveRoleFileCodex("code-reviewer", project, global, plugin, ModePlanningOnly)
 	if err == nil {
 		t.Fatalf("resolution succeeded, returning the %q tier role", role.Tier)
 	}
@@ -150,13 +150,13 @@ func TestResolutionRecordsWhichRoleTextRan(t *testing.T) {
 	// prompt. A path and a tier say where the file was, not what it said, and
 	// a role file edited afterwards leaves no other trace.
 	project, global, plugin := t.TempDir(), t.TempDir(), t.TempDir()
-	writeRole(t, filepath.Join(global, "probe-role.toml"), "SPECIFIC ROLE TEXT")
+	writeRole(t, filepath.Join(global, "code-reviewer.toml"), "SPECIFIC ROLE TEXT")
 
-	role, err := ResolveRoleFileCodex("probe-role", project, global, plugin, ModePlanningOnly)
+	role, err := ResolveRoleFileCodex("code-reviewer", project, global, plugin, ModePlanningOnly)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if role.ID != "probe-role" {
+	if role.ID != "code-reviewer" {
 		t.Errorf("ID = %q, want the role id", role.ID)
 	}
 	if role.Tier != "global" {
@@ -168,8 +168,8 @@ func TestResolutionRecordsWhichRoleTextRan(t *testing.T) {
 
 	// And it tracks the text: a different role file digests differently.
 	other := t.TempDir()
-	writeRole(t, filepath.Join(other, "probe-role.toml"), "DIFFERENT ROLE TEXT")
-	changed, err := ResolveRoleFileCodex("probe-role", project, other, plugin, ModePlanningOnly)
+	writeRole(t, filepath.Join(other, "code-reviewer.toml"), "DIFFERENT ROLE TEXT")
+	changed, err := ResolveRoleFileCodex("code-reviewer", project, other, plugin, ModePlanningOnly)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,17 +215,17 @@ func TestAProjectTierRoleMustBeCommittedBeforeItCanWrite(t *testing.T) {
 
 	t.Run("committed and clean is trusted", func(t *testing.T) {
 		root := newRepo(t)
-		writeRole(t, filepath.Join(root, "probe-role.toml"), "COMMITTED")
+		writeRole(t, filepath.Join(root, "code-reviewer.toml"), "COMMITTED")
 		commitAll(t, root)
-		if _, err := ResolveRoleFileCodex("probe-role", root, global, plugin, ModeRepositoryEdit); err != nil {
+		if _, err := ResolveRoleFileCodex("code-reviewer", root, global, plugin, ModeRepositoryEdit); err != nil {
 			t.Errorf("a committed, clean role file was refused: %v", err)
 		}
 	})
 
 	t.Run("untracked is refused", func(t *testing.T) {
 		root := newRepo(t)
-		writeRole(t, filepath.Join(root, "probe-role.toml"), "UNTRACKED")
-		if _, err := ResolveRoleFileCodex("probe-role", root, global, plugin, ModeRepositoryEdit); err == nil {
+		writeRole(t, filepath.Join(root, "code-reviewer.toml"), "UNTRACKED")
+		if _, err := ResolveRoleFileCodex("code-reviewer", root, global, plugin, ModeRepositoryEdit); err == nil {
 			t.Error("an untracked role file was trusted in write mode")
 		}
 	})
@@ -234,11 +234,11 @@ func TestAProjectTierRoleMustBeCommittedBeforeItCanWrite(t *testing.T) {
 		// The case a tracked-only check would miss: commit a harmless role,
 		// then edit it without committing.
 		root := newRepo(t)
-		path := filepath.Join(root, "probe-role.toml")
+		path := filepath.Join(root, "code-reviewer.toml")
 		writeRole(t, path, "HARMLESS")
 		commitAll(t, root)
 		writeRole(t, path, "EDITED AFTER COMMIT")
-		if _, err := ResolveRoleFileCodex("probe-role", root, global, plugin, ModeRepositoryEdit); err == nil {
+		if _, err := ResolveRoleFileCodex("code-reviewer", root, global, plugin, ModeRepositoryEdit); err == nil {
 			t.Error("a tracked but uncommitted-edit role file was trusted in write mode")
 		}
 	})
@@ -247,8 +247,8 @@ func TestAProjectTierRoleMustBeCommittedBeforeItCanWrite(t *testing.T) {
 		// Read-only dispatch cannot use the authority the gate protects, and
 		// applying it there would make an uncommitted role undiagnosable.
 		root := newRepo(t)
-		writeRole(t, filepath.Join(root, "probe-role.toml"), "UNTRACKED")
-		if _, err := ResolveRoleFileCodex("probe-role", root, global, plugin, ModePlanningOnly); err != nil {
+		writeRole(t, filepath.Join(root, "code-reviewer.toml"), "UNTRACKED")
+		if _, err := ResolveRoleFileCodex("code-reviewer", root, global, plugin, ModePlanningOnly); err != nil {
 			t.Errorf("the gate was applied outside write mode: %v", err)
 		}
 	})
