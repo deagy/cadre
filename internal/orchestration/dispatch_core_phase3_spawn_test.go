@@ -2,6 +2,7 @@ package orchestration
 
 import (
 	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -24,7 +25,7 @@ func TestSpawnClaudeCodeChildEmptyModel(t *testing.T) {
 }
 
 func TestSpawnClaudeCodeChildInvalidModel(t *testing.T) {
-	result := SpawnClaudeCodeChild("test prompt", "invalid-model-xyz", "", nil, 10.0)
+	result := SpawnClaudeCodeChild("test prompt", "invalid-model-xyz", SandboxReadOnly, nil, 10.0)
 
 	status := result["status"].(string)
 	if status != "error" {
@@ -39,9 +40,17 @@ func TestSpawnClaudeCodeChildInvalidModel(t *testing.T) {
 func TestSpawnClaudeCodeChildInvalidSandbox(t *testing.T) {
 	result := SpawnClaudeCodeChild("test prompt", "claude-sonnet-5", "invalid-sandbox", nil, 10.0)
 
+	// "denied", not "error": an unrecognised sandbox mode is a refusal on the
+	// request's merits, not a fault in this process. The distinction is what
+	// tells a caller to fix the role file rather than report a bug.
 	status := result["status"].(string)
-	if status != "error" {
-		t.Errorf("invalid sandbox should return error status, got %q", status)
+	if status != "denied" {
+		t.Errorf("invalid sandbox should be denied, got %q", status)
+	}
+	// And it must not have guessed a permission mode -- the only direction a
+	// guess can go here is wider.
+	if reason, _ := result["reason"].(string); !strings.Contains(reason, "invalid-sandbox") {
+		t.Errorf("the refusal should name the sandbox mode it rejected: %q", reason)
 	}
 }
 
@@ -53,7 +62,7 @@ func TestSpawnClaudeCodeChildValidModels(t *testing.T) {
 	}
 
 	for _, model := range models {
-		result := SpawnClaudeCodeChild("test prompt", model, "", nil, 10.0)
+		result := SpawnClaudeCodeChild("test prompt", model, SandboxReadOnly, nil, 10.0)
 
 		// Should not error on validation; actual execution may fail (claude CLI not available)
 		status := result["status"].(string)
