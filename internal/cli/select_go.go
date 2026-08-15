@@ -36,6 +36,13 @@ func runSelectGo(args []string) int {
 	output := options.String("output", "", "Write the plan to this path, in the --format chosen")
 	explain := options.Bool("explain", false,
 		"Additionally print, to stderr, near-miss reasoning for routes that did NOT match this task")
+	requireSDLC := options.Bool("require-sdlc", false,
+		"Fail instead of degrading to standalone mode if Agentic SDLC isn't available")
+	recordTelemetry := options.Bool("record-telemetry", false,
+		"Opt in to appending a local, structural-only outcome record to selection-telemetry.jsonl")
+	recordTelemetryIncludeTask := options.Bool("record-telemetry-include-task", false,
+		"With --record-telemetry, also record the raw task text and changed files")
+	telemetryPath := options.String("telemetry-path", "", "Override the telemetry JSON-lines file path")
 	var files stringSliceFlag
 	options.Var(&files, "files", "Changed path or comma-separated paths; repeatable")
 	var sources stringSliceFlag
@@ -123,6 +130,14 @@ func runSelectGo(args []string) int {
 	if contract != nil {
 		gates = contract.Gates
 		contractVersion = contract.Version
+	} else if *requireSDLC {
+		// Without --require-sdlc an absent kernel degrades to standalone
+		// mode: the plan simply carries no lifecycle applicability. With it,
+		// a caller has said that silent degradation is not acceptable for
+		// this run, so an absent kernel is an error rather than a quieter
+		// plan.
+		fmt.Fprintln(os.Stderr, selectInstallMessage(suiteRoot))
+		return 1
 	}
 
 	// Explicit files answer "route these paths"; a base ref answers "route
@@ -191,6 +206,14 @@ func runSelectGo(args []string) int {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 		return 1
+	}
+
+	if selector.TelemetryIsEnabled(*recordTelemetry) {
+		if _, err := selector.RecordSelection(plan, targetRoot, *telemetryPath,
+			selector.TelemetryIncludeTask(*recordTelemetryIncludeTask)); err != nil {
+			fmt.Fprintf(os.Stderr, "cadre select: %s\n", err)
+			return 1
+		}
 	}
 
 	var rendered []byte
@@ -266,4 +289,27 @@ func resolveRepositoryRoot(root string) (string, error) {
 		return "", fmt.Errorf("Repository root is not a directory: %s", absolute) //nolint:staticcheck // ported message
 	}
 	return absolute, nil
+}
+
+// selectInstallMessage is agentic_sdlc_contracts.install_message().
+//
+// Deliberately not SDLCInstallMessage: that one mirrors bin/cadre.py's
+// sdlc_install_message, a different function with different wording for a
+// different command. This one names AGENTIC_SDLC_BIN, because that is the
+// setting a `cadre select --require-sdlc` caller would reach for.
+//
+// The version range is read from provider.json rather than written down.
+// That file carries two unrelated version lines -- its own manifest version
+// and kernel_compatibility -- and every install message in this repository
+// once quoted the former while meaning the latter, sending operators to a
+// kernel ten minor versions too old.
+func selectInstallMessage(suiteRoot string) string {
+	requirement := "a compatible version"
+	if compatibility, err := readKernelCompatibility(suiteRoot); err == nil {
+		requirement = fmt.Sprintf("v%s or newer (below v%s)",
+			compatibility.Minimum, compatibility.MaximumExclusive)
+	}
+	return fmt.Sprintf(
+		"Agentic SDLC %s is required; set AGENTIC_SDLC_BIN or install https://github.com/deagy/cadre",
+		requirement)
 }

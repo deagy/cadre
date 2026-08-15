@@ -725,6 +725,131 @@ class SelectPresentationParityTest(unittest.TestCase):
             self.assertEqual(stdout, "", f"{implementation} emitted a plan for an invalid --format")
 
 
+class SelectTelemetryParityTest(unittest.TestCase):
+    """Parity for `--record-telemetry` and `--require-sdlc`.
+
+    Telemetry lines are compared byte for byte, not field by field. The
+    encoding is `json.dumps(sort_keys=True, ensure_ascii=False)` with default
+    separators, which is a different encoder from the plan's canonical form in
+    two ways that change no meaning at all -- non-ASCII stays raw, and the
+    separators are spaced. A file appended to by both implementations would
+    parse identically either way and diff on every single line, so bytes are
+    the property worth asserting.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        probe = load_corpus()[0]
+        code, _, stderr = run_select(probe, implementation="go")
+        if code == GO_NOT_IMPLEMENTED_EXIT:
+            raise unittest.SkipTest(
+                "no Go select implementation yet: CADRE_SELECT_IMPL=go returns "
+                f"exit {GO_NOT_IMPLEMENTED_EXIT}"
+            )
+        if code != 0:
+            raise AssertionError(f"CADRE_SELECT_IMPL=go failed (exit {code}):\n{stderr}")
+
+    def _select(self, *extra: str, implementation: str, env: dict | None = None) -> int:
+        environment = dict(os.environ)
+        environment.pop("CADRE_SELECT_IMPL", None)
+        if implementation == "go":
+            environment["CADRE_SELECT_IMPL"] = "go"
+        environment.update(env or {})
+        completed = subprocess.run(
+            [
+                str(CADRE), "select",
+                # Non-ASCII in the task, so ensure_ascii=False is actually
+                # exercised rather than assumed.
+                "--task", "deploy the café service 日本語 to production",
+                "--files", "k8s/a.yaml,src/b.go",
+                "--task-id", "TELEMETRY-1", "--classification", "internal",
+                "--source", "deagy/cadre",
+                *extra,
+            ],
+            capture_output=True, text=True, timeout=180, cwd=REPO_ROOT, env=environment,
+        )
+        if completed.returncode != 0:
+            raise AssertionError(
+                f"`cadre select` failed ({implementation}, exit "
+                f"{completed.returncode}):\n{completed.stderr}"
+            )
+        return completed.returncode
+
+    @staticmethod
+    def _strip_timestamps(text: str) -> list[str]:
+        """recorded_at is wall-clock; everything else must match exactly."""
+        import re
+        return [
+            re.sub(r'"recorded_at": "[^"]*"', "", line)
+            for line in text.splitlines() if line.strip()
+        ]
+
+    def test_telemetry_records_are_byte_identical(self) -> None:
+        written = {}
+        for implementation in ("python", "go"):
+            with tempfile.TemporaryDirectory() as workspace:
+                destination = Path(workspace) / "nested" / "selection-telemetry.jsonl"
+                # Once without task capture and once with: the second opt-in
+                # is a separate decision and adds two fields.
+                self._select("--record-telemetry", "--telemetry-path", str(destination),
+                             implementation=implementation)
+                self._select("--record-telemetry", "--record-telemetry-include-task",
+                             "--telemetry-path", str(destination), implementation=implementation)
+                # The env var is an equivalent opt-in to the flag.
+                self._select(implementation=implementation, env={
+                    "CADRE_SELECTION_TELEMETRY": "1",
+                    "CADRE_SELECTION_TELEMETRY_PATH": str(destination),
+                })
+                written[implementation] = destination.read_text(encoding="utf-8")
+
+        python_lines = self._strip_timestamps(written["python"])
+        go_lines = self._strip_timestamps(written["go"])
+        self.assertEqual(len(python_lines), 3, "each invocation appends exactly one record")
+        self.assertEqual(python_lines, go_lines, "telemetry records differ")
+
+        # The record carries no raw task text unless the second opt-in was
+        # given -- the property the two-flag design exists to provide.
+        self.assertNotIn("café", python_lines[0])
+        self.assertIn("café", python_lines[1])
+        # ...and when it is given, the text is raw rather than \\u-escaped.
+        self.assertNotIn("\\u00e9", python_lines[1])
+
+    def test_telemetry_is_off_unless_asked_for(self) -> None:
+        for implementation in ("python", "go"):
+            with self.subTest(implementation=implementation), tempfile.TemporaryDirectory() as workspace:
+                destination = Path(workspace) / "selection-telemetry.jsonl"
+                self._select("--telemetry-path", str(destination), implementation=implementation)
+                self.assertFalse(
+                    destination.exists(),
+                    "a plain invocation must write no telemetry at all",
+                )
+
+    def test_require_sdlc_is_accepted_and_changes_nothing_when_available(self) -> None:
+        """With the kernel present the flag is a no-op on the plan, which is
+        the assertion worth making: it must not become a second, quieter way
+        to change what gets selected."""
+        case = load_corpus()[0]
+        for implementation in ("python", "go"):
+            with self.subTest(implementation=implementation):
+                environment = dict(os.environ)
+                environment.pop("CADRE_SELECT_IMPL", None)
+                if implementation == "go":
+                    environment["CADRE_SELECT_IMPL"] = "go"
+
+                plain = plan_for(case, implementation=implementation)
+                completed = subprocess.run(
+                    [str(CADRE), "select", "--task", case["task"], "--files", case["files"],
+                     "--classification", case["classification"], "--task-id", case["id"].upper(),
+                     "--source", "deagy/cadre", "--source", "proposed-knowledge", "--require-sdlc"],
+                    capture_output=True, text=True, timeout=180, cwd=REPO_ROOT, env=environment,
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertEqual(
+                    canonical_form(plain), canonical_form(json.loads(completed.stdout)),
+                    "--require-sdlc changed the plan",
+                )
+
+
 def canonicalize_written(payload: bytes) -> object:
     """A written plan compared the way the corpus comparison does.
 
