@@ -29,7 +29,7 @@ around. Every mechanism below exists because of it.
 
 **Separation from the knowledge store.** Separate database file, separate
 config, separate module tree, and no imports in either direction — asserted by
-`roster/orchestration/test/test_context_boundary.py`. With two physically
+`internal/contextstore/boundary_test.go`. With two physically
 distinct SQLite files, a cross-store `JOIN` cannot be written, so "nothing
 reaches the curated corpus without a steward disposition" is a property of the
 deployment rather than a claim in a document.
@@ -48,7 +48,7 @@ window where an attacker waits for a poisoned parent to expire and then claims
 a clean derivation because nothing can be checked.
 
 **Secret redaction runs before storage.** `protect_content()` from
-`roster/shared/src/content_protection.py` runs on every `put`. Redaction
+`internal/textutil/content_protection.go` runs on every `put`. Redaction
 cascades and deliberately over-redacts. `content_hash` covers the stored,
 redacted text — not the original. Chunks are built from the redacted text, so a
 secret stripped from an entry cannot survive in the search index and come back
@@ -68,10 +68,10 @@ cross-referenced because this store is written to far more often.
 lives in the knowledge store, which this store may not import. There is no code
 path from here to anything that opens a socket or reads an embedding
 credential, so stored content cannot be transmitted to a third-party endpoint
-for vectorization. `config.py` also rejects a non-`hashing` provider, but that
+for vectorization. `internal/contextstore/config.go` also rejects a non-`hashing` provider, but that
 check is the second line, not the first — a config check alone would leave the
 remote path one edit from reachable.
-`roster/orchestration/test/test_context_boundary.py` asserts both the import
+`internal/contextstore/boundary_test.go` asserts both the import
 graph and that the shared embedding module stays free of network code.
 
 **Access filtering precedes ranking.** `search` applies classification, source,
@@ -102,7 +102,7 @@ path deletes their rows automatically, even though the `entries` they attest
 to always expire. That asymmetry is intentional: an audit trail with a silent
 default ceiling is the wrong failure mode to build in by default, and it would
 be a strange inconsistency to delete the evidence that content existed on the
-same clock that deletes the content. `database.py`'s `prune_audit_records()`
+same clock that deletes the content. `internal/contextstore/database.go`'s `prune_audit_records()`
 is a manual, operator-invoked-only primitive for a deployment that has decided
 otherwise -- it takes no default `older_than_days` and nothing in this store
 calls it, on a schedule or otherwise. It is not wired to a CLI subcommand as of
@@ -188,9 +188,9 @@ not.
 `classification` gets a real narrowing check because the dispatch server
 tracks a parent classification per session. There is no equivalent ambient
 project/repository identity for `source` to be checked against, so
-`context_tools.py` forwards whatever the caller supplies straight through to
+`internal/orchestration/mcp_context_tools.go` forwards whatever the caller supplies straight through to
 the CLI, unmodified. The server's own working directory is not a usable
-substitute for that identity: `dispatch_server.py` disables project-tier
+substitute for that identity: `internal/cli/mcp_dispatch_server.go` disables project-tier
 settings resolution precisely because an MCP server's cwd is wherever the host
 CLI happened to be launched from, not reliably the target project root. The
 result is that an MCP caller gets exactly the same `source` control a human

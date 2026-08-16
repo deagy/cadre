@@ -4,7 +4,7 @@
 
 Every role's `AGENT.md` points at a subset of the files in this directory as
 required reading (stack choices, autonomy policy, security baseline, and so
-on), and `roster/orchestration/src/generate_global_plugin.py` embeds them
+on), and `internal/generators/plugin_generation.go` embeds them
 directly into every packaged role's instructions. Those files are this
 repository's **global defaults**. A project using these agents can extend or,
 where it makes sense, override them without editing this checkout, by
@@ -16,10 +16,10 @@ Every file in this directory is optional as a global default: a project (or
 this repository itself) may have no `team-profile.yaml` at all, or an emptied
 one, and nothing should crash or hard-fail because of that -- roles proceed on
 task-brief judgment when a shared file is absent, and
-`generate_global_plugin.py` simply omits an absent file's section from the
+`internal/generators/plugin_generation.go` simply omits an absent file's section from the
 generated wrappers rather than failing.
 
-`generate_global_plugin.py` embeds these files **verbatim** into every one of
+`internal/generators/plugin_generation.go` embeds these files **verbatim** into every one of
 the 71+ generated role wrappers (both the Codex `.toml` wrappers committed in
 this repository and the Claude Code wrappers written into the separately
 published public `cadre-lifecycle` repository). Because of that, files under
@@ -39,7 +39,7 @@ flowchart LR
 
 Highest precedence wins per file. The overlay is found by walking up from
 the current directory to the nearest `.git` (the same convention
-`roster/knowledge-store/src/config.py` uses for its project-local
+`internal/knowledge/config.go` uses for its project-local
 `config.json`). Resolve the effective value with `cadre resolve-shared
 <filename>` (see `roster/shared/src/resolve.py`), run from anywhere inside
 the target project. It fails closed: a malformed overlay is an error, not a
@@ -72,7 +72,7 @@ silent fallback to the default.
 ### Tier-scoped shared policies
 
 Every file in this directory is embedded into *every* generated role wrapper
-(`SHARED_POLICIES` in `generate_global_plugin.py`). One of them,
+(`SHARED_POLICIES` in `internal/generators/plugin_generation.go`). One of them,
 `workspace-isolation.md`, is embedded in full for write-capable tiers and as
 a **section-granular excerpt** for the rest — see the next subsection.
 
@@ -94,14 +94,14 @@ header naming those tiers, because the scoping is generated-wrapper-only.
 `cadre resolve-shared`.** `resolve.py` is filename-based and knows nothing
 about capability tiers, so `cadre resolve-shared <file>` from any role or
 shell returns the file's full resolved text — a tier gate only decides
-whether `generate_global_plugin.py` embeds the section into a *specific
+whether `internal/generators/plugin_generation.go` embeds the section into a *specific
 role's* generated wrapper instructions. That asymmetry is why a tier-scoped
 file must state its own applicability in its own text: `cadre resolve-shared`
 cannot do that filtering for it.
 
 ### Section-granular excerpts (`UNIVERSAL_POLICY_SECTIONS`)
 
-`UNIVERSAL_POLICY_SECTIONS` in `generate_global_plugin.py` is a *separate*
+`UNIVERSAL_POLICY_SECTIONS` in `internal/generators/plugin_generation.go` is a *separate*
 mechanism from `TIER_SCOPED_POLICIES`, and the distinction is the whole point
 (deagy/cadre#211). `TIER_SCOPED_POLICIES` answers "which tiers get this file
 at all"; that file granularity is exactly what made tier-scoping
@@ -157,7 +157,7 @@ fire:
   scanning section bodies for that claim.
 
 Section *content* is not checked here.
-`plugin/tools/test_workspace_isolation_excerpt.py` asserts specific rule
+`internal/generators/workspace_isolation_excerpt_test.go` asserts specific rule
 prose survives into the committed wrappers on both runners. Note that its
 exact-excerpt test recomputes its expectation from the same function it
 validates, so it guards committed-output drift, not generator logic — do not
@@ -197,7 +197,7 @@ adding anything here.
 | Path | What it is | Trust | Merge |
 | --- | --- | --- | --- |
 | `.agents/shared/<filename>` | Policy overlays — this document | **Trusted.** Alters agent policy; `agent-autonomy.yaml` is narrowing-only so an overlay can tighten but never loosen autonomy. | Deep-merged over the global default (`resolve.py`) |
-| `.agents/knowledge-store/config.json` | Knowledge-store configuration | Security-relevant. Its *presence* selects the project-local tier, which gates database confinement, prohibits remote embeddings, and changes `--source` enforcement. | Own three-tier resolver (`knowledge-store/src/config.py`) |
+| `.agents/knowledge-store/config.json` | Knowledge-store configuration | Security-relevant. Its *presence* selects the project-local tier, which gates database confinement, prohibits remote embeddings, and changes `--source` enforcement. | Own three-tier resolver (`internal/knowledge/config.go`) |
 | `.agents/cadre.yaml` (or `.json`) | Operator settings — endpoints, binary paths, store location | **Untrusted.** Arrives with `git clone` and is editable by anyone who can open a pull request. Fields that select an executable, a data-store location, or a token-receiving destination are `global_only` and are rejected outright if set here. | First-wins precedence, no merging (`shared/src/settings.py`) |
 
 The asymmetry is deliberate. A policy overlay can only ever *narrow* what
@@ -218,7 +218,7 @@ resolver must not perturb.
 
 Rather than hand-authoring `.agents/shared/<filename>` overlays from scratch,
 run `cadre init [<project-root>]` (see
-`roster/shared/src/init_project.py`). It covers three sections (`--sections`
+`internal/cli/init.go`). It covers three sections (`--sections`
 restricts to a comma-separated subset; default: all):
 
 - **RG-A** — stack/tooling opinions.
@@ -296,7 +296,7 @@ Key behavior:
   and narrowing check as every other path: it can only ever *narrow*, and a
   rejected value is redacted to a hash exactly as in the prompt flow.
 - Answer the run non-interactively with `--answers <file.yaml>`
-  (`schema_version: 1`, documented in `init_project.py`'s module docstring —
+  (`schema_version: 1`, documented in `internal/cli/init.go`'s header —
   the same shape `--print-answers` echoes back, so a prior run is directly
   reusable), or interactively with `--interactive`. `--answers` and
   `--interactive` are mutually exclusive; neither is required.

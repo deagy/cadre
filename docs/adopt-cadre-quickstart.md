@@ -152,17 +152,17 @@ carries gating semantics an ordinary policy overlay doesn't:
 - `ignored_gates`: may only shrink.
 - `version`: fixed; may be repeated but not changed.
 
-Validate and materialize the effective (merged) configuration:
+The merge runs on every `cadre select`, so an overlay you author governs your
+real invocations as soon as it exists. There is currently no command that
+writes the merged configuration out to inspect it — `routing_overlay.py` (deleted)
+`--check` and `--out` did not survive the port, and restoring that workflow
+means adding a `cadre` subcommand for it.
+
+To validate your base `routing.json` itself:
 
 ```sh
-python3 roster/orchestration/src/routing_overlay.py --check
-python3 roster/orchestration/src/routing_overlay.py --out /tmp/effective-routing.json
+cadre schema-validate --routing orchestration/routing.json
 ```
-
-The materialized file is plain `routing.json`-shaped JSON, so you can also
-point `routing_health.py --routing <path>` or `schema_validate.py --routing
-<path>` at it to validate the effective configuration your project actually
-dispatches against, not just the unmodified base file.
 
 ## 6. Check for drift against this suite's canonical profile later
 

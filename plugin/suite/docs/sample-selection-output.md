@@ -18,7 +18,7 @@ case id `CROSS-STACK-1`). It was chosen because it is a realistic, non-edge-case
 task that touches two stacks at once (frontend and backend) and triggers a
 named team recipe, which exercises most of the fields a reader will encounter
 in practice. It is also asserted byte-for-byte against `build_dispatch_plan()`
-in `test_selection_golden_corpus.py`, so this page cannot silently drift from
+in `internal/selector/golden_corpus_test.go`, so this page cannot silently drift from
 selector behavior without that test failing first.
 
 ## Reproduce it
@@ -45,11 +45,11 @@ standalone Agentic SDLC executable was present on `PATH` when it ran; without
 one, `lifecycle_tracking.status` reads `"standalone"` with a `reason`, and
 every `required_quality_gates[].reason` instead reads "Required by routing
 configuration (Agentic SDLC unavailable; gate detail omitted)." (see
-`roster/orchestration/src/build_dispatch_plan.py`). The `matched_routes` route
+`internal/selector/plan.go`). The `matched_routes` route
 ids, `agents`, `teams`, the *set* of gate ids in `required_quality_gates`, and
 `human_gates` stay identical either way, and are pinned by the golden-corpus
 test referenced above (which compares route ids, not each entry's `reasons` —
-reason content is pinned by `test_selector.py` instead) (that test forces standalone mode so the
+reason content is pinned by `internal/selector's tests` instead) (that test forces standalone mode so the
 corpus is reproducible without the executable — see the fixture file's
 comment).
 
@@ -562,7 +562,7 @@ cadre select --task "improve cross-runner UX documentation" --explain
 
 ```
 --explain: no near-miss routes for this task -- no unmatched route had a
-partially satisfied keyword_groups entry (see route_near_miss.py's relevance
+partially satisfied keyword_groups entry (see internal/selector/nearmiss.go's relevance
 threshold; most routes in the current routing.json use plain keywords/paths,
 which have no partial-match state to report).
 ```
@@ -588,7 +588,7 @@ production-runbook-change:
 `keyword_groups` entries is *partially* satisfied — some but not all of a
 conjunctive (AND) group's keywords present in the task text. Plain
 `keywords` and `paths` are disjunctive (OR) triggers: `match_rule()`
-(`roster/orchestration/src/routing.py`) already matches a route the moment
+(`internal/selector/match.go`) already matches a route the moment
 any one of them fires, so an *unmatched* route's plain-keyword/path overlap
 is always exactly zero — there is no partial state to report, and printing
 "0 of N keywords matched" for every one of the dozens of unmatched routes on
@@ -604,7 +604,7 @@ confidence value, or cross-route ranking, under any field name: it states
 which literal keywords are present or absent per group and nothing more,
 preserving this repository's deterministic-selection invariant (selection is
 a fixed rule match, never agent judgment) end to end. See
-`internal/selector/nearmiss.go` (and `roster/orchestration/src/route_near_miss.py`,
+`internal/selector/nearmiss.go` (and `internal/selector/nearmiss.go`,
 its differential counterpart) for the full mechanism and its tests. Deliberately
 not a link: the packaged plugin ships neither implementation, only the data the
 binary reads, so a relative link here resolves in a checkout and dangles in the
