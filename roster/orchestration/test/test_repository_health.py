@@ -27,7 +27,6 @@ ROOT = Path(__file__).resolve().parents[2]
 _SRC = ROOT / "orchestration" / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
-from generate_role_metadata import is_role_definition  # noqa: E402
 REPOSITORY_ROOT = ROOT.parent
 
 # Single source of truth for this repository's current role count. Cross-
@@ -177,23 +176,13 @@ class RepositoryHealthTests(unittest.TestCase):
             return
         raise unittest.SkipTest("Agentic SDLC executable is not configured")
 
-    def test_catalog_definitions_and_agent_files_stay_in_sync(self) -> None:
-        catalog_agents: dict[str, str] = {}
-        current_agent: str | None = None
-        for line in (ROOT / "catalog.yaml").read_text(encoding="utf-8").splitlines():
-            if line.startswith("  ") and not line.startswith("    ") and line.rstrip().endswith(":"):
-                current_agent = line.strip()[:-1]
-            elif current_agent and line.strip().startswith("definition:"):
-                catalog_agents[current_agent] = line.split(":", 1)[1].strip()
-
-        agent_files = {
-            str(path.relative_to(ROOT)).replace("\\", "/")
-            for path in ROOT.rglob("AGENT.md")
-            if is_role_definition(path, ROOT)
-        }
-        self.assertEqual(set(catalog_agents.values()), agent_files)
-        for relative_path in catalog_agents.values():
-            self.assertTrue((ROOT / relative_path).is_file(), relative_path)
+    # test_catalog_definitions_and_agent_files_stay_in_sync moved to
+    # internal/generators/catalog_disk_agreement_test.go. It needed
+    # `is_role_definition` from generate_role_metadata.py, and that import was
+    # the last thing keeping three Python generators alive after the Go CLI
+    # replaced them. The Go version is stronger: it also checks that role
+    # *discovery* agrees with the committed catalog, closing the loop between
+    # what the generator finds, what the catalog says, and what is on disk.
 
     def test_catalog_declares_capabilities_and_reviewers_are_read_only(self) -> None:
         catalog = (ROOT / "catalog.yaml").read_text(encoding="utf-8").splitlines()
@@ -208,10 +197,9 @@ class RepositoryHealthTests(unittest.TestCase):
                 metadata[current_agent][key] = value.strip()
 
         self.assertEqual(EXPECTED_ROLE_COUNT, len(metadata))
-        self.assertEqual(
-            EXPECTED_ROLE_COUNT,
-            len([p for p in ROOT.rglob("AGENT.md") if is_role_definition(p, ROOT)]),
-        )
+        # The on-disk half of this count is asserted in Go, by
+        # internal/generators/catalog_disk_agreement_test.go -- see the note
+        # above on why the predicate it needs no longer lives in Python.
         allowed = {"read_only", "document_author", "code_author", "test_author", "environment_operator"}
         for agent_id, values in metadata.items():
             with self.subTest(agent=agent_id):
