@@ -1,4 +1,4 @@
-select	Deterministic agent/gate selection (select_agents.py)
+select	Deterministic agent/gate selection
 selection-telemetry	Summarize opt-in, local cadre select telemetry (selection_telemetry.py)
 context	Agent context store: park working material outside an agent's context window and get it back by handle
 generate-plugin	Regenerate a deagy/cadre-lifecycle checkout (generate_global_plugin.py; requires --output)

@@ -355,8 +355,14 @@ class RunnerAdaptersStructuralFactCoverageTests(unittest.TestCase):
         """
         modules = _orchestration_modules()
         # Guards the walk itself: a broken rglob would otherwise pass vacuously.
+        # The floor was 20 while the selector was Python. select_agents.py,
+        # build_dispatch_plan.py, risk_classifier.py and team_recipe_dryrun.py
+        # were deleted once internal/selector carried their behaviour, and this
+        # guard refused to pass rather than let the walk quietly shrink -- which
+        # is the whole reason it counts. Lowered deliberately, not to whatever
+        # the walk happens to find today.
         self.assertGreater(
-            len(modules), 20, f"module walk found only {len(modules)} files -- the walk is broken, not the code"
+            len(modules), 12, f"module walk found only {len(modules)} files -- the walk is broken, not the code"
         )
         for path in modules:
             source = path.read_text(encoding="utf-8")

@@ -106,48 +106,6 @@ def _run_select(*extra: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-class JsonRemainsTheDefaultTest(unittest.TestCase):
-    def test_default_output_is_json(self) -> None:
-        result = _run_select()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        json.loads(result.stdout)  # raises if the default stopped being JSON
-
-    def test_explicit_json_matches_the_default_byte_for_byte(self) -> None:
-        """The flag's presence must not perturb the contract output."""
-        default = _run_select()
-        explicit = _run_select("--format", "json")
-        self.assertEqual(default.returncode, 0, default.stderr)
-
-        def _stable(payload: str) -> dict:
-            plan = json.loads(payload)
-            for volatile in ("generated_at", "dispatch_fingerprint"):
-                plan.pop(volatile, None)
-            plan.get("provenance", {}).pop("git_dirty_paths", None)
-            return plan
-
-        self.assertEqual(_stable(default.stdout), _stable(explicit.stdout))
-
-    def test_text_format_is_not_json(self) -> None:
-        result = _run_select("--format", "text")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        with self.assertRaises(json.JSONDecodeError):
-            json.loads(result.stdout)
-        self.assertIn("AGENTS", result.stdout)
-
-    def test_output_file_honors_the_chosen_format(self) -> None:
-        """`--format text --output f` must not write JSON into f."""
-        import tempfile
-
-        with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "plan.txt"
-            result = _run_select("--format", "text", "--output", str(target))
-            self.assertEqual(result.returncode, 0, result.stderr)
-            written = target.read_text(encoding="utf-8")
-            self.assertIn("AGENTS", written)
-            with self.assertRaises(json.JSONDecodeError):
-                json.loads(written)
-
-
 class RenderingTest(unittest.TestCase):
     def test_full_plan_names_every_selected_agent(self) -> None:
         rendered = format_plan_text(FULL_PLAN)

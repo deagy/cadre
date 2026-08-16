@@ -52,15 +52,18 @@ for candidate in (SRC_DIR, ROSTER_DIR / "shared" / "src"):
 # check below asserts membership rather than merely non-emptiness.
 #
 # The two mcp/ entries are gone because the files are: dispatch moved to Go,
-# and roster/orchestration/mcp/ was deleted. The surface they covered is
-# guarded by internal/orchestration/platform_role_ids_test.go, which carries
-# this list's lesson with it -- including the membership check, because the
-# failure this boundary actually suffered was an incomplete list rather than
-# an empty one.
+# and roster/orchestration/mcp/ was deleted. The three selector entries are
+# gone for the same reason -- select_agents.py, build_dispatch_plan.py and
+# risk_classifier.py were deleted once internal/selector carried their
+# behaviour. The surface all five covered is guarded by
+# internal/orchestration/platform_role_ids_test.go, which carries this list's
+# lesson with it -- including the membership check, because the failure this
+# boundary actually suffered was an incomplete list rather than an empty one,
+# and which now scans internal/cli as well.
+#
+# What remains here is the Python that is still Python: routing.py and its two
+# neighbours, which the generators import.
 PLATFORM_MODULES = (
-    SRC_DIR / "select_agents.py",
-    SRC_DIR / "build_dispatch_plan.py",
-    SRC_DIR / "risk_classifier.py",
     SRC_DIR / "routing.py",
     SRC_DIR / "routing_overlay.py",
     SRC_DIR / "roster_manifest.py",
@@ -205,9 +208,20 @@ class TestGuardIsNotVacuous(unittest.TestCase):
             with self.subTest(module=module.name):
                 self.assertTrue(module.is_file(), f"{module} does not exist")
 
-    def test_the_selection_surface_is_in_scope(self) -> None:
+    def test_the_routing_surface_is_in_scope(self) -> None:
+        # This named select_agents.py and build_dispatch_plan.py until they
+        # were deleted, and it is the reason their removal from PLATFORM_MODULES
+        # had to be a decision rather than a quiet edit: the guard refused to
+        # pass with the list shortened and nothing said why.
+        #
+        # The selection surface it protected is now Go, and
+        # internal/orchestration/platform_role_ids_test.go carries this exact
+        # check forward -- same membership assertion, same reasoning, over the
+        # packages that decide which agent runs.
+        #
+        # What is left here is the Python the generators still import.
         names = {module.name for module in PLATFORM_MODULES}
-        for required in ("select_agents.py", "build_dispatch_plan.py"):
+        for required in ("routing.py", "routing_overlay.py", "roster_manifest.py"):
             self.assertIn(
                 required,
                 names,
@@ -338,124 +352,3 @@ class TestDiagnosticsAreExemptByRule(unittest.TestCase):
         self.assertEqual([], _offending_literals(SRC_DIR / "routing.py", DECLARED_FILENAMES))
 
 
-class TestPlatformAnchorsDoNotFollowTheRoster(unittest.TestCase):
-    """PP-FR-1's exceptions, asserted structurally.
-
-    The single most dangerous line in the baseline: `REPOSITORY_ROOT` and
-    `_SHARED_SRC_DIR` were derived from `ROSTER_ROOT`, so making that
-    resolver-driven while touching neither would have silently redirected both.
-    `_SHARED_SRC_DIR` is the sys.path bootstrap for the platform's own settings
-    resolver.
-    """
-
-    def setUp(self) -> None:
-        self.tree = ast.parse((SRC_DIR / "select_agents.py").read_text(encoding="utf-8"))
-
-    def _rhs_names(self, target: str) -> set[str]:
-        for node in self.tree.body:
-            if isinstance(node, ast.Assign):
-                for bound in node.targets:
-                    if isinstance(bound, ast.Name) and bound.id == target:
-                        return {
-                            child.id for child in ast.walk(node.value)
-                            if isinstance(child, ast.Name)
-                        }
-        raise AssertionError(f"{target} is not a module-level constant any more")
-
-    def test_shared_src_dir_does_not_resolve_through_the_roster(self) -> None:
-        names = self._rhs_names("_SHARED_SRC_DIR")
-        self.assertNotIn("ROSTER_ROOT", names)
-        self.assertIn(
-            "_PLATFORM_ROSTER_ROOT",
-            names,
-            "_SHARED_SRC_DIR must stay platform-anchored: it is the sys.path "
-            "bootstrap through which settings and routing_overlay are "
-            "imported, so a roster-driven value "
-            "would let a resolved roster supply the platform's own resolver.",
-        )
-
-    def test_repository_root_does_not_resolve_through_the_roster(self) -> None:
-        names = self._rhs_names("REPOSITORY_ROOT")
-        self.assertNotIn("ROSTER_ROOT", names)
-        self.assertIn("_PLATFORM_ROSTER_ROOT", names)
-
-    def test_orchestration_root_stays_platform_anchored(self) -> None:
-        names = self._rhs_names("ORCHESTRATION_ROOT")
-        self.assertNotIn("ROSTER_ROOT", names)
-
-
-IN_TREE_KERNEL = REPO_ROOT / "bin" / "agentic-sdlc"
-
-
-@unittest.skipUnless(IN_TREE_KERNEL.is_file(), "in-tree kernel wrapper missing")
-class TestLifecycleAwareSelection(unittest.TestCase):
-    """PP-NFR-1's second detector — the one the golden corpus cannot be.
-
-    `test_selection_golden_corpus.py:135` patches `try_lifecycle_contract` to
-    `None` so its 175 cases are deterministic across hosts, which means
-    `_gate_agents()` never runs there and no case can observe the gate-reviewer
-    default at all.
-
-    **Forced, not skipped.** The existing lifecycle assertions in
-    `test_selector.py` gate on `AGENTIC_SDLC_BIN or shutil.which(...)`, so they
-    silently vanish on a bare checkout — reintroducing exactly the
-    host-dependence the corpus was made deterministic to remove, in the tests
-    added to cover the corpus's blind spot. `bin/agentic-sdlc` runs the in-tree
-    kernel with no install, so pointing at it explicitly is both deterministic
-    and checkout-only.
-    """
-
-    def _plan(self, task: str, files: list[str]) -> dict:
-        import importlib
-
-        with mock.patch.dict(os.environ, {"AGENTIC_SDLC_BIN": str(IN_TREE_KERNEL)}, clear=False):
-            select_agents = importlib.import_module("select_agents")
-            build_dispatch_plan = importlib.import_module("build_dispatch_plan")
-            importlib.reload(build_dispatch_plan)
-            manifest = __import__("roster_manifest").load_roster_manifest(
-                __import__("roster_manifest").default_roster_root()
-            )
-            catalog = __import__("routing").load_catalog(manifest.catalog)
-            config, _ = select_agents.resolve_effective_routing(manifest.routing, start=REPO_ROOT)
-            select_agents.validate_routing_config(config)
-            try:
-                return build_dispatch_plan.build_dispatch_plan(
-                    config, catalog,
-                    {
-                        "task": task, "task_id": "BOUNDARY-1",
-                        "repository_root": str(REPO_ROOT), "base": None,
-                        "classification": "internal", "changed_files": files,
-                        "changed_file_source": "explicit", "sources": ["deagy/cadre"], "top": 5,
-                    },
-                    require_sdlc=True,
-                )
-            finally:
-                importlib.reload(build_dispatch_plan)
-
-    def test_a_gate_bearing_task_still_carries_the_roster_declared_reviewer(self) -> None:
-        """OD-9 option 1's whole promise: Cadre's output does not move."""
-        plan = self._plan("Update the OpenTofu module for the VPC", ["infra/vpc/main.tf"])
-        self.assertEqual("integrated", plan["lifecycle_tracking"]["status"])
-        self.assertIn(
-            "code-reviewer",
-            plan["agents"]["support"],
-            "Cadre's lifecycle-aware plans lost their gate reviewer. OD-9 chose "
-            "the option under which they do not: routing.json declares "
-            "default_gate_review_agents, so removing it from roster data is a "
-            "behaviour change, not a refactor.",
-        )
-
-    def test_the_default_is_roster_declared_not_hardcoded(self) -> None:
-        """The category-A assertion. Fails if the literal returns to the source."""
-        source = (SRC_DIR / "build_dispatch_plan.py").read_text(encoding="utf-8")
-        hits = _offending_literals(SRC_DIR / "build_dispatch_plan.py", ("code-reviewer",))
-        self.assertEqual(
-            [], hits,
-            f"a Cadre role id is hardcoded in platform resolution logic: {hits}. "
-            "It belongs in routing.json's default_gate_review_agents (OD-9).",
-        )
-        self.assertIn("default_gate_review_agents", source)
-
-
-if __name__ == "__main__":
-    unittest.main()
