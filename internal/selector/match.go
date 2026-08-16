@@ -144,10 +144,24 @@ func isKeywordBoundaryChar(c byte) bool {
 // token of the keyword must appear in the text before the regex is consulted.
 // It can only skip work that would have returned false.
 func KeywordMatches(text, keyword string) bool {
-	lowered := strings.ToLower(text)
-	for _, token := range strings.Fields(strings.ToLower(keyword)) {
-		if !strings.Contains(lowered, token) {
-			return false
+	// A cheap pre-filter, so the compiled pattern is consulted only for the
+	// handful of keywords that could possibly match. Its contract is
+	// one-directional: it may skip work that would have returned false, and
+	// never work that would have returned true.
+	//
+	// It holds that contract only for ASCII. The gate lowercases with
+	// strings.ToLower while the pattern folds case with (?i), and those
+	// disagree on characters that fold to a letter without lowercasing to it
+	// -- U+017F LATIN SMALL LETTER LONG S folds to "s" but is already
+	// lowercase, so Contains fails on text the regex would match. Skipping the
+	// gate there costs one regex on input that essentially never occurs, and
+	// keeps the optimization for every real task.
+	if isASCIIText(text) && isASCIIText(keyword) {
+		lowered := strings.ToLower(text)
+		for _, token := range strings.Fields(strings.ToLower(keyword)) {
+			if !strings.Contains(lowered, token) {
+				return false
+			}
 		}
 	}
 	for _, span := range keywordBody(keyword).FindAllStringIndex(text, -1) {
@@ -265,4 +279,15 @@ func stringSlice(value any) []string {
 		}
 	}
 	return out
+}
+
+// isASCIIText reports whether every byte is ASCII, which is the condition
+// under which strings.ToLower and a regex's (?i) fold identically.
+func isASCIIText(value string) bool {
+	for index := 0; index < len(value); index++ {
+		if value[index] >= 0x80 {
+			return false
+		}
+	}
+	return true
 }
