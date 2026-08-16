@@ -1,11 +1,13 @@
 package generators
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -230,6 +232,65 @@ func WriteAideFiles(files map[string]string) error {
 }
 
 // CheckAides validates that generated files are current without writing.
+// ValidateAideGatesAgainstContract cross-checks every gate number in
+// aides.yaml against the lifecycle-gates contract.
+//
+// aides.yaml hardcodes each aide's gate numbers, and the kernel owns gate
+// numbering permanently. Nothing else constrains them: parseGates checks they
+// are integers and not duplicated, not that they exist. So a typo, or a
+// kernel-side renumber, ships an authority aide telling a human to prepare a
+// decision package for a gate that is not there.
+//
+// The contract is read as data, which is one of exactly two couplings the
+// kernel boundary permits. That differs from the Python generator, which
+// shelled out to whichever kernel was on PATH: this reads the in-tree
+// contract, so it catches in-tree drift deterministically and would not
+// notice a *separately installed* kernel disagreeing. In this repository the
+// kernel is in-tree, so the two coincide.
+//
+// A contract that is not there is not an error. Standalone operation is
+// supported everywhere else in this suite, and a generator that refused to
+// run without a kernel would be a new dependency rather than a check.
+func ValidateAideGatesAgainstContract(aides []AideData, contractPath string) error {
+	raw, err := os.ReadFile(contractPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("cannot read %s: %w", contractPath, err)
+	}
+	var contract struct {
+		Gates []struct {
+			ID string `json:"id"`
+		} `json:"gates"`
+	}
+	if err := json.Unmarshal(raw, &contract); err != nil {
+		return fmt.Errorf("%s: invalid JSON: %w", contractPath, err)
+	}
+	if len(contract.Gates) == 0 {
+		return fmt.Errorf("%s declares no gates", contractPath)
+	}
+	known := make(map[string]bool, len(contract.Gates))
+	var knownIDs []string
+	for _, gate := range contract.Gates {
+		known[gate.ID] = true
+		knownIDs = append(knownIDs, gate.ID)
+	}
+	sort.Strings(knownIDs)
+
+	for _, aide := range aides {
+		for _, gate := range aide.Gates {
+			id := "G" + strconv.Itoa(gate)
+			if !known[id] {
+				return fmt.Errorf(
+					"aide %q references %s, which is not in the lifecycle-gates "+
+						"contract (%s)", aide.ID, id, strings.Join(knownIDs, ", "))
+			}
+		}
+	}
+	return nil
+}
+
 // OrphanedAideFiles lists every <authorityRoot>/*/AGENT.md the current aide
 // set no longer generates.
 //
