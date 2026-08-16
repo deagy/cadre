@@ -118,7 +118,18 @@ func tokenizeGlobForContainment(glob string) ([]globToken, bool) {
 			// Regex-special characters (.+^$()|{}) are escaped by
 			// globToRegex to match literally, same as any other byte --
 			// the token stream doesn't distinguish them.
-			tokens = append(tokens, globToken{kind: globLiteral, lit: string(c)})
+			//
+			// Folded to lower case because the matcher this models --
+			// selector.GlobToRegex, which compiles every route path glob --
+			// sets (?i). Keeping case here made the analyzer answer a question
+			// nobody asks: it reported `**/README.md` as not contained by
+			// `**/readme.md` while the live matcher has the exclude swallowing
+			// the include whole. Folding at the token stream keeps the
+			// alphabet, the transitions and the witness consistent, and a
+			// lower-case witness is a valid witness under a case-insensitive
+			// matcher.
+			tokens = append(tokens, globToken{kind: globLiteral,
+				lit: strings.ToLower(string(c))})
 		}
 	}
 	return tokens, true
@@ -454,7 +465,11 @@ func CheckRouteExcludeShadowing(route Route) map[string]string {
 // Supports *, ?, and [...] patterns.
 func globToRegex(glob string) *regexp.Regexp {
 	var pattern strings.Builder
-	pattern.WriteString("^")
+	// (?i) because selector.GlobToRegex sets it. This function exists to check
+	// a witness against the dialect the selector actually matches with, so a
+	// difference here is not a stricter check -- it is this package validating
+	// its answers against a matcher that is not the one in use.
+	pattern.WriteString("(?i)^")
 
 	for i := 0; i < len(glob); i++ {
 		c := glob[i]
