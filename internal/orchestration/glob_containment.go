@@ -74,7 +74,12 @@ const (
 // verdict, so a caller that reports only on Contained cannot be made to
 // accuse falsely by a pathological pattern. routing.json's real patterns
 // explore a few dozen.
-const maxContainmentProductStates = 50_000
+// A var, not a const, only so a test can lower it. Exhausting the budget must
+// yield Undetermined and never Contained -- the caller reports on Contained,
+// so a skipped pattern is a missed finding while a guessed one is a false
+// accusation. Reaching the real bound with a realistic pattern is not
+// practical, and an untested bound is a bound nobody knows the behaviour of.
+var maxContainmentProductStates = 50_000
 
 const (
 	symOther = "\x00other" // Sentinel: any byte that appears in no pattern under comparison.
