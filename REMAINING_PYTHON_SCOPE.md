@@ -24,39 +24,32 @@ timeline — an earlier version of this document (dated the same day) claimed
 
 ## What actually remains
 
-### `cadre select` — ported; Python retained as an escape hatch
+### `cadre select` — ported; the Python is gone
 
-**This is done.** `internal/selector/` is the default implementation and
-`CADRE_SELECT_IMPL=python` reverses it. The Python modules stay in the tree
-for two reasons: they are that escape hatch, and they are the other half of
-the differential gate — a parity test needs something to be at parity with.
+**This is done, and the escape hatch is gone with it.** `internal/selector/`
+is the only implementation. `CADRE_SELECT_IMPL=python` no longer reverses
+anything, the Python selector modules are deleted, and so is the differential
+that gated the port — a parity test needs two implementations, and there is
+one.
 
-The port was gated on
-`roster/orchestration/test/test_select_differential.py` rather than
-reviewed into place. It runs both implementations on the same machine in
-the same run and requires byte equality including `dispatch_fingerprint`,
-which matters because that fingerprint is checkout-location dependent: the
-plan embeds absolute paths inside the hashed payload, so a stored value
-would have pinned one developer's directory layout.
+That gate did its job while it existed. It ran both implementations on the
+same machine in the same run and required byte equality including
+`dispatch_fingerprint`, which mattered because that fingerprint is
+checkout-location dependent: the plan embeds absolute paths inside the hashed
+payload, so a stored value would have pinned one developer's directory
+layout. Each layer was additionally compared over a space chosen to exercise
+*it*, because the 25-case corpus reaches only a handful of shapes — the
+matcher over 4,725 rule×case evaluations, workflow precedence over 44,101
+decisions, the overlay merge over 69 documents, and so on.
 
-Each layer was additionally compared against Python over a space chosen to
-exercise *it*, because the 25-case corpus reaches only a handful of shapes:
-
-| layer | comparison |
-|---|---|
-| matcher (globs, keywords, `match_rule`) | 4,725 rule×case evaluations |
-| workflow precedence | 44,101 decisions — every route singly and every route *pair*, × 4 risk sets |
-| lifecycle gates | 360 decisions against the real in-tree contract |
-| canonical JSON + fingerprint | 41 encodings, then 41 fingerprints |
-| plan assembly | 25 full plans + 25 fingerprints |
-| git-derived inputs | 36 real checkouts + 11 explicit-input cases |
-| routing-overlay merge | 69 documents (24 accepted, 45 refused) |
-| text / near-miss rendering | 144 textwrap inputs, 35 plans, 11 near-miss configs |
-
-Those wider comparisons live in `roster/orchestration/test/probe_*_parity.py`
-and are run deliberately, not by CI — they build real checkouts and shell
-out to git and `go test` hundreds of times. What they proved is folded back
-into `test_select_differential.py` and into `internal/selector`'s own tests.
+What replaced it is not a weaker check but a different kind. Byte equality
+against a second implementation only ever ran on inputs both implementations
+were given; it could not say whether either was right. The property tests
+that now hold `internal/selector` are written against what the code is
+supposed to do rather than against what the other copy did, and auditing the
+Python tests before deleting them found eleven defects that byte equality had
+been agreeing about for months. `internal/selector/golden_corpus_test.go` and
+the tests around it are the gate now.
 
 The reimplementation that briefly existed here before — smaller flag set, a
 repurposed `--output` flag, a JSON-vs-text default mismatch, a plan of its
@@ -64,12 +57,12 @@ own invention — is why the gate was built before the port rather than after.
 
 ### `cadre init --interactive` — deliberately not ported, fails closed
 
-`internal/initproject/` ports `init_project.py`'s full **non-interactive**
+`internal/initproject/` ports `internal/cli/init.go`'s full **non-interactive**
 surface (`--answers`, `--set`, `--stack` presets, defaults-mode,
 `--dry-run`/`--force`/`--repair`/`--print-answers`) faithfully, including
 its named security properties (A-001 through at least A-005 per that
-package's own header). It does **not** port `init_project_interactive.py`
-(445 lines — the questionnaire UI `init_project.py` only imports when
+package's own header). It does **not** port `internal/initproject`
+(445 lines — the questionnaire UI `internal/cli/init.go` only imports when
 `--interactive` is passed). `cadre init --interactive` in the Go CLI fails
 closed with a message pointing at `--answers`/`--set`, rather than silently
 behaving differently from the Python original. There is no existing
@@ -151,14 +144,14 @@ the checkout) pieces, approximately:
 |---|---|---:|
 | Context store | `roster/context-store/src/*.py` | 2,058 |
 | Settings / resolve / init (non-interactive) | `roster/shared/src/{settings,resolve,init_project}.py` | 3,710 |
-| Init questionnaire | `roster/shared/src/init_project_interactive.py` | 445 |
+| Init questionnaire | `internal/initproject` | 445 |
 | Codex sync / profile diff / upgrade | `roster/orchestration/src/{sync_codex_agents,profile_diff,upgrade}.py` | 995 |
 | Doctor / role-fidelity / telemetry / text libs | `roster/orchestration/src/{doctor,role_fidelity,selection_telemetry}.py`, `roster/shared/src/{content_protection,text_chunking,text_embedding}.py` | 2,158 |
 | `cadre select`'s stack (see above — the one item still live in the checkout too) | — | 1,879 |
 
 **This table is not exhaustive** — it does not account for every file under
-the ~23,500-line total (e.g. `routing.py`, `roster_manifest.py`,
-`provenance.py`, `routing_overlay.py`, `role_metadata.py`, the
+the ~23,500-line total (e.g. `internal/selector/match.go`, `internal/selector/rostermanifest.go`,
+`internal/orchestration/provenance.go`, `internal/selector/overlay.go`, `internal/generators/frontmatter.go`, the
 `generate-*` scripts, and their test suites are not itemized here). Re-derive from the tree rather than treating this as a
 complete inventory.
 
@@ -191,7 +184,7 @@ changes gated on a decision rather than on work.
 ### 1. A second, drifted producer of `plugin/bin/cadre`
 
 **Status: in progress.** `generate_bin_wrapper()` in
-`roster/orchestration/src/generate_global_plugin.py` emits a `bin/cadre`
+`internal/generators/plugin_generation.go` emits a `bin/cadre`
 carrying none of #267's hardening — no binary resolution, no checksum
 verification, no cache. The Go generator
 (`internal/generators/plugin_generation.go`) emits the hardened one, and
@@ -205,7 +198,7 @@ editable checkout install regenerates the unhardened shim; and
 generator directly as one of the two drift guards.
 
 Note the module itself is **not** dead and must not simply be deleted:
-`generate_role_metadata.py` and `generate_authority_aides.py` import
+`internal/generators/catalog_generation.go` and `internal/generators/authority_aides.go` import
 constants and `GENERATED_MARKER` from it. The fix is to remove the *second
 shim producer*, not the module.
 

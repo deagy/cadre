@@ -18,7 +18,7 @@ return a blocking question in its result instead of prompting directly.**
 
 ## Establish Scope
 
-1. Locate the repository root containing `roster/catalog.yaml` and `roster/orchestration/src/select_agents.py`.
+1. Locate the repository root containing `roster/catalog.yaml` and `internal/selector`.
 2. Read the repository `AGENTS.md`, `roster/shared/operating-principles.md`, `team-profile.yaml`, `technology-standards.md`, `library-standards.yaml`, `knowledge-use-policy.md`, and `agent-autonomy.yaml`.
 3. Extract the objective from the prompt. Derive the rest rather than requiring the caller to supply them, and ask the human only when derivation genuinely fails:
    - **task ID**: a slug from the objective plus today's date, unless the prompt names one or the run needs durable cross-session tracking with no discoverable convention.
@@ -40,7 +40,7 @@ contains `roster/catalog.yaml`; otherwise use the self-contained suite under
 
   > No knowledge-store config found. Create an isolated store for this project only (`.agents/knowledge-store/config.json`, recommended — keeps this project's content separate from every other project), or use the shared store across every project on this machine (`~/.agents/knowledge-store/config.json`)?
 
-  Suggest project-local as the default if the human doesn't have a preference. Create only the one chosen — an empty `{}` is sufficient, since `roster/knowledge-store/src/config.py`'s `load_config()` fills every other setting from built-in defaults. Skip asking (and skip creating anything) once a tier already resolves; this is a first-use question, not a repeated one.
+  Suggest project-local as the default if the human doesn't have a preference. Create only the one chosen — an empty `{}` is sufficient, since `internal/knowledge/config.go`'s `load_config()` fills every other setting from built-in defaults. Skip asking (and skip creating anything) once a tier already resolves; this is a first-use question, not a repeated one.
 - **Every runner, ask if relevant**: if `cadre` doesn't resolve as a bare command, this only matters for the human's own terminal use (an orchestrating Claude Code agent already has it on the Bash tool's PATH via the installed plugin's `bin/` directory, no action needed there) — ask once whether to show the exact `PATH` setup command from `README.md` "Put `cadre` on `PATH`" rather than assuming the human has already read it.
 
 ## Select Agents

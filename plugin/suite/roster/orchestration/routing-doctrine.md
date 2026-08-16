@@ -3,7 +3,7 @@
 # Routing doctrine: when a base route may claim a generic path glob
 
 `roster/orchestration/routing.json` ships as the **base ruleset** to every
-consuming project. `routing_overlay.py` lets a consumer *widen* a base route
+consuming project. `internal/selector/overlay.go` lets a consumer *widen* a base route
 (add paths, keywords, team members) but never narrow one — see
 `roster/RUNBOOK.md`'s "Customize routing.json with a project-local overlay"
 section for the full per-construct merge rule. That non-narrowing property is
@@ -18,7 +18,7 @@ incomplete restatement of this rule — see that issue and the
 Earlier `routing.json` history (`#195`, `#196`, `#197`) rejected claiming root
 `pyproject.toml` on the reasoning that "a generic file present in arbitrary
 downstream projects is unclaimable in the base ruleset because
-`routing_overlay.py` can widen but never narrow." Read literally, that rule
+`internal/selector/overlay.go` can widen but never narrow." Read literally, that rule
 disqualifies most of the ruleset as it exists today: roughly a dozen routes
 already claim generic `**` globs base-wide, including `supply-chain`
 (`**/go.mod`, `**/package.json`, `**/*.lock`, `**/Dockerfile`,
@@ -147,7 +147,7 @@ evidence.
 
 ## The overlay runs in the selection path
 
-`roster/orchestration/src/select_agents.py` resolves
+`internal/selector` resolves
 `.agents/orchestration/routing-overlay.json` through
 `routing_overlay.resolve_effective_routing()` before building a plan, so the
 configuration the selector dispatches against is the effective (merged) one,
@@ -208,7 +208,7 @@ pending explicit review and a stated basis at the time it's proposed, not a
 standing objection.
 
 See also `CHANGELOG.md`'s `[Unreleased]` entry for the corrected record of
-this decision, and `roster/orchestration/test/test_selector.py`'s
+this decision, and `internal/selector's tests`'s
 `test_generic_pyproject_manifests_remain_unclaimed_by_path` and
 `test_root_pyproject_toml_alone_does_not_route_to_packaging` for the pinned
 regression coverage this document explains.

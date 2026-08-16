@@ -15,7 +15,7 @@ This is **not** the knowledge store, and the difference is the entire point.
 
 Nothing crosses from here into the knowledge store except through
 `cadre knowledge propose` and a steward's disposition.
-`roster/orchestration/test/test_context_boundary.py` enforces that
+`internal/contextstore/boundary_test.go` enforces that
 structurally: the two stores are separate databases, separate configs, and may
 not import each other.
 
@@ -29,7 +29,7 @@ the entry you half-remember, and honest about not being an embedding model.
 **Remote embeddings are refused, structurally.** The provider that could send
 text to a third-party endpoint lives in the knowledge store, which this store
 may not import; there is no code path from here to anything that opens a socket
-or reads an embedding credential. `config.py` rejects a non-`hashing` provider
+or reads an embedding credential. `internal/contextstore/config.go` rejects a non-`hashing` provider
 as well, but the module boundary is the real mechanism — a config check alone
 would leave the remote path one edit away. Whether unreviewed agent working
 material may be transmitted off the machine is OD-5 in
@@ -37,7 +37,7 @@ material may be transmitted off the machine is OD-5 in
 it is open.
 
 **Phase 3** adds four MCP tools — `context_put`, `context_get`, `context_list`,
-`context_search` — on `roster/orchestration/mcp/dispatch_server.py`. See
+`context_search` — on `internal/cli/mcp_dispatch_server.go`. See
 "Two surfaces" below.
 
 **Phase 4** adds `promote`, the `context_handles` handoff field, and
@@ -110,7 +110,7 @@ fenced as untrusted output with a per-call random token before it reaches the
 model.
 
 `agent` is the exception and stays caller-asserted on both surfaces: the
-dispatch protocol has no role-id environment variable today. `context_tools.py`
+dispatch protocol has no role-id environment variable today. `internal/orchestration/mcp_context_tools.go`
 reads `SECURE_CLOUD_AGENTS_ROLE_ID` if something sets it, and ambient wins over
 the parameter, but nothing sets it yet — wiring it into `build_child_env()`
 would make agent identity genuinely ambient for dispatched children and belongs
@@ -121,7 +121,7 @@ project/repository identity in the dispatch protocol to check it against, so
 it is forwarded to the CLI exactly as the caller supplied it. Unlike `agent`
 this is not merely undecided — the MCP server's own working directory is
 explicitly *not* used as a stand-in, because it is unreliable for this purpose
-(`dispatch_server.py` disables project-tier settings resolution for the same
+(`internal/cli/mcp_dispatch_server.go` disables project-tier settings resolution for the same
 reason: an MCP server's cwd is wherever the host CLI was launched, not
 reliably the target project). See `SECURITY.md`'s "What is not enforced".
 
@@ -324,7 +324,7 @@ deliberately not the staged record's id: deriving that id needs knowledge-store
 code this store may not import.
 
 The judgement fields are required rather than defaulted, mirroring
-`finding_record.py`'s refusal to invent one. Promoting into the corpus is meant
+`internal/contextstore/service.go`'s refusal to invent one. Promoting into the corpus is meant
 to cost more than stashing.
 
 An entry flagged `untrusted_inputs` is **not refused**. It is emitted with

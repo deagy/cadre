@@ -32,7 +32,7 @@ Implement bounded Talos configuration and validation under `infrastructure-provi
 # Shared policy: team-profile.yaml
 
 # NOTE: these shared-policy defaults are embedded verbatim into every generated
-# role wrapper (Claude Code + Codex, 71+ files) by generate_global_plugin.py,
+# role wrapper (Claude Code + Codex, 71+ files) by internal/generators/plugin_generation.go,
 # including into a separately published public repository. Never add personal
 # names, emails, or other individual-identifying data here. Named human
 # approval/escalation authority belongs in a consuming project's own
@@ -789,7 +789,7 @@ guard, the teams rule, escalation, and the end-of-task result block -- binds
 write-capable capability tiers only (any tier whose `sandbox_mode` in
 this project's runner-capability manifest is not `read-only` -- currently
 `document_author`, `code_author`, `test_author`, and `environment_operator`;
-see `generate_global_plugin.py`'s `WRITE_CAPABLE_TIERS`). A read-only role
+see `internal/generators/plugin_generation.go`'s `WRITE_CAPABLE_TIERS`). A read-only role
 has no edits to isolate, so those sections do not apply to it, and its
 generated wrapper carries this header plus the four sections above and
 nothing else.
@@ -899,7 +899,7 @@ The concrete case to know: `.agents/knowledge-store/config.json` is
 git-ignored by design (it is untracked, project-local configuration -- see
 this project's shared-policy documentation's "three things that live under `.agents/`"
 table). `find_project_local_config()`
-(this project's knowledge-store configuration module) walks upward from the current
+(`internal/knowledge/config.go`) walks upward from the current
 working directory looking for that file, and **stops at the first directory
 containing `.git`** -- which in a linked worktree is the worktree's own
 `.git` file (pointing at the shared administrative directory), not the main

@@ -1,5 +1,5 @@
 # NOTE: files under roster/shared/ are embedded verbatim into every generated
-# role wrapper (Claude Code + Codex, 71+ files) by generate_global_plugin.py,
+# role wrapper (Claude Code + Codex, 71+ files) by internal/generators/plugin_generation.go,
 # including into a separately published public repository. Never add personal
 # names, emails, or other individual-identifying data here. Named human
 # approval/escalation authority belongs in a consuming project's own

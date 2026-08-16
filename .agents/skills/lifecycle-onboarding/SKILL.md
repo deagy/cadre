@@ -278,7 +278,7 @@ assert. If a path is ambiguous the command names the regions that
 matched — qualify it (`autonomy:policy_version=...`) instead of guessing.
 
 Reach for `--answers <file>` (`schema_version: 1`; see `cadre init --help`
-and `roster/shared/src/init_project.py` for its shape and the
+and `internal/cli/init.go` for its shape and the
 `field_decisions` entry required per touched field) only when there are
 enough overrides that a file is genuinely clearer. `--interactive`
 (prompt-flow mode) drives a live terminal prompt loop meant for a human

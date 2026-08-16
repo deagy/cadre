@@ -251,7 +251,7 @@ function cadre { & "C:\path\to\this\checkout\bin\cadre.ps1" @args }
 ## pip / pipx install (additional distribution channel)
 
 This is a second, independent way to run the `cadre` CLI, alongside the
-checkout path above (`./bin/cadre` / `bin/cadre.py` / `bin/cadre.ps1`) — it
+checkout path above (`./bin/cadre` / `bin/cadre.ps1`) — it
 does not replace it, and the checkout path keeps working unmodified whether
 or not you ever build or install this package. `pyproject.toml` at the
 repository root packages the CLI (subcommand table, dispatch logic, and

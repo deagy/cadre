@@ -1,6 +1,6 @@
 version: 1
 # `model` is an optional per-role tier, propagated into the generated Claude
-# Code wrapper's `model:` frontmatter by generate_global_plugin.py. Assigned
+# Code wrapper's `model:` frontmatter by internal/generators/plugin_generation.go. Assigned
 # by a fixed heuristic, not per-role discretion — keep new roles consistent
 # with it:
 #   opus:   design/architecture/governance/crypto-assurance roles making
@@ -62,7 +62,7 @@ version: 1
 # (developers.openai.com/codex/agent-configuration/subagents,
 # .../codex/config-file/config-reference) plus a real installed
 # `@openai/codex` npm package's `codex exec --help` output — see
-# dispatch_core.py's build_child_argv docstring for how the MCP dispatch
+# internal/orchestration/dispatch_core.go's BuildChildArgv for how the MCP dispatch
 # path passes this (Codex has no dedicated exec-time flag for it, only a
 # generic `-c key=value` config override). Same tier mapping as model/
 # codex_model above:
