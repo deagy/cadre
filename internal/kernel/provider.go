@@ -1,7 +1,6 @@
 package kernel
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -550,26 +549,16 @@ func validateSuppliedExtensions(providerID string, roots []string) error {
 // Canonical rather than raw bytes, so two files that say the same thing
 // formatted differently produce the same fingerprint -- which is what makes
 // it usable as evidence that a catalog's *content* has not changed.
-func fingerprint(value any) (string, error) {
-	canonical, err := canonicalJSON(value)
-	if err != nil {
-		return "", err
-	}
-	return "sha256:" + hexSHA256(canonical), nil
-}
-
-// canonicalJSON matches json.dumps(value, sort_keys=True, separators=(",",":")).
-func canonicalJSON(value any) ([]byte, error) {
-	var buffer bytes.Buffer
-	encoder := json.NewEncoder(&buffer)
-	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(value); err != nil {
-		return nil, err
-	}
-	// Go marshals map keys sorted and emits no spaces, which is the same
-	// canonical form; Encode appends a newline that json.dumps does not.
-	return bytes.TrimRight(buffer.Bytes(), "\n"), nil
-}
+// fingerprint delegates to the shared implementation rather than keeping its
+// own.
+//
+// It used to encode with encoding/json and SetEscapeHTML(false), which is the
+// same canonical form as Python's for ASCII and a different one otherwise:
+// json.dumps defaults to ensure_ascii=True, so "café" is six bytes on one side
+// and ten on the other. Provider digests over any manifest containing a single
+// accented character would have differed, silently, and the two kernels would
+// have disagreed about whether a provider had changed.
+func fingerprint(value any) (string, error) { return Fingerprint(value) }
 
 func hexSHA256(data []byte) string {
 	sum := sha256.Sum256(data)

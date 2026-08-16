@@ -328,7 +328,7 @@ role file's own text coming back out of a child process is the assertion.
 under `kernel/contracts/` are **data, not code** — they stay exactly as they
 are.
 
-**Progress: 16 of 32.** `show-contract` (#290), `detect`, the `provider` /
+**Progress: 17 of 32.** `show-contract` (#290), `detect`, the `provider` /
 `profile` / `extension` introspection trio (#291), `validate`, and the four `list-*` readers (#292),
 each behind a differential that runs both kernels on the same machine
 (`kernel/test/test_kernel_differential.py`, and for `validate` the Go-side
@@ -387,9 +387,24 @@ read-only projection stays separate, because the gate-status publishers
 render a task onto a pull request and that render must not move the
 task on.
 
-Still to write: `init`, `repair`, and the GitHub/GitLab gate-approval
-plumbing — which is now the bulk of what remains, and the only part
-that talks to a network.
+`init` came next, and it is the port where byte-for-byte comparison
+earned its keep twice over. Comparing only the overlay's JSON documents
+would have passed while two things were wrong: the order agents are
+collected from gate bindings (which feeds the profile digest), and how
+a role definition's em-dash is escaped into a Codex wrapper's TOML.
+Both only showed up because every generated file is compared, wrappers
+included.
+
+That second one also revealed a latent defect elsewhere:
+`provider.go` kept its own `fingerprint`, encoding with encoding/json
+rather than Python's `ensure_ascii=True`. Provider digests over any
+manifest containing one accented character would have differed
+silently, and the two kernels would have disagreed about whether a
+provider had changed.
+
+Still to write: `repair`, and the GitHub/GitLab gate-approval plumbing
+— which is now the bulk of what remains, and the only part that talks
+to a network.
 
 **`validate` landed in #292**, and it was the largest single read-only item:
 the overlay loader, `approval_source_policy`, the agent catalog, path

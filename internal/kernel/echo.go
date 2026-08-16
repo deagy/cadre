@@ -42,6 +42,35 @@ func (o *orderedObject) set(key string, value any) {
 	o.values[key] = value
 }
 
+// MarshalJSON lets an ordered object travel through encoding/json intact.
+//
+// Without it the type marshals as {} -- every field is unexported -- and
+// anything that round-trips one through encoding/json silently loses the whole
+// document. That is not hypothetical: the profile digest was briefly the
+// sha256 of an empty object, which is a valid-looking hash of nothing.
+func (o *orderedObject) MarshalJSON() ([]byte, error) {
+	var builder strings.Builder
+	builder.WriteByte('{')
+	for index, key := range o.keys {
+		if index > 0 {
+			builder.WriteByte(',')
+		}
+		encodedKey, err := json.Marshal(key)
+		if err != nil {
+			return nil, err
+		}
+		builder.Write(encodedKey)
+		builder.WriteByte(':')
+		encodedValue, err := json.Marshal(o.values[key])
+		if err != nil {
+			return nil, err
+		}
+		builder.Write(encodedValue)
+	}
+	builder.WriteByte('}')
+	return []byte(builder.String()), nil
+}
+
 // DecodeOrdered parses JSON, preserving object key order.
 //
 // Numbers are kept as json.Number so an integer stays an integer: Go's
