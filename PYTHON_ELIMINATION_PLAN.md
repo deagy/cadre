@@ -432,7 +432,7 @@ the only part that talks to a network. It decomposes as:
 | ~~`gate_reviewers`, `gate_reviewers_gitlab`~~ | ~~890~~ | **Ported.** Reviewer reporting |
 | ~~`gate_status`, `github_status_write`~~ | ~~803~~ | **Ported.** The gate-status comment |
 | ~~`reviewer_nudge`~~ | ~~458~~ | **Ported.** The advisory reviewer comment |
-| `gate_issues`, `gate_issues_github`, `github_issue_write` | 2,736 | Issue creation and reconciliation |
+| ~~`gate_issues`, `gate_issues_github`, `github_issue_write`~~ | ~~2,736~~ | **Ported.** Issue creation and reconciliation |
 
 Both shared primitives landed first, since everything else builds on
 them. The sanitizers are pure enough to compare exhaustively: 48 inputs
@@ -473,6 +473,45 @@ Two things are worth carrying forward from it:
   set, held together by `internal/canonicaljson/agreement_test.go`. That
   split exists because the two sides disagreed once over `provenance` and
   the kernel then rejected every plan the selector produced.
+
+**Every subcommand is now in Go.** The last eight were the forge approval
+adapters (`approve-from-github`, `approve-from-github-pr`,
+`approve-from-gitlab`, `approve-from-gitlab-mr`) and the four
+`link-*-from-*-issue` commands. Nothing in `agentic_sdlc/__init__.py`'s
+parser now falls through to the "not ported yet" branch.
+
+Three things the last stretch surfaced, all recorded rather than fixed in
+place:
+
+- **The Go CLI prints no usage block.** argparse prints a wrapped usage
+  summary above every argument error; the Go parser prints only the error
+  line. The error lines themselves now match exactly -- the port had been
+  using Go's `%q` where every argparse message uses `%r`, so `invalid choice:
+  "G99"` where Python says `invalid choice: 'G99'`, across `decide`,
+  `request-gate-reviewers`, `publish-gate-status`, `publish-reviewer-nudge`
+  and the new adapters. That is fixed. The missing usage block is not, and it
+  is a real regression for somebody who mistypes a flag: reproducing
+  argparse's wrapping for every subcommand would be a facsimile of something
+  that disappears with the Python kernel, so the right fix is a usage summary
+  the Go CLI owns, written once the comparison no longer constrains it.
+
+- **`github_issue_write.py`'s docstring is wrong about its own exit code.**
+  It says a secondary rate limit maps to "a `secondary-rate-limit` block (CLI
+  exit 2)". `SecondaryRateLimitError` subclasses `ValueError`, and
+  `_process_gate_issue`'s `except ValueError` wraps it into
+  `GateIssuesGithubError` -- exit 1. The port mirrors the behaviour, because
+  the differential requires it. Correct the docstring when the module goes.
+
+- **One eligibility checker served three commands that disagree about its
+  failures.** `gate_reviewers.py` raises one exception class for every
+  eligibility failure; `gate_issues.py` and `gate_issues_github.py` split
+  them -- an unknown gate id is a typo (exit 1), a gate the task is not
+  configured for is a statement about the project (exit 2). The shared Go
+  helper collapsed the two, so `create-gate-issues --gates G9` exited 1 where
+  Python exits 2. Fixed in #303 by giving the shared error a `NeedsHuman`
+  flag each caller maps itself. The lesson generalises: **sharing a helper
+  across commands shares its error taxonomy too, and that is the part nobody
+  checks.**
 
 **Must survive the port, without exception:**
 
