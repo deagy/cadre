@@ -32,8 +32,15 @@ import (
 
 // nowRFC3339 is the timestamp format the kernel writes: UTC, Z-suffixed.
 func nowRFC3339() string {
-	return time.Now().UTC().Format("2006-01-02T15:04:05.000000") + "Z"
+	return timeNow().UTC().Format("2006-01-02T15:04:05.000000") + "Z"
 }
+
+// timeNow is a seam, not a feature. Two behaviours here can only be checked
+// against a fixed clock -- the gate-status comment's post-write verification
+// compares a rendered body against what the forge echoed back, and that body
+// carries a live timestamp -- so tests replace this and restore it. Nothing in
+// production ever assigns to it.
+var timeNow = time.Now
 
 // ChooseWorkflow picks the workflow for a task and the routes it matched.
 //

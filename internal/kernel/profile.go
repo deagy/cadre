@@ -273,7 +273,13 @@ func orderedKeys(value any) []string {
 	return keys
 }
 
-// fieldOf reads one field from either shape.
+// fieldOf reads one field from either shape -- an ordered object as decoded
+// from disk, or a plain map as built in code.
+//
+// Both occur in the same call paths: a document read order-preserving carries
+// ordered objects all the way down, while one constructed by a caller carries
+// maps. A helper that handled only one would not fail, it would silently
+// return nothing, which reads downstream as "the field is absent".
 func fieldOf(value any, key string) any {
 	if object, ok := value.(*orderedObject); ok {
 		return object.values[key]

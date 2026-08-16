@@ -46,16 +46,13 @@ func SafeTaskID(value string) (string, error) {
 // together and have moved together since.
 const ledgerSchemaVersion = 1
 
-// forgeGitLab and forgeGitHub name the two forges a ledger can belong to.
-const (
-	forgeGitLab = "gitlab"
-	forgeGitHub = "github"
-)
-
 // gateStatusForges is the order `list-gate-status` reports in. It has no
 // --forge flag: a task may have been published to either or both over its
 // life, and reporting only one would answer a question nobody asked.
-var gateStatusForges = []string{forgeGitHub, forgeGitLab}
+//
+// The forge names themselves are declared in gatestatus.go, next to the
+// command that decides which one to publish to.
+var gateStatusForges = []string{ForgeGitHub, ForgeGitLab}
 
 // readLedger returns a task's sidecar ledger, or the supplied empty skeleton
 // when there is no file.
@@ -92,7 +89,7 @@ func orderedLedger(pairs ...any) *orderedObject {
 
 // ReadGateIssuesLedger reports the GitLab gate-issues ledger for a task.
 func ReadGateIssuesLedger(root, taskID string) (any, error) {
-	return readLedger(root, taskID, "gate-issues-"+forgeGitLab+".json", func() any {
+	return readLedger(root, taskID, "gate-issues-"+ForgeGitLab+".json", func() any {
 		return orderedLedger(
 			"schema_version", ledgerSchemaVersion,
 			"task_id", taskID,
@@ -106,7 +103,7 @@ func ReadGateIssuesLedger(root, taskID string) (any, error) {
 
 // ReadGitHubGateIssuesLedger reports the GitHub gate-issues ledger.
 func ReadGitHubGateIssuesLedger(root, taskID string) (any, error) {
-	return readLedger(root, taskID, "gate-issues-"+forgeGitHub+".json", func() any {
+	return readLedger(root, taskID, "gate-issues-"+ForgeGitHub+".json", func() any {
 		return orderedLedger(
 			"schema_version", ledgerSchemaVersion,
 			"task_id", taskID,
@@ -134,8 +131,8 @@ func ReadGateStatusLedgers(root, taskID string) (any, error) {
 
 // ReadReviewerNudgeLedger reports the GitHub reviewer-nudge ledger.
 func ReadReviewerNudgeLedger(root, taskID string) (any, error) {
-	return readLedger(root, taskID, "reviewer-nudge-"+forgeGitHub+".json",
-		func() any { return emptyCommentLedger(taskID, forgeGitHub) })
+	return readLedger(root, taskID, "reviewer-nudge-"+ForgeGitHub+".json",
+		func() any { return emptyCommentLedger(taskID, ForgeGitHub) })
 }
 
 // emptyCommentLedger is the skeleton the two comment-publishing sidecars
