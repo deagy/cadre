@@ -65,7 +65,6 @@ for candidate in (SRC_DIR, ROSTER_DIR / "shared" / "src"):
 # neighbours, which the generators import.
 PLATFORM_MODULES = (
     SRC_DIR / "routing.py",
-    SRC_DIR / "routing_overlay.py",
     SRC_DIR / "roster_manifest.py",
 )
 
@@ -221,7 +220,7 @@ class TestGuardIsNotVacuous(unittest.TestCase):
         #
         # What is left here is the Python the generators still import.
         names = {module.name for module in PLATFORM_MODULES}
-        for required in ("routing.py", "routing_overlay.py", "roster_manifest.py"):
+        for required in ("routing.py", "roster_manifest.py"):
             self.assertIn(
                 required,
                 names,
