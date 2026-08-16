@@ -56,14 +56,41 @@ func TestGlobContainsExactLiteralFullyShadowed(t *testing.T) {
 	}
 }
 
-func TestGlobContainsCaseSensitive(t *testing.T) {
-	// route_matching.go's globToRegex never sets an IGNORECASE-equivalent
-	// flag -- this must be case-sensitive, unlike the Python original.
-	verdict, witness := GlobContainsWithWitness("README.md", []string{"readme.md"})
-	if verdict != NotContained {
-		t.Fatalf("verdict = %q, want %q -- containment must be case-sensitive to match globToRegex", verdict, NotContained)
+func TestGlobContainsFoldsCaseLikeTheMatcher(t *testing.T) {
+	// This asserted the opposite, on the strength of a comment pointing at
+	// this file's own globToRegex -- which has no callers outside tests. The
+	// matcher that decides whether a route's paths fire is
+	// selector.GlobToRegex, and it sets (?i).
+	//
+	// The consequence was not academic. A rule with paths **/README.md and
+	// exclude_paths **/readme.md has its include swallowed whole by the
+	// exclude at runtime: it keeps its reviewers and its human_gate and
+	// matches on keywords alone. The analyzer said not-contained, so
+	// TestNoRuleExcludesAwayItsOwnPathCoverage -- which exists to catch
+	// exactly that -- stayed silent.
+	verdict := GlobContains("README.md", []string{"readme.md"})
+	if verdict != Contained {
+		t.Errorf("verdict = %q, want %q. The live matcher is case-insensitive, "+
+			"so an analyzer that is not answers a question nobody asks.",
+			verdict, Contained)
 	}
-	assertWitnessIsValid(t, witness, "README.md", []string{"readme.md"})
+}
+
+func TestCaseFoldingDoesNotCollapseUnrelatedLiterals(t *testing.T) {
+	// The check above is satisfied vacuously by an analyzer whose alphabet has
+	// desynced from its literals -- everything becomes Contained. This is what
+	// pins the folding rather than the collapse.
+	for _, testCase := range []struct{ include, exclude string }{
+		{"Foo/**", "bar/**"},
+		{"A/**", "b/**"},
+		{"src/Main.go", "src/other.go"},
+	} {
+		if verdict := GlobContains(testCase.include, []string{testCase.exclude}); verdict != NotContained {
+			t.Errorf("GlobContains(%q, [%q]) = %q, want %q -- unrelated literals "+
+				"must stay unrelated after folding",
+				testCase.include, testCase.exclude, verdict, NotContained)
+		}
+	}
 }
 
 func TestGlobContainsQuestionMark(t *testing.T) {
