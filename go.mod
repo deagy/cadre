@@ -11,6 +11,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.49
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
+	golang.org/x/text v0.36.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -224,7 +225,6 @@ require (
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260409153401-be6f6cb8b1fa // indirect
-	golang.org/x/text v0.36.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect

@@ -421,8 +421,30 @@ corrected — fixing it during the port would make every repair differ
 from the kernel it is checked against, hiding real divergences behind
 an intentional one.
 
-Still to write: the GitHub/GitLab gate-approval plumbing — now the bulk
-of what remains, and the only part that talks to a network.
+**What remains is the GitHub/GitLab gate-approval plumbing: 5,922 lines
+across twelve modules**, more than half the kernel's production code and
+the only part that talks to a network. It decomposes as:
+
+| Piece | Lines | What it is |
+| --- | --- | --- |
+| `_forge_text`, `_forge_ledger` | 206 | Shared text sanitization and ledger/lock mechanics |
+| `github_write`, `gitlab_write` | 829 | The HTTP clients — auth, retry, mock mode |
+| `gate_reviewers`, `gate_reviewers_gitlab` | 890 | Read-only reviewer reporting |
+| `gate_status`, `github_status_write` | 803 | The one-way gate-status comment |
+| `reviewer_nudge` | 458 | The advisory reviewer comment |
+| `gate_issues`, `gate_issues_github`, `github_issue_write` | 2,736 | Issue creation and reconciliation |
+
+Both shared primitives landed first, since everything else builds on
+them. The sanitizers are pure enough to compare exhaustively: 48 inputs
+run through both implementations in one pass, compared on verdict *and*
+message. The ledger write is compared on bytes, because the Python
+kernel reads these files back for as long as both exist.
+
+One property of the ledger deserves carrying forward into the modules
+above it: **the lock is never broken on a timeout**. A stale lock means
+somebody's publication was interrupted, and resuming it automatically
+would create forge artifacts the interrupted run may already have
+created. Only an explicit `--break-lock` takes it.
 
 **`validate` landed in #292**, and it was the largest single read-only item:
 the overlay loader, `approval_source_policy`, the agent catalog, path
