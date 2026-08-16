@@ -63,6 +63,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return planCmd(registry, args[1:], stdout, stderr)
 	case "decide":
 		return decideCmd(registry, args[1:], stdout, stderr)
+	case "init":
+		return initCmd(registry, args[1:], stdout, stderr)
 	case "status":
 		return statusCmd(registry, args[1:], stdout, stderr)
 	case "invalidate":
@@ -87,6 +89,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stdout, "  validate [--root ROOT] Check a project's configuration and run records")
 		_, _ = fmt.Fprintln(stdout, "  plan --task-id ID --task TEXT         Create a dispatch plan and pending run record")
 		_, _ = fmt.Fprintln(stdout, "  decide --task-id ID --gate G --role R --decision D --actor-id A --evidence-uri U")
+		_, _ = fmt.Fprintln(stdout, "  init [--profile P] [--project-id ID] [--dry-run]  Initialize a project overlay")
 		_, _ = fmt.Fprintln(stdout, "  status --task-id ID                   Show a task's gate state (and advance it)")
 		_, _ = fmt.Fprintln(stdout, "  invalidate --task-id ID --earliest-gate G --reason R --actor A")
 		_, _ = fmt.Fprintln(stdout, "  reenter --task-id ID --earliest-gate G --reason R --actor A")
@@ -569,6 +572,86 @@ func statusCmd(registry *Registry, args []string, stdout, stderr io.Writer) int 
 	}
 
 	result, err := registry.Status(root, taskID)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(err))
+		return 1
+	}
+	_, _ = fmt.Fprint(stdout, RenderIndented(result))
+	return 0
+}
+
+// initCmd answers `init`.
+//
+// --repair and --apply are accepted so the argument shape matches the Python
+// parser's, and refused with the same message: repair is its own subcommand
+// here, and --apply outside it is a request nothing can honour.
+func initCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
+	request := InitRequest{Root: ".", Classification: "internal", Runner: "both"}
+	var extensions []string
+	repair, apply := false, false
+
+	for index := 0; index < len(args); index++ {
+		name, value, inline := strings.Cut(args[index], "=")
+		takeValue := func() (string, bool) {
+			if inline {
+				return value, true
+			}
+			if index+1 >= len(args) {
+				_, _ = fmt.Fprintf(stderr, "agentic-sdlc init: %s needs a value\n", name)
+				return "", false
+			}
+			index++
+			return args[index], true
+		}
+		switch name {
+		case "--root", "--profile", "--project-id", "--classification", "--runner", "--extension":
+			got, ok := takeValue()
+			if !ok {
+				return 2
+			}
+			switch name {
+			case "--root":
+				request.Root = got
+			case "--profile":
+				request.Profile = got
+			case "--project-id":
+				request.ProjectID = got
+			case "--classification":
+				request.Classification = got
+			case "--runner":
+				request.Runner = got
+			case "--extension":
+				extensions = append(extensions, got)
+			}
+		case "--dry-run":
+			request.DryRun = true
+		case "--repair":
+			repair = true
+		case "--apply":
+			apply = true
+		default:
+			_, _ = fmt.Fprintf(stderr, "agentic-sdlc init: unknown argument %q\n", args[index])
+			return 2
+		}
+	}
+	request.Extensions = extensions
+
+	if repair {
+		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(fmt.Errorf(
+			"init --repair is not ported to the Go kernel yet; use `agentic-sdlc repair`")))
+		return 1
+	}
+	if apply {
+		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(fmt.Errorf(
+			"--apply is only valid with init --repair")))
+		return 1
+	}
+	if code := rejectInvalidChoice(stderr, "init", "--runner", request.Runner,
+		[]string{"codex", "claude", "both"}); code != 0 {
+		return code
+	}
+
+	result, err := registry.Initialize(request)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(err))
 		return 1

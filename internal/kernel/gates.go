@@ -45,6 +45,20 @@ var ConditionalAuthorityRoles = map[string][]string{
 // AuthorityRoles is every role, required and conditional.
 var AuthorityRoles = mergeRoleMaps(RequiredAuthorityRoles, ConditionalAuthorityRoles)
 
+// AuthorityRoleOrder is the order these roles are written in, required before
+// conditional and each in lifecycle order.
+//
+// Not alphabetical, and not a Go map's iteration order. It is the order a
+// reader of authorities.json sees, and it groups the roles that always apply
+// ahead of the ones a project has to decide about -- which is the distinction
+// somebody filling the file in is working through.
+var AuthorityRoleOrder = []string{
+	"product_owner", "engineering_lead", "system_architect", "governance_lead",
+	"security_lead", "release_owner", "release_authority", "service_owner",
+	"data_control_owner", "human_key_owner", "uat_product_owner",
+	"implicated_security_lead", "implicated_governance_lead",
+}
+
 // RoleLabels are the human-facing names. A run record that relabels an
 // authority is refused: the label is what a reader sees when deciding whether
 // the right person approved, and two roles sharing a label (uat_product_owner
