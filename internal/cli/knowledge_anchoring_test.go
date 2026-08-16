@@ -34,7 +34,19 @@ import (
 func relocatedRoster(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "roster")
-	if err := os.MkdirAll(filepath.Join(root, "orchestration"), 0o755); err != nil {
+	for _, directory := range []string{"orchestration", "shared"} {
+		if err := os.MkdirAll(filepath.Join(root, directory), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A roster package declares its own layout, and the selector refuses a
+	// directory that does not. Writing the manifest is not incidental setup:
+	// it is what makes this fixture a roster package rather than a directory
+	// that happens to contain two files.
+	manifest := `{"schema_version": 1, "id": "relocated", "version": "0.0.1",` +
+		` "catalog": "catalog.yaml", "routing": "orchestration/routing.json",` +
+		` "role_root": ".", "shared_policy_root": "shared"}`
+	if err := os.WriteFile(filepath.Join(root, "roster.json"), []byte(manifest), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	here, err := os.Getwd()
