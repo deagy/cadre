@@ -337,15 +337,199 @@ func TestEveryCorpusFixtureNamesWhatItPins(t *testing.T) {
 	}
 }
 
-// Not covered here, deliberately, and it is the remaining blocker on deleting
-// the Python selector: `RenderPlanJSON`.
+// The recorded canonical plans, rebuilt against the lifecycle contract.
 //
-// Its gate today is test_select_differential.py, which runs both selectors on
-// one machine and compares bytes. The obvious replacement is
-// `select_golden.json`, which stores 25 plans in their fingerprint basis --
-// but those were recorded with a lifecycle kernel present
-// (`lifecycle_tracking: {"status": "integrated"}`), where this corpus forces
-// standalone mode so it resolves the same everywhere. Rebuilding them means
-// supplying the same lifecycle gates, which is real work rather than a
-// missing parameter. Until that lands, the Python differential is still the
-// only thing checking that the rendered bytes have not moved.
+// `select_golden.json` stores 25 plans in their *fingerprint basis* -- the
+// plan minus generated_at, dispatch_fingerprint and provenance, canonically
+// encoded. Consumers compare plans by that fingerprint, so a change to this
+// encoding is a change to every downstream comparison, and `RenderPlanJSON`
+// is what produces it.
+//
+// Its only gate was test_select_differential.py, running both selectors on one
+// machine and comparing bytes. That goes with the Python selector.
+//
+// These plans were recorded with a kernel present, where the corpus above
+// forces standalone -- so the contract has to be supplied. It is read from
+// `kernel/contracts/lifecycle-gates.json` as *data*, which is one of exactly
+// two couplings the kernel boundary permits; importing internal/kernel here
+// would be the other kind, and is what kernel_boundary_test.go exists to
+// prevent.
+
+func loadLifecycleContract(t *testing.T) *LifecycleContract {
+	t.Helper()
+	path := filepath.Join(selectorRepoRoot(t), "kernel", "contracts", "lifecycle-gates.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading the lifecycle contract: %v", err)
+	}
+	var contract LifecycleContract
+	if err := json.Unmarshal(data, &contract); err != nil {
+		t.Fatalf("parsing the lifecycle contract: %v", err)
+	}
+	if len(contract.Gates) == 0 {
+		t.Fatal("the contract declares no gates; this test would prove nothing")
+	}
+	return &contract
+}
+
+func TestTheRecordedCanonicalPlansStillRebuild(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(selectorRepoRoot(t), "roster", "orchestration",
+		"test", "select_golden.json"))
+	if err != nil {
+		t.Fatalf("reading the golden plans: %v", err)
+	}
+	var goldens map[string]struct {
+		Canonical map[string]any `json:"canonical"`
+	}
+	if err := json.Unmarshal(data, &goldens); err != nil {
+		t.Fatalf("parsing the golden plans: %v", err)
+	}
+	if len(goldens) == 0 {
+		t.Fatal("no golden plans; this test would prove nothing")
+	}
+
+	config := loadRoutingConfig(t)
+	catalog := loadCatalogIDs(t)
+	contract := loadLifecycleContract(t)
+	rosterRoot := filepath.Join(selectorRepoRoot(t), "roster")
+
+	for name, golden := range goldens {
+		t.Run(name, func(t *testing.T) {
+			inputs, ok := golden.Canonical["inputs"].(map[string]any)
+			if !ok {
+				t.Fatal("the golden plan records no inputs to rebuild from")
+			}
+			var changed []string
+			if raw, ok := inputs["changed_files"].([]any); ok {
+				for _, item := range raw {
+					if text, ok := item.(string); ok {
+						changed = append(changed, text)
+					}
+				}
+			}
+			var sources []string
+			if raw, ok := inputs["source_filter"].([]any); ok {
+				for _, item := range raw {
+					if text, ok := item.(string); ok {
+						sources = append(sources, text)
+					}
+				}
+			}
+			task, _ := inputs["task"].(string)
+			classification, _ := inputs["classification"].(string)
+			changedSource, _ := inputs["changed_file_source"].(string)
+			base, _ := inputs["base"].(string)
+			// The task id is a top-level field of the canonical form. Reading
+			// it out of the knowledge-context invocation instead worked for 24
+			// of 25 -- and not for `needs-triage`, which matches nothing and so
+			// has no knowledge requests to read it from.
+			taskID, _ := golden.Canonical["task_id"].(string)
+			_, knowledgeCLI := recordedInvocation(golden.Canonical)
+
+			plan, err := BuildDispatchPlan(config, PlanInput{
+				Task:              task,
+				TaskID:            taskID,
+				ChangedFiles:      changed,
+				Classification:    classification,
+				ChangedFileSource: changedSource,
+				Base:              base,
+				Sources:           sources,
+				RepositoryRoot:    "<REPO_ROOT>",
+			}, PlanOptions{
+				Catalog:      catalog,
+				Gates:        contract.Gates,
+				ContractVer:  contract.Version,
+				RosterRoot:   rosterRoot,
+				KnowledgeCLI: knowledgeCLI,
+			})
+			if err != nil {
+				t.Fatalf("rebuilding: %v", err)
+			}
+
+			// The same payload DispatchFingerprint hashes.
+			payload := map[string]any{}
+			excluded := setOf(FingerprintExcludedKeys)
+			for key, value := range plan {
+				if !excluded[key] {
+					payload[key] = value
+				}
+			}
+			rebuilt, err := CanonicalJSON(payload)
+			if err != nil {
+				t.Fatalf("canonicalising the rebuilt plan: %v", err)
+			}
+			recorded, err := CanonicalJSON(golden.Canonical)
+			if err != nil {
+				t.Fatalf("canonicalising the recorded plan: %v", err)
+			}
+			if string(rebuilt) != string(recorded) {
+				wasRecorded, wasRebuilt := firstDifference(string(recorded), string(rebuilt))
+				t.Errorf("the canonical form changed, so every dispatch_fingerprint "+
+					"downstream of it changed too.\nrecorded: %s\nrebuilt:  %s",
+					wasRecorded, wasRebuilt)
+			}
+		})
+	}
+}
+
+// firstDifference reports the two forms around the first byte they disagree
+// on, rather than dumping several kilobytes of identical JSON twice.
+func firstDifference(recorded, rebuilt string) (string, string) {
+	limit := len(recorded)
+	if len(rebuilt) < limit {
+		limit = len(rebuilt)
+	}
+	for index := 0; index < limit; index++ {
+		if recorded[index] != rebuilt[index] {
+			start := index - 90
+			if start < 0 {
+				start = 0
+			}
+			end := index + 130
+			return excerptAround(recorded, start, end), excerptAround(rebuilt, start, end)
+		}
+	}
+	return excerptAround(recorded, limit-90, len(recorded)),
+		excerptAround(rebuilt, limit-90, len(rebuilt))
+}
+
+func excerptAround(text string, start, end int) string {
+	if start < 0 {
+		start = 0
+	}
+	if end > len(text) {
+		end = len(text)
+	}
+	return text[start:end]
+}
+
+// recordedInvocation reads the knowledge CLI path back out of a golden plan's
+// first knowledge-context request. Returns "" for a plan that matched nothing,
+// which has no requests -- and needs none, since it invokes nothing.
+func recordedInvocation(canonical map[string]any) (taskID, knowledgeCLI string) {
+	context, ok := canonical["knowledge_context"].(map[string]any)
+	if !ok {
+		return "", ""
+	}
+	requests, ok := context["requests"].([]any)
+	if !ok || len(requests) == 0 {
+		return "", ""
+	}
+	request, _ := requests[0].(map[string]any)
+	invocation, _ := request["invocation"].(map[string]any)
+	rawArgs, _ := invocation["args"].([]any)
+	args := make([]string, 0, len(rawArgs))
+	for _, item := range rawArgs {
+		text, _ := item.(string)
+		args = append(args, text)
+	}
+	if len(args) > 0 {
+		knowledgeCLI = args[0]
+	}
+	for index, arg := range args {
+		if arg == "--task-id" && index+1 < len(args) {
+			taskID = args[index+1]
+		}
+	}
+	return taskID, knowledgeCLI
+}
