@@ -1,0 +1,353 @@
+{
+  "schema_version": 8,
+  "task_id": "RENDER-GOLDEN",
+  "generated_at": "2026-01-01T00:00:00.000Z",
+  "status": "ready",
+  "workflow": "new-service",
+  "inputs": {
+    "task": "Update the React navigation for keyboard accessibility",
+    "repository_root": "<REPO_ROOT>",
+    "base": null,
+    "changed_file_source": "explicit",
+    "changed_files": [
+      "frontend/src/Nav.tsx"
+    ],
+    "classification": "internal",
+    "source_filter": [
+      "deagy/cadre",
+      "proposed-knowledge"
+    ]
+  },
+  "matched_routes": [
+    {
+      "id": "frontend",
+      "reasons": {
+        "keyword_groups": [],
+        "keywords": [
+          "accessibility",
+          "react"
+        ],
+        "paths": [
+          {
+            "file": "frontend/src/Nav.tsx",
+            "pattern": "frontend/**"
+          },
+          {
+            "file": "frontend/src/Nav.tsx",
+            "pattern": "**/*.tsx"
+          }
+        ]
+      }
+    }
+  ],
+  "matched_risks": [],
+  "context_packs": [],
+  "agents": {
+    "primary": [
+      "frontend-engineer"
+    ],
+    "reviewers": [
+      "test-engineer",
+      "code-reviewer",
+      "accessibility-reviewer"
+    ],
+    "support": [
+      "product-intent-agent",
+      "requirements-agent",
+      "interaction-designer"
+    ]
+  },
+  "dispatch_disposition": {
+    "reason": "A primary and/or reviewer role was selected and can be dispatched as an accountable executor or independent reviewer.",
+    "status": "staffed"
+  },
+  "teams": [],
+  "lifecycle_tracking": {
+    "status": "integrated"
+  },
+  "required_quality_gates": [
+    {
+      "contributing_routes": [
+        "change-intake"
+      ],
+      "id": "G1",
+      "reason": "Intent lifecycle gate (intent phase).",
+      "required": true
+    },
+    {
+      "contributing_routes": [
+        "change-intake"
+      ],
+      "id": "G2",
+      "reason": "Requirements Baseline lifecycle gate (requirements phase).",
+      "required": true
+    },
+    {
+      "contributing_routes": [
+        "frontend"
+      ],
+      "id": "G3",
+      "reason": "Architecture lifecycle gate (architecture phase).",
+      "required": true
+    },
+    {
+      "contributing_routes": [
+        "lifecycle-sequence"
+      ],
+      "id": "G4",
+      "reason": "Required by the standalone lifecycle gate sequence.",
+      "required": true
+    },
+    {
+      "contributing_routes": [
+        "frontend"
+      ],
+      "id": "G5",
+      "reason": "Security and Crypto lifecycle gate (security-crypto phase).",
+      "required": true
+    },
+    {
+      "contributing_routes": [
+        "frontend"
+      ],
+      "id": "G6",
+      "reason": "Verification and Test lifecycle gate (verify phase).",
+      "required": true
+    },
+    {
+      "contributing_routes": [
+        "frontend"
+      ],
+      "id": "G7",
+      "reason": "Evidence lifecycle gate (evidence phase).",
+      "required": true
+    }
+  ],
+  "ignored_quality_gates": [],
+  "human_gates": [],
+  "knowledge_context": {
+    "classification": "internal",
+    "requests": [
+      {
+        "agent": "product-intent-agent",
+        "invocation": {
+          "args": [
+            "<KNOWLEDGE_CLI>",
+            "knowledge",
+            "search",
+            "--agent",
+            "product-intent-agent",
+            "--task-id",
+            "RENDER-GOLDEN",
+            "--classification",
+            "internal",
+            "--top",
+            "5",
+            "--json",
+            "--source",
+            "deagy/cadre",
+            "--source",
+            "proposed-knowledge",
+            "Task: Update the React navigation for keyboard accessibility. Retrieve approved product objectives, mission outcomes, scope decisions, constraints, classifications, environments, and success measures."
+          ],
+          "launcher": {
+            "minimum_version": "0.5.0",
+            "resolution": "platform-anchored",
+            "runtime": "cadre"
+          }
+        },
+        "query": "Task: Update the React navigation for keyboard accessibility. Retrieve approved product objectives, mission outcomes, scope decisions, constraints, classifications, environments, and success measures."
+      },
+      {
+        "agent": "requirements-agent",
+        "invocation": {
+          "args": [
+            "<KNOWLEDGE_CLI>",
+            "knowledge",
+            "search",
+            "--agent",
+            "requirements-agent",
+            "--task-id",
+            "RENDER-GOLDEN",
+            "--classification",
+            "internal",
+            "--top",
+            "5",
+            "--json",
+            "--source",
+            "deagy/cadre",
+            "--source",
+            "proposed-knowledge",
+            "Task: Update the React navigation for keyboard accessibility. Retrieve approved intent baselines, requirement decompositions, acceptance criteria, dependencies, control mappings, test obligations, and traceability decisions."
+          ],
+          "launcher": {
+            "minimum_version": "0.5.0",
+            "resolution": "platform-anchored",
+            "runtime": "cadre"
+          }
+        },
+        "query": "Task: Update the React navigation for keyboard accessibility. Retrieve approved intent baselines, requirement decompositions, acceptance criteria, dependencies, control mappings, test obligations, and traceability decisions."
+      },
+      {
+        "agent": "interaction-designer",
+        "invocation": {
+          "args": [
+            "<KNOWLEDGE_CLI>",
+            "knowledge",
+            "search",
+            "--agent",
+            "interaction-designer",
+            "--task-id",
+            "RENDER-GOLDEN",
+            "--classification",
+            "internal",
+            "--top",
+            "5",
+            "--json",
+            "--source",
+            "deagy/cadre",
+            "--source",
+            "proposed-knowledge",
+            "Task: Update the React navigation for keyboard accessibility. Retrieve prior UX decisions, interaction patterns, accessibility findings, and user journey/flow history."
+          ],
+          "launcher": {
+            "minimum_version": "0.5.0",
+            "resolution": "platform-anchored",
+            "runtime": "cadre"
+          }
+        },
+        "query": "Task: Update the React navigation for keyboard accessibility. Retrieve prior UX decisions, interaction patterns, accessibility findings, and user journey/flow history."
+      },
+      {
+        "agent": "frontend-engineer",
+        "invocation": {
+          "args": [
+            "<KNOWLEDGE_CLI>",
+            "knowledge",
+            "search",
+            "--agent",
+            "frontend-engineer",
+            "--task-id",
+            "RENDER-GOLDEN",
+            "--classification",
+            "internal",
+            "--top",
+            "5",
+            "--json",
+            "--source",
+            "deagy/cadre",
+            "--source",
+            "proposed-knowledge",
+            "Task: Update the React navigation for keyboard accessibility. Retrieve frontend implementation patterns, UX decisions, accessibility behavior, API contracts, browser security, and approved React or TypeScript conventions."
+          ],
+          "launcher": {
+            "minimum_version": "0.5.0",
+            "resolution": "platform-anchored",
+            "runtime": "cadre"
+          }
+        },
+        "query": "Task: Update the React navigation for keyboard accessibility. Retrieve frontend implementation patterns, UX decisions, accessibility behavior, API contracts, browser security, and approved React or TypeScript conventions."
+      },
+      {
+        "agent": "test-engineer",
+        "invocation": {
+          "args": [
+            "<KNOWLEDGE_CLI>",
+            "knowledge",
+            "search",
+            "--agent",
+            "test-engineer",
+            "--task-id",
+            "RENDER-GOLDEN",
+            "--classification",
+            "internal",
+            "--top",
+            "5",
+            "--json",
+            "--source",
+            "deagy/cadre",
+            "--source",
+            "proposed-knowledge",
+            "Task: Update the React navigation for keyboard accessibility. Retrieve Gherkin scenarios, regressions, failure cases, and quality history."
+          ],
+          "launcher": {
+            "minimum_version": "0.5.0",
+            "resolution": "platform-anchored",
+            "runtime": "cadre"
+          }
+        },
+        "query": "Task: Update the React navigation for keyboard accessibility. Retrieve Gherkin scenarios, regressions, failure cases, and quality history."
+      },
+      {
+        "agent": "code-reviewer",
+        "invocation": {
+          "args": [
+            "<KNOWLEDGE_CLI>",
+            "knowledge",
+            "search",
+            "--agent",
+            "code-reviewer",
+            "--task-id",
+            "RENDER-GOLDEN",
+            "--classification",
+            "internal",
+            "--top",
+            "5",
+            "--json",
+            "--source",
+            "deagy/cadre",
+            "--source",
+            "proposed-knowledge",
+            "Task: Update the React navigation for keyboard accessibility. Retrieve prior defects, coding conventions, exceptions, and relevant findings."
+          ],
+          "launcher": {
+            "minimum_version": "0.5.0",
+            "resolution": "platform-anchored",
+            "runtime": "cadre"
+          }
+        },
+        "query": "Task: Update the React navigation for keyboard accessibility. Retrieve prior defects, coding conventions, exceptions, and relevant findings."
+      },
+      {
+        "agent": "accessibility-reviewer",
+        "invocation": {
+          "args": [
+            "<KNOWLEDGE_CLI>",
+            "knowledge",
+            "search",
+            "--agent",
+            "accessibility-reviewer",
+            "--task-id",
+            "RENDER-GOLDEN",
+            "--classification",
+            "internal",
+            "--top",
+            "5",
+            "--json",
+            "--source",
+            "deagy/cadre",
+            "--source",
+            "proposed-knowledge",
+            "Task: Update the React navigation for keyboard accessibility. Retrieve prior accessibility findings, conformance target decisions, affected journeys, and assistive-technology constraints."
+          ],
+          "launcher": {
+            "minimum_version": "0.5.0",
+            "resolution": "platform-anchored",
+            "runtime": "cadre"
+          }
+        },
+        "query": "Task: Update the React navigation for keyboard accessibility. Retrieve prior accessibility findings, conformance target decisions, affected journeys, and assistive-technology constraints."
+      }
+    ],
+    "source_filter": [
+      "deagy/cadre",
+      "proposed-knowledge"
+    ],
+    "status": "planned"
+  },
+  "provenance": {
+    "git_commit_sha": "<SHA>",
+    "git_dirty_paths": []
+  },
+  "dispatch_fingerprint": "sha256:3f946bbbd9c4d0a3f6e0181ddb7703ee798edeeec2257498d5b9e33ba6e14bc9"
+}
