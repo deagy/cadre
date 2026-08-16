@@ -69,6 +69,22 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return createGateIssuesCmd(registry, args[1:], stdout, stderr)
 	case "create-github-gate-issues":
 		return createGithubGateIssuesCmd(registry, args[1:], stdout, stderr)
+	case "approve-from-github":
+		return approveFromGithubCmd(registry, args[1:], stdout, stderr)
+	case "approve-from-github-pr":
+		return approveFromGithubPRCmd(registry, args[1:], stdout, stderr)
+	case "approve-from-gitlab":
+		return approveFromGitlabCmd(registry, args[1:], stdout, stderr)
+	case "approve-from-gitlab-mr":
+		return approveFromGitlabMRCmd(registry, args[1:], stdout, stderr)
+	case "link-intent-from-gitlab-issue":
+		return linkSourceIssueCmd(registry, args[0], "G1", ForgeGitLab, args[1:], stdout, stderr)
+	case "link-requirements-from-gitlab-issue":
+		return linkSourceIssueCmd(registry, args[0], "G2", ForgeGitLab, args[1:], stdout, stderr)
+	case "link-intent-from-github-issue":
+		return linkSourceIssueCmd(registry, args[0], "G1", ForgeGitHub, args[1:], stdout, stderr)
+	case "link-requirements-from-github-issue":
+		return linkSourceIssueCmd(registry, args[0], "G2", ForgeGitHub, args[1:], stdout, stderr)
 	case "publish-reviewer-nudge":
 		return publishReviewerNudgeCmd(registry, args[1:], stdout, stderr)
 	case "publish-gate-status":
@@ -107,6 +123,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stdout, "  decide --task-id ID --gate G --role R --decision D --actor-id A --evidence-uri U")
 		_, _ = fmt.Fprintln(stdout, "  create-gate-issues --task-id ID --project-path P --as-bot B [--apply]")
 		_, _ = fmt.Fprintln(stdout, "  create-github-gate-issues --task-id ID --repo R --as-bot B [--apply]")
+		_, _ = fmt.Fprintln(stdout, "  approve-from-github --task-id ID --gate G --role R --repo R --pr N --review-id N --reviewer-login L --commit-sha S")
+		_, _ = fmt.Fprintln(stdout, "  approve-from-github-pr --task-id ID --gate G --role R --repo R --pr N")
+		_, _ = fmt.Fprintln(stdout, "  approve-from-gitlab --task-id ID --gate G --role R --project-path P --mr-iid N --approval-id A --approver-username U --commit-sha S")
+		_, _ = fmt.Fprintln(stdout, "  approve-from-gitlab-mr --task-id ID --gate G --role R --project-path P --mr-iid N")
+		_, _ = fmt.Fprintln(stdout, "  link-intent-from-gitlab-issue / link-requirements-from-gitlab-issue --task-id ID --role R --project-path P --issue-iid N")
+		_, _ = fmt.Fprintln(stdout, "  link-intent-from-github-issue / link-requirements-from-github-issue --task-id ID --role R --repo R --issue-number N")
 		_, _ = fmt.Fprintln(stdout, "  publish-gate-status --task-id ID --forge F --as-bot B [--apply]")
 		_, _ = fmt.Fprintln(stdout, "  publish-reviewer-nudge --task-id ID --repo R --pr N --as-bot B [--apply]")
 		_, _ = fmt.Fprintln(stdout, "  request-gate-reviewers --task-id ID --repo R --pr N --as-bot B")
@@ -185,7 +207,7 @@ func introspectionCmd(registry *Registry, args []string, stdout, stderr io.Write
 		}
 		got := ""
 		if len(positional) > 0 {
-			got = fmt.Sprintf(" %q", positional[0])
+			got = fmt.Sprintf(" %s", pythonRepr(positional[0]))
 		}
 		_, _ = fmt.Fprintf(stderr,
 			"agentic-sdlc %s: error: argument action: invalid choice%s (choose from %s)\n",
@@ -576,8 +598,8 @@ func rejectInvalidChoice(stderr io.Writer, command, flag, value string, allowed 
 		}
 	}
 	_, _ = fmt.Fprintf(stderr,
-		"agentic-sdlc %s: error: argument %s: invalid choice: %q (choose from %s)\n",
-		command, flag, value, strings.Join(allowed, ", "))
+		"agentic-sdlc %s: error: argument %s: invalid choice: %s (choose from %s)\n",
+		command, flag, pythonRepr(value), strings.Join(allowed, ", "))
 	return 2
 }
 
@@ -760,8 +782,8 @@ func requestGateReviewersCmd(registry *Registry, args []string, stdout, stderr i
 	number, err := strconv.Atoi(pullRequest)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr,
-			"agentic-sdlc request-gate-reviewers: error: argument --pr: invalid int value: %q\n",
-			pullRequest)
+			"agentic-sdlc request-gate-reviewers: error: argument --pr: invalid int value: %s\n",
+			pythonRepr(pullRequest))
 		return 2
 	}
 	request.PullRequest = number
@@ -825,8 +847,8 @@ func requestGateReviewersGitLabCmd(registry *Registry, args []string, stdout, st
 	iid, err := strconv.Atoi(mergeRequest)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr,
-			"agentic-sdlc request-gate-reviewers-gitlab: error: argument --mr-iid: invalid int value: %q\n",
-			mergeRequest)
+			"agentic-sdlc request-gate-reviewers-gitlab: error: argument --mr-iid: invalid int value: %s\n",
+			pythonRepr(mergeRequest))
 		return 2
 	}
 	request.MergeRequestIID = iid
@@ -909,8 +931,8 @@ func publishGateStatusCmd(registry *Registry, args []string, stdout, stderr io.W
 		parsed, err := strconv.Atoi(numeric.text)
 		if err != nil {
 			_, _ = fmt.Fprintf(stderr,
-				"agentic-sdlc publish-gate-status: error: argument %s: invalid int value: %q\n",
-				numeric.name, numeric.text)
+				"agentic-sdlc publish-gate-status: error: argument %s: invalid int value: %s\n",
+				numeric.name, pythonRepr(numeric.text))
 			return 2
 		}
 		*numeric.value = parsed
@@ -994,7 +1016,7 @@ func publishReviewerNudgeCmd(registry *Registry, args []string, stdout, stderr i
 	number, err := strconv.Atoi(pullRequest)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr,
-			"agentic-sdlc publish-reviewer-nudge: error: argument --pr: invalid int value: %q\n",
+			"agentic-sdlc publish-reviewer-nudge: error: argument --pr: invalid int value: %s\n",
 			pullRequest)
 		return 2
 	}
