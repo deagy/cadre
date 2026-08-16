@@ -1,0 +1,136 @@
+{
+  "product_owner": {
+    "status": "unknown",
+    "assignee": null,
+    "applicability": "applicable",
+    "rationale": null,
+    "evidence_reference": null,
+    "gates": [
+      "G1",
+      "G2",
+      "G6"
+    ]
+  },
+  "engineering_lead": {
+    "status": "unknown",
+    "assignee": null,
+    "applicability": "applicable",
+    "rationale": null,
+    "evidence_reference": null,
+    "gates": [
+      "G2",
+      "G6"
+    ]
+  },
+  "system_architect": {
+    "status": "unknown",
+    "assignee": null,
+    "applicability": "applicable",
+    "rationale": null,
+    "evidence_reference": null,
+    "gates": [
+      "G3"
+    ]
+  },
+  "governance_lead": {
+    "status": "unknown",
+    "assignee": null,
+    "applicability": "applicable",
+    "rationale": null,
+    "evidence_reference": null,
+    "gates": [
+      "G4"
+    ]
+  },
+  "security_lead": {
+    "status": "unknown",
+    "assignee": null,
+    "applicability": "applicable",
+    "rationale": null,
+    "evidence_reference": null,
+    "gates": [
+      "G5"
+    ]
+  },
+  "release_owner": {
+    "status": "unknown",
+    "assignee": null,
+    "applicability": "applicable",
+    "rationale": null,
+    "evidence_reference": null,
+    "gates": [
+      "G7",
+      "G8"
+    ]
+  },
+  "release_authority": {
+    "status": "unknown",
+    "assignee": null,
+    "applicability": "applicable",
+    "rationale": null,
+    "evidence_reference": null,
+    "gates": [
+      "G9"
+    ]
+  },
+  "service_owner": {
+    "status": "unknown",
+    "assignee": null,
+    "applicability": "applicable",
+    "rationale": null,
+    "evidence_reference": null,
+    "gates": [
+      "G10"
+    ]
+  },
+  "data_control_owner": {
+    "status": "unknown",
+    "assignee": null,
+    "applicability": "unknown",
+    "rationale": null,
+    "evidence_reference": null,
+    "gates": [
+      "G4"
+    ]
+  },
+  "human_key_owner": {
+    "status": "unknown",
+    "assignee": null,
+    "applicability": "unknown",
+    "rationale": null,
+    "evidence_reference": null,
+    "gates": [
+      "G5"
+    ]
+  },
+  "uat_product_owner": {
+    "status": "unknown",
+    "assignee": null,
+    "applicability": "unknown",
+    "rationale": null,
+    "evidence_reference": null,
+    "gates": [
+      "G6"
+    ]
+  },
+  "implicated_security_lead": {
+    "status": "unknown",
+    "assignee": null,
+    "applicability": "unknown",
+    "rationale": null,
+    "evidence_reference": null,
+    "gates": [
+      "G10"
+    ]
+  },
+  "implicated_governance_lead": {
+    "status": "unknown",
+    "assignee": null,
+    "applicability": "unknown",
+    "rationale": null,
+    "evidence_reference": null,
+    "gates": [
+      "G10"
+    ]
+  }
+}
