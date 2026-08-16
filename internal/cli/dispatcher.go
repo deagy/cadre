@@ -110,12 +110,15 @@ func Usage(subcommands []Subcommand) string {
 	fmt.Fprintf(&b, "  %-16s %s\n", "help", "Show this message")
 	b.WriteString("\n")
 	b.WriteString("Each subcommand's own --help documents its arguments, e.g. `cadre sdlc plan --help`.\n\n")
+	// This described a subprocess handing CADRE_INTERACTIVE=1 to settings.py.
+	// There is no subprocess and no Python -- the settings resolver is
+	// internal/config -- but the flag and its terminal requirement are
+	// unchanged, so only the mechanism needed rewriting.
 	fmt.Fprintf(&b, "`%s`, given as the leading argument before the subcommand name (e.g. "+
-		"`cadre %s select ...`), opts the dispatched subcommand into "+
-		"roster/shared/src/settings.py's interactive configuration prompt (CADRE_INTERACTIVE=1, "+
-		"passed via an explicit subprocess env= rather than mutating this process's own "+
-		"environment) -- only honored when stdin/stdout are both a real terminal; a value entered "+
-		"is offered a write to the project-local or user-global cadre config file.\n", InteractiveFlag, InteractiveFlag)
+		"`cadre %s select ...`), opts the dispatched subcommand into the settings resolver's "+
+		"interactive configuration prompt -- only honored when stdin/stdout are both a real "+
+		"terminal; a value entered is offered a write to the project-local or user-global "+
+		"cadre config file.\n", InteractiveFlag, InteractiveFlag)
 	b.WriteString("For `init`, this is distinct from `cadre init --interactive`, which starts the " +
 		"shared-policy overlay questionnaire; use both flags when both prompt flows are needed.")
 	return b.String()
