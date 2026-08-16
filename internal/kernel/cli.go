@@ -65,6 +65,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return planCmd(registry, args[1:], stdout, stderr)
 	case "decide":
 		return decideCmd(registry, args[1:], stdout, stderr)
+	case "publish-reviewer-nudge":
+		return publishReviewerNudgeCmd(registry, args[1:], stdout, stderr)
 	case "publish-gate-status":
 		return publishGateStatusCmd(registry, args[1:], stdout, stderr)
 	case "request-gate-reviewers-gitlab":
@@ -100,6 +102,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stdout, "  plan --task-id ID --task TEXT         Create a dispatch plan and pending run record")
 		_, _ = fmt.Fprintln(stdout, "  decide --task-id ID --gate G --role R --decision D --actor-id A --evidence-uri U")
 		_, _ = fmt.Fprintln(stdout, "  publish-gate-status --task-id ID --forge F --as-bot B [--apply]")
+		_, _ = fmt.Fprintln(stdout, "  publish-reviewer-nudge --task-id ID --repo R --pr N --as-bot B [--apply]")
 		_, _ = fmt.Fprintln(stdout, "  request-gate-reviewers --task-id ID --repo R --pr N --as-bot B")
 		_, _ = fmt.Fprintln(stdout, "  request-gate-reviewers-gitlab --task-id ID --project-path P --mr-iid N --as-bot B")
 		_, _ = fmt.Fprintln(stdout, "  repair [--runner R] [--apply]         Inspect or safely repair an initialization")
@@ -947,5 +950,64 @@ func parseFlagsWithSwitches(
 		index++
 		*target = args[index]
 	}
+	return 0
+}
+
+// publishReviewerNudgeCmd answers `publish-reviewer-nudge`.
+func publishReviewerNudgeCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
+	request := ReviewerNudgeRequest{Root: "."}
+	var pullRequest, gates string
+	fields := map[string]*string{
+		"--root": &request.Root, "--task-id": &request.TaskID, "--repo": &request.Repo,
+		"--pr": &pullRequest, "--as-bot": &request.AsBot, "--gates": &gates,
+		"--allow-classification": &request.AllowClassification,
+	}
+	flags := map[string]*bool{
+		"--apply": &request.Apply, "--break-lock": &request.BreakLock,
+		"--i-know-this-is-mocked": &request.KnowinglyMocked,
+	}
+	if code := parseFlagsWithSwitches("publish-reviewer-nudge", args, fields, flags, stderr); code != 0 {
+		return code
+	}
+
+	var missing []string
+	for _, required := range []struct{ name, value string }{
+		{"--task-id", request.TaskID}, {"--repo", request.Repo},
+		{"--pr", pullRequest}, {"--as-bot", request.AsBot},
+	} {
+		if required.value == "" {
+			missing = append(missing, required.name)
+		}
+	}
+	if len(missing) > 0 {
+		_, _ = fmt.Fprintf(stderr,
+			"agentic-sdlc publish-reviewer-nudge: error: the following arguments are required: %s\n",
+			strings.Join(missing, ", "))
+		return 2
+	}
+	number, err := strconv.Atoi(pullRequest)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr,
+			"agentic-sdlc publish-reviewer-nudge: error: argument --pr: invalid int value: %q\n",
+			pullRequest)
+		return 2
+	}
+	request.PullRequest = number
+	for _, gate := range strings.Split(gates, ",") {
+		if trimmed := strings.TrimSpace(gate); trimmed != "" {
+			request.Gates = append(request.Gates, trimmed)
+		}
+	}
+
+	summary, err := registry.PublishReviewerNudge(request)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(err))
+		var blocked *ReviewerNudgeBlocked
+		if errors.As(err, &blocked) {
+			return 2
+		}
+		return 1
+	}
+	_, _ = fmt.Fprint(stdout, RenderIndented(summary))
 	return 0
 }
