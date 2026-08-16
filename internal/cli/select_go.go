@@ -90,8 +90,18 @@ func runSelectGo(args []string) int {
 		return 1
 	}
 
-	catalogPath := filepath.Join(rosterRoot, "catalog.yaml")
-	routingPath := filepath.Join(rosterRoot, "orchestration", "routing.json")
+	// The roster package declares where its catalog and routing live. Joining
+	// the paths directly works for exactly one roster -- this repository's,
+	// whose manifest happens to declare them -- and refusing a package with no
+	// manifest is deliberate: falling back to this layout would let a
+	// directory that is not a roster package silently dispatch Cadre's roles.
+	manifest, err := selector.LoadRosterManifest(rosterRoot)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "roster package is unusable: %s\n", err)
+		return 1
+	}
+	catalogPath := manifest.Catalog
+	routingPath := manifest.Routing
 
 	catalogRaw, err := os.ReadFile(catalogPath)
 	if err != nil {
