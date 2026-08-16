@@ -94,17 +94,21 @@ class TestRosterNeverImportsTheKernel(unittest.TestCase):
             + "\n".join(offenders),
         )
 
-    def test_kernel_executable_resolution_stays_in_two_sanctioned_places(self) -> None:
-        """Exactly two modules may resolve a kernel executable.
+    def test_kernel_executable_resolution_stays_in_one_sanctioned_place(self) -> None:
+        """Exactly one Python module may resolve a kernel executable.
 
         `settings.py` owns the `agentic_sdlc.bin_path` field itself (env var
-        > config > computed default), and `agentic_sdlc_contracts.py` is the
-        single caller that turns that into a subprocess. Spreading
-        resolution beyond those two makes the boundary unauditable and easy
-        to widen by accident.
+        > config > computed default). Spreading resolution beyond it makes
+        the boundary unauditable and easy to widen by accident.
+
+        This named two modules until `agentic_sdlc_contracts.py` -- the
+        single caller that turned that path into a subprocess -- was deleted
+        with the rest of the dead orchestration Python. The subprocess side
+        is Go now, and internal/kernel/kernel_boundary_test.go guards it
+        there. Narrowing the set was a decision rather than a quiet edit
+        because this assertion refused to pass without one.
         """
         sanctioned = {
-            ROSTER_ROOT / "orchestration" / "src" / "agentic_sdlc_contracts.py",
             ROSTER_ROOT / "shared" / "src" / "settings.py",
         }
         for path in sanctioned:
