@@ -216,6 +216,13 @@ func writeIndented(builder *strings.Builder, value any, depth int) {
 func writeIndentedObject(
 	builder *strings.Builder, keys []string, valueOf func(string) any, depth int,
 ) {
+	writeIndentedObjectWith(builder, keys, valueOf, depth, writeIndented)
+}
+
+func writeIndentedObjectWith(
+	builder *strings.Builder, keys []string, valueOf func(string) any, depth int,
+	writeValue func(*strings.Builder, any, int),
+) {
 	if len(keys) == 0 {
 		builder.WriteString("{}")
 		return
@@ -228,7 +235,7 @@ func writeIndentedObject(
 		writeIndent(builder, depth+1)
 		canonicaljson.WriteString(builder, key)
 		builder.WriteString(": ")
-		writeIndented(builder, valueOf(key), depth+1)
+		writeValue(builder, valueOf(key), depth+1)
 	}
 	builder.WriteByte('\n')
 	writeIndent(builder, depth)
@@ -246,4 +253,53 @@ func sortedKeys(value map[string]any) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// sortedIndentedJSON renders a value as Python's
+// json.dumps(value, indent=2, sort_keys=True) does.
+//
+// The sorted counterpart to RenderIndented, for the ledgers: they are
+// rewritten in full on every publication, so a stable key order is what makes
+// their diffs readable. Everything else this kernel writes preserves the
+// order its author gave it.
+func sortedIndentedJSON(value any) ([]byte, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	decoded, err := DecodeOrdered(encoded)
+	if err != nil {
+		return nil, err
+	}
+	var builder strings.Builder
+	writeSortedIndented(&builder, decoded, 0)
+	return []byte(builder.String()), nil
+}
+
+func writeSortedIndented(builder *strings.Builder, value any, depth int) {
+	switch typed := value.(type) {
+	case *orderedObject:
+		// The one place an ordered object is deliberately re-sorted.
+		writeIndentedObjectWith(builder, sortedKeys(typed.values), func(key string) any {
+			return typed.values[key]
+		}, depth, writeSortedIndented)
+	case []any:
+		if len(typed) == 0 {
+			builder.WriteString("[]")
+			return
+		}
+		builder.WriteString("[\n")
+		for index, element := range typed {
+			if index > 0 {
+				builder.WriteString(",\n")
+			}
+			writeIndent(builder, depth+1)
+			writeSortedIndented(builder, element, depth+1)
+		}
+		builder.WriteByte('\n')
+		writeIndent(builder, depth)
+		builder.WriteByte(']')
+	default:
+		writeIndented(builder, value, depth)
+	}
 }

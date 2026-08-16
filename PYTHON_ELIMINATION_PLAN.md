@@ -434,10 +434,17 @@ the only part that talks to a network. It decomposes as:
 | `reviewer_nudge` | 458 | The advisory reviewer comment |
 | `gate_issues`, `gate_issues_github`, `github_issue_write` | 2,736 | Issue creation and reconciliation |
 
-The sanitizers landed first, since everything else composes text through
-them and they are pure enough to compare exhaustively: 48 inputs run
-through both implementations in one pass, compared on verdict *and*
-message.
+Both shared primitives landed first, since everything else builds on
+them. The sanitizers are pure enough to compare exhaustively: 48 inputs
+run through both implementations in one pass, compared on verdict *and*
+message. The ledger write is compared on bytes, because the Python
+kernel reads these files back for as long as both exist.
+
+One property of the ledger deserves carrying forward into the modules
+above it: **the lock is never broken on a timeout**. A stale lock means
+somebody's publication was interrupted, and resuming it automatically
+would create forge artifacts the interrupted run may already have
+created. Only an explicit `--break-lock` takes it.
 
 **`validate` landed in #292**, and it was the largest single read-only item:
 the overlay loader, `approval_source_policy`, the agent catalog, path
