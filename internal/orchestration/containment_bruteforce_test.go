@@ -38,6 +38,10 @@ var containmentPatterns = []string{
 	"/a", "a/", "**/a/b", "?/?", "a/*", "a/*/**",
 	// Mixed case, so the oracle exercises the literal case-folding path.
 	"A", "A/**", "**/A.a", "*.A", "Ab/*",
+	// Windows spellings, which normalise to a separator before tokenising.
+	// The enumerated candidates stay POSIX-spelled -- the matcher normalises
+	// the pattern, and these exist to check the pattern side.
+	`a\b`, `a\**`, `**\a`,
 }
 
 // bruteForceOracle decides containment by enumerating candidates, using the
@@ -211,7 +215,9 @@ func TestTheOraclesAlphabetReachesEveryConstructThePatternsUse(t *testing.T) {
 	// them. Cheap to state, and the kind of thing that rots when a pattern is
 	// added later.
 	for _, pattern := range containmentPatterns {
-		for _, char := range pattern {
+		// A backslash is normalised to a separator before tokenising, so it
+		// never reaches the alphabet as itself.
+		for _, char := range strings.ReplaceAll(pattern, `\`, "/") {
 			if char == '*' || char == '?' {
 				continue
 			}

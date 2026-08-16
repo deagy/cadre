@@ -112,6 +112,16 @@ type globToken struct {
 // the regexp.Regexp itself. Returns ok=false if the pattern contains a `[`
 // (a character class) -- see package doc.
 func tokenizeGlobForContainment(glob string) ([]globToken, bool) {
+	// Backslashes become separators first, exactly as iterGlobTokens does, so
+	// a Windows-style pattern tokenises identically to its POSIX spelling.
+	//
+	// Without this, `foo\bar/**` and `foo/bar/**` -- which the matcher compiles
+	// to the byte-identical regex `(?i)^foo/bar/.*$` -- came back
+	// not-contained. A pattern was not contained by itself, which is the silent
+	// direction: the linter misses a rule whose exclude_paths really do swallow
+	// its own include and reports nothing.
+	glob = strings.ReplaceAll(glob, `\`, "/")
+
 	var tokens []globToken
 	for i := 0; i < len(glob); i++ {
 		c := glob[i]
