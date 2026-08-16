@@ -9,16 +9,45 @@ import (
 	"strings"
 )
 
+// globalPrefix is the arguments before the subcommand.
+//
+// Only these are the top-level parser's: `detect --version` is an unknown
+// argument to the `detect` subparser in Python, not a version request, and it
+// has to stay one here.
+func globalPrefix(args []string) []string {
+	for index := 0; index < len(args); index++ {
+		switch {
+		case args[index] == "--provider":
+			index++
+		case strings.HasPrefix(args[index], "--provider="), strings.HasPrefix(args[index], "-"):
+		default:
+			return args[:index]
+		}
+	}
+	return args
+}
+
 // Run dispatches one kernel CLI invocation.
 //
-// Only `show-contract` is ported so far. Everything else returns the
-// not-implemented exit code rather than silently succeeding: a kernel that
-// exits 0 for a subcommand it does not implement would report gate approvals
+// Every subcommand the Python parser declares is answered here. The
+// not-implemented branch at the bottom is kept for the reverse case -- a
+// subcommand added to the Python kernel and not here -- because a kernel that
+// exits 0 for something it does not implement would report gate approvals
 // that never happened.
 func Run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		_, _ = fmt.Fprintln(stderr, "usage: agentic-sdlc <subcommand> [args...]")
 		return 2
+	}
+
+	// --version before any provider is loaded, because argparse answers it
+	// during parsing: `--provider nonsense.json --version` prints the version
+	// and exits 0 rather than failing on the manifest.
+	for _, arg := range globalPrefix(args) {
+		if arg == "--version" {
+			_, _ = fmt.Fprintln(stdout, Version)
+			return 0
+		}
 	}
 
 	// --provider is a global flag, consumed before the subcommand, exactly as
@@ -544,8 +573,14 @@ func upgradeCmd(registry *Registry, args []string, stdout, stderr io.Writer) int
 		case strings.HasPrefix(args[index], "--root="):
 			root = strings.TrimPrefix(args[index], "--root=")
 		case args[index] == "--check":
+			if apply {
+				return rejectExclusive(stderr, "upgrade", "--check", "--apply")
+			}
 			check = true
 		case args[index] == "--apply":
+			if check {
+				return rejectExclusive(stderr, "upgrade", "--apply", "--check")
+			}
 			apply = true
 		default:
 			_, _ = fmt.Fprintln(stderr,
@@ -566,6 +601,29 @@ func upgradeCmd(registry *Registry, args []string, stdout, stderr io.Writer) int
 	}
 	_, _ = fmt.Fprint(stdout, RenderIndented(result))
 	return 0
+}
+
+// exclusiveFlags refuses two flags from one mutually exclusive group.
+//
+// argparse names the flag seen *second* as the offender and the one seen first
+// as what it conflicts with, so the order the operator typed them in is part
+// of the message. Repeating a single flag is fine, in both.
+type exclusiveFlags struct{ seen string }
+
+// mark records a flag, returning the conflicting one if there is a clash.
+func (e *exclusiveFlags) mark(flag string) (string, bool) {
+	if e.seen != "" && e.seen != flag {
+		return e.seen, false
+	}
+	e.seen = flag
+	return "", true
+}
+
+func rejectExclusive(stderr io.Writer, command, flag, conflict string) int {
+	_, _ = fmt.Fprintf(stderr,
+		"agentic-sdlc %s: error: argument %s: not allowed with argument %s\n",
+		command, flag, conflict)
+	return 2
 }
 
 // parseFlags reads `--name value` and `--name=value` into the named targets.
@@ -633,7 +691,7 @@ func statusCmd(registry *Registry, args []string, stdout, stderr io.Writer) int 
 func initCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
 	request := InitRequest{Root: ".", Classification: "internal", Runner: "both"}
 	var extensions []string
-	repair, apply := false, false
+	repair, apply, force := false, false, false
 
 	for index := 0; index < len(args); index++ {
 		name, value, inline := strings.Cut(args[index], "=")
@@ -669,7 +727,19 @@ func initCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
 				extensions = append(extensions, got)
 			}
 		case "--dry-run":
+			if force {
+				return rejectExclusive(stderr, "init", "--dry-run", "--force")
+			}
 			request.DryRun = true
+		case "--force":
+			// Declared by the Python parser and documented there as reserved:
+			// init never overwrites, with it or without it. Accepted rather
+			// than rejected because a script passing it should not start
+			// failing on the day the Go kernel takes over.
+			if request.DryRun {
+				return rejectExclusive(stderr, "init", "--force", "--dry-run")
+			}
+			force = true
 		case "--repair":
 			repair = true
 		case "--apply":
@@ -680,6 +750,7 @@ func initCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	request.Extensions = extensions
+	_ = force // reserved by the Python parser; see --force above
 
 	if repair {
 		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(fmt.Errorf(
@@ -892,10 +963,16 @@ func publishGateStatusCmd(registry *Registry, args []string, stdout, stderr io.W
 		"--project-path": &request.ProjectPath, "--mr-iid": &mergeRequest,
 	}
 	flags := map[string]*bool{
-		"--apply": &request.Apply, "--break-lock": &request.BreakLock,
+		// --dry-run is the explicit spelling of the default, so it has
+		// somewhere to land and nothing to change. --apply is the flag that
+		// makes a run do anything, and the group below is what stops an
+		// operator asking for both.
+		"--dry-run": new(bool),
+		"--apply":   &request.Apply, "--break-lock": &request.BreakLock,
 		"--i-know-this-is-mocked": &request.KnowinglyMocked,
 	}
-	if code := parseFlagsWithSwitches("publish-gate-status", args, fields, flags, stderr); code != 0 {
+	if code := parseFlagsWithGroups("publish-gate-status", args, fields, flags,
+		[][]string{{"--dry-run", "--apply"}}, stderr); code != 0 {
 		return code
 	}
 
@@ -951,13 +1028,31 @@ func publishGateStatusCmd(registry *Registry, args []string, stdout, stderr io.W
 	return 0
 }
 
-// parseFlagsWithSwitches reads valued flags and boolean switches together.
-func parseFlagsWithSwitches(
+// parseFlagsWithGroups reads `--name value`, `--name=value` and bare switches,
+// refusing two flags from the same mutually exclusive group.
+//
+// Groups may be nil for a command that declares none.
+func parseFlagsWithGroups(
 	command string, args []string, fields map[string]*string, switches map[string]*bool,
-	stderr io.Writer,
+	groups [][]string, stderr io.Writer,
 ) int {
+	// One tracker per group, indexed by every flag in it, so a flag's group
+	// is found by the name the operator typed.
+	trackers := map[string]*exclusiveFlags{}
+	for _, group := range groups {
+		tracker := &exclusiveFlags{}
+		for _, flag := range group {
+			trackers[flag] = tracker
+		}
+	}
+
 	for index := 0; index < len(args); index++ {
 		name, value, inline := strings.Cut(args[index], "=")
+		if tracker, grouped := trackers[name]; grouped {
+			if conflict, ok := tracker.mark(name); !ok {
+				return rejectExclusive(stderr, command, name, conflict)
+			}
+		}
 		if flag, isSwitch := switches[name]; isSwitch {
 			*flag = true
 			continue
@@ -991,10 +1086,16 @@ func publishReviewerNudgeCmd(registry *Registry, args []string, stdout, stderr i
 		"--allow-classification": &request.AllowClassification,
 	}
 	flags := map[string]*bool{
-		"--apply": &request.Apply, "--break-lock": &request.BreakLock,
+		// --dry-run is the explicit spelling of the default, so it has
+		// somewhere to land and nothing to change. --apply is the flag that
+		// makes a run do anything, and the group below is what stops an
+		// operator asking for both.
+		"--dry-run": new(bool),
+		"--apply":   &request.Apply, "--break-lock": &request.BreakLock,
 		"--i-know-this-is-mocked": &request.KnowinglyMocked,
 	}
-	if code := parseFlagsWithSwitches("publish-reviewer-nudge", args, fields, flags, stderr); code != 0 {
+	if code := parseFlagsWithGroups("publish-reviewer-nudge", args, fields, flags,
+		[][]string{{"--dry-run", "--apply"}}, stderr); code != 0 {
 		return code
 	}
 
@@ -1056,13 +1157,19 @@ func createGithubGateIssuesCmd(registry *Registry, args []string, stdout, stderr
 		"--allow-classification": &request.AllowClassification,
 	}
 	flags := map[string]*bool{
-		"--apply": &request.Apply, "--include-scope": &request.IncludeScope,
+		// --dry-run is the explicit spelling of the default, so it has
+		// somewhere to land and nothing to change. --apply is the flag that
+		// makes a run do anything, and the group below is what stops an
+		// operator asking for both.
+		"--dry-run": new(bool),
+		"--apply":   &request.Apply, "--include-scope": &request.IncludeScope,
 		"--reconcile-assignees":   &request.ReconcileAssignees,
 		"--allow-public-repo":     &request.AllowPublicRepo,
 		"--break-lock":            &request.BreakLock,
 		"--i-know-this-is-mocked": &request.KnowinglyMocked,
 	}
-	if code := parseFlagsWithSwitches("create-github-gate-issues", args, fields, flags, stderr); code != 0 {
+	if code := parseFlagsWithGroups("create-github-gate-issues", args, fields, flags,
+		[][]string{{"--dry-run", "--apply"}}, stderr); code != 0 {
 		return code
 	}
 
@@ -1118,12 +1225,18 @@ func createGateIssuesCmd(registry *Registry, args []string, stdout, stderr io.Wr
 		"--link-type":            &request.LinkType,
 	}
 	flags := map[string]*bool{
-		"--apply": &request.Apply, "--include-scope": &request.IncludeScope,
+		// --dry-run is the explicit spelling of the default, so it has
+		// somewhere to land and nothing to change. --apply is the flag that
+		// makes a run do anything, and the group below is what stops an
+		// operator asking for both.
+		"--dry-run": new(bool),
+		"--apply":   &request.Apply, "--include-scope": &request.IncludeScope,
 		"--reconcile-assignees":   &request.ReconcileAssignees,
 		"--break-lock":            &request.BreakLock,
 		"--i-know-this-is-mocked": &request.KnowinglyMocked,
 	}
-	if code := parseFlagsWithSwitches("create-gate-issues", args, fields, flags, stderr); code != 0 {
+	if code := parseFlagsWithGroups("create-gate-issues", args, fields, flags,
+		[][]string{{"--dry-run", "--apply"}}, stderr); code != 0 {
 		return code
 	}
 
@@ -1141,6 +1254,15 @@ func createGateIssuesCmd(registry *Registry, args []string, stdout, stderr io.Wr
 			"agentic-sdlc create-gate-issues: error: the following arguments are required: %s\n",
 			strings.Join(missing, ", "))
 		return 2
+	}
+	// One link type, and it is validated here rather than at the forge: an
+	// unrecognised type reaches GitLab as a create-link call that fails
+	// mid-run, after some issues already exist.
+	if request.LinkType != "" {
+		if code := rejectInvalidChoice(stderr, "create-gate-issues", "--link-type",
+			request.LinkType, []string{"relates_to"}); code != 0 {
+			return code
+		}
 	}
 	for _, gate := range strings.Split(gates, ",") {
 		if trimmed := strings.TrimSpace(gate); trimmed != "" {
