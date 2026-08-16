@@ -96,7 +96,7 @@ func TestKnowledgeContextPutsTheQueryLast(t *testing.T) {
 	focus := map[string]any{"agent-a": "prior defects"}
 	got, err := BuildKnowledgeContext(focus, []string{"agent-a"}, KnowledgeInput{
 		Task: "do  a   thing", TaskID: "T1", Classification: "internal",
-		Sources: []string{"one", "two"}, Top: 5, KnowledgeCLI: "/bin/cadre",
+		Sources: []string{"one", "two"}, Top: knowledgeTop(5), KnowledgeCLI: "/bin/cadre",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -142,7 +142,7 @@ func TestKnowledgeContextFailsClosedWithoutClassification(t *testing.T) {
 func TestKnowledgeContextRejectsAnOutOfRangeTop(t *testing.T) {
 	for _, top := range []int{-1, 21} {
 		_, err := BuildKnowledgeContext(map[string]any{"a": "f"}, []string{"a"}, KnowledgeInput{
-			Task: "t", TaskID: "T", Classification: "internal", Top: top,
+			Task: "t", TaskID: "T", Classification: "internal", Top: knowledgeTop(top),
 		})
 		if err == nil {
 			t.Errorf("top=%d must be refused", top)
@@ -227,3 +227,7 @@ func TestBuildContextPacksChecksIntegrityEvenWhenFiltered(t *testing.T) {
 		t.Error("a pack with no frontmatter block must be refused rather than defaulted")
 	}
 }
+
+// knowledgeTop makes an explicit Top value addressable. A nil Top means the
+// caller expressed no preference; these tests are about callers that did.
+func knowledgeTop(value int) *int { return &value }

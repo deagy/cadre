@@ -68,7 +68,7 @@ func TestDumpStage3ForParityProbe(t *testing.T) {
 
 		knowledge, err := BuildKnowledgeContext(focus, selected, KnowledgeInput{
 			Task: task, TaskID: strings.ToUpper(caseID), Classification: classification,
-			Sources: []string{"deagy/cadre", "proposed-knowledge"}, Top: 5, KnowledgeCLI: knowledgeCLI,
+			Sources: []string{"deagy/cadre", "proposed-knowledge"}, Top: knowledgeTop(5), KnowledgeCLI: knowledgeCLI,
 		})
 		if err != nil {
 			t.Fatalf("BuildKnowledgeContext(%s): %v", caseID, err)

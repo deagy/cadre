@@ -203,7 +203,10 @@ func runSelectGo(args []string) int {
 		ChangedFiles:      changedFiles,
 		Classification:    *classification,
 		Sources:           knowledgeSources,
-		Top:               *top,
+		// The pointer, not its value: the flag's own default supplies 5 when
+		// --top is absent, so a 0 arriving here was typed by the caller and
+		// must be refused rather than defaulted.
+		Top: top,
 	}, selector.PlanOptions{
 		Catalog:      catalog,
 		Gates:        gates,

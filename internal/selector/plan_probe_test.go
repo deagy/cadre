@@ -57,7 +57,7 @@ func TestDumpPlansForParityProbe(t *testing.T) {
 			Task: task, TaskID: strings.ToUpper(id), RepositoryRoot: repoRoot,
 			ChangedFileSource: "explicit", ChangedFiles: changed,
 			Classification: classification,
-			Sources:        []string{"deagy/cadre", "proposed-knowledge"}, Top: 5,
+			Sources:        []string{"deagy/cadre", "proposed-knowledge"}, Top: knowledgeTop(5),
 		}, PlanOptions{
 			Catalog: catalog, Gates: gates,
 			RosterRoot:   filepath.Join(repoRoot, "roster"),
