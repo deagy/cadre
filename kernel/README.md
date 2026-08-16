@@ -34,9 +34,15 @@ Initialization makes a project immediately usable for planning, artifact prepara
 ## Initialize a project
 
 The canonical command is the installed `agentic-sdlc` executable (see
-"Install" above), or `../bin/agentic-sdlc` (from the repository root:
-`./bin/agentic-sdlc`) / `python3 -m agentic_sdlc` from a checkout during
-development, without installing anything:
+"Install" above), or `python3 -m agentic_sdlc` from a checkout during
+development, without installing anything.
+
+`../bin/agentic-sdlc` (from the repository root: `./bin/agentic-sdlc`) also
+works and is what a checkout runs, but it is no longer this package: it
+builds and execs the Go kernel under `cmd/agentic-sdlc`. The two are held to
+byte-for-byte agreement by the differentials in `internal/kernel`, so either
+answers the same, but only `python3 -m agentic_sdlc` exercises the code in
+this directory.
 
 ```sh
 agentic-sdlc init --root /path/to/target

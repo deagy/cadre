@@ -27,8 +27,9 @@ pipx install ./kernel
 # From a pinned git tag
 pipx install "git+https://github.com/deagy/cadre.git@kernel-v<version>#subdirectory=kernel"
 
-# From a checkout, without installing anything
-./bin/agentic-sdlc --help
+# From a checkout, without installing anything (this package, not the Go
+# kernel that ./bin/agentic-sdlc now builds and execs)
+python3 kernel/dev_entrypoint.py --help
 ```
 
 Wheels and sdists attached to this repository's
