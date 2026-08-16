@@ -67,6 +67,24 @@ func GenerateAuthorityAides(args []string) int {
 		return 0
 	}
 
+	// Remove what the current aide set no longer generates, before writing.
+	//
+	// Without this, `generate` leaves a tree its own `--check` rejects:
+	// CheckAides reports an orphaned AGENT.md as stale, and the write path
+	// had no way to clear it. Dropping an aide from aides.yaml and running
+	// the documented regeneration command produced a red CI job whose fix
+	// was a manual delete the command should have done.
+	kept, err := generators.RemoveOrphanedAides(authorityRoot, generated)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre: %v\n", err)
+		return 1
+	}
+	for _, directory := range kept {
+		fmt.Fprintf(os.Stderr,
+			"cadre: removed the generated AGENT.md under %s but left the directory; "+
+				"it still holds other files\n", directory)
+	}
+
 	// Write files
 	if err := generators.WriteAideFiles(generated); err != nil {
 		fmt.Fprintf(os.Stderr, "cadre: %v\n", err)

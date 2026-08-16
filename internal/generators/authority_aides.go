@@ -230,6 +230,59 @@ func WriteAideFiles(files map[string]string) error {
 }
 
 // CheckAides validates that generated files are current without writing.
+// OrphanedAideFiles lists every <authorityRoot>/*/AGENT.md the current aide
+// set no longer generates.
+//
+// Scoped to exactly that shape on purpose: this feeds a delete, and a wider
+// walk would eventually find something it should not.
+func OrphanedAideFiles(authorityRoot string, generated map[string]string) ([]string, error) {
+	entries, err := os.ReadDir(authorityRoot)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read %s: %w", authorityRoot, err)
+	}
+	var orphans []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		path := filepath.Join(authorityRoot, entry.Name(), "AGENT.md")
+		if _, generatedHere := generated[path]; generatedHere {
+			continue
+		}
+		if info, err := os.Stat(path); err != nil || info.IsDir() {
+			continue
+		}
+		orphans = append(orphans, path)
+	}
+	sort.Strings(orphans)
+	return orphans, nil
+}
+
+// RemoveOrphanedAides deletes the AGENT.md of every aide the current set no
+// longer generates, then removes each now-empty directory.
+//
+// The directory removal is deliberately non-recursive. An orphaned directory
+// holding anything else -- a note, a half-written sibling file -- keeps that
+// content and is reported instead, because a generator that recursively
+// deletes a directory it did not wholly create is one bad path away from
+// removing work nobody asked it to touch.
+func RemoveOrphanedAides(authorityRoot string, generated map[string]string) ([]string, error) {
+	orphans, err := OrphanedAideFiles(authorityRoot, generated)
+	if err != nil {
+		return nil, err
+	}
+	var kept []string
+	for _, path := range orphans {
+		if err := os.Remove(path); err != nil {
+			return nil, fmt.Errorf("cannot remove %s: %w", path, err)
+		}
+		if err := os.Remove(filepath.Dir(path)); err != nil {
+			kept = append(kept, filepath.Dir(path))
+		}
+	}
+	return kept, nil
+}
+
 func CheckAides(authorityRoot string, generated map[string]string) (bool, []string, error) {
 	var stale []string
 
