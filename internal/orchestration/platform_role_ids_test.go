@@ -53,7 +53,9 @@ import (
 func platformGoModules(t *testing.T) []string {
 	t.Helper()
 	var modules []string
-	for _, directory := range []string{".", "../selector", "../cli"} {
+	// internal/config resolves every operator setting the plan is built
+	// from, so a role id hardcoded as a default there leaks the same way.
+	for _, directory := range []string{".", "../selector", "../cli", "../config"} {
 		entries, err := os.ReadDir(directory)
 		if err != nil {
 			t.Fatalf("cannot read %s: %v", directory, err)
