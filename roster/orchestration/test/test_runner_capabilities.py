@@ -22,8 +22,6 @@ ROOT = Path(__file__).resolve().parent.parent
 REPOSITORY_ROOT = ROOT.parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-import generate_global_plugin as ggp  # noqa: E402
-import generate_role_metadata as grm  # noqa: E402
 
 try:
     import jsonschema  # noqa: F401
@@ -151,25 +149,12 @@ class ManifestExistenceAndContentTests(unittest.TestCase):
         self.assertTrue(MANIFEST_PATH.is_file())
         self.assertTrue(SCHEMA_PATH.is_file())
 
-    def test_manifest_capability_tiers_match_generator_constants_verbatim(self) -> None:
-        manifest = _load_manifest()
-        expected = {
-            tier: {"tools": data["tools"], "sandbox_mode": data["sandbox_mode"]}
-            for tier, data in manifest["capability_tiers"].items()
-        }
-        self.assertEqual(expected, ggp.CAPABILITY_PROFILES)
-        self.assertEqual(
-            {"read_only", "document_author", "code_author", "test_author", "environment_operator"},
-            set(ggp.CAPABILITY_PROFILES),
-        )
-
-    def test_manifest_model_tiers_match_tier_map_verbatim(self) -> None:
-        manifest = _load_manifest()
-        expected = {
-            tier: (data["codex_model"], data["reasoning_effort"]) for tier, data in manifest["model_tiers"].items()
-        }
-        self.assertEqual(expected, grm.TIER_MAP)
-        self.assertEqual({"opus", "sonnet", "haiku"}, set(grm.TIER_MAP))
+    # test_manifest_capability_tiers_match_generator_constants_verbatim and
+    # test_manifest_model_tiers_match_tier_map_verbatim moved to
+    # internal/generators/runner_capabilities_test.go. They compared the
+    # *Python* generators' derived constants against this manifest, and those
+    # generators were replaced by the Go CLI. The Go versions check what the
+    # constants are derived from, one layer closer to the file.
 
     def test_manifest_reproduces_catalog_schema_enums_without_hand_copying(self) -> None:
         """CM-FR-4 / gap G-3: roster/catalog.schema.json's capability/model/
@@ -189,84 +174,12 @@ class ManifestExistenceAndContentTests(unittest.TestCase):
         self.assertEqual(set(manifest["allowed_reasoning_efforts"]), set(role_defs["reasoning_effort"]["enum"]))
 
 
-class GeneratedFromManifestTests(unittest.TestCase):
-    """AC-2 / CM-NFR-5: generate_global_plugin.py's/generate_role_metadata.py's
-    capability/model-tier constants are *generated from* the manifest (not
-    merely checked against a second hand-authored copy) -- demonstrated by
-    varying the manifest content fed to the loader and observing the derived
-    constants change accordingly, and by showing a malformed/incomplete
-    manifest fails closed rather than silently falling back to stale values.
-    """
-
-    def test_capability_profiles_reflect_a_fixture_manifest(self) -> None:
-        fixture = {
-            "capability_tiers": {
-                "throwaway_tier": {"tools": ["Read"], "sandbox_mode": "read-only"},
-            },
-            "model_tiers": {},
-            "allowed_reasoning_efforts": [],
-        }
-        profiles = ggp._capability_profiles_from_manifest(fixture, Path("fixture.json"))
-        self.assertEqual(
-            {"throwaway_tier": {"tools": ["Read"], "sandbox_mode": "read-only"}},
-            profiles,
-        )
-
-    def test_changing_one_tiers_sandbox_mode_in_a_fixture_changes_only_that_tier(self) -> None:
-        """AC-3: adding/changing one tier requires editing exactly the
-        manifest -- demonstrated here by mutating a single field on a
-        fixture copy and confirming the derived profile reflects exactly
-        that one change, with no other Python file touched.
-        """
-        manifest = copy.deepcopy(_load_manifest())
-        manifest["capability_tiers"]["read_only"]["sandbox_mode"] = "danger-full-access"
-        profiles = ggp._capability_profiles_from_manifest(manifest, MANIFEST_PATH)
-        self.assertEqual("danger-full-access", profiles["read_only"]["sandbox_mode"])
-        for tier in ("document_author", "code_author", "test_author", "environment_operator"):
-            self.assertEqual("workspace-write", profiles[tier]["sandbox_mode"])
-
-    def test_manifest_missing_capability_tiers_key_fails_closed(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            broken = Path(directory) / "runner-capabilities.json"
-            broken.write_text(json.dumps({"model_tiers": {}, "allowed_reasoning_efforts": []}), encoding="utf-8")
-            with self.assertRaisesRegex(ggp.ManifestError, "capability_tiers"):
-                ggp._load_runner_capabilities(broken)
-
-    def test_manifest_tier_missing_sandbox_mode_fails_closed(self) -> None:
-        fixture = {"capability_tiers": {"read_only": {"tools": ["Read"]}}}
-        with self.assertRaisesRegex(ggp.ManifestError, "read_only"):
-            ggp._capability_profiles_from_manifest(fixture, Path("fixture.json"))
-
-    def test_missing_manifest_file_fails_closed(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            missing = Path(directory) / "does-not-exist.json"
-            with self.assertRaisesRegex(ggp.ManifestError, "not found"):
-                ggp._load_runner_capabilities(missing)
-
-    def test_invalid_json_fails_closed(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            broken = Path(directory) / "runner-capabilities.json"
-            broken.write_text("{not valid json", encoding="utf-8")
-            with self.assertRaisesRegex(ggp.ManifestError, "invalid JSON"):
-                ggp._load_runner_capabilities(broken)
-
-    @unittest.skipUnless(JSONSCHEMA_AVAILABLE, "jsonschema is not installed in this environment")
-    def test_scratch_manifest_divergence_from_schema_is_a_failing_check(self) -> None:
-        """AC-8: a scratch/fixture divergence between the manifest and its
-        contract produces a non-zero-exit-equivalent failure, not a silent
-        pass, runnable under this same `unittest discover` invocation.
-        """
-        manifest = copy.deepcopy(_load_manifest())
-        manifest["capability_tiers"]["read_only"]["sandbox_mode"] = 12345  # wrong type
-        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
-        findings = vrc.validate(manifest, schema)
-        self.assertTrue(findings, "expected schema validation to report the injected type mismatch")
-
-    @unittest.skipUnless(JSONSCHEMA_AVAILABLE, "jsonschema is not installed in this environment")
-    def test_real_manifest_is_schema_clean(self) -> None:
-        findings = vrc.run()
-        self.assertEqual([], findings)
-
+# GeneratedFromManifestTests moved to
+# internal/generators/runner_capabilities_test.go
+# (TestACapabilityManifestThatCannotBeTrustedFailsClosed and
+# TestWriteCapableTiersAreDerivedFromSandboxModeRatherThanNamed). It drove the
+# Python generator's manifest loader directly; the Go loader is the one that
+# runs now, and its fail-closed paths are falsified there.
 
 class RunnerAdaptersStructuralFactCoverageTests(unittest.TestCase):
     """AC-4: all 8 structural facts enumerated in requirements.md's table
@@ -574,129 +487,13 @@ class ClineScopeRespectedTests(unittest.TestCase):
         )
 
 
-class PackagingAllowlistParityTests(unittest.TestCase):
-    """AC-7 (CM-NFR-6): the manifest and its schema are present in
-    generate_global_plugin.py::generate_suite_copy's file-selection
-    allowlist, demonstrated both positively (against a fixture repository)
-    and negatively (a scratch removal of the allowlist entries produces a
-    packaged copy missing the files -- the exact idea #10 gap class).
-    """
-
-    def test_source_declares_both_files_in_the_allowlist(self) -> None:
-        source = (ROOT / "src" / "generate_global_plugin.py").read_text(encoding="utf-8")
-        self.assertIn('"roster/runner-capabilities.json"', source)
-        self.assertIn('"roster/runner-capabilities.schema.json"', source)
-
-    def _init_git_repo(self, root: Path) -> None:
-        subprocess.run(["git", "init", "-q", str(root)], check=True)
-        subprocess.run(["git", "-C", str(root), "config", "user.email", "test@example.invalid"], check=True)
-        subprocess.run(["git", "-C", str(root), "config", "user.name", "Test"], check=True)
-
-    def test_real_generator_packages_the_manifest_and_schema(self) -> None:
-        """Uses a fixture git repository (same pattern as
-        test_generate_global_plugin.py) rather than this checkout's own
-        REPOSITORY_ROOT, because generate_suite_copy() only ever selects
-        `git ls-files`-tracked paths, and this task's own instructions
-        prohibit `git add`ing the newly-created manifest files into this
-        checkout's real index -- see the negative (scratch-removal)
-        demonstration below for the other half of this same proof.
-        """
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self._init_git_repo(root)
-            (root / "roster").mkdir()
-            (root / "roster" / "runner-capabilities.json").write_text(
-                MANIFEST_PATH.read_text(encoding="utf-8"), encoding="utf-8"
-            )
-            (root / "roster" / "runner-capabilities.schema.json").write_text(
-                SCHEMA_PATH.read_text(encoding="utf-8"), encoding="utf-8"
-            )
-            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
-            subprocess.run(["git", "-C", str(root), "commit", "-qm", "base"], check=True)
-            plugin_root = root / "plugins" / "cadre"
-            plugin_root.mkdir(parents=True)
-            packaging_readme = root / "packaging" / "plugin-README.md"
-            packaging_readme.parent.mkdir(parents=True)
-            packaging_readme.write_text("template readme\n", encoding="utf-8")
-
-            with mock.patch.object(ggp, "REPOSITORY_ROOT", root), mock.patch.object(
-                ggp, "PACKAGING_README", packaging_readme
-            ):
-                ggp.generate_suite_copy({}, plugin_root)
-
-            self.assertTrue((plugin_root / "suite" / "roster" / "runner-capabilities.json").is_file())
-            self.assertTrue((plugin_root / "suite" / "roster" / "runner-capabilities.schema.json").is_file())
-            packaged = json.loads(
-                (plugin_root / "suite" / "roster" / "runner-capabilities.json").read_text(encoding="utf-8")
-            )
-            self.assertEqual(_load_manifest(), packaged)
-
-    def _load_module_from_source(self, name: str, source: str, module_path: Path) -> object:
-        module_path.parent.mkdir(parents=True, exist_ok=True)
-        module_path.write_text(source, encoding="utf-8")
-        spec = importlib.util.spec_from_file_location(name, module_path)
-        module = importlib.util.module_from_spec(spec)
-        assert spec.loader is not None
-        spec.loader.exec_module(module)
-        return module
-
-    def test_scratch_removal_from_allowlist_breaks_the_packaged_copy(self) -> None:
-        """Mirrors the exact idea #10 review-caught gap: patch a scratch
-        copy of generate_suite_copy's source to omit the manifest allowlist
-        entries, run it against a fixture repository that *does* carry
-        roster/runner-capabilities.json, and confirm the packaged output
-        silently lacks the file -- proving the real allowlist entry is
-        load-bearing, not decorative.
-        """
-        real_source = (ROOT / "src" / "generate_global_plugin.py").read_text(encoding="utf-8")
-        marker = (
-            '"roster/runner-capabilities.json",\n'
-            '            "roster/runner-capabilities.schema.json",\n'
-        )
-        self.assertIn(marker, real_source)
-        broken_source = real_source.replace(marker, "", 1)
-        self.assertNotIn('"roster/runner-capabilities.json"', broken_source)
-
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self._init_git_repo(root)
-            (root / "roster").mkdir()
-            (root / "roster" / "runner-capabilities.json").write_text(
-                MANIFEST_PATH.read_text(encoding="utf-8"), encoding="utf-8"
-            )
-            (root / "roster" / "runner-capabilities.schema.json").write_text(
-                SCHEMA_PATH.read_text(encoding="utf-8"), encoding="utf-8"
-            )
-            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
-            subprocess.run(["git", "-C", str(root), "commit", "-qm", "base"], check=True)
-            plugin_root = root / "plugins" / "cadre"
-            plugin_root.mkdir(parents=True)
-            packaging_readme = root / "packaging" / "plugin-README.md"
-            packaging_readme.parent.mkdir(parents=True)
-            packaging_readme.write_text("template readme\n", encoding="utf-8")
-
-            # Place the scratch module at the same relative depth as the
-            # real one (<root>/roster/orchestration/src/generate_global_plugin.py)
-            # so its own `Path(__file__).resolve().parents[3]` self-resolves
-            # to this fixture repo without needing any REPOSITORY_ROOT patch.
-            module_path = root / "roster" / "orchestration" / "src" / "generate_global_plugin.py"
-            broken_module = self._load_module_from_source(
-                "broken_generate_global_plugin", broken_source, module_path
-            )
-            with mock.patch.object(broken_module, "PACKAGING_README", packaging_readme):
-                broken_module.generate_suite_copy({}, plugin_root)
-            self.assertFalse((plugin_root / "suite" / "roster" / "runner-capabilities.json").is_file())
-
-            # Contrast: the real, unmodified module packages the same
-            # fixture repository correctly.
-            correct_plugin_root = root / "plugins" / "cadre-correct"
-            correct_plugin_root.mkdir(parents=True)
-            with mock.patch.object(ggp, "REPOSITORY_ROOT", root), mock.patch.object(
-                ggp, "PACKAGING_README", packaging_readme
-            ):
-                ggp.generate_suite_copy({}, correct_plugin_root)
-            self.assertTrue((correct_plugin_root / "suite" / "roster" / "runner-capabilities.json").is_file())
-
+# PackagingAllowlistParityTests moved to
+# internal/generators/runner_capabilities_test.go
+# (TestThePackagedPluginCarriesTheCapabilityManifest). It drove the *Python*
+# generator into a fixture git repository to prove the manifest and its schema
+# get packaged; the Go version checks the committed distribution -- which is
+# what people install, and which `cadre generate-plugin --check` already
+# guards against drifting from what the generator would emit.
 
 class NoFabricatedTargetTests(unittest.TestCase):
     """AC-9: no specific maintenance-time, defect-rate, or onboarding-time
