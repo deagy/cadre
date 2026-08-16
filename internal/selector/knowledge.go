@@ -23,6 +23,13 @@ var ClassificationRank = func() map[string]int {
 // MaximumKnowledgeTop bounds retrieval breadth.
 const MaximumKnowledgeTop = 20
 
+// DefaultKnowledgeTop is what a caller that expressed no preference gets.
+//
+// Applied only when KnowledgeInput.Top is nil. An explicit 0 is a choice, and
+// a choice outside 1..MaximumKnowledgeTop is refused -- see the pointer's own
+// note on the field.
+const DefaultKnowledgeTop = 5
+
 // KnowledgeLauncher describes how to run the retrieval CLI.
 type KnowledgeLauncher struct {
 	Runtime        string `json:"runtime"`
@@ -58,8 +65,12 @@ type KnowledgeInput struct {
 	TaskID         string
 	Classification string
 	Sources        []string
-	Top            int
-	KnowledgeCLI   string
+	// Top is a pointer so that "the caller expressed no preference" is
+	// distinguishable from an explicit 0, which orchestration policy refuses.
+	// With a plain int the two collapse, and `cadre select --top 0` silently
+	// retrieves five results instead of being refused -- which is what it did.
+	Top          *int
+	KnowledgeCLI string
 }
 
 // BuildKnowledgeContext ports _build_knowledge_context. The selector plans
@@ -80,9 +91,9 @@ func BuildKnowledgeContext(knowledgeFocus map[string]any, selectedAgents []strin
 	if _, known := ClassificationRank[input.Classification]; !known {
 		return KnowledgeContext{}, fmt.Errorf("Invalid classification: %s", input.Classification) //nolint:staticcheck // ST1005: ported verbatim.
 	}
-	top := input.Top
-	if top == 0 {
-		top = 5
+	top := DefaultKnowledgeTop
+	if input.Top != nil {
+		top = *input.Top
 	}
 	if top < 1 || top > MaximumKnowledgeTop {
 		return KnowledgeContext{}, fmt.Errorf("Knowledge top must be an integer from 1 through 20") //nolint:staticcheck // ST1005: ported verbatim.

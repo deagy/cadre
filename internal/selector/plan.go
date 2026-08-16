@@ -32,7 +32,8 @@ type PlanInput struct {
 	ChangedFiles      []string
 	Classification    string
 	Sources           []string
-	Top               int
+	// Top is nil when the caller expressed no preference; see KnowledgeInput.
+	Top *int
 }
 
 // PlanOptions carries what the plan needs from its environment.
