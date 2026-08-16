@@ -328,7 +328,7 @@ role file's own text coming back out of a child process is the assertion.
 under `kernel/contracts/` are **data, not code** — they stay exactly as they
 are.
 
-**Progress: 17 of 32.** `show-contract` (#290), `detect`, the `provider` /
+**Progress: 18 of 32.** `show-contract` (#290), `detect`, the `provider` /
 `profile` / `extension` introspection trio (#291), `validate`, and the four `list-*` readers (#292),
 each behind a differential that runs both kernels on the same machine
 (`kernel/test/test_kernel_differential.py`, and for `validate` the Go-side
@@ -402,9 +402,27 @@ manifest containing one accented character would have differed
 silently, and the two kernels would have disagreed about whether a
 provider had changed.
 
-Still to write: `repair`, and the GitHub/GitLab gate-approval plumbing
-— which is now the bulk of what remains, and the only part that talks
-to a network.
+`repair` followed, with its own descriptor-confined filesystem. Every
+other command resolves a path and then opens it; repair does not,
+because it writes into a project it did not create, on a filesystem
+somebody else may be touching. It pins the root, walks one component at
+a time refusing symlinks, and installs through a temporary file — using
+`link` (atomic, no-clobber) to create and `rename` to overwrite, so a
+decision appearing between planning and writing makes repair lose the
+race rather than win it. `os.Root` supplies the confinement; the
+symlink refusal is stricter than `os.Root` alone, which follows links
+that stay inside the root.
+
+The port also surfaced an inconsistency in the Python kernel worth
+fixing once it is the only kernel left: **`init` and `repair` render a
+Claude wrapper one blank line apart**, so a project's wrapper content
+depends on which command created it. Reproduced faithfully rather than
+corrected — fixing it during the port would make every repair differ
+from the kernel it is checked against, hiding real divergences behind
+an intentional one.
+
+Still to write: the GitHub/GitLab gate-approval plumbing — now the bulk
+of what remains, and the only part that talks to a network.
 
 **`validate` landed in #292**, and it was the largest single read-only item:
 the overlay loader, `approval_source_policy`, the agent catalog, path

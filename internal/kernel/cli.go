@@ -63,6 +63,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return planCmd(registry, args[1:], stdout, stderr)
 	case "decide":
 		return decideCmd(registry, args[1:], stdout, stderr)
+	case "repair":
+		return repairCmd(registry, args[1:], stdout, stderr)
 	case "init":
 		return initCmd(registry, args[1:], stdout, stderr)
 	case "status":
@@ -89,6 +91,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stdout, "  validate [--root ROOT] Check a project's configuration and run records")
 		_, _ = fmt.Fprintln(stdout, "  plan --task-id ID --task TEXT         Create a dispatch plan and pending run record")
 		_, _ = fmt.Fprintln(stdout, "  decide --task-id ID --gate G --role R --decision D --actor-id A --evidence-uri U")
+		_, _ = fmt.Fprintln(stdout, "  repair [--runner R] [--apply]         Inspect or safely repair an initialization")
 		_, _ = fmt.Fprintln(stdout, "  init [--profile P] [--project-id ID] [--dry-run]  Initialize a project overlay")
 		_, _ = fmt.Fprintln(stdout, "  status --task-id ID                   Show a task's gate state (and advance it)")
 		_, _ = fmt.Fprintln(stdout, "  invalidate --task-id ID --earliest-gate G --reason R --actor A")
@@ -658,4 +661,47 @@ func initCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
 	}
 	_, _ = fmt.Fprint(stdout, RenderIndented(result))
 	return 0
+}
+
+// repairCmd answers `repair`. Without --apply it plans and writes nothing,
+// which is the mode worth being able to run anywhere.
+func repairCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
+	request := RepairRequest{Root: ".", Runner: "both"}
+	for index := 0; index < len(args); index++ {
+		name, value, inline := strings.Cut(args[index], "=")
+		switch name {
+		case "--root", "--runner":
+			got := value
+			if !inline {
+				if index+1 >= len(args) {
+					_, _ = fmt.Fprintf(stderr, "agentic-sdlc repair: %s needs a value\n", name)
+					return 2
+				}
+				index++
+				got = args[index]
+			}
+			if name == "--root" {
+				request.Root = got
+			} else {
+				request.Runner = got
+			}
+		case "--apply":
+			request.Apply = true
+		default:
+			_, _ = fmt.Fprintf(stderr, "agentic-sdlc repair: unknown argument %q\n", args[index])
+			return 2
+		}
+	}
+	if code := rejectInvalidChoice(stderr, "repair", "--runner", request.Runner,
+		[]string{"codex", "claude", "both"}); code != 0 {
+		return code
+	}
+
+	result, code, err := registry.Repair(request)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(err))
+		return 1
+	}
+	_, _ = fmt.Fprint(stdout, RenderIndented(result))
+	return code
 }
