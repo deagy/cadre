@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// The compile-avoidance gate, and the one place it is not equivalent.
+// The compile-avoidance gate, and the equivalence it owes the regex.
 //
 // KeywordMatches does a cheap check before touching a regex: every
 // whitespace-separated token of the keyword must appear in the lowercased
@@ -18,6 +18,9 @@ import (
 // that would have returned false. Skipping a keyword that *would* have matched
 // does not raise anything. The route simply is not selected, the specialist is
 // not dispatched, and the plan looks like a normal plan.
+//
+// The gate holds that condition only for ASCII, which is why it is applied only
+// there -- see TestTheGateIsSkippedWhereItWouldNotAgreeWithTheRegex.
 //
 // Ported from roster/orchestration/test/test_selection_cost.py's
 // GateEquivalenceTests. The rest of that file counts CPython `re._compile`
@@ -147,42 +150,60 @@ func TestAMultiWordKeywordStillRequiresAdjacency(t *testing.T) {
 	}
 }
 
-func TestTheGateAndTheRegexPartCompanyOnUnicodeCaseFolding(t *testing.T) {
-	// A recorded exception, not an aspiration.
-	//
+func TestTheGateIsSkippedWhereItWouldNotAgreeWithTheRegex(t *testing.T) {
 	// The gate lowercases with strings.ToLower; the pattern folds case with
-	// Go's (?i). Those are different operations, and they disagree on
-	// characters that fold to a letter without lowercasing to it. U+017F
-	// LATIN SMALL LETTER LONG S is the reachable example: it is already
-	// lowercase, so ToLower leaves it alone and the gate's Contains fails,
-	// while (?i)s matches it.
+	// (?i). Those are different operations, and they disagree on characters
+	// that fold to a letter without lowercasing to it. U+017F LATIN SMALL
+	// LETTER LONG S is the reachable example: already lowercase, so ToLower
+	// leaves it alone and Contains fails, while (?i)s folds it and matches.
 	//
-	// The gate therefore skips a case the regex would have matched -- the one
-	// direction its contract forbids. Pinned here because:
+	// That is the one direction the gate's contract forbids -- skipping work
+	// that would have returned true, which surfaces as a route silently not
+	// selected. So the gate is applied only when both sides are ASCII, where
+	// the two foldings coincide.
 	//
-	//   - the Python selector does exactly the same thing, checked directly:
-	//     _keyword_matches returns False and _keyword_regex().search returns
-	//     True for this pair. So this is a property of the design, not
-	//     something the port introduced, and "fix" would mean changing routing
-	//     behaviour rather than restoring it.
-	//   - the cross-product test above passes only because no shipped keyword
-	//     and no corpus task contains such a character. A test asserting total
-	//     equivalence while sampling only ASCII would be the kind that passes
-	//     without measuring anything.
-	//
-	// If this ever needs closing, the cheap fix is to skip the gate when
-	// either side is not ASCII, which keeps the optimization for every real
-	// task and costs one regex for the rest. That is a routing-behaviour
-	// decision, so it is recorded rather than taken here.
-	const text, keyword = "the ſtandard form", "standard"
-
-	if KeywordMatches(text, keyword) {
-		t.Error("the gate now matches a long s; if that was deliberate, this " +
-			"test and the comment above should go, and the cross-product test " +
-			"is the one that guarantees the rest")
+	// The Python selector does not do this: _keyword_matches returns False for
+	// the pair below while _keyword_regex().search returns True. Go is
+	// deliberately the stricter of the two here. The corpus contains no such
+	// character, so test_select_differential.py is unaffected -- verified, not
+	// assumed.
+	for _, probe := range []struct{ text, keyword string }{
+		{"the ſtandard form", "standard"}, // U+017F folds to s
+		{"the Kelvin sign", "kelvin"},     // U+212A folds to k
+		{"a ſimple ſtring", "simple"},     // more than one in the text
+		{"plain ascii text", "ascii"},     // the gated path still works
+	} {
+		gated := KeywordMatches(probe.text, probe.keyword)
+		if ungated := ungatedKeywordMatches(probe.text, probe.keyword); gated != ungated {
+			t.Errorf("the gate still disagrees with the regex.\ntext: %q\nkeyword: %q\n"+
+				"gated: %v, ungated: %v", probe.text, probe.keyword, gated, ungated)
+		}
 	}
-	if !ungatedKeywordMatches(text, keyword) {
-		t.Error("the regex no longer folds U+017F to s, so this exception has " +
-			"stopped being an exception and the gate is now equivalent")
+}
+
+func TestEveryShippedKeywordAndCorpusTaskQualifiesForTheGate(t *testing.T) {
+	// Named for what it checks. Whether the gate *runs* is not observable from
+	// behaviour -- it is a pure optimization, so removing it entirely changes
+	// cost and nothing else, and no correctness test can catch that. (Confirmed:
+	// forcing the skip for all input fails nothing here.)
+	//
+	// What is observable, and what matters, is that the skip stays the
+	// exception: if a shipped keyword or a corpus task were non-ASCII it would
+	// bypass the pre-filter, and the optimization would quietly stop applying
+	// to the workload it exists for.
+	for _, keyword := range everyShippedKeyword(t) {
+		if !isASCIIText(keyword) {
+			t.Errorf("shipped keyword %q is not ASCII, so the gate no longer "+
+				"applies to it", keyword)
+		}
+	}
+	nonASCII := 0
+	for _, testCase := range loadGoldenCorpus(t) {
+		if !isASCIIText(testCase.Task) {
+			nonASCII++
+		}
+	}
+	if nonASCII > 0 {
+		t.Errorf("%d corpus tasks are not ASCII and now bypass the gate", nonASCII)
 	}
 }
