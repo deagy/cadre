@@ -3,6 +3,7 @@ package kernel
 import (
 	"bytes"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -458,17 +459,27 @@ func TestTheForgeApprovalAdaptersMatchThePythonKernel(t *testing.T) {
 				t.Fatalf("expected exit %d -- python %d, go %d\npython: %s\ngo: %s",
 					probe.expectExit, pythonCode, goCode, pythonOutput, goOutput)
 			}
-			// One exemption, and only for a usage error: argparse prints a
-			// wrapped usage block above its message and the Go CLI prints
-			// none. The message itself -- the line an operator reads and a
-			// script greps -- is compared exactly. Reproducing argparse's line
+			// Two exemptions, and only for a usage error, both of them
+			// argparse's rendering rather than anything the kernel words.
+			//
+			// The usage block: argparse prints a wrapped summary above its
+			// message and the Go CLI prints none. Reproducing argparse's line
 			// wrapping for every subcommand would be a facsimile of a thing
 			// that disappears with the Python kernel; the missing usage block
 			// is recorded as a follow-up instead.
+			//
+			// The choice list: argparse quoted every choice up to Python 3.13
+			// and stopped in 3.14, so the same kernel prints two different
+			// messages depending on the interpreter running it. CI found this
+			// -- it runs an older python3 in the Go job than this machine has
+			// -- and it is the reason the quoting inside `(choose from ...)`
+			// is normalised away. What is still compared exactly: the command,
+			// the flag, the offending value and *which* choices are listed.
 			if probe.usageError {
-				if lastLine(pythonOutput) != lastLine(goOutput) {
-					t.Errorf("the usage error differs.\npython: %s\ngo:     %s",
-						lastLine(pythonOutput), lastLine(goOutput))
+				python := normalizeChoiceList(lastLine(pythonOutput))
+				golang := normalizeChoiceList(lastLine(goOutput))
+				if python != golang {
+					t.Errorf("the usage error differs.\npython: %s\ngo:     %s", python, golang)
 				}
 			} else if pythonOutput != goOutput {
 				t.Errorf("output differs.\npython:\n%s\ngo:\n%s", pythonOutput, goOutput)
@@ -489,6 +500,19 @@ func TestTheForgeApprovalAdaptersMatchThePythonKernel(t *testing.T) {
 			}
 		})
 	}
+}
+
+// choiceList matches argparse's "(choose from ...)" tail.
+var choiceList = regexp.MustCompile(`\(choose from [^)]*\)`)
+
+// normalizeChoiceList drops argparse's per-choice quoting.
+//
+// Only inside the parenthesised list: the offending value's own quotes are
+// outside it and stay compared, because those the kernel controls.
+func normalizeChoiceList(line string) string {
+	return choiceList.ReplaceAllStringFunc(line, func(segment string) string {
+		return strings.ReplaceAll(segment, "'", "")
+	})
 }
 
 // lastLine is the final non-empty line of a stream.
