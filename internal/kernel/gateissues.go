@@ -215,8 +215,63 @@ type ApprovalCandidate struct {
 	Marker      string
 	Label       string
 	Title       string
-	Username    string
+	Login       string
 	Rationale   any
+}
+
+// issueForge is everything the two issue commands do not agree on.
+//
+// `create-gate-issues` and `create-github-gate-issues` plan identically: same
+// eligibility rules, same skip and refusal reasons, same per-gate digest
+// shape, same cap. What differs is the identity of the artifacts -- markers
+// domain-separated per forge so a GitLab label can never match a GitHub one --
+// the name of the binding each looks for, and the digest's forge tag.
+//
+// The Python kernel keeps two full copies of this, deliberately, to contain
+// the blast radius of a change. This is one copy with the differences named,
+// which trades that containment for the guarantee that a fix reaches both.
+// Both are pinned byte-for-byte against their own Python module, so a
+// divergence introduced here fails one differential or the other.
+type issueForge struct {
+	// name tags the digest payload, so a GitLab plan and a GitHub plan for
+	// the same task never hash alike.
+	name string
+	// pathKey names the repository field in the digest: GitLab calls it a
+	// project path, GitHub calls it a repo.
+	pathKey string
+	// resolvedKey names the per-gate map of authority to forge identity.
+	resolvedKey string
+	// binding is the forge's own word for that identity, in the refusal an
+	// unbound authority produces.
+	bindingReason string
+	bindingNoun   string
+	// forgeLogin is the key AuthorityForgeLogin reads.
+	forgeLogin string
+	// tagsDigest adds a leading "forge" key to the plan digest. Only the
+	// GitHub command does: the GitLab digest predates there being a second
+	// forge, and adding the key would change every digest a project has
+	// already recorded.
+	tagsDigest bool
+
+	gateMarker     func(taskID, gateID string) string
+	approvalMarker func(taskID, gateID, authorityID string) string
+	gateLabel      func(marker string) (string, error)
+	approvalLabel  func(marker string) (string, error)
+	// fail wraps a message in the command's own structural-error type, which
+	// is what the CLI maps to an exit code.
+	fail func(message string) error
+}
+
+// gitlabIssueForge is `create-gate-issues`.
+var gitlabIssueForge = &issueForge{
+	name: "gitlab", pathKey: "project_path", resolvedKey: "resolved_usernames",
+	bindingReason: "no-gitlab-binding", bindingNoun: "GitLab username",
+	forgeLogin:     "gitlab",
+	gateMarker:     ComputeGateMarker,
+	approvalMarker: ComputeApprovalMarker,
+	gateLabel:      GateLabel,
+	approvalLabel:  ApprovalLabel,
+	fail:           func(message string) error { return &GateIssuesError{Message: message} },
 }
 
 // issuePlan is everything one run intends to do, before any forge call.
@@ -236,7 +291,7 @@ type issuePlan struct {
 // hash of a decision made from local state, so a change in that state between
 // planning and applying is detectable.
 func buildIssuePlan(
-	taskID, projectPath string, gateIDs []string,
+	forge *issueForge, taskID, projectPath string, gateIDs []string,
 	record, authorities map[string]any,
 	contracts map[string]map[string]any,
 	includeScope bool, scopeText any,
@@ -258,8 +313,8 @@ func buildIssuePlan(
 	for _, gateID := range gateIDs {
 		gateRecord, present := gateByID[gateID]
 		if !present {
-			return nil, &GateIssuesError{Message: fmt.Sprintf(
-				"gate %s not found in the run record's lifecycle_gates array", gateID)}
+			return nil, forge.fail(fmt.Sprintf(
+				"gate %s not found in the run record's lifecycle_gates array", gateID))
 		}
 		contract := contracts[gateID]
 		gateName, _ := contract["name"].(string)
@@ -269,8 +324,8 @@ func buildIssuePlan(
 		phase, _ := contract["phase"].(string)
 		humanOnly := contract["human_only"] == true
 
-		marker := ComputeGateMarker(taskID, gateID)
-		label, err := GateLabel(marker)
+		marker := forge.gateMarker(taskID, gateID)
+		label, err := forge.gateLabel(marker)
 		if err != nil {
 			return nil, err
 		}
@@ -300,14 +355,14 @@ func buildIssuePlan(
 			authorityID, _ := requirement["authority_id"].(string)
 			var username any
 			if authority, ok := authorities[authorityID].(map[string]any); ok {
-				if resolvedName := AuthorityForgeLogin(authority, "gitlab"); resolvedName != "" {
+				if resolvedName := AuthorityForgeLogin(authority, forge.forgeLogin); resolvedName != "" {
 					username = resolvedName
 				}
 			}
 			resolved.set(authorityID, username)
 		}
 
-		if err := plan.addApprovalCandidates(taskID, gateID, gateName, gateRecord,
+		if err := plan.addApprovalCandidates(forge, taskID, gateID, gateName, gateRecord,
 			requirements, authorities, resolved); err != nil {
 			return nil, err
 		}
@@ -318,22 +373,22 @@ func buildIssuePlan(
 			"status", gateRecord["status"],
 			"required_reentry_gate", gateRecord["required_reentry_gate"],
 			"authority_requirements", requirementDigests(requirements),
-			"resolved_usernames", resolved,
+			forge.resolvedKey, resolved,
 		))
 		plan.gateOrder = append(plan.gateOrder, gateID)
 	}
 
 	if total := len(plan.gates) + len(plan.approvals); total > maxIssuesPerRun {
-		return nil, &GateIssuesError{Message: fmt.Sprintf(
+		return nil, forge.fail(fmt.Sprintf(
 			"planned issue count %d exceeds MAX_ISSUES_PER_RUN=%d -- aborting rather than truncating",
-			total, maxIssuesPerRun)}
+			total, maxIssuesPerRun))
 	}
 	return plan, nil
 }
 
 // addApprovalCandidates decides which authorities get an approval issue.
 func (p *issuePlan) addApprovalCandidates(
-	taskID, gateID, gateName string, gateRecord map[string]any,
+	forge *issueForge, taskID, gateID, gateName string, gateRecord map[string]any,
 	requirements []any, authorities map[string]any, resolved *orderedObject,
 ) error {
 	for _, raw := range requirements {
@@ -388,8 +443,8 @@ func (p *issuePlan) addApprovalCandidates(
 		username, _ := resolved.values[authorityID].(string)
 		if username == "" {
 			p.refusals = append(p.refusals, RefusalEntry{
-				gateID, authorityID, "no-gitlab-binding",
-				fmt.Sprintf("authority %s has no GitLab username binding", authorityID)})
+				gateID, authorityID, forge.bindingReason,
+				fmt.Sprintf("authority %s has no %s binding", authorityID, forge.bindingNoun)})
 			continue
 		}
 		// Enforced here because GitLab enforces nothing about who an issue is
@@ -403,8 +458,8 @@ func (p *issuePlan) addApprovalCandidates(
 			continue
 		}
 
-		marker := ComputeApprovalMarker(taskID, gateID, authorityID)
-		label, err := ApprovalLabel(marker)
+		marker := forge.approvalMarker(taskID, gateID, authorityID)
+		label, err := forge.approvalLabel(marker)
 		if err != nil {
 			return err
 		}
@@ -414,7 +469,7 @@ func (p *issuePlan) addApprovalCandidates(
 		}
 		p.approvals = append(p.approvals, ApprovalCandidate{
 			GateID: gateID, AuthorityID: authorityID, Role: roleLabel,
-			Marker: marker, Label: label, Title: title, Username: username,
+			Marker: marker, Label: label, Title: title, Login: username,
 			Rationale: requirement["rationale"],
 		})
 	}
@@ -445,13 +500,20 @@ func requirementDigests(requirements []any) []any {
 // reassigned, a gate invalidated, a rationale edited. Creating issues from a
 // plan somebody has since invalidated is the failure it prevents.
 func ComputePlanDigest(
-	taskID, projectPath string, gateIDs []string,
+	forge *issueForge, taskID, projectPath string, gateIDs []string,
 	dispatchFingerprint any, perGate *orderedObject,
 	disposition, classification any, reEntryCount int,
 ) (string, error) {
-	payload := ordered(
+	payload := ordered()
+	// The GitHub payload leads with its forge tag; the GitLab one predates
+	// there being two, and adding the key to it would change every digest
+	// already recorded in a project's ledger.
+	if forge.tagsDigest {
+		payload.set("forge", forge.name)
+	}
+	payload.setAll(
 		"task_id", taskID,
-		"project_path", projectPath,
+		forge.pathKey, projectPath,
 		"gate_ids", asJSONList(gateIDs),
 		"dispatch_fingerprint", dispatchFingerprint,
 		"per_gate", perGate,

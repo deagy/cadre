@@ -154,12 +154,12 @@ func (r *Registry) planAndDigest(
 	if request.IncludeScope {
 		scope = record["scope"]
 	}
-	plan, err := buildIssuePlan(taskID, request.ProjectPath, gateIDs, record, authorities,
+	plan, err := buildIssuePlan(gitlabIssueForge, taskID, request.ProjectPath, gateIDs, record, authorities,
 		contracts, request.IncludeScope, scope)
 	if err != nil {
 		return nil, "", err
 	}
-	digest, err := ComputePlanDigest(taskID, request.ProjectPath, gateIDs,
+	digest, err := ComputePlanDigest(gitlabIssueForge, taskID, request.ProjectPath, gateIDs,
 		dispatchPlan["dispatch_fingerprint"], plan.perGate,
 		record["disposition"], record["classification"],
 		len(listOf(record["re_entry_history"])))
