@@ -114,7 +114,21 @@ func SelectWorkflow(matchedRoutes []Match, riskIDs []string, hasAgents bool) str
 func UndeclaredWorkflowShapeRoutes(matchedRoutes []Match) []string {
 	undeclared := []string{}
 	for _, route := range matchedRoutes {
-		if _, present := route.Rule["workflow_shape"]; !present {
+		// A shape counts as declared only when it is a non-empty string.
+		//
+		// Presence alone is not enough, and the difference is reachable: an
+		// overlay may write "workflow_shape": null, which validation accepts
+		// (the value check skips a null) while the workflow selector reads no
+		// shape off it. Keying on presence let exactly that case fall back to
+		// "unclassified" with nothing in the plan to say so -- the defect this
+		// signal exists to make visible.
+		//
+		// Python spells this as falsiness, so null, "" and any other empty
+		// value all report. Anything that is not a non-empty string reports
+		// here for the same reason, which is also the conservative direction
+		// for a signal whose whole purpose is visibility.
+		shape, _ := route.Rule["workflow_shape"].(string)
+		if shape == "" {
 			undeclared = append(undeclared, route.ID)
 		}
 	}
