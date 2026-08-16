@@ -220,3 +220,46 @@ func TestTheKernelShipsAsItsOwnBinary(t *testing.T) {
 			"so that the boundary survives a refactor", files)
 	}
 }
+
+// TestThisRepositoryRunsNoLifecycleOverlayOfItsOwn guards a stated invariant
+// that is easy to break by accident and hard to notice afterwards.
+//
+// This repository supplies the kernel; it does not adopt it. It has no
+// `.agentic-sdlc/` overlay and no lifecycle records, which CLAUDE.md states
+// outright.
+//
+// What makes it worth a test rather than a rule: an overlay is what
+// `agentic-sdlc init` *creates*, and init defaults `--root` to the working
+// directory. Any test, sweep or manual invocation that forgets a `--root`
+// writes a complete overlay wherever it happened to be standing -- seven
+// JSON files with plausible names, which look like fixtures in a diff. Two
+// arrived that way and were committed before this existed.
+func TestThisRepositoryRunsNoLifecycleOverlayOfItsOwn(t *testing.T) {
+	root := repositoryRoot(t)
+	var found []string
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // an unreadable directory is not evidence of an overlay
+		}
+		if !info.IsDir() {
+			return nil
+		}
+		switch info.Name() {
+		case ".git", "node_modules", ".cadre-build-cache", "plugin-dist":
+			return filepath.SkipDir
+		case Overlay:
+			relative, _ := filepath.Rel(root, path)
+			found = append(found, relative)
+			return filepath.SkipDir
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) > 0 {
+		t.Errorf("this repository has lifecycle overlays it should not:\n  %s\n"+
+			"An `agentic-sdlc init` ran here without --root. Delete these, and give "+
+			"whatever produced them an explicit root.", strings.Join(found, "\n  "))
+	}
+}
