@@ -583,8 +583,10 @@ func upgradeCmd(registry *Registry, args []string, stdout, stderr io.Writer) int
 			}
 			apply = true
 		default:
-			_, _ = fmt.Fprintln(stderr,
-				"usage: agentic-sdlc upgrade [--root ROOT] (--check | --apply)")
+			// Named, not just refused. Every other command in this CLI says
+			// which argument it did not understand, and an operator reading
+			// only a usage line has to diff it against what they typed.
+			_, _ = fmt.Fprintf(stderr, "agentic-sdlc upgrade: unknown argument %q\n", args[index])
 			return 2
 		}
 	}
