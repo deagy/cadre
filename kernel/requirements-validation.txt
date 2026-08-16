@@ -1,2 +1,0 @@
-# Required for fail-closed validation, including RFC 3339 date-time formats.
-jsonschema[format]==4.26.0

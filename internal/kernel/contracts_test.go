@@ -3,7 +3,6 @@ package kernel
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -152,24 +151,61 @@ func TestTheOutputEndsWithExactlyOneNewline(t *testing.T) {
 	}
 }
 
-func TestTheGoKernelVersionMatchesThePythonOne(t *testing.T) {
-	// Version is a literal here and a literal in agentic_sdlc/__init__.py,
-	// because a binary cannot read the Python source and reading it at
-	// runtime would make the version depend on a checkout being present.
+func TestTheKernelVersionIsInsideEveryProviderCompatibilityWindow(t *testing.T) {
+	// Version was guarded against the Python kernel's literal until that
+	// kernel was deleted. The reason it needed guarding did not go with it:
+	// providers declare a kernel_compatibility range and are refused outside
+	// it, so a wrong value here either rejects a provider that should load or
+	// accepts one written against different gate semantics.
 	//
-	// It is not decoration: providers declare a kernel_compatibility range
-	// and are refused outside it, so a wrong version here either rejects a
-	// provider that should load or accepts one written against different gate
-	// semantics.
-	source, err := os.ReadFile(filepath.Join("..", "..", "kernel", "agentic_sdlc", "__init__.py"))
+	// With one implementation left, the thing it must agree with is the
+	// provider bundles this repository ships. This also replaces the Python
+	// repository-health check that ran `cadre sdlc --version` and compared it
+	// to the same window -- now a constant comparison, with no subprocess.
+	root := repositoryRoot(t)
+	manifests, err := filepath.Glob(filepath.Join(root, "provider*", "**", "provider.json"))
 	if err != nil {
-		t.Skipf("not running inside a source checkout: %v", err)
+		t.Fatal(err)
 	}
-	match := regexp.MustCompile(`(?m)^VERSION = "([^"]+)"`).FindSubmatch(source)
-	if match == nil {
-		t.Fatal("could not find VERSION in the Python kernel; this guard is not checking anything")
+	direct, err := filepath.Glob(filepath.Join(root, "provider*", "provider.json"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := string(match[1]); got != Version {
-		t.Errorf("kernel version disagrees: Go has %q, Python has %q", Version, got)
+	manifests = append(manifests, direct...)
+	if len(manifests) == 0 {
+		t.Fatal("no provider manifests found; this guard is not checking anything")
+	}
+
+	current, err := semverTuple(Version)
+	if err != nil {
+		t.Fatalf("the kernel version %q is not a semantic version: %v", Version, err)
+	}
+	for _, path := range manifests {
+		manifest, err := loadJSONObject(path)
+		if err != nil {
+			t.Errorf("%s: %v", path, err)
+			continue
+		}
+		window, ok := manifest["kernel_compatibility"].(map[string]any)
+		if !ok {
+			continue // a manifest that declares no window constrains nothing
+		}
+		minimum, err := semverTuple(toStringOrEmpty(window["minimum"]))
+		if err != nil {
+			t.Errorf("%s: minimum %v", path, err)
+			continue
+		}
+		maximum, err := semverTuple(toStringOrEmpty(window["maximum_exclusive"]))
+		if err != nil {
+			t.Errorf("%s: maximum_exclusive %v", path, err)
+			continue
+		}
+		// The same comparison LoadProvider makes, so this fails exactly when a
+		// real load would.
+		if semverLessThan(current, minimum) || !semverLessThan(current, maximum) {
+			t.Errorf("%s declares [%v, %v) and this kernel is %s -- it would refuse "+
+				"its own provider bundle", path, window["minimum"],
+				window["maximum_exclusive"], Version)
+		}
 	}
 }

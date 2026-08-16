@@ -27,9 +27,9 @@ stay put.
 
 ## The actual usage flow
 
-1. **Install** — `pipx install` the kernel (puts `agentic-sdlc` on `PATH`;
-   see the [plugin guide](../kernel/README.md#install) for the
-   exact command and current release tag), and separately set up the
+1. **Install** — build the kernel from a checkout (`./bin/agentic-sdlc`
+   builds and execs the Go binary; see the [kernel guide](../../kernel/README.md#install)),
+   and separately set up the
    LangGraph engine if you want real orchestration (`uv sync` in
    `engine/`, or install it too).
 2. **Initialize a target project**:

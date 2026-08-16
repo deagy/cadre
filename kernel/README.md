@@ -5,19 +5,26 @@ This plugin makes the repository's G1–G10 Agentic SDLC portable. It supplies a
 ## Install
 
 > [!WARNING]
-> **Not on PyPI.** The PyPI name `agentic-sdlc` belongs to an unrelated
-> third-party project — `pip install agentic-sdlc` installs *different
-> software*, not this kernel. Use only the checkout or git-URL forms below, or
-> a wheel from this repository's
-> [Releases](https://github.com/deagy/cadre/releases) (filter for `kernel-v*`
-> tags). See [SECURITY.md](../SECURITY.md).
+> **Not on PyPI, and nothing here is a Python package any more.** The PyPI
+> name `agentic-sdlc` belongs to an unrelated third-party project, so
+> `pip install agentic-sdlc` installs *different software*. It always did;
+> now there is not even a package of ours it could be confused with. See
+> [SECURITY.md](../SECURITY.md).
+
+The kernel is a Go binary, built from this repository:
 
 ```sh
-pipx install ./kernel        # from a checkout
-pipx install "git+https://github.com/deagy/cadre.git@kernel-v<version>#subdirectory=kernel"
+./bin/agentic-sdlc --version       # builds cmd/agentic-sdlc on first use, then execs it
 ```
 
-Either form puts a real `agentic-sdlc` executable on `PATH`, isolated in its own environment, with no repository checkout required at runtime — `contracts/` is bundled into the installed distribution at build time (see `pyproject.toml`). `pip install` works the same way if you'd rather manage the environment yourself; use `pip install -e ./kernel` for an editable install while developing the kernel itself. Requires Python 3.10+.
+Put that script on `PATH` (a symlink works — it resolves its own location) or
+point `AGENTIC_SDLC_BIN` at it. `contracts/` is embedded in the binary, so no
+checkout is needed at runtime once it is built.
+
+**What is in this directory now.** `contracts/` — the ten JSON schemas that
+define the G1–G10 lifecycle — and this README. The implementation is Go, in
+`internal/kernel/`, and the schemas here are its source of truth: a Go test
+guards the embedded copy against these files.
 
 Orchestrating actual work against this kernel — dispatching author/reviewer roles, stopping at human/mutation gates, tracking gate state across a task's lifetime — is done by the LangGraph engine in [`../engine/agentic_sdlc_langgraph/`](../engine/agentic_sdlc_langgraph), not by this plugin. See that package's README for the `agentic-sdlc-lg` CLI and the standalone service. (An earlier version of this plugin shipped that orchestration as six Claude Code/Codex CLI skills an LLM host had to interpret step by step; those were retired once the LangGraph engine replaced them with real, testable control flow.)
 

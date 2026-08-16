@@ -141,19 +141,19 @@ class TestRosterNeverImportsTheKernel(unittest.TestCase):
 
 
 class TestKernelStaysIndependentlyReleasable(unittest.TestCase):
-    def test_kernel_declares_its_own_distribution_and_version(self) -> None:
+    def test_kernel_carries_its_own_version(self) -> None:
         """Merging the repositories must not merge the version lines.
 
-        The kernel remains a separately versioned, separately publishable
-        distribution: provider.json's `kernel_compatibility` window is still
-        a real compatibility contract, and it is only meaningful if the
-        kernel can move independently of the role catalog.
+        The kernel is no longer a separately *publishable* distribution --
+        the Python package was deleted once the Go port replaced it -- but it
+        is still separately *versioned*, and that is the half that carries the
+        contract: provider.json's `kernel_compatibility` window is only
+        meaningful if the kernel can move independently of the role catalog.
         """
-        pyproject = KERNEL_ROOT / "pyproject.toml"
-        self.assertTrue(pyproject.is_file(), str(pyproject))
-        text = pyproject.read_text(encoding="utf-8")
-        self.assertIn('name = "agentic-sdlc"', text)
-        self.assertIn("agentic-sdlc = ", text)  # its own console script
+        source = (REPOSITORY_ROOT / "internal" / "kernel" / "provider.go").read_text(
+            encoding="utf-8"
+        )
+        self.assertRegex(source, r'(?m)^const Version = "\d+\.\d+\.\d+"')
 
     def test_kernel_owns_the_lifecycle_contracts(self) -> None:
         for contract in ("lifecycle-gates.json", "mutation-gates.json", "run-record.schema.json"):

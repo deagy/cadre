@@ -5,13 +5,12 @@ name: Release
 # This repository carries three independent version lines, and that is
 # deliberate -- provider/provider.json's kernel_compatibility window is only
 # meaningful if the kernel can move separately from the role catalog, and
-# roster/orchestration/test/test_kernel_boundary.py asserts the kernel keeps
+# internal/kernel/kernel_boundary_test.go asserts the kernel keeps
 # its own distribution name and console script. So there are two release
 # jobs, each with its own component-prefixed tag namespace:
 #
 #   plugin-v<version>   the packaged plugin distribution (plugin/**/plugin.json,
 #                       all 8 manifests, see plugin/tools/plugin_version.py)
-#   kernel-v<version>   the G1-G10 kernel (kernel/agentic_sdlc/__init__.py)
 #
 # Prefixes are not cosmetic. This repository inherited 25 bare `v*` tags from
 # the pre-monorepo deagy/cadre (v0.1.1 through v0.16.0, plus v1..v7), so a
@@ -51,7 +50,6 @@ on:
       - "plugin/plugins/lifecycle-github/.codex-plugin/plugin.json"
       - "plugin/plugins/lifecycle-gitlab/.claude-plugin/plugin.json"
       - "plugin/plugins/lifecycle-gitlab/.codex-plugin/plugin.json"
-      - "kernel/agentic_sdlc/__init__.py"
       - "VERSION"
   workflow_dispatch:
 
@@ -66,7 +64,6 @@ jobs:
       contents: read
     outputs:
       plugin: ${{ steps.detect.outputs.plugin }}
-      kernel: ${{ steps.detect.outputs.kernel }}
       cli: ${{ steps.detect.outputs.cli }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -104,11 +101,6 @@ jobs:
                   # plugin_version.py --check report it properly.
                   return "<unparseable>"
 
-          def kernel_version(text):
-              if text is None:
-                  return None
-              match = re.search(r'^VERSION = "(\d+\.\d+\.\d+)"', text, re.MULTILINE)
-              return match.group(1) if match else "<unreadable>"
 
           def cli_version(text):
               if text is None:
@@ -154,7 +146,6 @@ jobs:
 
           components = {
               "plugin": (PLUGIN_MANIFESTS, manifest_version),
-              "kernel": (["kernel/agentic_sdlc/__init__.py"], kernel_version),
               "cli": (["cadre_cli/_version.py"], cli_version),
           }
           for name, (paths, read) in components.items():
@@ -193,7 +184,7 @@ jobs:
     # directly. Scoping the secret to this environment is what makes the gate
     # protect the key -- see .github/TAG-SIGNING-SETUP.md step 2.
     environment: release
-    # Per-job, matching the kernel job: the SBOM below is attested, so this
+    # Per-job: the SBOM below is attested, so this
     # needs the same Sigstore permissions.
     permissions:
       contents: write
@@ -737,255 +728,3 @@ jobs:
             --latest=false \
             flat-dist/*
 
-  kernel:
-    name: Release the lifecycle kernel
-    needs: changed
-    if: needs.changed.outputs.kernel == 'true'
-    runs-on: ubuntu-latest
-    # Signing and publishing run under the `release` environment, which
-    # requires an explicit approval and limits the allowed refs to `main` and
-    # the `plugin-v*`/`kernel-v*` tags. Reaching `main` is not by itself
-    # authorization to mint a signed, published release: the run waits for a
-    # human to approve it, indefinitely, rather than proceeding unattended.
-    #
-    # Environment approval permits self-approval, unlike pull-request review
-    # -- which is why a solo maintainer can use it as a real gate rather than
-    # a wait timer that elapses whether or not anyone is watching.
-    #
-    # Note this gates *these jobs*, not the secret: while TAG_SIGNING_KEY is a
-    # repository secret, any job that omits `environment:` still reads it
-    # directly. Scoping the secret to this environment is what makes the gate
-    # protect the key -- see .github/TAG-SIGNING-SETUP.md step 2.
-    environment: release
-    # Declared per-job rather than at the workflow level so the plugin job
-    # above does not also gain the ability to mint attestations it never
-    # uses. A job-level block replaces the workflow-level one outright, so
-    # contents: write has to be repeated here.
-    permissions:
-      contents: write
-      # attest-build-provenance mints a Sigstore certificate from this
-      # workflow's OIDC identity and records the attestation against this
-      # repository -- there is no signing key to manage or rotate.
-      id-token: write
-      attestations: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.14"
-
-      - name: Read kernel version
-        id: version
-        run: |
-          set -eu
-          value=$(python3 -c "
-          import re, pathlib
-          text = pathlib.Path('kernel/agentic_sdlc/__init__.py').read_text(encoding='utf-8')
-          match = re.search(r'^VERSION = \"(\d+\.\d+\.\d+)\"', text, re.MULTILINE)
-          if not match:
-              raise SystemExit('kernel VERSION not found or not MAJOR.MINOR.PATCH')
-          print(match.group(1))
-          ")
-          echo "value=$value" >> "$GITHUB_OUTPUT"
-
-      - name: Verify the kernel version satisfies provider.json's compatibility window
-        run: |
-          set -eu
-          python3 - <<'PY'
-          import json, os, pathlib
-          version = os.environ["KERNEL_VERSION"]
-          window = json.loads(pathlib.Path("provider/provider.json").read_text())["kernel_compatibility"]
-
-          def parts(value):
-              return tuple(int(p) for p in value.split("."))
-
-          if not parts(window["minimum"]) <= parts(version) < parts(window["maximum_exclusive"]):
-              raise SystemExit(
-                  f"kernel {version} falls outside provider.json's declared window "
-                  f"[{window['minimum']}, {window['maximum_exclusive']}). Releasing it would "
-                  "ship a kernel this repository's own provider refuses to run."
-              )
-          print(f"kernel {version} is inside [{window['minimum']}, {window['maximum_exclusive']})")
-          PY
-        env:
-          KERNEL_VERSION: ${{ steps.version.outputs.value }}
-
-      - name: Skip if this version is already tagged
-        id: tag
-        run: |
-          if git rev-parse "refs/tags/kernel-v${{ steps.version.outputs.value }}" >/dev/null 2>&1; then
-            echo "kernel-v${{ steps.version.outputs.value }} already tagged; nothing to do."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Version-pinned for the same reason validate.yml pins it: a single
-      # build-only tool, not part of the hash-pinned requirements lock.
-      - name: Build wheel and sdist
-        if: steps.tag.outputs.skip == 'false'
-        run: |
-          set -eu
-          pip install --no-cache-dir build==1.5.0
-          python -m build --wheel --sdist --outdir dist ./kernel
-
-      # The SBOM describes the *resolved* dependency tree, so it has to be
-      # taken from an environment where the wheel is actually installed.
-      # Scanning kernel/ instead reads pyproject.toml and finds exactly one
-      # package (jsonschema), which is a declaration, not an inventory --
-      # what really lands is 19 distributions, most of them pulled in
-      # beneath jsonschema.
-      #
-      # This mirrors what bootstrap_sdlc.py does on a user's machine: create
-      # a venv, pip install the wheel. So the SBOM describes the environment
-      # a consumer ends up with, pip included, rather than a hypothetical.
-      - name: Install the built wheel into a throwaway venv
-        if: steps.tag.outputs.skip == 'false'
-        run: |
-          set -eu
-          python -m venv "$RUNNER_TEMP/sbom-venv"
-          "$RUNNER_TEMP/sbom-venv/bin/pip" install --no-cache-dir --disable-pip-version-check dist/*.whl
-          # Resolved rather than hardcoded: the path carries the minor version.
-          echo "SITE_PACKAGES=$(
-            "$RUNNER_TEMP/sbom-venv/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])'
-          )" >> "$GITHUB_ENV"
-
-      # Run syft directly rather than through sbom-action: the action exposes
-      # no cataloger selection or source naming, and without them the output
-      # carries six "Simple Launcher" binaries and a package named after the
-      # scan path.
-      - name: Install syft
-        if: steps.tag.outputs.skip == 'false'
-        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
-
-      - name: Generate an SBOM of the resolved dependency tree
-        if: steps.tag.outputs.skip == 'false'
-        run: |
-          set -eu
-          syft scan "dir:$SITE_PACKAGES" \
-            --select-catalogers python \
-            --source-name agentic-sdlc \
-            --source-version "${{ steps.version.outputs.value }}" \
-            -o spdx-json=dist/agentic-sdlc-sbom.spdx.json
-          python3 -c "
-          import json, pathlib
-          d = json.loads(pathlib.Path('dist/agentic-sdlc-sbom.spdx.json').read_text())
-          names = {p['name'] for p in d.get('packages', []) if p.get('name')}
-          # Guards the whole point of this step: if the scan silently reverts
-          # to reading declarations, this is 2 and the release should fail
-          # rather than publish a misleading inventory.
-          assert len(names) >= 15, f'SBOM has only {len(names)} packages: {sorted(names)}'
-          assert 'jsonschema' in names and 'rpds-py' in names, sorted(names)
-          print(f'SBOM lists {len(names)} distinct packages')
-          "
-
-      # bootstrap_sdlc.py installs the kernel from a release asset rather than
-      # a git ref so the download can be hash-checked. A moving tag cannot be
-      # pinned, and a git+ URL additionally needs git and direct GitHub
-      # access -- the first thing a corporate proxy breaks.
-      #
-      # Runs after the SBOM so SHA256SUMS covers it too; bootstrap_sdlc.py
-      # selects the line ending in .whl, so the extra lines are inert there.
-      - name: Checksum the artifacts
-        if: steps.tag.outputs.skip == 'false'
-        working-directory: dist
-        run: sha256sum * > SHA256SUMS
-
-      # What this buys over the checksums already published: SHA256SUMS says
-      # the download matches what the release holds, but it is served by the
-      # same release and says nothing about which build produced it.
-      # Provenance binds these artifacts to this workflow, at this commit, in
-      # this repository. Consumers verify with:
-      #   gh attestation verify <file> --repo deagy/cadre
-      #
-      # Guarded by the same skip flag as everything above, so a re-run
-      # against an existing tag never re-attests it.
-      - name: Attest build provenance
-        if: steps.tag.outputs.skip == 'false'
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: |
-            dist/*.whl
-            dist/*.tar.gz
-            dist/agentic-sdlc-sbom.spdx.json
-
-      # SSH tag signing. The private key lives in the TAG_SIGNING_KEY secret
-      # and the matching public key is registered on the account as a
-      # *signing* key, which is what makes GitHub show these tags Verified.
-      #
-      # This is a deliberate reversal of the keyless posture used for
-      # artifacts, and the reason is recorded in SECURITY.md: gitsign
-      # produced tag signatures with no Rekor entry, so nothing could ever
-      # verify them. A stored key is the cost of tag signatures that
-      # actually verify.
-      #
-      # Skipped rather than failed when the secret is absent, so a fork or a
-      # repository that has not set it up still releases -- unsigned, which
-      # is honest, instead of not at all.
-      - name: Set up tag signing
-        id: signing
-        if: steps.tag.outputs.skip == 'false'
-        env:
-          TAG_SIGNING_KEY: ${{ secrets.TAG_SIGNING_KEY }}
-        run: |
-          set -eu
-          if [ -z "${TAG_SIGNING_KEY:-}" ]; then
-            echo "::warning::TAG_SIGNING_KEY is not set; tagging without a signature."
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          install -m 700 -d "$RUNNER_TEMP/signing"
-          printf '%s\n' "$TAG_SIGNING_KEY" > "$RUNNER_TEMP/signing/key"
-          chmod 600 "$RUNNER_TEMP/signing/key"
-          ssh-keygen -y -f "$RUNNER_TEMP/signing/key" > "$RUNNER_TEMP/signing/key.pub"
-          git config gpg.format ssh
-          git config user.signingkey "$RUNNER_TEMP/signing/key"
-          echo "enabled=true" >> "$GITHUB_OUTPUT"
-
-      - name: Tag
-        if: steps.tag.outputs.skip == 'false'
-        run: |
-          # Tagger identity must belong to the account that owns the signing
-          # key, or GitHub reports the signature as unknown_key however valid
-          # it is -- it matches the key to the signer's account by email.
-          # github-actions[bot]@users.noreply.github.com is not on that
-          # account, which is exactly how plugin-v0.12.4 ended up signed,
-          # locally verifiable, and still shown Unverified.
-          #
-          # The noreply form is used rather than a personal address: always
-          # associated with the account, and it exposes nothing.
-          git config user.name "deagy"
-          git config user.email "48447733+deagy@users.noreply.github.com"
-          # -s when a signing key is configured, -a otherwise.
-          if [ "${{ steps.signing.outputs.enabled }}" = "true" ]; then
-            git tag -s "kernel-v${{ steps.version.outputs.value }}" \
-              -m "Lifecycle kernel v${{ steps.version.outputs.value }}"
-            # Fail the release if the signature does not verify. Unlike the
-            # gitsign attempt, this check is fatal: a tag that cannot be
-            # verified is the defect, not a hiccup to log and move past.
-            printf 'signer %s\n' "$(cat "$RUNNER_TEMP/signing/key.pub")" > "$RUNNER_TEMP/signing/allowed_signers"
-            git -c gpg.ssh.allowedSignersFile="$RUNNER_TEMP/signing/allowed_signers" \
-              tag -v "kernel-v${{ steps.version.outputs.value }}"
-          else
-            git tag -a "kernel-v${{ steps.version.outputs.value }}" \
-              -m "Lifecycle kernel v${{ steps.version.outputs.value }}"
-          fi
-          git push origin "kernel-v${{ steps.version.outputs.value }}"
-
-      # --latest=false, not merely omitting --latest: gh defaults to marking
-      # the newest release as latest, so omitting it is not neutral. The
-      # kernel job runs after the plugin job, so the default handed the
-      # headline release to the kernel -- which is not what an end user
-      # installs. Observed on the first real run.
-      - name: Publish GitHub Release with artifacts
-        if: steps.tag.outputs.skip == 'false'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "kernel-v${{ steps.version.outputs.value }}" \
-            --title "Lifecycle kernel v${{ steps.version.outputs.value }}" \
-            --notes "G1-G10 lifecycle kernel v${{ steps.version.outputs.value }}. Verify downloads against SHA256SUMS." \
-            --latest=false \
-            dist/*

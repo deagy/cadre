@@ -31,11 +31,12 @@ import (
 
 // Version is the kernel version providers declare compatibility against.
 //
-// A literal, guarded rather than derived: a kernel shipped as a binary cannot
-// read the Python source, and reading it at runtime would make the version
-// depend on a checkout being present. TestTheGoKernelVersionMatchesThePython
-// One compares this against agentic_sdlc/__init__.py, so the two cannot
-// disagree for longer than it takes to run the tests.
+// A literal, guarded rather than derived: reading it from a file at runtime
+// would make the version depend on a checkout being present. It was guarded
+// against the Python kernel's own literal until that kernel was deleted;
+// TestTheKernelVersionIsInsideEveryProviderCompatibilityWindow now guards it
+// against the provider bundles this repository ships, which is the thing it
+// has to agree with for a load to succeed.
 //
 // It is not decoration. Providers declare a kernel_compatibility range and
 // are refused outside it, so a wrong version here either rejects a provider

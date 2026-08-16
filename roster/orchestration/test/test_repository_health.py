@@ -1718,12 +1718,15 @@ class RepositoryHealthTests(unittest.TestCase):
         # strings. It also passed locally while failing in CI, because a
         # developer machine with an older agentic-sdlc on PATH resolves that
         # instead of the in-tree kernel CI points AGENTIC_SDLC_BIN at.
+        # Read from the Go kernel's own constant. This read
+        # kernel/agentic_sdlc/__init__.py until that package was deleted; the
+        # reason for deriving it rather than hardcoding it is unchanged.
         expected = re.search(
-            r'^VERSION = "(\d+\.\d+\.\d+)"',
-            (REPOSITORY_ROOT / "kernel" / "agentic_sdlc" / "__init__.py").read_text(encoding="utf-8"),
+            r'^const Version = "(\d+\.\d+\.\d+)"',
+            (REPOSITORY_ROOT / "internal" / "kernel" / "provider.go").read_text(encoding="utf-8"),
             re.MULTILINE,
         )
-        self.assertIsNotNone(expected, "kernel VERSION not found")
+        self.assertIsNotNone(expected, "kernel Version not found in internal/kernel/provider.go")
         self.assertEqual(expected.group(1), result.stdout.strip())
 
     @unittest.skipUnless(sys.platform != "win32", "bin/cadre is a POSIX sh script")
