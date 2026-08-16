@@ -173,7 +173,9 @@ func listLedgerCmd(
 		case strings.HasPrefix(args[index], "--task-id="):
 			taskID = strings.TrimPrefix(args[index], "--task-id=")
 		default:
-			_, _ = fmt.Fprintf(stderr, "usage: agentic-sdlc %s [--root ROOT] --task-id TASK_ID\n", name)
+			// Named, like every other command here. A ledger reader that only
+			// prints its usage line leaves the operator to spot the typo.
+			_, _ = fmt.Fprintf(stderr, "agentic-sdlc %s: unknown argument %q\n", name, args[index])
 			return 2
 		}
 	}
