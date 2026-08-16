@@ -2,10 +2,7 @@ package kernel
 
 import (
 	"bytes"
-	"encoding/json"
-	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -21,86 +18,6 @@ import (
 // requested, 2 means somebody has to act first, and 1 means the report could
 // not be built at all. A port that got the document right and the code wrong
 // would look correct in every log and break every pipeline reading it.
-
-// reviewerFixture builds a project with assigned authorities, forge bindings,
-// and one planned task.
-func reviewerFixture(t *testing.T) (root, manifest string) {
-	t.Helper()
-	root, manifest = decidableProject(t)
-	mutateJSON(t, filepath.Join(root, Overlay, "authorities.json"),
-		func(document map[string]any) {
-			for role, raw := range document {
-				authority, ok := raw.(map[string]any)
-				if !ok {
-					continue
-				}
-				if _, isAuthority := authority["status"]; !isAuthority {
-					continue
-				}
-				// A GitLab binding beside the GitHub one, so the same fixture
-				// drives both reports.
-				authority["gitlab_username"] = strings.ReplaceAll(role, "_", "-")
-			}
-		})
-	return root, manifest
-}
-
-// writeForgeMock writes one mock file and points an environment variable at it.
-func writeForgeMock(t *testing.T, variable string, payload any) {
-	t.Helper()
-	encoded, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(t.TempDir(), strings.ToLower(variable)+".json")
-	if err := os.WriteFile(path, encoded, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv(variable, path)
-}
-
-// gitHubReviewerMock is the baseline: an open PR authored by the engineering
-// lead, with one reviewer already requested and one review already in.
-func gitHubReviewerMock() map[string]any {
-	collaborators := map[string]any{}
-	users := map[string]any{}
-	for _, role := range AuthorityRoleOrder {
-		login := strings.ReplaceAll(role, "_", "-")
-		users[login] = true
-		collaborators["acme/app:"+login] = true
-	}
-	return map[string]any{
-		"identity": map[string]any{"login": "sdlc-bot"},
-		"pr": map[string]any{
-			"number": 3, "state": "open", "draft": false, "merged": false,
-			"head": map[string]any{"sha": "abc123"},
-			"base": map[string]any{"repo": map[string]any{"full_name": "acme/app"}},
-			// Somebody who holds no authority, so the baseline is clean and
-			// each case below introduces exactly one problem. The
-			// pr-author-conflict branch has its own case.
-			"user": map[string]any{"login": "outside-contributor"},
-		},
-		"requested_reviewers": map[string]any{
-			"users": []any{map[string]any{"login": "system-architect"}},
-		},
-		"users": users, "collaborators": collaborators,
-	}
-}
-
-func gitHubReviewsMock() []any {
-	return []any{
-		// A review of the current head, and a review of an older commit --
-		// already-reviewed and review-stale respectively.
-		map[string]any{
-			"user": map[string]any{"login": "product-owner"}, "state": "APPROVED",
-			"submitted_at": "2026-08-15T09:00:00Z", "commit_id": "abc123",
-		},
-		map[string]any{
-			"user": map[string]any{"login": "governance-lead"}, "state": "APPROVED",
-			"submitted_at": "2026-08-14T09:00:00Z", "commit_id": "old999",
-		},
-	}
-}
 
 var gitHubReviewerCases = []struct {
 	name    string
@@ -299,26 +216,6 @@ var gitLabReviewerCases = []struct {
 		},
 		expectExit: 2,
 	},
-}
-
-func gitLabReviewerMock() map[string]any {
-	users := map[string]any{}
-	for _, role := range AuthorityRoleOrder {
-		username := strings.ReplaceAll(role, "_", "-")
-		users[username] = []any{
-			map[string]any{"id": 1, "username": username, "state": "active"},
-		}
-	}
-	return map[string]any{
-		"identity": map[string]any{"username": "sdlc-bot"},
-		"mr": map[string]any{
-			"iid": 5, "state": "opened", "draft": false, "sha": "def456",
-			"references": map[string]any{"full": "acme/app!5"},
-			"author":     map[string]any{"username": "engineering-lead"},
-			"reviewers":  []any{map[string]any{"username": "system-architect"}},
-		},
-		"users": users,
-	}
 }
 
 func TestTheGitLabReviewerReportMatchesThePythonKernel(t *testing.T) {

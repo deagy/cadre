@@ -161,30 +161,6 @@ func readTaskDocument(t *testing.T, root, name string) string {
 	return string(data)
 }
 
-func repositoryRoot(t *testing.T) string {
-	t.Helper()
-	root, err := filepath.Abs(filepath.Join("..", ".."))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return root
-}
-
-// initialisedProject builds a bare project overlay -- no planned task -- and
-// returns a fresh copy of it.
-func initialisedProject(t *testing.T) (root, manifest string) {
-	t.Helper()
-	template, manifest := plannedProjectTemplate(t)
-	root = t.TempDir()
-	if err := copyTree(template, root); err != nil {
-		t.Fatal(err)
-	}
-	// The shared template already has a planned TASK-2; these cases plan
-	// TASK-1 beside it, which also means every case runs against a project
-	// that already contains a run rather than an empty one.
-	return root, manifest
-}
-
 func TestPlanRefusesToRedefineAnExistingTask(t *testing.T) {
 	// The refusal that protects a record already accumulating approvals. A
 	// re-plan with different text is not an update -- it is a different task

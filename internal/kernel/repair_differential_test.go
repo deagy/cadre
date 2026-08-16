@@ -140,7 +140,7 @@ var repairCases = []repairCase{
 func TestRepairAgreesWithThePythonKernel(t *testing.T) {
 	for _, probe := range repairCases {
 		t.Run(probe.name, func(t *testing.T) {
-			pythonRoot, manifest := initialisedProjectFor(t)
+			pythonRoot, manifest := repairableProject(t)
 			goRoot := filepath.Join(t.TempDir(), "project")
 			if err := copyTree(pythonRoot, goRoot); err != nil {
 				t.Fatal(err)
@@ -215,33 +215,13 @@ func reportedPaths(t *testing.T, report string) []string {
 	return paths
 }
 
-// initialisedProjectFor builds a project with the Python kernel's own init, so
-// repair is reconciling something it did not create.
-func initialisedProjectFor(t *testing.T) (root, manifest string) {
-	t.Helper()
-	manifest = providerManifest(t)
-	if _, err := os.Stat(manifest); err != nil {
-		t.Skip("no provider manifest in this checkout")
-	}
-	root = filepath.Join(t.TempDir(), "project")
-	if err := os.MkdirAll(root, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	code, output := runPythonKernel(repositoryRoot(t), "--provider", manifest,
-		"init", "--root", root, "--profile", "secure-cloud", "--project-id", "probe")
-	if code != 0 {
-		t.Skipf("kernel init failed, so there is nothing to repair: %s", truncate(output))
-	}
-	return root, manifest
-}
-
 // The invariants, stated without reference to the Python kernel.
 
 func TestRepairNeverReplacesADecision(t *testing.T) {
 	// The rule the whole command is built around: existing artifacts are
 	// decisions, not cache. This edits every managed file, then repairs, and
 	// asserts nothing it edited moved.
-	root, manifest := initialisedProjectFor(t)
+	root, manifest := repairableProject(t)
 	mutateJSON(t, filepath.Join(root, Overlay, "authorities.json"),
 		func(document map[string]any) {
 			authority, _ := document["product_owner"].(map[string]any)
@@ -283,7 +263,7 @@ func TestRepairNeverReplacesADecision(t *testing.T) {
 func TestOneBlockerStopsEverything(t *testing.T) {
 	// A repair that fixed what it could while something else was unreadable
 	// would leave a project half-reconciled and report success.
-	root, manifest := initialisedProjectFor(t)
+	root, manifest := repairableProject(t)
 	if err := os.Remove(filepath.Join(root, Overlay, "commands.json")); err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +291,7 @@ func TestOneBlockerStopsEverything(t *testing.T) {
 }
 
 func TestRepairWithoutApplyWritesNothing(t *testing.T) {
-	root, manifest := initialisedProjectFor(t)
+	root, manifest := repairableProject(t)
 	if err := os.Remove(filepath.Join(root, Overlay, "commands.json")); err != nil {
 		t.Fatal(err)
 	}
@@ -343,7 +323,7 @@ func TestRepairRefusesToFollowASymlinkedManagedFile(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink semantics differ on Windows")
 	}
-	root, manifest := initialisedProjectFor(t)
+	root, manifest := repairableProject(t)
 	outside := filepath.Join(t.TempDir(), "victim")
 	if err := os.WriteFile(outside, []byte("untouched"), 0o644); err != nil {
 		t.Fatal(err)

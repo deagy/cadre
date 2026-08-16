@@ -2,7 +2,6 @@ package kernel
 
 import (
 	"encoding/json"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -43,39 +42,6 @@ func pythonKernelIn(kernelRoot string, args ...string) (int, string) {
 	return command.ProcessState.ExitCode(), string(output)
 }
 
-// initProject builds a fresh project overlay with the real kernel.
-func initProject(t *testing.T) (root, manifest string) {
-	t.Helper()
-	if _, err := exec.LookPath("python3"); err != nil {
-		t.Skip("python3 is unavailable, so there is nothing to compare against")
-	}
-	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
-	if err != nil {
-		t.Fatal(err)
-	}
-	manifest = filepath.Join(repoRoot, "provider", "provider.json")
-	if _, err := os.Stat(manifest); err != nil {
-		t.Skip("no provider manifest in this checkout")
-	}
-
-	root = t.TempDir()
-	code, output := pythonKernel(t,
-		"--provider", manifest, "init", "--root", root,
-		"--profile", "secure-cloud", "--project-id", "probe")
-	if code != 0 {
-		t.Skipf("kernel init failed, so there is no fixture to compare: %s", truncate(output))
-	}
-	return root, manifest
-}
-
-func truncate(text string) string {
-	if len(text) > 300 {
-		return text[:300] + "..."
-	}
-	return text
-}
-
-// goConfiguration runs the Go configuration half.
 func goConfiguration(t *testing.T, root, manifest string) ValidationReport {
 	t.Helper()
 	registry := NewRegistry()
@@ -246,25 +212,5 @@ func TestAnAuthorReviewerOverlapIsAnErrorNotABlocker(t *testing.T) {
 		if strings.Contains(message, "author and reviewer") {
 			t.Error("the overlap was reported as a blocker, which reads as 'decide this later'")
 		}
-	}
-}
-
-func mutateJSON(t *testing.T, path string, mutate func(map[string]any)) {
-	t.Helper()
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading %s: %v", path, err)
-	}
-	var document map[string]any
-	if err := json.Unmarshal(raw, &document); err != nil {
-		t.Fatalf("parsing %s: %v", path, err)
-	}
-	mutate(document)
-	encoded, err := json.MarshalIndent(document, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, encoded, 0o644); err != nil {
-		t.Fatal(err)
 	}
 }

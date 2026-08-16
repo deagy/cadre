@@ -23,32 +23,6 @@ import (
 
 const approveTask = decideTask
 
-// githubBoundProject binds the product owner to a GitHub login.
-func githubBoundProject(t *testing.T) (root, manifest string) {
-	t.Helper()
-	root, manifest = decidableProject(t)
-	makeGateApprovable(t, root)
-	mutateJSON(t, filepath.Join(root, Overlay, "authorities.json"),
-		func(document map[string]any) {
-			owner, _ := document["product_owner"].(map[string]any)
-			owner["github_login"] = "product-owner"
-		})
-	return root, manifest
-}
-
-// gitlabBoundProject binds the product owner to a GitLab username.
-func gitlabBoundProject(t *testing.T) (root, manifest string) {
-	t.Helper()
-	root, manifest = decidableProject(t)
-	makeGateApprovable(t, root)
-	mutateJSON(t, filepath.Join(root, Overlay, "authorities.json"),
-		func(document map[string]any) {
-			owner, _ := document["product_owner"].(map[string]any)
-			owner["gitlab_username"] = "product-owner"
-		})
-	return root, manifest
-}
-
 type forgeApprovalCase struct {
 	name string
 	// fixture builds the project. Defaults to githubBoundProject.
@@ -373,13 +347,6 @@ var forgeApprovalCases = []forgeApprovalCase{
 			"--role", "chief-approver", "--project-path", "acme/app", "--issue-iid", "7"},
 		expectExit: 2, expectContains: "invalid choice", usageError: true,
 	},
-}
-
-func review(id int, login, state, submittedAt, commit string) map[string]any {
-	return map[string]any{
-		"id": id, "state": state, "submitted_at": submittedAt, "commit_id": commit,
-		"user": map[string]any{"login": login},
-	}
 }
 
 func dismissed(entry map[string]any) map[string]any {
