@@ -30,13 +30,30 @@ import (
 // like this is an incomplete list, not an empty one, which is why the
 // membership check below exists alongside the scan.
 
-// platformGoModules are the files that decide *which* agent runs. Generators
-// are deliberately excluded: they format catalog content, so naming a role is
-// their job rather than a leak.
+// platformGoModules are the files that decide *which* agent runs.
+//
+// Two exclusions, both decisions rather than oversights:
+//
+//   - Generators format catalog content, so naming a role is their job rather
+//     than a leak. internal/generators names product-owner-aide to reproduce a
+//     hand-authored comment block byte-for-byte, and the Python generator it
+//     was ported from does the same.
+//   - internal/kernel is a separate component with its own ownership boundary,
+//     and it names release-engineer: `agentic-sdlc plan` adds that role to
+//     support for a production-release workflow. That predates the Go port --
+//     the deleted Python kernel carried the identical line -- and
+//     test_roster_boundary.py's PLATFORM_MODULES never covered the kernel
+//     either. Scanning it here would fail on faithful behaviour and would be
+//     a change to plan output disguised as a test.
+//
+// internal/cli is included. It was not, and that is the gap this list existed
+// to prevent: `cadre select`'s flag handling now resolves the roster root, the
+// knowledge CLI path and every default the plan is built from, so a role id
+// hardcoded as a fallback there leaks exactly as one in the selector would.
 func platformGoModules(t *testing.T) []string {
 	t.Helper()
 	var modules []string
-	for _, directory := range []string{".", "../selector"} {
+	for _, directory := range []string{".", "../selector", "../cli"} {
 		entries, err := os.ReadDir(directory)
 		if err != nil {
 			t.Fatalf("cannot read %s: %v", directory, err)
@@ -97,6 +114,9 @@ func TestTheRoleIDGuardIsNotVacuous(t *testing.T) {
 	// version of this guard omitted.
 	for _, required := range []string{
 		"dispatch_core.go", "dispatch_core_phase2.go", "dispatch_core_phase1.go",
+		// The selection surface, in both the package that computes a plan and
+		// the one that decides what to compute it from.
+		"plan.go", "select_go.go",
 	} {
 		present := false
 		for _, module := range modules {
