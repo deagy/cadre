@@ -54,7 +54,7 @@ func processApprovalIssue(
 	// Resolved before creating, so the issue is never created unassigned and
 	// then fixed up -- an unassigned approval issue looks like one nobody has
 	// been asked for.
-	active, err := resolveActiveUsernames(client, approval.Username)
+	active, err := resolveActiveUsernames(client, approval.Login)
 	if err != nil {
 		return nil, false, approvalStructuralError(approval, err)
 	}
@@ -62,12 +62,12 @@ func processApprovalIssue(
 	case len(active) == 0:
 		return nil, false, &approvalRefusal{approval.GateID, approval.AuthorityID,
 			"gitlab-user-unresolved", fmt.Sprintf(
-				"username %s resolved to 0 active GitLab users", pythonRepr(approval.Username))}
+				"username %s resolved to 0 active GitLab users", pythonRepr(approval.Login))}
 	case len(active) > 1:
 		return nil, false, &approvalRefusal{approval.GateID, approval.AuthorityID,
 			"gitlab-user-ambiguous", fmt.Sprintf(
 				"username %s resolved to %d active GitLab users",
-				pythonRepr(approval.Username), len(active))}
+				pythonRepr(approval.Login), len(active))}
 	}
 	resolvedID, _ := jsonNumber(active[0]["id"])
 
@@ -92,7 +92,7 @@ func processApprovalIssue(
 	}
 
 	failures := verifyCreatedIssue(verification, approval.Title, projectPath, botUsername,
-		[]string{FixedLabel, approval.Label}, []string{approval.Username})
+		[]string{FixedLabel, approval.Label}, []string{approval.Login})
 	if len(failures) > 0 {
 		ledger.setEntry(entryKey, approvalLedgerEntry(approval, "suspect", iid, verification.State,
 			"post-creation verification failed: "+strings.Join(failures, ", ")))
@@ -163,18 +163,18 @@ func reuseApprovalIssue(
 	var drift any
 	unreconciled := false
 	current := lowercased(verification.AssigneeUsernames)
-	if !sameStrings(current, []string{strings.ToLower(approval.Username)}) {
+	if !sameStrings(current, []string{strings.ToLower(approval.Login)}) {
 		drift = "assignee_changed"
 		unreconciled = true
 		if reconcileAssignees {
-			active, err := resolveActiveUsernames(client, approval.Username)
+			active, err := resolveActiveUsernames(client, approval.Login)
 			if err != nil {
 				return nil, false, approvalStructuralError(approval, err)
 			}
 			if len(active) != 1 {
 				return nil, false, &GateIssuesBlocked{Message: fmt.Sprintf(
 					"%s: cannot reconcile assignee -- username %s did not resolve to exactly "+
-						"one active GitLab user", context, pythonRepr(approval.Username))}
+						"one active GitLab user", context, pythonRepr(approval.Login))}
 			}
 			resolvedID, _ := jsonNumber(active[0]["id"])
 			if err := client.UpdateIssueAssignee(projectPath, iid, []int{resolvedID}); err != nil {

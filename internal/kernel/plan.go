@@ -251,11 +251,16 @@ func makeGateRecord(
 // would put G10 between G1 and G2.
 func ordered(pairs ...any) *orderedObject {
 	object := &orderedObject{values: map[string]any{}}
+	object.setAll(pairs...)
+	return object
+}
+
+// setAll appends key/value pairs in the order given.
+func (o *orderedObject) setAll(pairs ...any) {
 	for index := 0; index+1 < len(pairs); index += 2 {
 		key, _ := pairs[index].(string)
-		object.set(key, pairs[index+1])
+		o.set(key, pairs[index+1])
 	}
-	return object
 }
 
 // deriveCurrentPhase reports the phase of the earliest gate still outstanding.

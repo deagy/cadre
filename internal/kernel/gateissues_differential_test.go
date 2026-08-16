@@ -838,7 +838,7 @@ func TestTooManyIssuesAbortsRatherThanTruncating(t *testing.T) {
 		gate["authority_requirements"] = requirements
 	}
 
-	_, err = buildIssuePlan(issuesTask, "acme/app", GateIDs, record, authorities,
+	_, err = buildIssuePlan(gitlabIssueForge, issuesTask, "acme/app", GateIDs, record, authorities,
 		contracts, false, nil)
 	if err == nil {
 		t.Fatal("a plan larger than the cap was accepted")
