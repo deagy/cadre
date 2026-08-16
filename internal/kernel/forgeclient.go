@@ -44,11 +44,16 @@ const forgeTimeout = 30 * time.Second
 // Mock environment variables. Each names a JSON file holding canned responses
 // for one forge, and they are deliberately separate: a single file
 // multiplexing both forges would let a GitHub test pass on a GitLab fixture.
+//
+// The names are the Python kernel's, exactly. Every fixture written against
+// that kernel names one of these, so a tidier name here would silently stop
+// those fixtures being read while the tests using them still passed -- the
+// mock would simply be absent, and absent means "use the network".
 const (
 	GitHubReadMockEnv   = "AGENTIC_SDLC_TEST_GITHUB_READ_FILE"
 	GitLabIssueMockEnv  = "AGENTIC_SDLC_TEST_ISSUE_CREATE_FILE"
 	GitHubIssueMockEnv  = "AGENTIC_SDLC_TEST_GITHUB_ISSUE_FILE"
-	GitHubStatusMockEnv = "AGENTIC_SDLC_TEST_GITHUB_STATUS_FILE"
+	GitHubStatusMockEnv = "AGENTIC_SDLC_TEST_GITHUB_WRITE_FILE"
 )
 
 // forgeResult is one completed forge invocation.

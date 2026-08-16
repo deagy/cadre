@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -64,6 +65,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return planCmd(registry, args[1:], stdout, stderr)
 	case "decide":
 		return decideCmd(registry, args[1:], stdout, stderr)
+	case "publish-gate-status":
+		return publishGateStatusCmd(registry, args[1:], stdout, stderr)
 	case "request-gate-reviewers-gitlab":
 		return requestGateReviewersGitLabCmd(registry, args[1:], stdout, stderr)
 	case "request-gate-reviewers":
@@ -96,6 +99,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stdout, "  validate [--root ROOT] Check a project's configuration and run records")
 		_, _ = fmt.Fprintln(stdout, "  plan --task-id ID --task TEXT         Create a dispatch plan and pending run record")
 		_, _ = fmt.Fprintln(stdout, "  decide --task-id ID --gate G --role R --decision D --actor-id A --evidence-uri U")
+		_, _ = fmt.Fprintln(stdout, "  publish-gate-status --task-id ID --forge F --as-bot B [--apply]")
 		_, _ = fmt.Fprintln(stdout, "  request-gate-reviewers --task-id ID --repo R --pr N --as-bot B")
 		_, _ = fmt.Fprintln(stdout, "  request-gate-reviewers-gitlab --task-id ID --project-path P --mr-iid N --as-bot B")
 		_, _ = fmt.Fprintln(stdout, "  repair [--runner R] [--apply]         Inspect or safely repair an initialization")
@@ -839,6 +843,109 @@ func requestGateReviewersGitLabCmd(registry *Registry, args []string, stdout, st
 	}
 	if len(report.Refusals) > 0 {
 		return 2
+	}
+	return 0
+}
+
+// publishGateStatusCmd answers `publish-gate-status`.
+//
+// Three exit codes, and the middle one carries the distinction: 0 done or
+// nothing to do, 2 blocked and needing a human, 1 the command could not run.
+func publishGateStatusCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
+	request := GateStatusRequest{Root: "."}
+	var pullRequest, mergeRequest string
+	fields := map[string]*string{
+		"--root": &request.Root, "--task-id": &request.TaskID, "--forge": &request.Forge,
+		"--as-bot": &request.AsBot, "--allow-classification": &request.AllowClassification,
+		"--repo": &request.Repo, "--pr": &pullRequest,
+		"--project-path": &request.ProjectPath, "--mr-iid": &mergeRequest,
+	}
+	flags := map[string]*bool{
+		"--apply": &request.Apply, "--break-lock": &request.BreakLock,
+		"--i-know-this-is-mocked": &request.KnowinglyMocked,
+	}
+	if code := parseFlagsWithSwitches("publish-gate-status", args, fields, flags, stderr); code != 0 {
+		return code
+	}
+
+	var missing []string
+	for _, required := range []struct{ name, value string }{
+		{"--task-id", request.TaskID}, {"--forge", request.Forge}, {"--as-bot", request.AsBot},
+	} {
+		if required.value == "" {
+			missing = append(missing, required.name)
+		}
+	}
+	if len(missing) > 0 {
+		_, _ = fmt.Fprintf(stderr,
+			"agentic-sdlc publish-gate-status: error: the following arguments are required: %s\n",
+			strings.Join(missing, ", "))
+		return 2
+	}
+	if code := rejectInvalidChoice(stderr, "publish-gate-status", "--forge", request.Forge,
+		[]string{ForgeGitHub, ForgeGitLab}); code != 0 {
+		return code
+	}
+	for _, numeric := range []struct {
+		name  string
+		text  string
+		value *int
+	}{
+		{"--pr", pullRequest, &request.PullRequest},
+		{"--mr-iid", mergeRequest, &request.MergeRequestIID},
+	} {
+		if numeric.text == "" {
+			continue
+		}
+		parsed, err := strconv.Atoi(numeric.text)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr,
+				"agentic-sdlc publish-gate-status: error: argument %s: invalid int value: %q\n",
+				numeric.name, numeric.text)
+			return 2
+		}
+		*numeric.value = parsed
+	}
+
+	summary, err := registry.PublishGateStatus(request)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(err))
+		var blocked *GateStatusBlocked
+		if errors.As(err, &blocked) {
+			return 2
+		}
+		return 1
+	}
+	_, _ = fmt.Fprint(stdout, RenderIndented(summary))
+	return 0
+}
+
+// parseFlagsWithSwitches reads valued flags and boolean switches together.
+func parseFlagsWithSwitches(
+	command string, args []string, fields map[string]*string, switches map[string]*bool,
+	stderr io.Writer,
+) int {
+	for index := 0; index < len(args); index++ {
+		name, value, inline := strings.Cut(args[index], "=")
+		if flag, isSwitch := switches[name]; isSwitch {
+			*flag = true
+			continue
+		}
+		target, known := fields[name]
+		if !known {
+			_, _ = fmt.Fprintf(stderr, "agentic-sdlc %s: unknown argument %q\n", command, args[index])
+			return 2
+		}
+		if inline {
+			*target = value
+			continue
+		}
+		if index+1 >= len(args) {
+			_, _ = fmt.Fprintf(stderr, "agentic-sdlc %s: %s needs a value\n", command, name)
+			return 2
+		}
+		index++
+		*target = args[index]
 	}
 	return 0
 }

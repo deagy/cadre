@@ -401,6 +401,49 @@ func TestTheMockCorpusCoversBothOutcomes(t *testing.T) {
 	}
 }
 
+func TestTheMockVariableNamesAreThePythonKernels(t *testing.T) {
+	// Pinned against the Python constants rather than chosen. A tidier name
+	// here would silently stop every fixture written against that kernel being
+	// read -- and an absent mock does not fail, it falls through to the
+	// network. This test exists because that happened: the status client was
+	// briefly given a name nothing else used.
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 is unavailable, so there is nothing to compare against")
+	}
+	script := `
+import json
+from agentic_sdlc import github_write, gitlab_write, github_status_write, github_issue_write
+print(json.dumps({
+    "read": github_write.GITHUB_READ_MOCK_ENV_VAR,
+    "gitlab": gitlab_write.ISSUE_CREATE_MOCK_ENV_VAR,
+    "status": github_status_write.GITHUB_WRITE_MOCK_ENV_VAR,
+    "issue": github_issue_write.GITHUB_ISSUE_MOCK_ENV_VAR,
+}))
+`
+	command := exec.Command("python3", "-c", script)
+	command.Dir = filepath.Join(repositoryRoot(t), "kernel")
+	output, err := command.Output()
+	if err != nil {
+		t.Skipf("the Python constants could not be read: %v", err)
+	}
+	var names map[string]string
+	if err := json.Unmarshal(output, &names); err != nil {
+		t.Fatalf("the Python side did not return JSON: %s", output)
+	}
+	for _, probe := range []struct {
+		key, actual string
+	}{
+		{"read", GitHubReadMockEnv},
+		{"gitlab", GitLabIssueMockEnv},
+		{"status", GitHubStatusMockEnv},
+		{"issue", GitHubIssueMockEnv},
+	} {
+		if names[probe.key] != probe.actual {
+			t.Errorf("%s: python names %q, go names %q", probe.key, names[probe.key], probe.actual)
+		}
+	}
+}
+
 func TestBothForgesKeepTheirOwnMockFile(t *testing.T) {
 	// A single file multiplexing both forges would let a GitHub test pass on a
 	// GitLab fixture, which is the one way these conventions could agree with
