@@ -623,8 +623,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Pre-build the Go CLI so bin/cadre never compiles inside a timed test
-        run: ./bin/cadre help >/dev/null
+      - name: Pre-build the Go binaries so neither compiles inside a timed test
+        # Both of them: `bin/agentic-sdlc` builds and execs the Go kernel too
+        # since the kernel port, and AGENTIC_SDLC_BIN above points these tests
+        # straight at it. Leaving it cold reproduced the exact wall of
+        # timeouts described above, one binary later.
+        run: |
+          ./bin/cadre help >/dev/null
+          ./bin/agentic-sdlc --version >/dev/null
       - run: npm test
         working-directory: cline-plugins/${{ matrix.package }}
       - run: npm run typecheck
