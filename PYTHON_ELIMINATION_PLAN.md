@@ -428,7 +428,7 @@ the only part that talks to a network. It decomposes as:
 | Piece | Lines | What it is |
 | --- | --- | --- |
 | `_forge_text`, `_forge_ledger` | 206 | Shared text sanitization and ledger/lock mechanics |
-| `github_write`, `gitlab_write` | 829 | The HTTP clients — auth, retry, mock mode |
+| ~~`github_write`, `gitlab_write`~~ | ~~829~~ | **Ported.** The forge clients |
 | `gate_reviewers`, `gate_reviewers_gitlab` | 890 | Read-only reviewer reporting |
 | `gate_status`, `github_status_write` | 803 | The one-way gate-status comment |
 | `reviewer_nudge` | 458 | The advisory reviewer comment |
@@ -439,6 +439,15 @@ them. The sanitizers are pure enough to compare exhaustively: 48 inputs
 run through both implementations in one pass, compared on verdict *and*
 message. The ledger write is compared on bytes, because the Python
 kernel reads these files back for as long as both exist.
+
+The two forge clients followed. Neither speaks HTTP: they run `gh api`
+and `glab api`, so credentials never pass through this process. The
+comparison that mattered there was not the network path — which cannot
+be compared without a network — but the **mock conventions**, because
+they are how every module above these clients is tested. Twenty-four
+cases feed one mock file to both implementations and compare the result
+or the refusal; if the conventions had differed, every fixture written
+against the Python modules would have stopped working silently.
 
 One property of the ledger deserves carrying forward into the modules
 above it: **the lock is never broken on a timeout**. A stale lock means
