@@ -136,6 +136,44 @@ func LoadRosterManifest(root string) (*RosterManifest, error) {
 	return manifest, nil
 }
 
+// resolveNonStrict follows symlinks through the longest existing prefix of
+// path and appends whatever remains, which is what pathlib's Path.resolve()
+// does and what the Python this was ported from relied on.
+//
+// filepath.EvalSymlinks refuses a path unless all of it exists. Using it
+// directly would leave the containment check blind exactly when a symlink
+// points somewhere that is itself missing -- `role_root: "link/roles"` where
+// link escapes the package and roles is not there -- because the resolution
+// fails wholesale and the lexical path, which looks contained, is what gets
+// compared.
+func resolveNonStrict(path string) string {
+	if evaluated, err := filepath.EvalSymlinks(path); err == nil {
+		return evaluated
+	}
+	parent := filepath.Dir(path)
+	if parent == path {
+		// The filesystem root, and it did not resolve. Nothing left to try.
+		return path
+	}
+	resolvedParent := resolveNonStrict(parent)
+	candidate := filepath.Join(resolvedParent, filepath.Base(path))
+
+	// EvalSymlinks refused this path, which may be because the last component
+	// is a symlink whose target is missing. Readlink still reads it, and a
+	// dangling link pointing out of the package is an escape regardless of
+	// whether anything is at the other end -- the escape is the link.
+	//
+	// Read one level and stop: the target is not followed further, so a link
+	// pointing at itself terminates here rather than spinning.
+	if target, err := os.Readlink(candidate); err == nil {
+		if filepath.IsAbs(target) {
+			return filepath.Clean(target)
+		}
+		return filepath.Clean(filepath.Join(resolvedParent, target))
+	}
+	return candidate
+}
+
 // rosterResource resolves one declared path, rejecting anything that escapes
 // root.
 func rosterResource(root string, value any, field string, directory bool) (string, error) {
@@ -157,6 +195,18 @@ func rosterResource(root string, value any, field string, directory bool) (strin
 	if err != nil {
 		return "", rosterManifestErrorf("roster manifest field %s: %s", pythonRepr(field), err)
 	}
+	// Resolve symlinks before comparing, which is what makes the check
+	// containment rather than a spelling rule. `..` and an absolute path are
+	// both visible in the text; a symlink is not -- "catalog.yaml" reads as
+	// plainly inside the package while pointing anywhere on the filesystem.
+	// Without this the guard that exists to keep a foreign roster package
+	// inside its own directory is defeated by one `ln -s`.
+	//
+	// root is already symlink-resolved by the caller, so the two sides of the
+	// comparison are resolved alike; comparing a resolved candidate against an
+	// unresolved root would reject a package that legitimately sits under a
+	// symlinked parent.
+	candidate = resolveNonStrict(candidate)
 	relative, err := filepath.Rel(root, candidate)
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return "", rosterManifestErrorf(
