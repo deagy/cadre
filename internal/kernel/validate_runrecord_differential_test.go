@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"os"
@@ -12,8 +13,7 @@ import (
 )
 
 // The run-record half of `validate`, compared against the Python kernel on a
-// project the Python kernel itself built and then a single deliberate lie was
-// told about.
+// project this kernel built, into which a single deliberate lie is told.
 //
 // Happy-path parity would prove very little here. A freshly planned task has
 // nothing approved, so both implementations agree by saying nothing -- and the
@@ -86,8 +86,23 @@ func buildPlannedProject() (root, manifest, skip string) {
 		return "", "", err.Error()
 	}
 
+	// Built by *this* kernel, not the Python one.
+	//
+	// It was Python's until the port finished, and that had a failure mode
+	// worth naming: when Python could not run, this returned a skip reason and
+	// every differential downstream of the fixture reported PASS having
+	// executed nothing. A green suite that checks nothing is worse than a red
+	// one. Building it in-process removes the skip entirely -- the fixture is
+	// now as available as the code under test.
+	//
+	// It is a starting state, not an assertion. Both kernels then act on
+	// identical copies of it, so which one produced it does not privilege
+	// either; what it does mean is that the differentials now start from a
+	// state the shipping kernel actually produces.
 	run := func(args ...string) (int, string) {
-		return runPythonKernel(repoRoot, append([]string{"--provider", manifest}, args...)...)
+		var output bytes.Buffer
+		code := Run(append([]string{"--provider", manifest}, args...), &output, &output)
+		return code, output.String()
 	}
 	if code, output := run("init", "--root", root, "--profile", "secure-cloud",
 		"--project-id", "probe"); code != 0 {
@@ -144,6 +159,33 @@ func plannedProject(t *testing.T) (root, manifest string) {
 		t.Fatalf("copying the fixture: %v", err)
 	}
 	return root, manifest
+}
+
+// TestThePythonKernelIsAvailableToCompareAgainst fails, rather than skips,
+// when the other half of the differentials cannot run.
+//
+// Every test in this package that compares against the Python kernel skips
+// when it is unimportable -- which is right for each of them individually and
+// wrong for the suite: a run with no Python reports green having compared
+// nothing. That is the state this test exists to make visible, and it is not
+// hypothetical. Before the shared fixture was built in-process, a missing
+// Python turned 43 subtests into silent passes.
+//
+// This states an existing requirement rather than adding one: the repository's
+// own roster/ and plugin/ suites are Python, so a checkout without it cannot
+// run its tests anyway. When the Python kernel is deleted, this test and the
+// differentials go together -- it is not a reason to keep either.
+func TestThePythonKernelIsAvailableToCompareAgainst(t *testing.T) {
+	code, output := runPythonKernel(repositoryRoot(t), "--version")
+	if code != 0 {
+		t.Fatalf("the Python kernel could not run, so every differential in this "+
+			"package compared nothing and reported success:\n%s", output)
+	}
+	if strings.TrimSpace(output) != Version {
+		t.Errorf("the Python kernel reports %q and this one reports %q; the "+
+			"differentials are comparing two different kernels",
+			strings.TrimSpace(output), Version)
+	}
 }
 
 func runPythonKernel(repoRoot string, args ...string) (int, string) {
