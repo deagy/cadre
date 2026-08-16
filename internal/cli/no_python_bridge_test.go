@@ -149,3 +149,35 @@ func TestTheScanWouldNoticeAnInterpreterBeingStarted(t *testing.T) {
 		}
 	}
 }
+
+func TestTheSubcommandTableNamesNoPythonFile(t *testing.T) {
+	// Every row's description carried a parenthetical naming the Python module
+	// that used to implement it -- "(doctor.py)", "(upgrade.py)". Five of the
+	// eight named files that no longer exist, and `cadre --help` printed all
+	// of them, so the CLI advertised an implementation it does not have.
+	//
+	// They were accurate when the CLI dispatched to Python. They stopped being
+	// accurate when it stopped, which is a change nothing was watching for.
+	root := filepath.Dir(filepath.Dir(mustGetwd(t)))
+	raw, err := os.ReadFile(filepath.Join(root, "bin", "subcommands.tsv"))
+	if err != nil {
+		t.Skipf("no subcommand table here: %v", err)
+	}
+
+	rows := 0
+	for number, line := range strings.Split(string(raw), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		rows++
+		if strings.Contains(line, ".py") {
+			t.Errorf("bin/subcommands.tsv:%d advertises a Python file:\n  %s\n"+
+				"`cadre --help` prints this description. Every subcommand is Go.",
+				number+1, trimmed)
+		}
+	}
+	if rows < 10 {
+		t.Fatalf("read %d rows; the table was not parsed", rows)
+	}
+}

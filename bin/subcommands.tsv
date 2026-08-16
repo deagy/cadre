@@ -1,17 +1,17 @@
 select	Deterministic agent/gate selection
-selection-telemetry	Summarize opt-in, local cadre select telemetry (selection_telemetry.py)
+selection-telemetry	Summarize opt-in, local cadre select telemetry
 context	Agent context store: park working material outside an agent's context window and get it back by handle
 generate-plugin	Regenerate the packaged plugin distribution (requires --output)
 generate-authority-aides	Regenerate roster/authority/*-aide AGENT.md files
 generate-role-metadata	Regenerate roster/catalog.yaml and routing.json knowledge_focus from role metadata
 bootstrap-codex	Safely install namespaced Codex role wrappers
-resolve-shared	Resolve effective shared config for the current project (resolve.py)
+resolve-shared	Resolve effective shared config for the current project
 mcp-dispatch-server	Run the MCP dispatch server (stdio)
 mcp-gitlab-server	Run the GitLab evidence MCP server (stdio; three create-only tools)
-init	Guide a project through generating .agents/shared/ overlays (init_project.py)
-profile	Read-only provider/profile drift report against a consuming project's copy (profile_diff.py)
+init	Guide a project through generating .agents/shared/ overlays
+profile	Read-only provider/profile drift report against a consuming project's copy
 gitlab-evidence	Non-MCP CLI over the GitLab evidence tools (create-review-subtask/write-wiki-page/write-evidence-comment)
-config	Show resolved operator settings, config file paths, or resolve one setting (settings.py; `show`/`path`/`resolve`)
-doctor	Report which cadre binary is running, what kind of install it is, and warn on a cwd/checkout mismatch (doctor.py)
-role-fidelity	Measure whether role briefs survive a given model: context-budget analysis, or live probes (role_fidelity.py)
-upgrade	Check for Cadre updates and upgrade the CLI (upgrade.py; --check, --force, --help)
+config	Show resolved operator settings, config file paths, or resolve one setting (`show`/`path`/`resolve`)
+doctor	Report which cadre binary is running, what kind of install it is, and warn on a cwd/checkout mismatch
+role-fidelity	Measure whether role briefs survive a given model: context-budget analysis, or live probes
+upgrade	Check for Cadre updates and upgrade the CLI (--check, --force, --help)
