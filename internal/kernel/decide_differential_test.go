@@ -3,7 +3,6 @@ package kernel
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -41,13 +40,6 @@ type decideCase struct {
 	expectStderr string
 }
 
-const (
-	decideTask     = "TASK-1"
-	decideActor    = "github.com/product-owner"
-	decideEvidence = "github-review:acme/app:pull/1:review/1:reviewer/product-owner"
-	decideWhen     = "2026-08-15T09:00:00+00:00"
-)
-
 func decideArgs(overrides ...string) []string {
 	args := []string{
 		"--task-id", decideTask, "--gate", "G1", "--role", "product_owner",
@@ -55,54 +47,6 @@ func decideArgs(overrides ...string) []string {
 		"--decided-at", decideWhen, "--decision", "approved",
 	}
 	return append(args, overrides...)
-}
-
-// makeGateApprovable fills in everything a gate needs before an approval can
-// take effect: bound artifacts, evidence, a preparer, and an independent
-// verifier who declared they did not prepare it.
-func makeGateApprovable(t *testing.T, root string) {
-	t.Helper()
-	mutateJSON(t, filepath.Join(root, Overlay, "runs", decideTask, "run-record.json"),
-		func(document map[string]any) {
-			gates, _ := document["lifecycle_gates"].([]any)
-			gate, _ := gates[0].(map[string]any)
-			gate["evidence_refs"] = []any{map[string]any{
-				"evidence_id": "g1-intent", "uri": "github-issue:acme/app:issues/7",
-				"hash_algorithm": "sha256", "hash": strings.Repeat("a", 64),
-				"classification": "internal",
-			}}
-			gate["artifact_bindings"] = []any{map[string]any{
-				"artifact_id": "intent", "revision": "r1", "digest": "sha256:abc",
-			}}
-			gate["preparers"] = []any{map[string]any{
-				"id": "agent://product-intent-agent", "kind": "agent",
-				"role": "product-intent-agent",
-			}}
-			gate["independent_verifier"] = map[string]any{
-				"id": "agent://code-reviewer", "kind": "agent", "role": "code-reviewer",
-			}
-			gate["independence_declaration"] = map[string]any{
-				"verifier_confirmed_not_preparer":   true,
-				"verifier_made_material_correction": false,
-			}
-		})
-}
-
-// approveG1For records an approval through the kernel itself, so a case can
-// start from a gate that already has one.
-func approveG1For(t *testing.T, root, manifest string) {
-	t.Helper()
-	registry := NewRegistry()
-	if err := registry.LoadProvider(manifest); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := registry.Decide(DecideRequest{
-		Root: root, TaskID: decideTask, GateID: "G1", AuthorityRole: "product_owner",
-		Decision: "approved", ActorID: decideActor, EvidenceURI: decideEvidence,
-		DecidedAt: "2026-08-14T09:00:00+00:00",
-	}); err != nil {
-		t.Fatalf("seeding an approval: %v", err)
-	}
 }
 
 func setGateIdentity(field, id string) func(*testing.T, string) {
@@ -211,13 +155,6 @@ var decideCases = []decideCase{
 	},
 }
 
-// providerManifest is the provider this repository ships, which the fixtures
-// are built against.
-func providerManifest(t *testing.T) string {
-	t.Helper()
-	return filepath.Join(repositoryRoot(t), "provider", "provider.json")
-}
-
 // addSecondAuthorityRequirement gives G1 a second applicable human authority,
 // so a case can make one of two signatures missing rather than the only one.
 func addSecondAuthorityRequirement(t *testing.T, root string) {
@@ -279,41 +216,6 @@ func TestDecideAgreesWithThePythonKernel(t *testing.T) {
 		})
 	}
 }
-
-func readFile(t *testing.T, path string) string {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading %s: %v", path, err)
-	}
-	return string(data)
-}
-
-// decidableProject is a project with assigned authorities and one planned
-// task, which is the least a decision needs to exist at all.
-func decidableProject(t *testing.T) (root, manifest string) {
-	t.Helper()
-	template, manifest := plannedProjectTemplate(t)
-	root = t.TempDir()
-	if err := copyTree(template, root); err != nil {
-		t.Fatal(err)
-	}
-	// The template's own planned task is TASK-2, already carrying a G1
-	// decision. These cases want an untouched one.
-	registry := NewRegistry()
-	if err := registry.LoadProvider(manifest); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := registry.Plan(PlanRequest{
-		Root: root, TaskID: decideTask, Task: "add an endpoint to the billing service",
-	}); err != nil {
-		t.Fatalf("planning the fixture task: %v", err)
-	}
-	return root, manifest
-}
-
-// The invariants, stated without reference to the Python kernel so they
-// survive its removal.
 
 func TestDecideRefusesSelfApprovalEvenWhenEverythingElseIsInOrder(t *testing.T) {
 	// The case that matters most: a gate that is otherwise completely ready to

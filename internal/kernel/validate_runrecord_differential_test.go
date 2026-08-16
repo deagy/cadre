@@ -1,14 +1,10 @@
 package kernel
 
 import (
-	"bytes"
-	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"testing"
 )
 
@@ -49,132 +45,6 @@ func normalizeSchemaWording(messages []string) []string {
 	return normalized
 }
 
-var (
-	fixtureOnce     sync.Once
-	fixtureTemplate string
-	fixtureManifest string
-	fixtureSkip     string
-)
-
-// plannedProjectTemplate builds one project with a planned, part-approved task
-// and returns it for copying. Built once: it costs four kernel invocations,
-// and every case wants the same starting point.
-func plannedProjectTemplate(t *testing.T) (template, manifest string) {
-	t.Helper()
-	fixtureOnce.Do(func() {
-		root, manifestPath, reason := buildPlannedProject()
-		fixtureTemplate, fixtureManifest, fixtureSkip = root, manifestPath, reason
-	})
-	if fixtureSkip != "" {
-		t.Skip(fixtureSkip)
-	}
-	return fixtureTemplate, fixtureManifest
-}
-
-func buildPlannedProject() (root, manifest, skip string) {
-	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
-	if err != nil {
-		return "", "", err.Error()
-	}
-	manifest = filepath.Join(repoRoot, "provider", "provider.json")
-	if _, err := os.Stat(manifest); err != nil {
-		return "", "", "no provider manifest in this checkout"
-	}
-	// Not t.TempDir: this outlives the test that happened to build it.
-	root, err = os.MkdirTemp("", "kernel-run-fixture-")
-	if err != nil {
-		return "", "", err.Error()
-	}
-
-	// Built by *this* kernel, not the Python one.
-	//
-	// It was Python's until the port finished, and that had a failure mode
-	// worth naming: when Python could not run, this returned a skip reason and
-	// every differential downstream of the fixture reported PASS having
-	// executed nothing. A green suite that checks nothing is worse than a red
-	// one. Building it in-process removes the skip entirely -- the fixture is
-	// now as available as the code under test.
-	//
-	// It is a starting state, not an assertion. Both kernels then act on
-	// identical copies of it, so which one produced it does not privilege
-	// either; what it does mean is that the differentials now start from a
-	// state the shipping kernel actually produces.
-	run := func(args ...string) (int, string) {
-		var output bytes.Buffer
-		code := Run(append([]string{"--provider", manifest}, args...), &output, &output)
-		return code, output.String()
-	}
-	if code, output := run("init", "--root", root, "--profile", "secure-cloud",
-		"--project-id", "probe"); code != 0 {
-		return "", "", "kernel init failed: " + truncate(output)
-	}
-
-	// Assign every authority. A freshly initialised project has none, and an
-	// unassigned authority cannot approve -- so without this the fixture could
-	// never reach the state the interesting checks guard.
-	authoritiesPath := filepath.Join(root, Overlay, "authorities.json")
-	if err := rewriteJSON(authoritiesPath, func(document map[string]any) {
-		for role, raw := range document {
-			authority, ok := raw.(map[string]any)
-			if !ok {
-				continue
-			}
-			if _, isAuthority := authority["status"]; !isAuthority {
-				continue
-			}
-			authority["status"] = "assigned"
-			authority["assignee"] = "github.com/" + strings.ReplaceAll(role, "_", "-")
-			if authority["applicability"] == "unknown" {
-				authority["applicability"] = "applicable"
-			}
-		}
-	}); err != nil {
-		return "", "", err.Error()
-	}
-
-	// Planned after assignment, so the run record's authority requirements are
-	// applicable rather than unresolved.
-	if code, output := run("plan", "--root", root, "--task-id", fixtureTask,
-		"--task", "add an endpoint"); code != 0 {
-		return "", "", "kernel plan failed: " + truncate(output)
-	}
-	if code, output := run("decide", "--root", root, "--task-id", fixtureTask,
-		"--gate", "G1", "--role", "product_owner", "--decision", "approved",
-		"--actor-id", "github.com/product-owner",
-		"--evidence-uri", "github-review:acme/app:pull/1:review/1:reviewer/product-owner",
-	); code != 0 {
-		return "", "", "kernel decide failed: " + truncate(output)
-	}
-	return root, manifest, ""
-}
-
-const fixtureTask = "TASK-2"
-
-// plannedProject copies the template into a fresh directory for one case.
-func plannedProject(t *testing.T) (root, manifest string) {
-	t.Helper()
-	template, manifest := plannedProjectTemplate(t)
-	root = t.TempDir()
-	if err := copyTree(template, root); err != nil {
-		t.Fatalf("copying the fixture: %v", err)
-	}
-	return root, manifest
-}
-
-// TestThePythonKernelIsAvailableToCompareAgainst fails, rather than skips,
-// when the other half of the differentials cannot run.
-//
-// Every test in this package that compares against the Python kernel skips
-// when it is unimportable -- which is right for each of them individually and
-// wrong for the suite: a run with no Python reports green having compared
-// nothing. That is the state this test exists to make visible, and it is not
-// hypothetical. Before the shared fixture was built in-process, a missing
-// Python turned 43 subtests into silent passes.
-//
-// This states an existing requirement rather than adding one: the repository's
-// own roster/ and plugin/ suites are Python, so a checkout without it cannot
-// run its tests anyway. When the Python kernel is deleted, this test and the
-// differentials go together -- it is not a reason to keep either.
 func TestThePythonKernelIsAvailableToCompareAgainst(t *testing.T) {
 	code, output := runPythonKernel(repositoryRoot(t), "--version")
 	if code != 0 {
@@ -190,63 +60,6 @@ func TestThePythonKernelIsAvailableToCompareAgainst(t *testing.T) {
 
 func runPythonKernel(repoRoot string, args ...string) (int, string) {
 	return pythonKernelIn(filepath.Join(repoRoot, "kernel"), args...)
-}
-
-func copyTree(source, destination string) error {
-	return filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		relative, err := filepath.Rel(source, path)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(destination, relative)
-		if info.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-		if !info.Mode().IsRegular() {
-			return nil // the fixture holds no links; anything else is not ours to copy
-		}
-		return copyFile(path, target, info.Mode())
-	})
-}
-
-func copyFile(source, target string, mode os.FileMode) error {
-	in, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = in.Close() }()
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return err
-	}
-	out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		_ = out.Close()
-		return err
-	}
-	return out.Close()
-}
-
-func rewriteJSON(path string, mutate func(map[string]any)) error {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	var document map[string]any
-	if err := json.Unmarshal(raw, &document); err != nil {
-		return err
-	}
-	mutate(document)
-	encoded, err := json.MarshalIndent(document, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, append(encoded, '\n'), 0o644)
 }
 
 func recordPathIn(root string) string {

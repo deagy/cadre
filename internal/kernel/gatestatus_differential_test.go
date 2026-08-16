@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 // `publish-gate-status`, compared with the Python kernel.
@@ -25,22 +24,6 @@ import (
 // microseconds between them, and the verification refuses every time -- which
 // is correct behaviour and useless as a test of the success path.
 
-const frozenMoment = "2026-08-15T09:00:00.000000Z"
-
-// freezeClock pins the Go kernel's clock for one test.
-func freezeClock(t *testing.T) {
-	t.Helper()
-	moment, err := time.Parse("2006-01-02T15:04:05.000000Z", frozenMoment)
-	if err != nil {
-		t.Fatal(err)
-	}
-	previous := timeNow
-	timeNow = func() time.Time { return moment }
-	t.Cleanup(func() { timeNow = previous })
-}
-
-// runPythonGateStatus runs the Python kernel with its clock pinned to the same
-// moment, so both sides render an identical body.
 func runPythonGateStatus(t *testing.T, args []string) (int, string) {
 	t.Helper()
 	script := `
@@ -54,12 +37,6 @@ sys.exit(agentic_sdlc.main(sys.argv[2:]))
 	command.Dir = filepath.Join(repositoryRoot(t), "kernel")
 	output, _ := command.CombinedOutput()
 	return command.ProcessState.ExitCode(), string(output)
-}
-
-// statusProject is a project with one planned task to report on.
-func statusProject(t *testing.T) (root, manifest string) {
-	t.Helper()
-	return decidableProject(t)
 }
 
 func TestTheGateStatusBodyMatchesThePythonKernel(t *testing.T) {
