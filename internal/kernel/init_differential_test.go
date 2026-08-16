@@ -188,11 +188,21 @@ func compareTrees(t *testing.T, pythonRoot, goRoot string, mayBeEmpty bool) {
 			t.Errorf("only the Python kernel wrote %s", name)
 		case !inPython:
 			t.Errorf("only the Go kernel wrote %s", name)
-		case strings.ReplaceAll(python, pythonRoot, "<root>") !=
-			strings.ReplaceAll(golang, goRoot, "<root>"):
+		// Both roots are normalised out of both files, not just each file's
+		// own: a project copied from one root to the other carries the
+		// original path inside it, and repair's fixtures are built that way.
+		case normaliseRoots(python, pythonRoot, goRoot) !=
+			normaliseRoots(golang, pythonRoot, goRoot):
 			t.Errorf("%s differs.\npython:\n%s\ngo:\n%s", name, python, golang)
 		}
 	}
+}
+
+func normaliseRoots(content string, roots ...string) string {
+	for _, root := range roots {
+		content = strings.ReplaceAll(content, root, "<root>")
+	}
+	return content
 }
 
 func walkFiles(t *testing.T, root string) map[string]string {
