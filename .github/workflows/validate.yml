@@ -104,32 +104,6 @@ jobs:
             ./bin/cadre sdlc show-contract "$contract" >/dev/null
           done
 
-  kernel:
-    name: kernel/ (G1-G10 lifecycle kernel)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.14"
-          cache: pip
-          cache-dependency-path: kernel/requirements-validation.txt
-      - run: pip install --no-cache-dir -r kernel/requirements-validation.txt
-      - run: python -B -m unittest discover -b -s kernel/test -p "test_*.py"
-      # The Python package, run from the checkout. This was `./bin/agentic-sdlc
-      # --version` until that shim started building and exec'ing the Go kernel;
-      # it would still pass, on the Go the runner image happens to ship, while
-      # checking something other than what this job is for.
-      - run: python -B kernel/dev_entrypoint.py --version
-      - name: Install the packaged distribution (pip/pipx install path)
-        run: pip install --no-cache-dir ./kernel
-      - name: Verify the installed console script works outside the checkout
-        working-directory: ${{ runner.temp }}
-        run: |
-          agentic-sdlc --version
-          agentic-sdlc show-contract lifecycle-gates >/dev/null
-
   engine:
     name: engine/ (LangGraph orchestration)
     runs-on: ubuntu-latest
@@ -163,9 +137,8 @@ jobs:
       # stops being true, fall back to a plain `go test ./...` leg rather
       # than disabling cgo globally, per the Makefile's test-race comment.
       - run: CGO_ENABLED=1 go test -race ./...
-      # The shim a checkout actually runs: builds cmd/agentic-sdlc and execs it.
-      # Here rather than in the kernel job, which is about the Python package
-      # and sets up no Go of its own.
+      # The shim a checkout actually runs: builds cmd/agentic-sdlc and execs
+      # it. Checked here because this is the job that sets up Go.
       - run: ./bin/agentic-sdlc --version
       - run: ./bin/agentic-sdlc show-contract lifecycle-gates > /dev/null
       - name: gofmt (fails on any formatting diff)

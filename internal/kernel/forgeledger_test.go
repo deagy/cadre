@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -184,12 +183,23 @@ func TestALockIsNeverBrokenWithoutBeingAsked(t *testing.T) {
 	}
 }
 
-func TestTheLedgerBytesMatchThePythonKernel(t *testing.T) {
-	// The ledger is read back by the Python kernel for as long as both exist,
-	// so its bytes are a contract rather than an implementation detail.
-	if _, err := exec.LookPath("python3"); err != nil {
-		t.Skip("python3 is unavailable, so there is nothing to compare against")
-	}
+func TestTheLedgerBytesAreAContractRatherThanAnImplementationDetail(t *testing.T) {
+	// A ledger is a document other tooling reads: an operator greps it, a
+	// script parses it, and both break on a formatting change nobody thought
+	// was a change. So the bytes are pinned, not the parsed value.
+	//
+	// This compared against `python3 -c json.dumps(..., indent=2,
+	// sort_keys=True)` until the Python kernel was deleted -- the reason given
+	// was that Python read these files back for as long as both existed, and
+	// that reason went with it. The format did not. Pinned to a literal here,
+	// which is the same gate without a second interpreter: sorted keys, two
+	// spaces, \uXXXX for anything non-ASCII, `<` and `&` left alone, and a
+	// trailing newline.
+	//
+	// The em-dash, accent and emoji are deliberate: Go's encoding/json emits
+	// raw UTF-8 and escapes `<`, `>` and `&`, which is the opposite of this
+	// format on both counts. A ledger written by the wrong encoder is readable
+	// and wrong.
 	ledger := map[string]any{
 		"schema_version": 1,
 		"task_id":        "TASK-1",
@@ -198,24 +208,31 @@ func TestTheLedgerBytesMatchThePythonKernel(t *testing.T) {
 		"mocked":         false,
 		"entries": map[string]any{
 			"G1": map[string]any{
-				"iid": 7, "title": "G1 Intent — café ☕",
+				"iid": 7, "title": "G1 Intent \u2014 caf\u00e9 \u2615",
 				"url": "https://gitlab.example/acme/app/-/issues/7",
 			},
 			"G2": map[string]any{"iid": 8, "title": "G2 <Requirements> & scope"},
 		},
 	}
-	encoded, err := json.Marshal(ledger)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	command := exec.Command("python3", "-c",
-		`import json, sys; print(json.dumps(json.loads(sys.argv[1]), indent=2, sort_keys=True))`,
-		string(encoded))
-	output, err := command.Output()
-	if err != nil {
-		t.Skipf("the Python side could not be run: %v", err)
-	}
+	const golden = `{
+  "bot_username": "sdlc-bot",
+  "entries": {
+    "G1": {
+      "iid": 7,
+      "title": "G1 Intent \u2014 caf\u00e9 \u2615",
+      "url": "https://gitlab.example/acme/app/-/issues/7"
+    },
+    "G2": {
+      "iid": 8,
+      "title": "G2 <Requirements> & scope"
+    }
+  },
+  "mocked": false,
+  "project_path": "acme/app",
+  "schema_version": 1,
+  "task_id": "TASK-1"
+}
+`
 
 	root := t.TempDir()
 	path, err := LedgerPath(root, Overlay, "TASK-1", "gate-issues-gitlab.json")
@@ -225,7 +242,7 @@ func TestTheLedgerBytesMatchThePythonKernel(t *testing.T) {
 	if err := WriteLedgerFile(path, ledger, ".gate-issues."); err != nil {
 		t.Fatal(err)
 	}
-	if readFile(t, path) != string(output) {
-		t.Errorf("the ledger differs.\npython:\n%s\ngo:\n%s", output, readFile(t, path))
+	if got := readFile(t, path); got != golden {
+		t.Errorf("the ledger bytes changed.\nwant:\n%s\ngot:\n%s", golden, got)
 	}
 }

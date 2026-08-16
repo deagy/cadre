@@ -262,4 +262,41 @@ func TestThisRepositoryRunsNoLifecycleOverlayOfItsOwn(t *testing.T) {
 			"An `agentic-sdlc init` ran here without --root. Delete these, and give "+
 			"whatever produced them an explicit root.", strings.Join(found, "\n  "))
 	}
+
+	// The managed AGENTS.md block init writes alongside the overlay. Checked
+	// separately because it is *not* under `.agentic-sdlc/`, so the walk above
+	// misses it -- which is how one survived the cleanup that removed its own
+	// overlay and a sibling copy in the same commit.
+	var managed []string
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			if info != nil && info.IsDir() {
+				switch info.Name() {
+				case ".git", "node_modules", ".cadre-build-cache", "plugin-dist":
+					return filepath.SkipDir
+				}
+			}
+			return nil
+		}
+		if info.Name() != "AGENTS.md" {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return nil
+		}
+		if strings.Contains(string(data), "<!-- agentic-sdlc:start -->") {
+			relative, _ := filepath.Rel(root, path)
+			managed = append(managed, relative)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(managed) > 0 {
+		t.Errorf("this repository has init-managed AGENTS.md blocks it should not:\n  %s\n"+
+			"These are written by `agentic-sdlc init` into a project that adopts the "+
+			"kernel. This repository supplies it.", strings.Join(managed, "\n  "))
+	}
 }

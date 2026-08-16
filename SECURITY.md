@@ -18,24 +18,22 @@ package with the expected name that is not the software you intended to run.
 There is no typo or malice required for this to happen. It is simply a name
 collision, and it predates this project's use of the name.
 
-### Install only from these sources
+### There is nothing to install from PyPI, and there never will be
+
+The kernel is a Go binary now. It was a Python package until the port
+finished; that package is deleted, and its PyPI name still belongs to
+somebody else, so the warning above is if anything more pointed than before.
+Nothing this project publishes will ever be installed by `pip`.
 
 ```sh
-# From a checkout of this repository
-pipx install ./kernel
-
-# From a pinned git tag
-pipx install "git+https://github.com/deagy/cadre.git@kernel-v<version>#subdirectory=kernel"
-
-# From a checkout, without installing anything (this package, not the Go
-# kernel that ./bin/agentic-sdlc now builds and execs)
-python3 kernel/dev_entrypoint.py --help
+# From a checkout of this repository -- builds and runs the Go kernel
+./bin/agentic-sdlc --version
 ```
 
-Wheels and sdists attached to this repository's
-[Releases](https://github.com/deagy/cadre/releases) (filter for `kernel-v*`
-tags) are also authoritative. Verify them against the `SHA256SUMS` file
-published alongside each release before installing.
+Past `kernel-v*` releases carry Python wheels and sdists. They are the
+pre-release artifacts of a package that no longer exists; verify them against
+the `SHA256SUMS` published alongside each release if you are inspecting
+history, and do not install them.
 
 ### Verifying what you have
 
@@ -63,7 +61,7 @@ this project to be stolen or rotated.
 
 ```sh
 gh release download kernel-v<version> --repo deagy/cadre
-gh attestation verify agentic_sdlc-<version>-py3-none-any.whl --repo deagy/cadre
+gh attestation verify agentic-sdlc --repo deagy/cadre
 sha256sum -c SHA256SUMS
 ```
 

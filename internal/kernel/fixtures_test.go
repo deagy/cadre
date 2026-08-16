@@ -413,24 +413,6 @@ func makeGateApprovable(t *testing.T, root string) {
 // approveG1For records an approval through the kernel itself, so a case can
 // start from a gate that already has one.
 
-// approveG1For records an approval through the kernel itself, so a case can
-// start from a gate that already has one.
-func approveG1For(t *testing.T, root, manifest string) {
-	t.Helper()
-	registry := NewRegistry()
-	if err := registry.LoadProvider(manifest); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := registry.Decide(DecideRequest{
-		Root: root, TaskID: decideTask, GateID: "G1", AuthorityRole: "product_owner",
-		Decision: "approved", ActorID: decideActor, EvidenceURI: decideEvidence,
-		DecidedAt: "2026-08-14T09:00:00+00:00",
-	}); err != nil {
-		t.Fatalf("seeding an approval: %v", err)
-	}
-}
-
-// statusProject is a project with one planned task to report on.
 func statusProject(t *testing.T) (root, manifest string) {
 	t.Helper()
 	return decidableProject(t)

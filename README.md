@@ -141,21 +141,19 @@ is fine for exploration but not an immutable dependency. Check
 (filter for `kernel-v*`) for the current tag rather than hardcoding one here,
 since this section goes stale otherwise.
 
-The kernel is a real pip/pipx-installable distribution (puts `agentic-sdlc`
-directly on `PATH`, no repository checkout needed at runtime). See
-[`kernel/README.md`](kernel/README.md) for the exact `pipx install` command;
-duplicating that command here would just go stale again.
+The kernel is a Go binary. It was a pip/pipx-installable Python package
+until the port finished; see [`kernel/README.md`](kernel/README.md) for what
+the kernel is and what it owns.
 
-For development against an unreleased change, or if you already have this
-repository checked out, run from the checkout instead — no separate clone
-needed:
+From a checkout, `bin/agentic-sdlc` builds it on first use and execs it —
+no separate clone and no install step:
 
 ```sh
-pipx install ./kernel
+./bin/agentic-sdlc --version
 ```
 
-Put the resulting `agentic-sdlc` executable on `PATH` (pipx does this by
-default), or set `AGENTIC_SDLC_BIN=/path/to/agentic-sdlc`.
+Put `bin/agentic-sdlc` on `PATH` (a symlink works — it resolves its own
+location), or set `AGENTIC_SDLC_BIN=/path/to/agentic-sdlc`.
 
 Either way, once `agentic-sdlc` resolves on `PATH` (or via `AGENTIC_SDLC_BIN`),
 run `cadre sdlc init --root /path/to/target`.

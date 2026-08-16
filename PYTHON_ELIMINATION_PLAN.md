@@ -432,7 +432,7 @@ the only part that talks to a network. It decomposes as:
 | ~~`gate_reviewers`, `gate_reviewers_gitlab`~~ | ~~890~~ | **Ported.** Reviewer reporting |
 | ~~`gate_status`, `github_status_write`~~ | ~~803~~ | **Ported.** The gate-status comment |
 | ~~`reviewer_nudge`~~ | ~~458~~ | **Ported.** The advisory reviewer comment |
-| ~~`gate_issues`, `gate_issues_github`, `github_issue_write`~~ | ~~2,736~~ | **Ported.** Issue creation and reconciliation |
+| ~~`gate_issues`, `gate_issues_github`, `github_issue_write`~~ | ~~2,736~~ | **Ported, then deleted with the rest of the package.** |
 
 Both shared primitives landed first, since everything else builds on
 them. The sanitizers are pure enough to compare exhaustively: 48 inputs
@@ -539,6 +539,42 @@ same fix.
 
 **Gate:** differential across all 30 subcommands against the Python kernel,
 run-record schema validation unchanged, and the boundary test ported first.
+
+**Phase 5 is complete.** `kernel/agentic_sdlc/` (9,626 lines), `kernel/test/`
+(6,883), the 26 differential tests, and the pip packaging are deleted --
+21,705 lines. `kernel/` now holds `contracts/` and a README; the
+implementation is `internal/kernel/`.
+
+The pip retirement needed no mitigation in the end: the maintainer confirmed
+the package had pre-release testers only and no current consumers, so the
+"final release whose console script prints install instructions" step above
+was not required. The PyPI *name* still belongs to an unrelated third party,
+which makes `SECURITY.md`'s warning more pointed rather than less -- there is
+now no package of ours that `pip install agentic-sdlc` could be confused
+with.
+
+What made the deletion cost nothing was four changes that landed first, and
+each was worth more than the deletion:
+
+| | |
+| --- | --- |
+| #309 | the differentials stopped passing when they compared nothing |
+| #310, #311 | the command layer and forge paths got tests of their own -- 55 functions went from full coverage to zero without them |
+| #312 | shared fixtures moved out of the files about to be deleted |
+| #313 | invariants split from comparisons, so the deletion removed one set and not both |
+
+Measured before deleting anything: removing the differential *files* dropped
+coverage to 48%; removing only the Python-comparing *tests* left 67.3%. The
+split is the difference.
+
+**One pattern surfaced four times and is worth carrying into Phase 6.** A
+test reports success because something underneath it quietly gave up: a
+fixture that skipped when its Python builder failed (#309, and twice more in
+#312), a parent that passed because every subtest skipped (#313), and a
+discovery test that skipped on error (#315). None was found by reading code.
+All four were found by removing the thing they depended on and looking at
+what happened -- which is the check to run against the graph engine before
+trusting any differential built for it.
 
 ## Phase 6 — Reimplement the graph runtime
 
