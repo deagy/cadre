@@ -44,6 +44,21 @@ func GenerateAuthorityAides(args []string) int {
 	templatePath := filepath.Join(authorityRoot, "_template.md.tmpl")
 
 	// Generate all aides
+	// Cross-check the declared gate numbers before generating anything. A gate
+	// the kernel does not declare would otherwise reach an authority aide's
+	// brief, telling a human to prepare a decision package for a gate that is
+	// not there.
+	aides, err := generators.LoadAides(aidesPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cadre: %v\n", err)
+		return 1
+	}
+	contractPath := filepath.Join(repoRoot, "kernel", "contracts", "lifecycle-gates.json")
+	if err := generators.ValidateAideGatesAgainstContract(aides, contractPath); err != nil {
+		fmt.Fprintf(os.Stderr, "cadre: %s: %v\n", aidesPath, err)
+		return 1
+	}
+
 	generated, err := generators.GenerateAuthorityAides(authorityRoot, aidesPath, templatePath, generators.GeneratedMarker)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "cadre: %v\n", err)
