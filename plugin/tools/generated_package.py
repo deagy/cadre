@@ -26,7 +26,12 @@ import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-GENERATOR = REPO_ROOT / "roster" / "orchestration" / "src" / "generate_global_plugin.py"
+# `bin/cadre`, not the Python generator it replaced. These tests exist to check
+# the distribution this project actually ships, and since the Go port that is
+# what `cadre generate-plugin` produces -- CI's own `--check` guard has run the
+# Go generator for some time. Building with the Python one meant the Cline
+# mirror was being checked against a package nobody installs.
+GENERATOR = REPO_ROOT / "bin" / "cadre"
 
 _CACHED: Path | None = None
 
@@ -39,7 +44,7 @@ def generated_package() -> Path:
         atexit.register(shutil.rmtree, directory, True)
         target = directory / "cadre-plugin"
         result = subprocess.run(
-            [sys.executable, str(GENERATOR), "--output", str(target)],
+            [str(GENERATOR), "generate-plugin", "--output", str(target)],
             cwd=REPO_ROOT,
             text=True,
             capture_output=True,
