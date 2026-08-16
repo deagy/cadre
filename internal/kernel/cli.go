@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -63,6 +64,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return planCmd(registry, args[1:], stdout, stderr)
 	case "decide":
 		return decideCmd(registry, args[1:], stdout, stderr)
+	case "request-gate-reviewers-gitlab":
+		return requestGateReviewersGitLabCmd(registry, args[1:], stdout, stderr)
+	case "request-gate-reviewers":
+		return requestGateReviewersCmd(registry, args[1:], stdout, stderr)
 	case "repair":
 		return repairCmd(registry, args[1:], stdout, stderr)
 	case "init":
@@ -91,6 +96,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stdout, "  validate [--root ROOT] Check a project's configuration and run records")
 		_, _ = fmt.Fprintln(stdout, "  plan --task-id ID --task TEXT         Create a dispatch plan and pending run record")
 		_, _ = fmt.Fprintln(stdout, "  decide --task-id ID --gate G --role R --decision D --actor-id A --evidence-uri U")
+		_, _ = fmt.Fprintln(stdout, "  request-gate-reviewers --task-id ID --repo R --pr N --as-bot B")
+		_, _ = fmt.Fprintln(stdout, "  request-gate-reviewers-gitlab --task-id ID --project-path P --mr-iid N --as-bot B")
 		_, _ = fmt.Fprintln(stdout, "  repair [--runner R] [--apply]         Inspect or safely repair an initialization")
 		_, _ = fmt.Fprintln(stdout, "  init [--profile P] [--project-id ID] [--dry-run]  Initialize a project overlay")
 		_, _ = fmt.Fprintln(stdout, "  status --task-id ID                   Show a task's gate state (and advance it)")
@@ -704,4 +711,134 @@ func repairCmd(registry *Registry, args []string, stdout, stderr io.Writer) int 
 	}
 	_, _ = fmt.Fprint(stdout, RenderIndented(result))
 	return code
+}
+
+// requestGateReviewersCmd answers `request-gate-reviewers`.
+//
+// Reporting only. There is no --apply, and the absence is the feature: see
+// gatereviewers.go for why the write capability is not here.
+func requestGateReviewersCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
+	request := ReviewerRequest{Root: "."}
+	var pullRequest, gates string
+	fields := map[string]*string{
+		"--root": &request.Root, "--task-id": &request.TaskID, "--repo": &request.Repo,
+		"--pr": &pullRequest, "--as-bot": &request.AsBot, "--gates": &gates,
+		"--allow-classification": &request.AllowClassification,
+	}
+	if code := parseFlags("request-gate-reviewers", args, fields, stderr); code != 0 {
+		return code
+	}
+
+	var missing []string
+	for _, required := range []struct{ name, value string }{
+		{"--task-id", request.TaskID}, {"--repo", request.Repo},
+		{"--pr", pullRequest}, {"--as-bot", request.AsBot},
+	} {
+		if required.value == "" {
+			missing = append(missing, required.name)
+		}
+	}
+	if len(missing) > 0 {
+		_, _ = fmt.Fprintf(stderr,
+			"agentic-sdlc request-gate-reviewers: error: the following arguments are required: %s\n",
+			strings.Join(missing, ", "))
+		return 2
+	}
+	number, err := strconv.Atoi(pullRequest)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr,
+			"agentic-sdlc request-gate-reviewers: error: argument --pr: invalid int value: %q\n",
+			pullRequest)
+		return 2
+	}
+	request.PullRequest = number
+	for _, gate := range strings.Split(gates, ",") {
+		if trimmed := strings.TrimSpace(gate); trimmed != "" {
+			request.Gates = append(request.Gates, trimmed)
+		}
+	}
+
+	report, err := registry.RequestGateReviewers(request)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(err))
+		return 1
+	}
+	_, _ = fmt.Fprint(stdout, RenderIndented(report))
+
+	// Exit 2 when anything needs a human: a refusal, or a login that cannot be
+	// asked. Distinct from 1 -- the report was built and is correct, and what
+	// it says is that somebody has to act before these reviewers can be
+	// requested. A caller treating non-zero as failure still stops.
+	for _, entry := range report.Reviewers {
+		if problemClassifications[entry.Classification] {
+			return 2
+		}
+	}
+	if len(report.Refusals) > 0 {
+		return 2
+	}
+	return 0
+}
+
+// requestGateReviewersGitLabCmd answers `request-gate-reviewers-gitlab`.
+func requestGateReviewersGitLabCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
+	request := GitLabReviewerRequest{Root: "."}
+	var mergeRequest, gates string
+	fields := map[string]*string{
+		"--root": &request.Root, "--task-id": &request.TaskID,
+		"--project-path": &request.ProjectPath, "--mr-iid": &mergeRequest,
+		"--as-bot": &request.AsBot, "--gates": &gates,
+		"--allow-classification": &request.AllowClassification,
+	}
+	if code := parseFlags("request-gate-reviewers-gitlab", args, fields, stderr); code != 0 {
+		return code
+	}
+
+	var missing []string
+	for _, required := range []struct{ name, value string }{
+		{"--task-id", request.TaskID}, {"--project-path", request.ProjectPath},
+		{"--mr-iid", mergeRequest}, {"--as-bot", request.AsBot},
+	} {
+		if required.value == "" {
+			missing = append(missing, required.name)
+		}
+	}
+	if len(missing) > 0 {
+		_, _ = fmt.Fprintf(stderr,
+			"agentic-sdlc request-gate-reviewers-gitlab: error: the following arguments are required: %s\n",
+			strings.Join(missing, ", "))
+		return 2
+	}
+	iid, err := strconv.Atoi(mergeRequest)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr,
+			"agentic-sdlc request-gate-reviewers-gitlab: error: argument --mr-iid: invalid int value: %q\n",
+			mergeRequest)
+		return 2
+	}
+	request.MergeRequestIID = iid
+	for _, gate := range strings.Split(gates, ",") {
+		if trimmed := strings.TrimSpace(gate); trimmed != "" {
+			request.Gates = append(request.Gates, trimmed)
+		}
+	}
+
+	report, err := registry.RequestGateReviewersGitLab(request)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(err))
+		return 1
+	}
+	_, _ = fmt.Fprint(stdout, RenderIndented(report))
+
+	// Same mapping as the GitHub report, over this forge's own problem set --
+	// the two share "withheld-conflict" and differ in the rest.
+	for _, entry := range report.Reviewers {
+		if gitlabProblemClassifications[entry.Classification] {
+			return 2
+		}
+	}
+	if len(report.Refusals) > 0 {
+		return 2
+	}
+	return 0
 }
