@@ -2162,7 +2162,11 @@ class RepositoryHealthTests(unittest.TestCase):
         if interpreter is None:
             self.skipTest("no PowerShell interpreter (pwsh/powershell) available")
         wrapper = REPOSITORY_ROOT / "bin" / "cadre.ps1"
-        selector = ROOT / "orchestration" / "src" / "select_agents.py"
+        # Compared against bin/cadre rather than a selector script: the Python
+        # selector is gone, and what this pins is the *wrapper* -- that
+        # cadre.ps1 hands `select` to the same binary with the same arguments
+        # and returns its output unaltered.
+        direct_cli = REPOSITORY_ROOT / "bin" / "cadre"
         arguments = [
             "--task", "Update the React navigation",
             "--files", "frontend/src/Nav.tsx",
@@ -2170,7 +2174,7 @@ class RepositoryHealthTests(unittest.TestCase):
             "--task-id", "WRAPPER-HEALTH-3",
         ]
         direct = subprocess.run(
-            [sys.executable, str(selector), *arguments],
+            [str(direct_cli), "select", *arguments],
             cwd=REPOSITORY_ROOT,
             check=True,
             capture_output=True,
@@ -2187,8 +2191,9 @@ class RepositoryHealthTests(unittest.TestCase):
         )
         direct_payload = json.loads(direct.stdout)
         wrapper_payload = json.loads(via_wrapper.stdout)
-        direct_payload.pop("generated_at", None)
-        wrapper_payload.pop("generated_at", None)
+        for payload in (direct_payload, wrapper_payload):
+            payload.pop("generated_at", None)
+            payload.get("provenance", {}).pop("git_dirty_paths", None)
         self.assertEqual(direct_payload, wrapper_payload)
 
     def test_bin_agents_ps1_wrapper_rejects_unknown_subcommand(self) -> None:
