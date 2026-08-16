@@ -117,7 +117,11 @@ jobs:
           cache-dependency-path: kernel/requirements-validation.txt
       - run: pip install --no-cache-dir -r kernel/requirements-validation.txt
       - run: python -B -m unittest discover -b -s kernel/test -p "test_*.py"
-      - run: ./bin/agentic-sdlc --version
+      # The Python package, run from the checkout. This was `./bin/agentic-sdlc
+      # --version` until that shim started building and exec'ing the Go kernel;
+      # it would still pass, on the Go the runner image happens to ship, while
+      # checking something other than what this job is for.
+      - run: python -B kernel/dev_entrypoint.py --version
       - name: Install the packaged distribution (pip/pipx install path)
         run: pip install --no-cache-dir ./kernel
       - name: Verify the installed console script works outside the checkout
@@ -159,6 +163,11 @@ jobs:
       # stops being true, fall back to a plain `go test ./...` leg rather
       # than disabling cgo globally, per the Makefile's test-race comment.
       - run: CGO_ENABLED=1 go test -race ./...
+      # The shim a checkout actually runs: builds cmd/agentic-sdlc and execs it.
+      # Here rather than in the kernel job, which is about the Python package
+      # and sets up no Go of its own.
+      - run: ./bin/agentic-sdlc --version
+      - run: ./bin/agentic-sdlc show-contract lifecycle-gates > /dev/null
       - name: gofmt (fails on any formatting diff)
         run: |
           set -eu
@@ -614,8 +623,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Pre-build the Go CLI so bin/cadre never compiles inside a timed test
-        run: ./bin/cadre help >/dev/null
+      - name: Pre-build the Go binaries so neither compiles inside a timed test
+        # Both of them: `bin/agentic-sdlc` builds and execs the Go kernel too
+        # since the kernel port, and AGENTIC_SDLC_BIN above points these tests
+        # straight at it. Leaving it cold reproduced the exact wall of
+        # timeouts described above, one binary later.
+        run: |
+          ./bin/cadre help >/dev/null
+          ./bin/agentic-sdlc --version >/dev/null
       - run: npm test
         working-directory: cline-plugins/${{ matrix.package }}
       - run: npm run typecheck
