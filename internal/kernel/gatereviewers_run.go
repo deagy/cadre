@@ -100,8 +100,12 @@ func (r *Registry) RequestGateReviewers(request ReviewerRequest) (*ReviewerRepor
 	var gateIDs []string
 	if len(request.Gates) > 0 {
 		for _, gateID := range request.Gates {
+			// One class for every eligibility failure here, unlike
+			// create-gate-issues below -- gate_reviewers.py makes no
+			// exit-code distinction between the two kinds, and this
+			// mirrors it.
 			if err := CheckGateEligibility(gateID, dispatchPlan, gateByID[gateID]); err != nil {
-				return nil, err
+				return nil, &GateReviewersError{Message: err.Error()}
 			}
 			gateIDs = append(gateIDs, gateID)
 		}

@@ -83,7 +83,16 @@ func (r *Registry) CreateGateIssues(request GateIssuesRequest) (*orderedObject, 
 	var gateIDs []string
 	if len(request.Gates) > 0 {
 		for _, gateID := range request.Gates {
+			// A gate the project is not configured for needs somebody to
+			// change the project, so it exits 2; a gate id that does not
+			// exist is a typo, so it exits 1. Collapsing the two was a real
+			// defect -- an operator scripting against exit codes would have
+			// treated "this task does not run G9" as a malformed command.
 			if err := CheckGateEligibility(gateID, dispatchPlan, gateByID[gateID]); err != nil {
+				var eligibility *GateEligibilityError
+				if errors.As(err, &eligibility) && eligibility.NeedsHuman {
+					return nil, &GateIssuesBlocked{Message: err.Error()}
+				}
 				return nil, &GateIssuesError{Message: err.Error()}
 			}
 			gateIDs = append(gateIDs, gateID)

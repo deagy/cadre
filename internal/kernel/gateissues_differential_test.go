@@ -357,6 +357,21 @@ var gateIssuesCases = []gateIssuesCase{
 		expectExit: 2, expectContains: "gitlab-user-ambiguous",
 	},
 	{
+		// A gate the operator named that the task is not configured for. Named
+		// gates are refused rather than skipped -- an instruction that cannot
+		// be carried out is more useful said than silently ignored.
+		name:       "a named gate outside the configured set",
+		extraArgs:  []string{"--gates", "G9"},
+		expectExit: 2, expectContains: "not part of the task's configured",
+	},
+	{
+		// Not a gate at all: a structural mistake in the invocation, not
+		// something a human has to go and resolve on the forge.
+		name:       "a named gate that does not exist",
+		extraArgs:  []string{"--gates", "G99"},
+		expectExit: 1, expectContains: "unknown gate id",
+	},
+	{
 		name: "an apply with no plan digest", noDigest: true,
 		expectExit: 1, expectContains: "--apply requires --plan-digest",
 	},

@@ -353,6 +353,22 @@ func configuredGateIDs(dispatchPlan map[string]any) map[string]bool {
 	return configured
 }
 
+// GateEligibilityError is one named gate that cannot be worked on.
+//
+// NeedsHuman is what separates the two kinds. A gate id that does not exist,
+// or one missing from the run record, is a mistake in the invocation -- fixed
+// by typing something else. A gate the task is not configured for, or one that
+// is not applicable, invalidated, or awaiting re-entry, is a statement about
+// the project that somebody has to go and change. The callers map the two to
+// different exit codes, and the Python kernel makes the same split with two
+// exception classes.
+type GateEligibilityError struct {
+	Message    string
+	NeedsHuman bool
+}
+
+func (e *GateEligibilityError) Error() string { return e.Message }
+
 // CheckGateEligibility refuses a gate that cannot be reported on.
 //
 // Explicitly asked-for gates only. A gate that fails these checks in the
@@ -369,28 +385,28 @@ func CheckGateEligibility(
 		}
 	}
 	if !known {
-		return &GateReviewersError{Message: fmt.Sprintf("unknown gate id: %s", pythonRepr(gateID))}
+		return &GateEligibilityError{Message: fmt.Sprintf("unknown gate id: %s", pythonRepr(gateID))}
 	}
 	if gateRecord == nil {
-		return &GateReviewersError{Message: fmt.Sprintf(
+		return &GateEligibilityError{Message: fmt.Sprintf(
 			"gate %s not found in the run record's lifecycle_gates array "+
 				"(lookup is by gate_id, not index; the array must contain exactly G1-G10)", gateID)}
 	}
 	if !configuredGateIDs(dispatchPlan)[gateID] {
-		return &GateReviewersError{Message: fmt.Sprintf(
+		return &GateEligibilityError{NeedsHuman: true, Message: fmt.Sprintf(
 			"gate %s is not part of the task's configured (dispatch-plan) gate set", gateID)}
 	}
 	if gateRecord["applicability"] != "applicable" {
-		return &GateReviewersError{Message: fmt.Sprintf(
+		return &GateEligibilityError{NeedsHuman: true, Message: fmt.Sprintf(
 			"gate %s applicability is %s, not 'applicable'",
 			gateID, pythonRepr(gateRecord["applicability"]))}
 	}
 	if gateRecord["status"] == "invalidated" {
-		return &GateReviewersError{Message: fmt.Sprintf(
+		return &GateEligibilityError{NeedsHuman: true, Message: fmt.Sprintf(
 			"gate %s status is 'invalidated'", gateID)}
 	}
 	if reentry, present := gateRecord["required_reentry_gate"]; present && reentry != nil {
-		return &GateReviewersError{Message: fmt.Sprintf(
+		return &GateEligibilityError{NeedsHuman: true, Message: fmt.Sprintf(
 			"gate %s has a pending required_reentry_gate=%s", gateID, pythonRepr(reentry))}
 	}
 	return nil
