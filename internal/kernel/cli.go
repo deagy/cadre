@@ -65,6 +65,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return planCmd(registry, args[1:], stdout, stderr)
 	case "decide":
 		return decideCmd(registry, args[1:], stdout, stderr)
+	case "create-gate-issues":
+		return createGateIssuesCmd(registry, args[1:], stdout, stderr)
 	case "publish-reviewer-nudge":
 		return publishReviewerNudgeCmd(registry, args[1:], stdout, stderr)
 	case "publish-gate-status":
@@ -101,6 +103,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stdout, "  validate [--root ROOT] Check a project's configuration and run records")
 		_, _ = fmt.Fprintln(stdout, "  plan --task-id ID --task TEXT         Create a dispatch plan and pending run record")
 		_, _ = fmt.Fprintln(stdout, "  decide --task-id ID --gate G --role R --decision D --actor-id A --evidence-uri U")
+		_, _ = fmt.Fprintln(stdout, "  create-gate-issues --task-id ID --project-path P --as-bot B [--apply]")
 		_, _ = fmt.Fprintln(stdout, "  publish-gate-status --task-id ID --forge F --as-bot B [--apply]")
 		_, _ = fmt.Fprintln(stdout, "  publish-reviewer-nudge --task-id ID --repo R --pr N --as-bot B [--apply]")
 		_, _ = fmt.Fprintln(stdout, "  request-gate-reviewers --task-id ID --repo R --pr N --as-bot B")
@@ -1009,5 +1012,67 @@ func publishReviewerNudgeCmd(registry *Registry, args []string, stdout, stderr i
 		return 1
 	}
 	_, _ = fmt.Fprint(stdout, RenderIndented(summary))
+	return 0
+}
+
+// createGateIssuesCmd answers `create-gate-issues`.
+//
+// Exit 2 covers both a blocked run and a completed one that found assignee
+// drift or refused a candidate: each means somebody has to look before the
+// task's tracking is complete.
+func createGateIssuesCmd(registry *Registry, args []string, stdout, stderr io.Writer) int {
+	request := GateIssuesRequest{Root: "."}
+	var gates string
+	fields := map[string]*string{
+		"--root": &request.Root, "--task-id": &request.TaskID,
+		"--project-path": &request.ProjectPath, "--as-bot": &request.AsBot,
+		"--gates": &gates, "--plan-digest": &request.PlanDigest,
+		"--allow-classification": &request.AllowClassification,
+		"--link-type":            &request.LinkType,
+	}
+	flags := map[string]*bool{
+		"--apply": &request.Apply, "--include-scope": &request.IncludeScope,
+		"--reconcile-assignees":   &request.ReconcileAssignees,
+		"--break-lock":            &request.BreakLock,
+		"--i-know-this-is-mocked": &request.KnowinglyMocked,
+	}
+	if code := parseFlagsWithSwitches("create-gate-issues", args, fields, flags, stderr); code != 0 {
+		return code
+	}
+
+	var missing []string
+	for _, required := range []struct{ name, value string }{
+		{"--task-id", request.TaskID}, {"--project-path", request.ProjectPath},
+		{"--as-bot", request.AsBot},
+	} {
+		if required.value == "" {
+			missing = append(missing, required.name)
+		}
+	}
+	if len(missing) > 0 {
+		_, _ = fmt.Fprintf(stderr,
+			"agentic-sdlc create-gate-issues: error: the following arguments are required: %s\n",
+			strings.Join(missing, ", "))
+		return 2
+	}
+	for _, gate := range strings.Split(gates, ",") {
+		if trimmed := strings.TrimSpace(gate); trimmed != "" {
+			request.Gates = append(request.Gates, trimmed)
+		}
+	}
+
+	result, err := registry.CreateGateIssues(request)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "%s\n", jsonError(err))
+		var blocked *GateIssuesBlocked
+		if errors.As(err, &blocked) {
+			return 2
+		}
+		return 1
+	}
+	_, _ = fmt.Fprint(stdout, RenderIndented(result))
+	if len(listOf(result.values["refusals"])) > 0 || result.values["drift_detected"] == true {
+		return 2
+	}
 	return 0
 }
