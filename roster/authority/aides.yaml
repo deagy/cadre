@@ -1,7 +1,7 @@
 # Data table for the generated authority-aide AGENT.md files.
 #
 # Same 2-space-id / 4-space-field shape as catalog.yaml's `agents:` block, so
-# both are read by the single parse_keyed_entries() primitive in routing.py
+# both are read by the single keyed-entry parser in internal/orchestration
 # instead of two independently hand-rolled parsers. Each id maps to the
 # human-authority title, gate numbers, and role-metadata knowledge_focus text
 # that `cadre generate-authority-aides` renders through
