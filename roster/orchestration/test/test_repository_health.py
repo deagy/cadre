@@ -1729,40 +1729,6 @@ class RepositoryHealthTests(unittest.TestCase):
         self.assertIsNotNone(expected, "kernel Version not found in internal/kernel/provider.go")
         self.assertEqual(expected.group(1), result.stdout.strip())
 
-    @unittest.skipUnless(sys.platform != "win32", "bin/cadre is a POSIX sh script")
-    def test_bin_agents_wrapper_dispatches_select_matching_direct_invocation(self) -> None:
-        self._require_agentic_sdlc()
-        wrapper = REPOSITORY_ROOT / "bin" / "cadre"
-        selector = ROOT / "orchestration" / "src" / "select_agents.py"
-        arguments = [
-            "--task", "Update the React navigation",
-            "--files", "frontend/src/Nav.tsx",
-            "--classification", "internal",
-            "--task-id", "WRAPPER-HEALTH-1",
-        ]
-        direct = subprocess.run(
-            [sys.executable, str(selector), *arguments],
-            cwd=REPOSITORY_ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-        )
-        via_wrapper = subprocess.run(
-            [str(wrapper), "select", *arguments],
-            cwd=REPOSITORY_ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-        )
-        direct_payload = json.loads(direct.stdout)
-        wrapper_payload = json.loads(via_wrapper.stdout)
-        direct_payload.pop("generated_at", None)
-        wrapper_payload.pop("generated_at", None)
-        self.assertEqual(direct_payload, wrapper_payload)
-
-    @unittest.skipUnless(sys.platform != "win32", "bin/cadre is a POSIX sh script")
     def test_bin_agents_wrapper_resolves_correctly_through_a_symlink(self) -> None:
         self._require_agentic_sdlc()
         wrapper = REPOSITORY_ROOT / "bin" / "cadre"
@@ -1799,51 +1765,6 @@ class RepositoryHealthTests(unittest.TestCase):
         )
         self.assertNotEqual(0, result.returncode)
         self.assertIn("unknown subcommand", result.stderr)
-
-    def test_secure_cloud_agents_plugin_bin_wrapper_matches_direct_invocation(self) -> None:
-        self._require_agentic_sdlc()
-        wrapper = generated_package() / "bin" / "cadre"
-        self.assertTrue(wrapper.is_file(), str(wrapper))
-        self.assertTrue(os.access(wrapper, os.X_OK), f"{wrapper} is not executable")
-        selector = ROOT / "orchestration" / "src" / "select_agents.py"
-        arguments = [
-            "--root", str(REPOSITORY_ROOT),
-            "--task", "Update the React navigation",
-            "--files", "frontend/src/Nav.tsx",
-            "--classification", "internal",
-            "--task-id", "WRAPPER-HEALTH-4",
-        ]
-        direct = subprocess.run(
-            [sys.executable, str(selector), *arguments],
-            cwd=REPOSITORY_ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-        )
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            via_plugin_wrapper = subprocess.run(
-                [str(wrapper), "select", *arguments],
-                cwd=temporary_directory,
-                check=True,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-            )
-        direct_payload = json.loads(direct.stdout)
-        wrapper_payload = json.loads(via_plugin_wrapper.stdout)
-        direct_payload.pop("generated_at", None)
-        wrapper_payload.pop("generated_at", None)
-        for payload in (direct_payload, wrapper_payload):
-            payload.pop("dispatch_fingerprint", None)
-            # Resolved from the *invoking* directory, not --root, and the
-            # packaged wrapper is deliberately run from a non-git temporary
-            # directory here to prove it does not depend on its own location.
-            payload.get("provenance", {}).pop("git_commit_sha", None)
-            payload.get("provenance", {}).pop("git_dirty_paths", None)
-            for request in payload.get("knowledge_context", {}).get("requests", []):
-                request["invocation"]["args"][0] = "<packaged-knowledge-cli>"
-        self.assertEqual(direct_payload, wrapper_payload)
 
     def test_packaged_bin_wrapper_sdlc_resolves_agentic_sdlc_bin_through_settings_py(self) -> None:
         """The packaged wrapper's `sdlc` branch must resolve

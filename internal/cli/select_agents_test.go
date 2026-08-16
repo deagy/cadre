@@ -12,12 +12,20 @@ import (
 // that a missing one fails with a pointer rather than a panic or a silent
 // success. Flag parsing, defaults, the plan's shape and its byte-level
 // output contract belong to the selector and are covered where that
-// contract lives -- roster/orchestration/test/test_selector.py and
-// test_repository_health.py's wrapper-parity cases.
+// contract lives -- internal/selector's own tests, which carry it now that
+// the Python selector is gone.
+
+// resolvedFileRelativePath is a file FindCadreFile is actually asked for.
+//
+// These cases used the Python selector's script path until it was deleted.
+// What they exercise is the *resolution order* -- which checkout's copy is
+// chosen -- so any path the function really looks up serves, and using a live
+// one keeps the stand-in honest.
+const resolvedFileRelativePath = "roster/catalog.yaml"
 
 func writeSelector(t *testing.T, root string) string {
 	t.Helper()
-	script := filepath.Join(root, filepath.FromSlash(SelectorScriptRelativePath))
+	script := filepath.Join(root, filepath.FromSlash(resolvedFileRelativePath))
 	if err := os.MkdirAll(filepath.Dir(script), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -32,7 +40,7 @@ func TestFindCadreFilePrefersCadreRepoRoot(t *testing.T) {
 	script := writeSelector(t, root)
 	t.Setenv("CADRE_REPO_ROOT", root)
 
-	found, err := FindCadreFile(SelectorScriptRelativePath)
+	found, err := FindCadreFile(resolvedFileRelativePath)
 	if err != nil {
 		t.Fatalf("FindCadreFile: %v", err)
 	}
@@ -53,7 +61,7 @@ func TestFindCadreFileWalksUpFromWorkingDirectory(t *testing.T) {
 	}
 	t.Chdir(nested)
 
-	found, err := FindCadreFile(SelectorScriptRelativePath)
+	found, err := FindCadreFile(resolvedFileRelativePath)
 	if err != nil {
 		t.Fatalf("FindCadreFile: %v", err)
 	}

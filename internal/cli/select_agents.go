@@ -6,15 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/deagy/cadre/cli/internal/interop"
 	"github.com/deagy/cadre/cli/internal/platform"
 )
-
-// SelectorScriptRelativePath is where the authoritative deterministic
-// selector lives, relative to a Cadre checkout (or to the vendored tree a
-// pip/pipx install carries -- see cadre_cli/__init__.py, which addresses it
-// by this same relative path).
-const SelectorScriptRelativePath = "roster/orchestration/src/select_agents.py"
 
 // maxAncestorWalkDepth bounds the upward search for this CLI's own tree, matching
 // platform.FindProjectRoot's own bound rather than inventing a second one.
@@ -65,29 +58,6 @@ func SelectAgents(args []string) int {
 	return SelectAgentsWithOptions(context.Background(), args, false)
 }
 
-// SelectImplEnv chooses which selector implementation runs.
-//
-// The Go implementation is the default. `CADRE_SELECT_IMPL=python` selects
-// the Python one, which remains in the tree as an escape hatch and as the
-// other half of the differential gate.
-//
-// The escape hatch is not decoration. The parity gate compares 25 corpus
-// plans, plus discovery, overlay, presentation and telemetry behaviour, and
-// that is a large space -- but it is not every task anyone will ever run
-// through this. If a real invocation turns up a divergence the corpus never
-// reached, `CADRE_SELECT_IMPL=python` restores the previous behaviour
-// immediately, without a release, and the divergence becomes a new corpus
-// case rather than an outage.
-const SelectImplEnv = "CADRE_SELECT_IMPL"
-
-// SelectImplPython is the escape-hatch value. Any other value, including
-// unset, runs the Go implementation.
-//
-// Deliberately not a boolean-ish "disable" flag: a caller reading
-// CADRE_SELECT_IMPL=python in a CI script can tell what it does without
-// consulting anything.
-const SelectImplPython = "python"
-
 // SelectGoNotImplementedExit is returned when the Go selector is requested
 // but does not exist yet. Deliberately distinct from 1 (a selection error)
 // and 2 (a usage error): the differential harness has to be able to tell
@@ -101,26 +71,7 @@ const SelectGoNotImplementedExit = 3
 // any other dispatched subcommand (CADRE_INTERACTIVE=1 in an explicit child
 // environment, never a mutation of this process's own).
 func SelectAgentsWithOptions(ctx context.Context, args []string, interactive bool) int {
-	if os.Getenv(SelectImplEnv) != SelectImplPython {
-		return selectAgentsGo(ctx, args, interactive)
-	}
-	script, err := FindCadreFile(SelectorScriptRelativePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "cadre select: %s\n", err)
-		return 1
-	}
-
-	code, err := interop.PythonSubcommand(ctx, script, args, interop.Options{
-		Stdin:  os.Stdin,
-		Stdout: os.Stdout,
-		Stderr: os.Stderr,
-		Env:    childEnv(interactive),
-	})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "cadre: %s\n", err)
-		return 1
-	}
-	return code
+	return selectAgentsGo(ctx, args, interactive)
 }
 
 // FindCadreFile locates a file belonging to *this CLI's own installation*

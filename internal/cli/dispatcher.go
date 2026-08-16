@@ -99,7 +99,7 @@ func Usage(subcommands []Subcommand) string {
 		{Name: "context", Description: "Local agent context store: put/get/list/search/export/promote/drop"},
 		{Name: "bootstrap-codex", Description: "Safely install namespaced Codex role wrappers (sync_codex_agents.py)"},
 		{Name: "profile", Description: "Read-only provider/profile drift report against a consuming project's copy (profile_diff.py)"},
-		{Name: "select", Description: "Deterministic agent/gate selection (select_agents.py)"},
+		{Name: "select", Description: "Deterministic agent/gate selection"},
 	} {
 		if listed[row.Name] {
 			continue

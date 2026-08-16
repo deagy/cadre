@@ -799,36 +799,6 @@ class SelectionPathIntegrationTests(ProjectOverlayFixture):
         self._write_overlay({"routes": [{"id": "documentation",
                                          "keywords": [*route["keywords"], extra]}]})
 
-    def test_overlay_added_keyword_changes_what_select_dispatches(self) -> None:
-        task = "revise the operator handbook"
-        before = self._select(task)
-        self.assertEqual(before["status"], "needs-triage")
-        self.assertEqual(before["matched_routes"], [])
-
-        self._widen_documentation("operator handbook")
-        after = self._select(task)
-        self.assertEqual([m["id"] for m in after["matched_routes"]], ["documentation"])
-        self.assertIn("technical-writer", after["agents"]["primary"])
-
-    def test_applied_overlay_is_recorded_in_provenance(self) -> None:
-        self._widen_documentation("operator handbook")
-        plan = self._select("revise the operator handbook")
-        provenance = plan["provenance"]
-        self.assertTrue(provenance["overlay_applied"])
-        self.assertEqual(provenance["overlay_path"],
-                         str(self.root / OVERLAY_RELATIVE_PATH))
-        self.assertRegex(provenance["overlay_content_hash"], r"^sha256:[0-9a-f]{64}$")
-        # The base file's hash stays the base file's: an auditor needs both
-        # halves to reproduce the merge.
-        self.assertNotEqual(provenance["routing_content_hash"],
-                            provenance["overlay_content_hash"])
-
-    def test_absent_overlay_leaves_provenance_overlay_fields_off(self) -> None:
-        plan = self._select("update the runbook")
-        provenance = plan["provenance"]
-        for field in ("overlay_applied", "overlay_path", "overlay_content_hash"):
-            self.assertNotIn(field, provenance)
-
     def test_an_overlay_does_not_drop_context_packs_from_the_effective_config(self) -> None:
         """`context_packs` is not in `_KNOWN_TOP_LEVEL_KEYS`, so the merge has
         no rule for it. It survives only because the merge patches a copy of
@@ -843,25 +813,6 @@ class SelectionPathIntegrationTests(ProjectOverlayFixture):
             base, {"routes": [{"id": "documentation", "keywords": [*route["keywords"], "x"]}]}
         )
         self.assertEqual(effective["context_packs"], base["context_packs"])
-
-    def test_context_packs_still_resolve_when_an_overlay_is_applied(self) -> None:
-        self._widen_documentation("operator handbook")
-        plan = self._select("revise the operator handbook for redfish bmc inventory")
-        self.assertTrue(plan["provenance"]["overlay_applied"])
-        self.assertEqual([p["id"] for p in plan["context_packs"]], ["redfish-bmc-context"])
-
-    def test_a_narrowing_overlay_fails_selection_instead_of_being_ignored(self) -> None:
-        # Widen-only is enforced at dispatch now, not just in the validators.
-        self._write_overlay({"routes": [{"id": "documentation", "keywords": ["only-this"]}]})
-        result = subprocess.run(
-            [sys.executable, str(SELECT_AGENTS), "--root", str(self.root),
-             "--task", "update the runbook", "--files", "notes.txt",
-             "--task-id", "OVERLAY-2", "--classification", "internal"],
-            capture_output=True, text=True, check=False,
-        )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("routing overlay is invalid", result.stderr)
-
 
 if __name__ == "__main__":
     unittest.main()

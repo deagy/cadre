@@ -14,7 +14,8 @@ import (
 	"github.com/deagy/cadre/cli/internal/selector"
 )
 
-// runSelectGo is the native Go selector, reached only via CADRE_SELECT_IMPL=go.
+// runSelectGo is the selector. It was reached via CADRE_SELECT_IMPL=go while a
+// Python implementation existed to compare against; that is now the only path.
 //
 // It is gated by roster/orchestration/test/test_select_differential.py, which
 // compares this against the Python implementation over a corpus of input
