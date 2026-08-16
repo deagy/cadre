@@ -56,9 +56,28 @@ func LoadAides(aidesPath string) ([]AideData, error) {
 			return nil, fmt.Errorf("aides.yaml: aide %q is missing required field 'knowledge_focus'", id)
 		}
 
-		gates := fields.Gates // Already parsed by YAML unmarshaler
-		// But we should still sort them for consistency
+		// A gate listed twice renders into the aide's own brief -- gatePhrase
+		// produces "gates G1, G1, and G2" -- so it is refused rather than
+		// silently de-duplicated. De-duplicating would hide a typo in a
+		// hand-edited file whose whole purpose is to say which gates an
+		// authority prepares for.
+		gates := append([]int(nil), fields.Gates...)
 		sort.Ints(gates)
+		var duplicates []int
+		for index := 1; index < len(gates); index++ {
+			if gates[index] == gates[index-1] &&
+				(len(duplicates) == 0 || duplicates[len(duplicates)-1] != gates[index]) {
+				duplicates = append(duplicates, gates[index])
+			}
+		}
+		if len(duplicates) > 0 {
+			listed := make([]string, 0, len(duplicates))
+			for _, gate := range duplicates {
+				listed = append(listed, strconv.Itoa(gate))
+			}
+			return nil, fmt.Errorf("aides.yaml: aide %q has duplicate gate(s): %s",
+				id, strings.Join(listed, ", "))
+		}
 
 		aides = append(aides, AideData{
 			ID:             id,
