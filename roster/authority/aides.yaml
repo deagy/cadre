@@ -4,17 +4,17 @@
 # both are read by the single parse_keyed_entries() primitive in routing.py
 # instead of two independently hand-rolled parsers. Each id maps to the
 # human-authority title, gate numbers, and role-metadata knowledge_focus text
-# that roster/orchestration/src/generate_authority_aides.py renders through
+# that `cadre generate-authority-aides` renders through
 # roster/authority/_template.md.tmpl (the shared phase/capability/model/
 # codex_model/reasoning_effort values are identical across all eight aides
 # and are hardcoded in the template itself, not repeated here). Regenerate
 # after editing this file:
 #
-#     python3 roster/orchestration/src/generate_authority_aides.py
+#     ./bin/cadre generate-authority-aides
 #
 # Validate deterministically without changing the working tree:
 #
-#     python3 roster/orchestration/src/generate_authority_aides.py --check
+#     ./bin/cadre generate-authority-aides --check
 
 aides:
   product-owner-aide:

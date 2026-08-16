@@ -14,7 +14,7 @@ repos:
         # document, and pre-commit parses this config with PyYAML, so every
         # hook below silently never ran.
         files: '\.ya?ml$'
-        exclude: '^roster/catalog\.yaml$|^roster/orchestration/routing\.yaml$'  # validated by schema_validate.py
+        exclude: '^roster/catalog\.yaml$|^roster/orchestration/routing\.yaml$'  # validated by `cadre schema-validate`
       - id: end-of-file-fixer
         files: "\\.md$"
       - id: trailing-whitespace
@@ -25,17 +25,17 @@ repos:
     hooks:
       - id: catalog-schema-validate
         name: Validate catalog.yaml and routing.json schemas
-        entry: python3 roster/orchestration/src/schema_validate.py
-        language: python
+        entry: ./bin/cadre schema-validate
+        language: system
         pass_filenames: false
         files: "roster/catalog\\.yaml$|roster/orchestration/routing\\.yaml$"
 
-      - id: catalog-health
-        name: Check catalog health (orphan/dangling refs, shadowed globs)
-        entry: python3 roster/orchestration/src/routing_health.py --check
-        language: python
-        pass_filenames: false
-        files: "roster/catalog\\.yaml$|roster/orchestration/routing\\.yaml$"
+      # The catalog-health hook that stood here ran routing_health.py, which
+      # linted orphaned and dangling role references and globs a rule excludes
+      # away entirely. That linter is now
+      # internal/orchestration/routing_health_test.go: it runs in `go test`
+      # and in CI, rather than as a subcommand a hook could call. Re-adding a
+      # hook here means adding a `cadre` command for it first.
 
       - id: staged-knowledge-records
         name: Check staged knowledge records are well-formed
@@ -46,7 +46,7 @@ repos:
 
       - id: generate-role-metadata-check
         name: Verify generated role metadata is in sync
-        entry: python3 roster/orchestration/src/generate_role_metadata.py --check
-        language: python
+        entry: ./bin/cadre generate-role-metadata --check
+        language: system
         pass_filenames: false
         files: "roster/.*AGENT\\.md$|roster/catalog\\.yaml$|roster/catalog-order\\.txt$"

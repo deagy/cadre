@@ -89,7 +89,7 @@ jobs:
       - run: python -B -m unittest discover -b -s roster/shared/test -p "test_*.py"
       - run: ./bin/cadre help
       - run: ./bin/cadre select --task "CI wrapper smoke test" --files README.md --classification internal --task-id CI-SMOKE-1 >/dev/null
-      - run: python roster/orchestration/src/schema_validate.py
+      - run: ./bin/cadre schema-validate
       # The kernel is in-tree now, so these exercise the real wiring rather
       # than a SHA-pinned checkout of another repository.
       - run: ./bin/cadre sdlc --version
