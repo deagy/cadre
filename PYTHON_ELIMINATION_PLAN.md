@@ -431,7 +431,7 @@ the only part that talks to a network. It decomposes as:
 | ~~`github_write`, `gitlab_write`~~ | ~~829~~ | **Ported.** The forge clients |
 | ~~`gate_reviewers`, `gate_reviewers_gitlab`~~ | ~~890~~ | **Ported.** Reviewer reporting |
 | ~~`gate_status`, `github_status_write`~~ | ~~803~~ | **Ported.** The gate-status comment |
-| `reviewer_nudge` | 458 | The advisory reviewer comment |
+| ~~`reviewer_nudge`~~ | ~~458~~ | **Ported.** The advisory reviewer comment |
 | `gate_issues`, `gate_issues_github`, `github_issue_write` | 2,736 | Issue creation and reconciliation |
 
 Both shared primitives landed first, since everything else builds on
