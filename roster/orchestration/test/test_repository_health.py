@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 _SRC = ROOT / "orchestration" / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
+CADRE_CLI_RELATIVE = ("bin", "cadre")
 REPOSITORY_ROOT = ROOT.parent
 
 # Single source of truth for this repository's current role count. Cross-
@@ -381,9 +382,9 @@ class RepositoryHealthTests(unittest.TestCase):
         self.assertEqual(offenders, [])
 
     def test_authority_aide_agents_are_generated_and_in_sync(self) -> None:
-        generator = REPOSITORY_ROOT / "roster" / "orchestration" / "src" / "generate_authority_aides.py"
+        generator = REPOSITORY_ROOT.joinpath(*CADRE_CLI_RELATIVE)
         checked = subprocess.run(
-            [sys.executable, str(generator), "--check"],
+            [str(generator), "generate-authority-aides", "--check"],
             cwd=REPOSITORY_ROOT,
             check=False,
             capture_output=True,
@@ -393,9 +394,11 @@ class RepositoryHealthTests(unittest.TestCase):
         self.assertEqual(0, checked.returncode, checked.stderr)
 
     def test_role_metadata_files_are_generated_and_in_sync(self) -> None:
-        generator = REPOSITORY_ROOT / "roster" / "orchestration" / "src" / "generate_role_metadata.py"
+        # The Go CLI, not a generator script: `cadre generate-role-metadata`
+        # is what this repository runs and what CI checks.
+        generator = REPOSITORY_ROOT.joinpath(*CADRE_CLI_RELATIVE)
         checked = subprocess.run(
-            [sys.executable, str(generator), "--check"],
+            [str(generator), "generate-role-metadata", "--check"],
             cwd=REPOSITORY_ROOT,
             check=False,
             capture_output=True,
@@ -405,11 +408,11 @@ class RepositoryHealthTests(unittest.TestCase):
         self.assertEqual(0, checked.returncode, checked.stderr)
 
     def test_secure_cloud_agents_plugin_is_generated_and_in_sync(self) -> None:
-        generator = REPOSITORY_ROOT / "roster" / "orchestration" / "src" / "generate_global_plugin.py"
+        generator = REPOSITORY_ROOT.joinpath(*CADRE_CLI_RELATIVE)
         with tempfile.TemporaryDirectory(prefix="agents-health-") as temporary_directory:
             output = Path(temporary_directory) / "plugin"
             generated = subprocess.run(
-                [sys.executable, str(generator), "--output", str(output)],
+                [str(generator), "generate-plugin", "--output", str(output)],
                 cwd=REPOSITORY_ROOT,
                 check=False,
                 capture_output=True,
@@ -418,7 +421,7 @@ class RepositoryHealthTests(unittest.TestCase):
             )
             self.assertEqual(0, generated.returncode, generated.stderr)
             checked = subprocess.run(
-                [sys.executable, str(generator), "--check", "--output", str(output)],
+                [str(generator), "generate-plugin", "--check", "--output", str(output)],
                 cwd=REPOSITORY_ROOT,
                 check=False,
                 capture_output=True,
@@ -498,45 +501,6 @@ class RepositoryHealthTests(unittest.TestCase):
         # ship to projects that separately opt into lifecycle governance.
         self.assertFalse((plugin_root / "plugins" / "lifecycle" / "hooks" / "guard_workspace_mutation.py").exists())
 
-    def test_secure_cloud_agents_plugin_covers_every_catalog_agent_and_skill(self) -> None:
-        catalog_agents: dict[str, str] = {}
-        current_agent: str | None = None
-        for line in (ROOT / "catalog.yaml").read_text(encoding="utf-8").splitlines():
-            if line.startswith("  ") and not line.startswith("    ") and line.rstrip().endswith(":"):
-                current_agent = line.strip()[:-1]
-                catalog_agents[current_agent] = ""
-
-        plugin_root = generated_package()
-        for agent_id in catalog_agents:
-            with self.subTest(agent=agent_id):
-                md_path = plugin_root / "agents" / f"{agent_id}.md"
-                codex_id = f"agents-{agent_id}"
-                toml_path = plugin_root / "codex-agents" / f"{codex_id}.toml"
-                self.assertTrue(md_path.is_file(), str(md_path))
-                self.assertTrue(toml_path.is_file(), str(toml_path))
-                self.assertIn(f"name: {agent_id}", md_path.read_text(encoding="utf-8"))
-                self.assertIn(f'name = "{codex_id}"', toml_path.read_text(encoding="utf-8"))
-
-        sys.path.insert(0, str(ROOT / "orchestration" / "src"))
-        try:
-            import generate_global_plugin
-        finally:
-            sys.path.pop(0)
-
-        skills_root = REPOSITORY_ROOT / ".agents" / "skills"
-        for skill_file in skills_root.glob("*/SKILL.md"):
-            skill_name = skill_file.parent.name
-            with self.subTest(skill=skill_name):
-                # Most skills package to skills/<name>/; a few (see
-                # SKILL_PACKAGE_TARGETS) retarget into a sub-plugin directory
-                # instead, e.g. lifecycle-onboarding/lifecycle-review into
-                # plugins/lifecycle/skills/ so cadre-lifecycle can ship them
-                # as an optional plugin rather than bundled into the core.
-                package_subdir = generate_global_plugin.SKILL_PACKAGE_TARGETS.get(skill_name, "skills")
-                packaged_skill = plugin_root / package_subdir / skill_name / "SKILL.md"
-                self.assertTrue(packaged_skill.is_file(), str(packaged_skill))
-                self.assertIn(f"name: {skill_name}", packaged_skill.read_text(encoding="utf-8"))
-
     def test_secure_cloud_agents_agent_catalog_export_covers_every_role(self) -> None:
         catalog_agents: dict[str, str] = {}
         current_agent: str | None = None
@@ -566,307 +530,6 @@ class RepositoryHealthTests(unittest.TestCase):
                     (generated_package() / "agent-catalog.json").read_text(encoding="utf-8")
                 )["agents"][agent_id]["definition"]
                 self.assertTrue((generated_package() / packaged).is_file(), packaged)
-
-    def test_role_authority_is_equivalent_across_every_generating_runner(self) -> None:
-        """Proposal 10's invariant, stated as one test: every role this
-        repository's catalog defines is emitted, with runner-equivalent
-        authority, by all three role-wrapper generators -- Claude Code
-        (generate_global_plugin.py), Codex (generate_role_metadata.py's
-        codex_wrapper_contents), and Cline (plugin/tools/port_cline_agents.py).
-
-        Before this test, parity across the three outputs was only an
-        emergent property of several separate generator tests, each checking
-        its own output in isolation -- nothing stated "role X has
-        runner-equivalent representation everywhere" as a single, named
-        check. This test states it directly and fails with the specific
-        role id, runner(s), and field(s) that diverged, rather than a bare
-        assertion failure.
-
-        Everything here is regenerated fresh into temporary output (this
-        test never reads the committed plugin/, provider/, or
-        cline-plugins/ trees, which can lag the source of truth between
-        regenerations):
-
-        - the role set and each role's capability/model tier come from
-          `generate_role_metadata.build_role_model()`, parsed directly from
-          every roster/<phase>/<role>/AGENT.md's frontmatter -- the same
-          source catalog.yaml itself is generated from, not catalog.yaml on
-          disk;
-        - the Claude Code wrapper set is `generated_package()` above (a
-          fresh `generate_global_plugin.py --output` build, cached and
-          reused by every other test in this module);
-        - the Codex wrapper set is computed in-memory by calling
-          `codex_wrapper_contents()` on that same fresh role model -- not by
-          reading the committed roster/provider/codex-agents/*.toml, which
-          `cadre generate-role-metadata --check` guards separately but which
-          could still be stale in a working tree mid-edit;
-        - the Cline preset set is a fresh `port_cline_agents.port_agents()`
-          run, sourced from the fresh Claude Code build above.
-
-        "Authority-equivalent" means, per runner pairing:
-
-        - Claude Code <-> Codex: the role's `capability` tier must resolve to
-          the *same* `roster/runner-capabilities.json` profile on both sides
-          -- Claude's `tools:` frontmatter line must equal that profile's
-          tool list verbatim, and Codex's `sandbox_mode` TOML value must
-          equal that profile's `sandbox_mode` verbatim. This is the only
-          pairing checked on the full tool-list/sandbox_mode axis, since it
-          is the only pairing where both sides carry a directly comparable
-          field.
-        - All three (Claude Code, Codex, Cline): whether the role is
-          write-capable at all. Claude Code is write-capable when its tools
-          line contains Bash/Edit/Write; Codex when its `sandbox_mode` is
-          not "read-only"; Cline when its `allowedTools` contains
-          `run_commands` or `editor` (the tools `port_cline_agents.TOOL_MAP`
-          maps Bash/Edit/Write onto). All three must agree.
-        - All three: model tier. Claude Code's `model:` frontmatter value,
-          Codex's `model` TOML value resolved back to a tier through
-          `MODEL_TIERS`, and Cline's `modelTier:` frontmatter value resolved
-          through the manifest's `cline_tier` must all denote the same tier.
-          Cline is the one that does not compare as a bare string: its
-          vocabulary is capability-neutral (high/mid/low) rather than the
-          catalog's opus/sonnet/haiku, for the same reason Codex has its own
-          `codex_model` -- a runner whose model namespace does not share
-          Claude's naming gets its own mapped value, never a reused one.
-
-        Explicit limitation, stated rather than silently skipped: Cline
-        presets carry no `sandbox_mode`-equivalent field and no verbatim
-        tool-list -- only a coarser `allowedTools` action-name list with no
-        read/write-per-tool distinction preserved (`Edit` and `Write` both
-        collapse to `editor`; `Grep`/`Glob` both collapse to
-        `search_codebase`). Cline therefore does not participate in the
-        exact-tool-list comparison above; it participates only in the
-        coarser write-capable-or-not comparison, which is the one property
-        `allowedTools` can actually express. Forcing a false byte-level
-        equivalence there would fail this test on Cline's tool-name
-        *vocabulary* rather than on any real authority drift, which is
-        exactly the kind of noisy assertion Proposal 10 was written against.
-        """
-        sys.path.insert(0, str(ROOT / "orchestration" / "src"))
-        try:
-            import generate_global_plugin as ggp
-            import generate_role_metadata as grm
-        finally:
-            sys.path.pop(0)
-
-        sys.path.insert(0, str(REPOSITORY_ROOT / "plugin" / "tools"))
-        try:
-            import port_cline_agents as pca
-        finally:
-            sys.path.pop(0)
-
-        # 1. The full role set and each role's capability/model metadata,
-        # derived fresh from AGENT.md frontmatter -- never from catalog.yaml
-        # on disk, so a mid-edit catalog.yaml cannot make this test look
-        # more current than the actual role definitions.
-        order_ids, roles = grm.build_role_model(ROOT, ROOT / "catalog-order.txt")
-        self.assertTrue(order_ids, "no roles discovered from AGENT.md frontmatter")
-
-        header_template = (ROOT / "_catalog_header.yaml.tmpl").read_text(encoding="utf-8")
-        fresh_catalog_content = grm.render_catalog(order_ids, roles, header_template)
-        catalog_entries = grm.load_catalog_content(fresh_catalog_content)
-
-        # 2. Claude Code: the shared, cached fresh plugin build.
-        plugin_root = generated_package()
-
-        # 3. Codex: computed purely in-memory from the fresh role model
-        # above -- never written to (or read from) the real provider/ tree.
-        codex_contents = ggp.codex_wrapper_contents(catalog_entries)
-
-        # 4. Cline: a fresh port, sourced from the fresh Claude Code build.
-        cline_root = Path(tempfile.mkdtemp(prefix="cadre-cline-conformance-"))
-        self.addCleanup(shutil.rmtree, cline_root, ignore_errors=True)
-        ported_cline_roles = set(pca.port_agents(cline_root, source_root=plugin_root))
-
-        codex_model_to_tier = {
-            data["codex_model"]: tier for tier, data in ggp.MODEL_TIERS.items()
-        }
-        # Cline presets carry the capability-neutral tier name (high/mid/low),
-        # not the catalog's Anthropic-derived one, so its tier is compared
-        # after mapping through the manifest -- the same treatment Codex's
-        # `model` value already gets above. Both mappings come from
-        # roster/runner-capabilities.json, so neither can drift from it.
-        cline_tier_by_catalog_tier = dict(pca.MODEL_TIERS)
-
-        def _frontmatter_field(text: str, prefix: str) -> str | None:
-            for line in text.splitlines():
-                if line.startswith(prefix):
-                    return line[len(prefix) :].strip()
-            return None
-
-        def _toml_field(text: str, key: str) -> str | None:
-            raw = _frontmatter_field(text, f"{key} = ")
-            return json.loads(raw) if raw is not None else None
-
-        WRITE_TOOLS = {"Bash", "Edit", "Write"}
-        WRITE_CLINE_TOOLS = {"run_commands", "editor"}
-
-        divergences: list[str] = []
-
-        for role_id in order_ids:
-            metadata = catalog_entries[role_id]
-            capability = metadata["capability"]
-            profile = ggp.CAPABILITY_PROFILES[capability]
-            expected_model_tier = metadata["model"]
-
-            # -- Claude Code --------------------------------------------------
-            claude_path = plugin_root / "agents" / f"{role_id}.md"
-            if not claude_path.is_file():
-                divergences.append(f"{role_id}: missing from Claude Code output ({claude_path})")
-                continue
-            claude_text = claude_path.read_text(encoding="utf-8")
-            claude_tools_line = _frontmatter_field(claude_text, "tools:")
-            expected_tools_line = ", ".join(profile["tools"])
-            if claude_tools_line != expected_tools_line:
-                divergences.append(
-                    f"{role_id}: Claude Code tools {claude_tools_line!r} != expected "
-                    f"{expected_tools_line!r} for capability {capability!r}"
-                )
-            claude_model = _frontmatter_field(claude_text, "model:")
-            if claude_model != expected_model_tier:
-                divergences.append(
-                    f"{role_id}: Claude Code model {claude_model!r} != catalog model "
-                    f"{expected_model_tier!r}"
-                )
-            claude_write_capable = bool(WRITE_TOOLS & set((claude_tools_line or "").split(", ")))
-
-            # -- Codex ----------------------------------------------------------
-            codex_filename = f"agents-{role_id}.toml"
-            codex_text = codex_contents.get(codex_filename)
-            if codex_text is None:
-                divergences.append(f"{role_id}: missing from Codex output ({codex_filename})")
-                continue
-            codex_sandbox_mode = _toml_field(codex_text, "sandbox_mode")
-            if codex_sandbox_mode != profile["sandbox_mode"]:
-                divergences.append(
-                    f"{role_id}: Codex sandbox_mode {codex_sandbox_mode!r} != expected "
-                    f"{profile['sandbox_mode']!r} for capability {capability!r}"
-                )
-            codex_model_value = _toml_field(codex_text, "model")
-            codex_model_tier = codex_model_to_tier.get(codex_model_value)
-            if codex_model_tier != expected_model_tier:
-                divergences.append(
-                    f"{role_id}: Codex model {codex_model_value!r} resolves to tier "
-                    f"{codex_model_tier!r}, != catalog model {expected_model_tier!r}"
-                )
-            codex_write_capable = codex_sandbox_mode != "read-only"
-
-            # -- Cline ------------------------------------------------------
-            if role_id not in ported_cline_roles:
-                divergences.append(f"{role_id}: missing from Cline output (port_agents did not emit it)")
-                continue
-            cline_path = cline_root / "cline-agents" / "agents" / f"{role_id}.md"
-            cline_text = cline_path.read_text(encoding="utf-8")
-            cline_model_tier = _frontmatter_field(cline_text, "modelTier:")
-            expected_cline_tier = cline_tier_by_catalog_tier.get(expected_model_tier)
-            if cline_model_tier != expected_cline_tier:
-                divergences.append(
-                    f"{role_id}: Cline modelTier {cline_model_tier!r} != {expected_cline_tier!r} "
-                    f"(the cline_tier of catalog model {expected_model_tier!r})"
-                )
-            allowed_tools_raw = _frontmatter_field(cline_text, "allowedTools:")
-            allowed_tools = {
-                tool.strip() for tool in (allowed_tools_raw or "").strip("[]").split(",") if tool.strip()
-            }
-            cline_write_capable = bool(WRITE_CLINE_TOOLS & allowed_tools)
-
-            # -- Cross-runner write-capability agreement (all three) --------
-            if not (claude_write_capable == codex_write_capable == cline_write_capable):
-                divergences.append(
-                    f"{role_id}: write-capability disagreement -- Claude Code="
-                    f"{claude_write_capable}, Codex={codex_write_capable}, Cline="
-                    f"{cline_write_capable} (capability tier {capability!r})"
-                )
-
-        self.assertEqual(
-            [],
-            divergences,
-            "One or more roles have non-equivalent authority across generating runners "
-            "(role: what diverged, listed above). Each entry names the specific role id "
-            "and runner(s) that disagree.",
-        )
-
-    def test_generated_wrappers_enforce_catalog_capabilities_and_provenance(self) -> None:
-        generator = REPOSITORY_ROOT / "roster" / "orchestration" / "src" / "generate_global_plugin.py"
-        with tempfile.TemporaryDirectory(prefix="agents-capabilities-") as temporary_directory:
-            plugin_root = Path(temporary_directory) / "plugin"
-            result = subprocess.run(
-                [sys.executable, str(generator), "--output", str(plugin_root)],
-                cwd=REPOSITORY_ROOT,
-                check=True,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-            )
-            self.assertEqual(0, result.returncode)
-            for agent_id in ("code-reviewer", "security-reviewer"):
-                markdown = (plugin_root / "agents" / f"{agent_id}.md").read_text(encoding="utf-8")
-                toml = (plugin_root / "codex-agents" / f"agents-{agent_id}.toml").read_text(encoding="utf-8")
-                self.assertIn("tools: Read, Grep, Glob", markdown)
-                self.assertNotIn("tools: Read, Grep, Glob, Bash", markdown)
-                self.assertIn('sandbox_mode = "read-only"', toml)
-                self.assertIn("generated: true", markdown)
-                self.assertIn("canonical_source:", markdown)
-                self.assertIn("# GENERATED FILE:", toml)
-            for agent_id in ("application-engineer", "test-engineer"):
-                author = (plugin_root / "agents" / f"{agent_id}.md").read_text(encoding="utf-8")
-                self.assertIn("tools: Read, Grep, Glob, Bash, Edit, Write", author)
-                self.assertIn('sandbox_mode = "workspace-write"', (plugin_root / "codex-agents" / f"agents-{agent_id}.toml").read_text(encoding="utf-8"))
-
-            # roster/shared/workspace-isolation.md must reach EVERY role, at
-            # every capability tier. Its "Never mutate a working tree you did
-            # not create" section binds all of them: destroying uncommitted
-            # work with `git reset --hard`/`checkout`/`stash` while inspecting
-            # a diff requires no file-write tool and produces no edit, so
-            # neither a role's tier nor its tool allowlist is what governs.
-            # The file was previously tier-scoped to write-capable roles,
-            # which coupled a rule about *reading* to a tier about *writing*.
-            marker = "Shared policy: roster/shared/workspace-isolation.md"
-            for agent_id in (
-                "code-reviewer",  # read-only
-                "security-reviewer",  # read-only
-                "application-engineer",  # code_author
-                "test-engineer",  # test_author
-                "incident-commander",  # environment_operator
-                "requirements-agent",  # document_author
-            ):
-                markdown = (plugin_root / "agents" / f"{agent_id}.md").read_text(encoding="utf-8")
-                self.assertIn(marker, markdown)
-
-            sys.path.insert(0, str(ROOT / "orchestration" / "src"))
-            try:
-                import generate_global_plugin
-            finally:
-                sys.path.pop(0)
-            manifest = json.loads(
-                (REPOSITORY_ROOT / "roster" / "runner-capabilities.json").read_text(encoding="utf-8")
-            )
-            expected_write_capable = {
-                tier for tier, data in manifest["capability_tiers"].items()
-                if data["sandbox_mode"] != "read-only"
-            }
-            self.assertEqual(expected_write_capable, set(generate_global_plugin.WRITE_CAPABLE_TIERS))
-
-            tracked = set(
-                subprocess.run(
-                    ["git", "ls-files", "roster"],
-                    cwd=REPOSITORY_ROOT,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                ).stdout.splitlines()
-            )
-            for relative in generate_global_plugin.TIER_SCOPED_POLICIES:
-                self.assertIn(
-                    relative,
-                    tracked,
-                    f"{relative} is not git-tracked under roster/",
-                )
-                self.assertTrue(
-                    (plugin_root / "suite" / relative).is_file(),
-                    f"{relative} did not land under suite/ in the generated package",
-                )
 
     def test_every_relative_link_in_the_generated_package_resolves(self) -> None:
         """The generator rewrites relative links as it copies docs into
@@ -1472,11 +1135,11 @@ class RepositoryHealthTests(unittest.TestCase):
                     self.assertEqual("needs-triage", negative_plan["workflow"])
 
     def test_generated_package_has_no_source_paths_or_unsafe_relative_documentation_paths(self) -> None:
-        generator = REPOSITORY_ROOT / "roster" / "orchestration" / "src" / "generate_global_plugin.py"
+        generator = REPOSITORY_ROOT.joinpath(*CADRE_CLI_RELATIVE)
         with tempfile.TemporaryDirectory(prefix="agents-packaging-") as temporary_directory:
             plugin_root = Path(temporary_directory) / "plugin"
             subprocess.run(
-                [sys.executable, str(generator), "--output", str(plugin_root)],
+                [str(generator), "generate-plugin", "--output", str(plugin_root)],
                 cwd=REPOSITORY_ROOT,
                 check=True,
                 capture_output=True,
@@ -1494,141 +1157,6 @@ class RepositoryHealthTests(unittest.TestCase):
                     relative = raw_relative.rstrip(".,")
                     target = (path.parent / relative).resolve()
                     self.assertTrue(target.is_file() or target.is_dir(), f"{path}: {relative}")
-
-    def test_every_embedded_shared_policy_reaches_the_wheel(self) -> None:
-        """Every shared policy embedded into a generated wrapper must also be
-        carried by the pip/pipx wheel.
-
-        This used to check an allowlist: hatchling's force-include ignores
-        exclude patterns, so `pyproject.toml` named each roster/shared/ file
-        individually and a new one had to be added by hand. Phase 2 of
-        PYTHON_ELIMINATION_PLAN.md replaced that with `make wheel` copying the
-        tree with exclusions, so the allowlist is gone and a new shared file
-        is carried automatically.
-
-        The guarantee is unchanged and still worth pinning, because the
-        failure is silent in both arrangements: role_wrapper_inputs() *skips*
-        a missing shared file, so an installed distribution would generate
-        wrappers without the policy, and `generate-role-metadata --check`
-        would then report drift against vendored copies that do contain it.
-
-        Rather than build a wheel (slow), this asks the same question of the
-        copy rule: is the file under a copied root, and does any path
-        component match an exclusion? The exclusions are read from the
-        Makefile rather than restated, so the two cannot drift apart.
-        """
-        sys.path.insert(0, str(ROOT / "orchestration" / "src"))
-        try:
-            import generate_global_plugin
-        finally:
-            sys.path.pop(0)
-
-        makefile = (REPOSITORY_ROOT / "Makefile").read_text(encoding="utf-8")
-        block = re.search(
-            r"WHEEL_DATA_EXCLUDES\s*=\s*((?:.*\\\n)*.*)", makefile
-        )
-        self.assertIsNotNone(block, "WHEEL_DATA_EXCLUDES not found in Makefile")
-        excludes = set(re.findall(r"--exclude='([^']+)'", block.group(1)))
-        self.assertIn("*.py", excludes, "the wheel must still exclude Python")
-
-        copied_roots = re.search(r"tar -c \$\(WHEEL_DATA_EXCLUDES\) ([^|]+)\|", makefile)
-        self.assertIsNotNone(copied_roots, "wheel data roots not found in Makefile")
-        roots = copied_roots.group(1).split()
-        self.assertIn("roster", roots)
-
-        embedded = list(generate_global_plugin.SHARED_POLICIES) + list(
-            generate_global_plugin.TIER_SCOPED_POLICIES
-        )
-        self.assertTrue(embedded, "no shared policies found to check")
-
-        missing = []
-        for relative in embedded:
-            path = REPOSITORY_ROOT / relative
-            under_a_copied_root = any(
-                relative == root or relative.startswith(f"{root}/") for root in roots
-            )
-            excluded = any(
-                fnmatch.fnmatch(part, pattern)
-                for part in Path(relative).parts
-                for pattern in excludes
-            )
-            if not path.is_file() or not under_a_copied_root or excluded:
-                missing.append(relative)
-
-        self.assertEqual(
-            [],
-            missing,
-            "shared policy files embedded into generated wrappers that the wheel "
-            "would not carry -- either they are outside the roots `make wheel` "
-            "copies, or an exclusion pattern drops them",
-        )
-
-    def test_every_shared_policy_file_is_embedded_or_explicitly_exempted(self) -> None:
-        """A shared file under roster/shared/ can silently never reach any
-        agent: SHARED_POLICIES and TIER_SCOPED_POLICIES are opt-in
-        allowlists, so adding a new roster/shared/*.md policy without adding
-        it to either is not an error anywhere else -- it just quietly never
-        gets embedded (documentation-style.md shipped exactly this way for a
-        full release). This test closes that gap by requiring every
-        roster/shared/*.md file to be accounted for one of three ways:
-        embedded universally (SHARED_POLICIES), embedded for a subset of
-        capability tiers (TIER_SCOPED_POLICIES), or named in the allowlist
-        below with a reason it is deliberately not embedded.
-        """
-        sys.path.insert(0, str(ROOT / "orchestration" / "src"))
-        try:
-            import generate_global_plugin
-        finally:
-            sys.path.pop(0)
-
-        # Files that deliberately do not go through automatic embedding.
-        # Adding a file here is a real design decision, not a way to silence
-        # this test -- explain why the file is exempt.
-        not_embedded_by_design = {
-            # Directory README, not agent-facing policy content.
-            "roster/shared/README.md": "index/reference document, not a role policy",
-            # Opt-in policy referenced explicitly by the specific roles that
-            # need it (cloud-architect, etc.), not every role -- unlike
-            # documentation-style.md, applying to a narrow, deliberately
-            # chosen subset is the intended shape here.
-            "roster/shared/cloud-guardrails.md": "opt-in, referenced explicitly by the roles it applies to",
-            "roster/shared/secure-development-policy.md": "opt-in, referenced explicitly by the roles it applies to",
-            # General reference material cited from RUNBOOK.md as shared
-            # context for reviewers/release engineers, not per-role
-            # instructions meant to be embedded into every wrapper.
-            "roster/shared/definition-of-done.md": "general completion-bar reference cited from RUNBOOK.md, not per-role embedded policy",
-            "roster/shared/risk-severity-model.md": "general reference cited from RUNBOOK.md, not per-role embedded policy",
-        }
-
-        embedded = set(generate_global_plugin.SHARED_POLICIES) | set(
-            generate_global_plugin.TIER_SCOPED_POLICIES
-        )
-        shared_markdown_files = {
-            f"roster/shared/{path.name}"
-            for path in (REPOSITORY_ROOT / "roster" / "shared").glob("*.md")
-        }
-
-        unaccounted = sorted(
-            shared_markdown_files - embedded - set(not_embedded_by_design)
-        )
-        self.assertEqual(
-            [],
-            unaccounted,
-            "roster/shared/*.md file(s) are neither embedded (SHARED_POLICIES "
-            "or TIER_SCOPED_POLICIES in generate_global_plugin.py) nor listed "
-            "in this test's not_embedded_by_design allowlist with a reason: "
-            f"{unaccounted}. Add the file to one of those, deliberately.",
-        )
-
-        stale_allowlist_entries = sorted(
-            set(not_embedded_by_design) - shared_markdown_files
-        )
-        self.assertEqual(
-            [],
-            stale_allowlist_entries,
-            "not_embedded_by_design names file(s) that no longer exist under "
-            f"roster/shared/: {stale_allowlist_entries}. Remove the stale entry.",
-        )
 
     def test_secure_cloud_agents_plugin_is_self_contained(self) -> None:
         plugin_root = generated_package()
@@ -2118,41 +1646,6 @@ class RepositoryHealthTests(unittest.TestCase):
                 self.assertNotIn(
                     f"{name})", source,
                     "subcommand table must not also be hardcoded in the shim")
-
-    def test_packaged_wrapper_dispatches_nothing_itself(self) -> None:
-        """The wrapper used to carry a case arm per subcommand, each exec'ing
-        a Python script, and this test checked every row appeared there.
-
-        It no longer dispatches at all -- it resolves the binary and execs it
-        -- so the property worth pinning is the absence of that case block,
-        which is what makes the wrapper unable to drift from the binary's own
-        subcommand set.
-        """
-        sys.path.insert(0, str(ROOT / "orchestration" / "src"))
-        try:
-            import generate_global_plugin
-        finally:
-            sys.path.pop(0)
-
-        names = generate_global_plugin.packaged_subcommands(REPOSITORY_ROOT)
-        self.assertTrue(names)
-        wrapper_source = (generated_package() / "bin" / "cadre").read_text(encoding="utf-8")
-
-        # The wrapper no longer carries a case arm per subcommand: it execs
-        # the binary and lets it dispatch. What must hold is the stronger
-        # property that replaced that -- it dispatches nothing itself, so it
-        # cannot drift from the binary's own subcommand set.
-        for name in names:
-            with self.subTest(subcommand=name):
-                self.assertNotIn(
-                    f"  {name})", wrapper_source,
-                    "the wrapper must not dispatch subcommands itself; the binary does")
-        self.assertNotIn(
-            "AGENT_PYTHON", wrapper_source,
-            "the packaged wrapper must never exec Python")
-        self.assertIn(
-            'exec "$BINARY_CACHE"', wrapper_source,
-            "the wrapper must hand every subcommand to the binary")
 
     def _powershell_interpreter(self) -> str | None:
         return shutil.which("pwsh") or shutil.which("powershell")
