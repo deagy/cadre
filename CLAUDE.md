@@ -32,17 +32,16 @@ All Python tooling requires Python 3.10+, resolved automatically by `bin/cadre` 
 # points that print, and without it ~350 lines of JSON plans and resolved
 # config land on stdout and bury the OK/FAILED line. Buffered output is still
 # shown for any test that fails, so nothing is lost. CI passes -b too.
-python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
+go test ./internal/generators/   # the repo-health guards, formerly roster/orchestration/test
 
 # The knowledge-store and roster/shared suites are gone -- their modules are
 # Go now (internal/knowledge, internal/config), and `discover` over an empty
 # directory reports "NO TESTS RAN" and exits 0, which passes while asserting
 # nothing. What they covered runs under `go test ./...`.
 
-# Run a single test file, or a single test within it (no package __init__.py,
-# so `-m unittest <module.path>` doesn't resolve — use discover with -p/-k)
-python3 -m unittest discover -b -s roster/orchestration/test -p "test_repository_health.py" -v
-python3 -m unittest discover -b -s roster/orchestration/test -p "test_repository_health.py" -k SomeTestCase.test_method
+# Run one Go package, or one test within it
+go test ./internal/generators/ -v
+go test ./internal/generators/ -run TestNameHere -v
 
 # The kernel is in-tree, so `cadre sdlc` and the lifecycle-contract tests
 # need no install and no AGENTIC_SDLC_BIN. Set it only to point at a
@@ -59,7 +58,7 @@ python3 -m unittest discover -b -s plugin/tools -p "test_*.py"    # packaging + 
 python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin   # the Cline mirror
 
 # ...then re-run both guards — they fail the build on drift
-python3 -m unittest discover -b -s roster/orchestration/test -p "test_repository_health.py"
+go test ./internal/generators/
 python3 -m unittest discover -b -s plugin/tools -p "test_*.py"
 
 # Scratch build of the distribution to inspect without touching committed
@@ -100,7 +99,7 @@ Until the merge this was enforced *by construction*: two repositories cannot imp
 
 Never move lifecycle schemas, run-record validators, or gate-authority logic into `roster/`, and never have it infer gate approval, risk acceptance, or compliance applicability for *other* projects — `cadre select` emits a plan only (routes, evidence, primary/review/support agents, workflow, a `teams` array, and lifecycle applicability when `agentic-sdlc` is also on `PATH`); it never retrieves knowledge, invokes agents, approves gates, merges, deploys, or mutates infrastructure. This repository does not run its own `.agentic-sdlc/` overlay and has no lifecycle records of its own.
 
-**Source of truth flows one direction:** `roster/catalog.yaml` (role inventory: definition path, phase, capability, `model`/`codex_model` tier) + `roster/<phase>/<role>/AGENT.md` (role authority/policy) + `.agents/skills/` (publishable skills) → `cadre generate-plugin` (`internal/generators/plugin_generation.go`) → a self-contained distribution committed in this same repository, under `plugin/` (Claude Code subagent wrappers, packaged `skills/`/`suite/`, and a copy of this repository's `provider/` bundle — `plugin/` also bundles the separately-owned Agentic SDLC lifecycle-governance skills as additional, optional plugins). Codex `.toml` wrappers and `agent-catalog.json` are register-side generated content under `provider/`, produced by `cadre generate-role-metadata` so the pip/pipx distribution can ship them without a plugin checkout. Never hand-edit generated output — edit the sources and regenerate. `test_repository_health.py` (`roster/orchestration/test/`) is one drift guard (it generates a package into a temp directory rather than reading a committed one); `.github/workflows/validate.yml`'s `generated-content` job (`--check`) is the other, guarding the committed `plugin/` output directly against the same sources.
+**Source of truth flows one direction:** `roster/catalog.yaml` (role inventory: definition path, phase, capability, `model`/`codex_model` tier) + `roster/<phase>/<role>/AGENT.md` (role authority/policy) + `.agents/skills/` (publishable skills) → `cadre generate-plugin` (`internal/generators/plugin_generation.go`) → a self-contained distribution committed in this same repository, under `plugin/` (Claude Code subagent wrappers, packaged `skills/`/`suite/`, and a copy of this repository's `provider/` bundle — `plugin/` also bundles the separately-owned Agentic SDLC lifecycle-governance skills as additional, optional plugins). Codex `.toml` wrappers and `agent-catalog.json` are register-side generated content under `provider/`, produced by `cadre generate-role-metadata` so the pip/pipx distribution can ship them without a plugin checkout. Never hand-edit generated output — edit the sources and regenerate. `internal/generators/` is one drift guard (it generates a package into a temp directory rather than reading a committed one); `.github/workflows/validate.yml`'s `generated-content` job (`--check`) is the other, guarding the committed `plugin/` output directly against the same sources.
 
 **Model tier assignment is a fixed heuristic, not per-role discretion** (documented in `catalog.yaml`'s header comment): `opus` for design/architecture/governance/crypto-assurance roles making high-blast-radius, hard-to-reverse judgment calls; `sonnet` as the default for build/review/test/operations/support roles; `haiku` for narrow single-purpose roles (evidence cataloging, knowledge-store stewardship, triage/escalation routing). `codex_model` is the parallel OpenAI-identifier mapping, recorded once in `roster/runner-capabilities.json` and mirrored in `catalog.yaml`'s header comment (which also records why the previous `gpt-5`/`gpt-5-codex`/`gpt-5-mini` identifiers were rejected) — treat that file as the source of truth rather than this doc, and re-verify it against current Codex docs before relying on it, since this repo has no live check against Codex's model list.
 

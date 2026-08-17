@@ -194,7 +194,7 @@ Both are live, which is why this is a real risk rather than tidy-up:
 `cadre_cli/__init__.py` dispatches `generate-plugin` to the Python script and
 `_requires_checkout()` fails closed only for a *bundled* install, so an
 editable checkout install regenerates the unhardened shim; and
-`roster/orchestration/test/test_repository_health.py` invokes the Python
+`internal/generators/`'s tests invoke the Go
 generator directly as one of the two drift guards.
 
 Note the module itself is **not** dead and must not simply be deleted:

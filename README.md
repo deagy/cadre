@@ -105,7 +105,7 @@ development dependency during installation.
 Read [AGENTS.md](AGENTS.md) first, then use the [getting-started guide](docs/getting-started.md). `bin/cadre` resolves a Python 3.10+ interpreter for you (checks `python3`/`python`; `.\bin\cadre.ps1` also checks `py -3` in PowerShell) — see "Put `cadre` on `PATH`" to put it on `PATH`, or run it as `./bin/cadre` (`.\bin\cadre.ps1` in PowerShell) from the repository root. Then validate the suite-only component, the orchestration tools, and the in-tree lifecycle kernel:
 
 ```sh
-python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
+go test ./internal/generators/
 go test ./...   # the CLI, kernel, knowledge and context stores, generators
 ```
 

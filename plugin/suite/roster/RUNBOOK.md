@@ -99,7 +99,7 @@ Use `workflows/debugging.md` when reproducing defects, analyzing runtime failure
 The local selector uses deterministic path, keyword, and risk rules from `orchestration/routing.json`. Plans include provider lifecycle applicability in `required_quality_gates` separately from mutation-oriented `human_gates` (each carrying a `kernel_mutation_gate_id` cross-reference to the Agentic SDLC kernel's own `contracts/mutation-gates.json` id, where one exists); gate semantics and state are owned by the standalone Agentic SDLC kernel. Every plan also carries a `dispatch_disposition` (`staffed`, `advisory-only`, or `no-agents-selected`) that makes explicit whether `agents.primary`/`agents.reviewers` hold an accountable executor or independent reviewer, or whether only `agents.support` was populated (e.g. via generic change-intake keywords) with nothing else selected — an orchestrator must not treat `advisory-only` as authorization to perform the task's work itself with no dispatch and no stated reason (see `.agents/skills/run-agent-orchestration/SKILL.md`'s "Dispatch in Waves"). The selector creates a dispatch plan but does not retrieve knowledge, invoke agents, approve gates, merge, deploy, or mutate infrastructure. Run it through `bin/cadre` (repository root), which resolves a Python 3.10+ interpreter for you across `python3`/`python`/`py -3`; this does not establish an organization-wide Python version. It works standalone by default (`lifecycle_tracking.status: "standalone"` in the emitted plan); when `AGENTIC_SDLC_BIN` or `agentic-sdlc` is also on `PATH`, the plan is automatically enriched with lifecycle-contract-derived, gate-augmented `required_quality_gates` (`status: "integrated"`) — pass `--require-sdlc` to fail instead of silently falling back when that integration is required. Put `bin/cadre` on `PATH` first (see `../README.md` "Put `cadre` on `PATH`") or invoke it as `../../bin/cadre` / `..\bin\cadre.ps1` from this directory.
 
 ```sh
-python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
+go test ./internal/generators/
 cadre select \
   --task "Add a React upload form backed by a PostgreSQL API" \
   --files frontend/src/Upload.tsx,services/upload/main.go \
@@ -627,7 +627,7 @@ short-lived-credential standard for this specific integration. This is
 deliberately placed under `orchestration/`, not under `workflows/`,
 because `roster/workflows/*.md`
 is a closed set matched 1:1 against `orchestration/selection.schema.json`'s
-`workflow` enum (`test_repository_health.py` enforces the equality) — this is
+`workflow` enum (`internal/generators/` enforces the equality) — this is
 operator/setup documentation for one MCP server, not a dispatch-plan
 `workflow` value.
 
