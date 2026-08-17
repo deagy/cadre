@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -296,13 +297,13 @@ func dispatchSync(
 	role *ResolvedRole,
 	classification, parentClassification, taskID, sessionID, runner, effectiveSandbox, mode string,
 ) map[string]any {
-	if !dispatchLimiter.TryAcquire() {
+	if !currentDispatchLimiter().TryAcquire() {
 		return map[string]any{
 			"status": "denied",
 			"reason": fmt.Sprintf("too many concurrent dispatches (limit %d); retry later", MaxConcurrentChildren),
 		}
 	}
-	defer dispatchLimiter.Release()
+	defer currentDispatchLimiter().Release()
 
 	env := BuildChildEnv(currentDispatchDepth()+1, roots.ProjectRoot)
 	env[ParentClassificationVar] = classification
@@ -336,7 +337,7 @@ func dispatchAsync(
 	// The slot is taken before returning, not inside the goroutine: an async
 	// dispatch that reported a job id and then queued behind the limiter
 	// would have told the caller work had started when it had not.
-	if !dispatchLimiter.TryAcquire() {
+	if !currentDispatchLimiter().TryAcquire() {
 		return map[string]any{
 			"status": "denied",
 			"reason": fmt.Sprintf("too many concurrent dispatches (limit %d); retry later", MaxConcurrentChildren),
@@ -347,7 +348,7 @@ func dispatchAsync(
 	env[ParentClassificationVar] = classification
 
 	go func() {
-		defer dispatchLimiter.Release()
+		defer currentDispatchLimiter().Release()
 		result := ExecuteDispatchChild(dispatchCtx, runner, env, DefaultTimeoutSeconds)
 		result["context_capture"] = AutomaticContextCapture(roots.ProjectRoot,
 			result, dispatchCtx.RoleID, taskID, sessionID, parentClassification, classification)
@@ -644,7 +645,21 @@ func (cl *ConcurrencyLimiter) Release() {
 // dispatchLimiter caps how many children this process runs at once, across
 // every dispatch path -- single, team, sync and async alike. Process-wide
 // because the resource it protects is the machine, not one call.
-var dispatchLimiter = NewConcurrencyLimiter(MaxConcurrentChildren)
+//
+// Held behind an atomic pointer because a test binary replaces it: the
+// limiter is process-wide, so a test that dispatches would otherwise inherit
+// whatever slots earlier tests leaked (see dispatch_limiter_isolation_test.go).
+// A plain variable races -- the dispatch paths read it from goroutines while
+// the replacement is written -- which the race detector catches and a
+// non-race run does not.
+var dispatchLimiter atomic.Pointer[ConcurrencyLimiter]
+
+func init() {
+	dispatchLimiter.Store(NewConcurrencyLimiter(MaxConcurrentChildren))
+}
+
+// currentDispatchLimiter is the limiter every dispatch path acquires from.
+func currentDispatchLimiter() *ConcurrencyLimiter { return dispatchLimiter.Load() }
 
 // currentDispatchDepth reads the nesting counter a parent set for its child.
 //
