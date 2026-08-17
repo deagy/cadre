@@ -93,7 +93,7 @@ Retention policy enforcement:
 ## Architecture Notes
 
 ### Schema Compatibility
-The SQLite schema exactly matches `roster/knowledge-store/src/database.py`:
+The SQLite schema exactly matches `internal/contextstore/database.go`:
 - Same table names, columns, types, constraints
 - Same indexes for performance
 - Additive migrations for future schema evolution

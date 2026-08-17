@@ -31,7 +31,7 @@ advisory control with enforcement language:
 - **Mechanically enforced** -- the code makes the bad outcome structurally
   impossible for a caller to produce through that control's own interface,
   and a specific automated test exercises that claim. For the MCP entries
-  that test suite is `roster/orchestration/test/test_mcp_dispatch.py`; each
+  that test suite is `internal/orchestration/dispatch_core_phase4_mcp_server_test.go`; each
   entry names the tests it relies on.
 - **Advisory** -- the code implements the control and it holds against an
   ordinary, non-adversarial, or single-turn caller, but a sufficiently
@@ -132,7 +132,7 @@ carrying an *own* key (`Object.hasOwn`, so a model literally named
 `constructor` does not read as attested) exactly equal to the resolved model
 string, with a non-null value; a bare `=1`, an array, or malformed JSON all
 fail toward showing the notice rather than toward silence. On the writing
-side, `write_attestation()` in `roster/orchestration/src/role_fidelity.py`
+side, `write_attestation()` in `internal/orchestration/role_fidelity.go`
 (reached as `cadre role-fidelity --mode probe ... --attest-file <path>`)
 refuses to write from a `--dry-run` (nothing was sent), from a
 `--compare-condensed` run (no single per-model result exists), or from a run
@@ -272,7 +272,7 @@ history (e.g. a compromised or malicious session with ordinary `git commit`
 access and no external review gate). Global (`~/.codex/agents/`) and plugin
 (`provider/codex-agents/`) tiers are intentionally out of
 scope for this check: the global tier is only populated through the
-provenance-marker-gated `sync_codex_agents.py` sync, and the plugin tier
+provenance-marker-gated `internal/orchestration/sync_codex_agents.go` sync, and the plugin tier
 ships with the package -- neither is writable by an ordinary caller through
 the same direct "just edit a file in the repo" path the project tier is.
 
@@ -469,10 +469,10 @@ dynamic recipe's `instance_count` outside its declared min/max, or a member
 left without a brief) -- `expand_recipe_to_members()` raises `ValueError` in
 each case, which the tool surfaces as `status: "denied"` before
 `dispatch_team()` is ever called. Tested by
-`ExpandRecipeToMembersTests` (`test_team_recipe_dryrun.py`) and
+`internal/orchestration/team_recipe_expand_test.go` and
 `DispatchServerSchemaTests.test_recipe_tool_denies_a_recipe_that_would_not_fire_without_dispatching_anything`
 / `test_recipe_tool_unknown_recipe_id_is_denied_without_dispatching_anything`
-(`test_mcp_dispatch.py`), both asserting `dispatch_team()` is never invoked
+(`internal/orchestration/dispatch_core_phase4_mcp_server_test.go`), both asserting `dispatch_team()` is never invoked
 on a refused expansion.
 
 - **Classification/sandbox narrowing: mechanically enforced, per member
@@ -637,7 +637,7 @@ exist on this path:
   `WriteAuditRecordBestEffortStderrFallbackTests` (all three methods --
   failure content, `team_id` fallback when `job_id` is absent, and no
   stderr noise on a successful write). All of the above live in
-  `test_mcp_dispatch.py`.
+  `internal/orchestration/dispatch_core_phase4_mcp_server_test.go`.
 
 The synchronous (`wait=True`) path is unaffected: its completion audit write
 is still a plain `write_audit_record()` call, so a write failure there
@@ -659,7 +659,7 @@ passing unmodified.
   `.claude/agents/<role_id>.md` override (a real, documented convention --
   `runner-adapters.md`) first, then falls back to an installed plugin's own
   generated `agents/<role_id>.md`. There is no Claude Code equivalent of
-  `sync_codex_agents.py`'s `~/.codex/agents/` global-sync tier. The plugin
+  `internal/orchestration/sync_codex_agents.go`'s `~/.codex/agents/` global-sync tier. The plugin
   tier's search path
   (`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/agents/<role>.md`)
   was *observed*, not documented, in the session that wrote this code --
@@ -899,7 +899,7 @@ written to be read before enabling it, not after.
   which is new ground for this register. Bounded by: an operator-configured
   `base_url` only (never caller- or model-supplied, and `global_only` so a
   cloned repository cannot redirect it); redirects refused outright
-  (`_RejectRedirects`, following `embeddings.py`), so an endpoint cannot move
+  (`_RejectRedirects`, following `internal/knowledge/persistence.go`), so an endpoint cannot move
   the request and its `Authorization` header to a host the operator never
   configured; a response size cap; a request timeout; and a URL policy that
   accepts `https://` anywhere but `http://` only toward a loopback,

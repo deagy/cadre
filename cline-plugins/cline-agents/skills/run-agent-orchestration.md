@@ -22,7 +22,7 @@ return a blocking question in its result instead of prompting directly.**
 
 ## Establish Scope
 
-1. Locate the repository root containing this repository's bundled role catalog and the bundled selector implementation.
+1. Locate the repository root containing this repository's bundled role catalog and `internal/selector`.
 2. Read the repository `AGENTS.md`, this project's operating-principles documentation, `team-profile.yaml`, `technology-standards.md`, `library-standards.yaml`, `knowledge-use-policy.md`, and `agent-autonomy.yaml`.
 3. Extract the objective from the prompt. Derive the rest rather than requiring the caller to supply them, and ask the human only when derivation genuinely fails:
    - **task ID**: a slug from the objective plus today's date, unless the prompt names one or the run needs durable cross-session tracking with no discoverable convention.
@@ -44,7 +44,7 @@ the bundled suite policy directory relative to this packaged skill:
 
   > No knowledge-store config found. Create an isolated store for this project only (`.agents/knowledge-store/config.json`, recommended — keeps this project's content separate from every other project), or use the shared store across every project on this machine (`~/.agents/knowledge-store/config.json`)?
 
-  Suggest project-local as the default if the human doesn't have a preference. Create only the one chosen — an empty `{}` is sufficient, since the bundled knowledge-store config-resolution logic's `load_config()` fills every other setting from built-in defaults. Skip asking (and skip creating anything) once a tier already resolves; this is a first-use question, not a repeated one.
+  Suggest project-local as the default if the human doesn't have a preference. Create only the one chosen — an empty `{}` is sufficient, since `internal/knowledge/config.go`'s `load_config()` fills every other setting from built-in defaults. Skip asking (and skip creating anything) once a tier already resolves; this is a first-use question, not a repeated one.
 - **Every runner, ask if relevant**: if `cadre` doesn't resolve as a bare command, this only matters for the human's own terminal use (an orchestrating Claude Code agent already has it on the Bash tool's PATH via the installed plugin's `bin/` directory, no action needed there) — ask once whether to show the exact `PATH` setup command from `README.md` "Put `cadre` on `PATH`" rather than assuming the human has already read it.
 
 ## Select Agents
@@ -408,11 +408,11 @@ authoritative for the *why*.
   confirmed root cause. What this repo *can* confirm and control:
   `dispatch_secure_cloud_role` below spawns a real, isolated child process
   and explicitly waits on it
-  (the bundled MCP dispatch server implementation's `spawn_and_wait()`), which
+  (`internal/orchestration/dispatch_core.go`'s `spawn_and_wait()`), which
   is a verified fix for the process-lifecycle question regardless of the
   above, not just for role selection.
   - **Preferred: register this repo's MCP dispatch server.**
-    the bundled MCP dispatch server implementation exposes a real
+    `internal/cli/mcp_dispatch_server.go` exposes a real
     `dispatch_secure_cloud_role` tool that resolves `role_id` to its `.toml`
     wrapper, extracts `developer_instructions`/`model`/`sandbox_mode`/
     `model_reasoning_effort` itself,
@@ -426,9 +426,9 @@ authoritative for the *why*.
     1. Install the official `mcp` SDK (stdio transport only — do not add a networked extra) if working from a checkout of the source register (this bundled plugin does not ship the MCP dispatch server's own dependency pin file).
     2. Add a server entry to Codex CLI's `config.toml` (global
        `~/.codex/config.toml` or project-local `.codex/config.toml`) pointing
-       at `cadre mcp-dispatch-server` (repository-root `bin/cadre`, resolves
-       a Python 3.10+ interpreter the same way every other subcommand does) or
-       directly at the bundled MCP dispatch server implementation, if working from a checkout of the source register (this bundled plugin does not ship that server as a standalone script)
+         at `cadre mcp-dispatch-server` (repository-root `bin/cadre`, which
+         builds and execs the Go binary the same way every other subcommand
+         does), or at `<repo>/bin/cadre mcp-dispatch-server`
        if `cadre` isn't on `PATH`. The `[mcp_servers]` table syntax below
        (`command`/`args` keys) is verified against Codex CLI's live
        `config-reference` docs (2026-07-28) — `mcp_servers.<id>.command` and
@@ -572,7 +572,7 @@ authoritative for the *why*.
     `dispatch_secure_cloud_role` (the preferred MCP path above) currently
     always passes the wrapper's `model` value to `codex exec` as an explicit
     `--model` flag with no fallback if the account rejects it
-    (the bundled MCP dispatch server implementation's `build_child_argv`), so a
+    (`internal/orchestration/dispatch_core.go`'s `build_child_argv`), so a
     ChatGPT-authenticated session hitting this would fail identically
     through the MCP path too — a code-level opt-out for that path is tracked
     as follow-up work, not yet implemented, since there is no confirmed exact
@@ -609,9 +609,9 @@ authoritative for the *why*.
   own `git worktree add` steps entirely on its own, not through any
   runner-level flag. This is why the design forces the in-root
   `<repository_root>/.worktrees/<task-id>/<role-id>/` location instead of a
-  sibling directory: `dispatch_core.py`'s `build_child_argv()` spawns the
+  sibling directory: `internal/orchestration/dispatch_core.go`'s `build_child_argv()` spawns the
   child with `--cd <project_root> --sandbox workspace-write`
-  (`dispatch_core.py:1186-1215`), and **it is an explicitly unverified
+  (`internal/orchestration/dispatch_core.go:1186-1215`), and **it is an explicitly unverified
   assumption, not independently confirmed against Codex CLI's own sandbox
   documentation from inside this sandbox (no live `codex` binary available,
   same limitation noted elsewhere in this file), that `--sandbox
@@ -707,7 +707,7 @@ working mechanism:
   — so the same `dispatch_secure_cloud_role`/`poll_dispatch_status`/
   `dispatch_team`/`poll_team_status`/`dispatch_team_recipe` server documented
   for Codex CLI above *can* be registered for Cline too, from a full source
-  checkout (not the packaged plugin — the bundled MCP dispatch server implementation
+  checkout (not the packaged plugin — `internal/cli/mcp_dispatch_server.go`
   and its `requirements-mcp.txt` pin are only present there):
   1. `cline mcp add --yes agents-dispatch -- <repo>/bin/cadre
      mcp-dispatch-server` registers cleanly with no warnings, and a live
@@ -748,7 +748,7 @@ working mechanism:
      child itself exited 1 in this sandbox, unrelated to MCP/Cline — a
      `402 deactivated_workspace` from the Codex backend, a credentials issue
      with the test account, not a dispatch-path failure.) No orphaned
-     `dispatch_server.py`/`codex exec` process was left behind afterward.
+     `internal/cli/mcp_dispatch_server.go`/`codex exec` process was left behind afterward.
   - **Net effect (updated):** this path now gives you tool discovery, fast
     fail-closed checks (like the classification denial), *and* a completed
     end-to-end dispatch through Cline's native MCP client, at least for a
