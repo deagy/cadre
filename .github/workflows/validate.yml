@@ -140,7 +140,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # fetch-depth: 0 for the tags, not the history.
+      # internal/orchestration/schema_release_drift_test.go reads
+      # selection.schema.json at the last plugin release tag with `git show`,
+      # to check the emitted field set has not changed without a
+      # schema_version bump. A shallow checkout has no tags, and that guard
+      # fails rather than skipping under CI -- silently skipping in the one
+      # place it is meant to run is the failure it exists to prevent.
+      # The roster job below fetches the same way, for the same guard's
+      # Python half.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
