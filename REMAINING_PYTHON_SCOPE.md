@@ -1,15 +1,15 @@
 # Remaining Python -> Go Scope
 
-**Status:** Nearly complete, not "scoping only." Every prior tier this
-document described (settings/resolve, context-store, sync-codex/profile,
-MCP servers) has already shipped as native Go. What genuinely remains is
-one deliberately-unported command plus a distribution-channel question that
-is not a Go-porting backlog at all.
-**Last verified:** 2026-08-14, against commit `3dcb3a46`, by reading
-`internal/cli/dispatcher.go`'s full command list, grepping for
-`PythonSubcommand`/`exec.Command` call sites across `internal/`, and
-`wc -l`'ing the Python files named below. Re-verify against the tree before
-trusting a specific number here; these move.
+**Status:** The porting backlog is empty. Every module this document once
+described as pending has shipped as native Go, and `roster/` now contains no
+Python at all. What remains is 13,736 lines in three groups, two of which are
+Python for a structural reason rather than for want of a port -- see
+"What actually remains" below.
+**Last verified:** 2026-08-17, against `main`, by deleting the last
+`roster/` Python module and re-reading how each remaining script is invoked
+(`plugin/hooks/hooks.json`, `plugin/plugins/lifecycle/bin/cadre-install-kernel`,
+and the regeneration sequence in `CLAUDE.md`). Re-verify against the tree
+before trusting a specific number here; these move.
 
 Do not read the git history of this file's earlier revisions as a reliable
 timeline — an earlier version of this document (dated the same day) claimed
@@ -23,6 +23,41 @@ timeline — an earlier version of this document (dated the same day) claimed
 > of zero Python in this repository.
 
 ## What actually remains
+
+Three groups, and the distinction between them matters more than the line
+count.
+
+### Two that are Python for a structural reason
+
+**`guard_workspace_mutation.py`** (1,944 lines, plus an identical packaged
+copy). Claude Code invokes it as
+`python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guard_workspace_mutation.py"`. A
+`PreToolUse` hook has to run on the installer's machine with no setup, and the
+packaged `bin/cadre` is a *downloader* -- it fetches a platform binary on
+first use. Porting the guard to Go would make a safety hook conditional on a
+successful network download, which is a worse property than the language it is
+written in.
+
+**`bootstrap_sdlc.py`** (721 lines, plus three packaged copies). Invoked by
+`plugin/plugins/lifecycle/bin/cadre-install-kernel` through `$AGENT_PYTHON`.
+Its job is installing the kernel, so it runs *before* a working cadre
+installation is a given. Same bootstrap paradox.
+
+Neither is blocked on effort. Both would need the packaged wrapper to stop
+being a downloader first, which is a distribution decision rather than a
+porting one.
+
+### One that is genuinely portable
+
+**`port_cline_agents.py`** (680 lines, plus a 438-line test). A build-time
+tool run by maintainers inside a checkout, from the documented regeneration
+sequence. Nothing about it needs Python: a `cadre` subcommand would do, and
+the sequence in `CLAUDE.md` and `AGENTS.md` would name that instead. This is
+the next port, and the last one that is purely a porting question.
+
+The remaining test modules under `plugin/tools/` cover the three scripts
+above and go with whichever of them moves.
+
 
 ### `cadre select` — ported; the Python is gone
 
