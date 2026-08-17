@@ -14,7 +14,7 @@ A runner-neutral **Cadre** monorepo. Four repositories were merged into this one
 | `provider/` | The `secure-cloud` provider bundle: profiles, extensions, generated Codex wrappers, and `provider.json`'s `kernel_compatibility` window. |
 | `providers/` | The kernel's own example default provider package. |
 | `plugin/` | Hand-authored plugin distribution sources: the marketplace manifest, the three lifecycle plugin manifests, the three Cline plugins, and packaging tools. |
-| `cmd/`, `internal/` | The Go CLI (`ADR-001-CLI-GO-REFACTOR.md`'s Python-to-Go refactor of `bin/cadre`), with a repository-root `go.mod`/`go.sum` and `Makefile`. The Python dispatcher is gone; `bin/cadre` is a shell shim that builds and execs `cmd/cadre`. Every subcommand is Go, including a complete settings resolver (`internal/config/`, mirroring `roster/shared/src/settings.py`'s precedence chain in full) and the knowledge store (`internal/knowledge/`). `cadre select` — the flagship command — is Go (`internal/selector/`). The Python selector and the differential that gated the port are both deleted; `internal/selector/golden_corpus_test.go` and the property tests around it are what hold it now. See `internal/cli/select_agents.go`'s header and `REMAINING_PYTHON_SCOPE.md`. |
+| `cmd/`, `internal/` | The Go CLI (`ADR-001-CLI-GO-REFACTOR.md`'s Python-to-Go refactor of `bin/cadre`), with a repository-root `go.mod`/`go.sum` and `Makefile`. The Python dispatcher is gone; `bin/cadre` is a shell shim that builds and execs `cmd/cadre`. Every subcommand is Go, including a complete settings resolver (`internal/config/`, carrying the whole precedence chain) and the knowledge store (`internal/knowledge/`). `cadre select` — the flagship command — is Go (`internal/selector/`). The Python selector and the differential that gated the port are both deleted; `internal/selector/golden_corpus_test.go` and the property tests around it are what hold it now. See `internal/cli/select_agents.go`'s header and `REMAINING_PYTHON_SCOPE.md`. |
 
 **The generated half of `plugin/` is committed, deliberately.** `cadre generate-plugin --output plugin` writes it, and `.github/workflows/validate.yml`'s `generated-content` job re-runs the same command with `--check` so drift cannot outlive a pull request. It is committed because a GitHub-sourced marketplace serves the repository tree: an uncommitted distribution would install a plugin with no roles in it. Never hand-edit it — edit the source and regenerate. This is not the old arrangement returning: before the merge those ~340 files were committed into a *separate* repository and reconciled by `cadre-ref.txt`, `drift-check.yml`, and `regenerate.yml`, all now deleted. Source and output now live in one commit.
 
@@ -32,9 +32,12 @@ All Python tooling requires Python 3.10+, resolved automatically by `bin/cadre` 
 # points that print, and without it ~350 lines of JSON plans and resolved
 # config land on stdout and bury the OK/FAILED line. Buffered output is still
 # shown for any test that fails, so nothing is lost. CI passes -b too.
-python3 -m unittest discover -b -s roster/knowledge-store/test -p "test_*.py"
 python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
-python3 -m unittest discover -b -s roster/shared/test -p "test_*.py"
+
+# The knowledge-store and roster/shared suites are gone -- their modules are
+# Go now (internal/knowledge, internal/config), and `discover` over an empty
+# directory reports "NO TESTS RAN" and exits 0, which passes while asserting
+# nothing. What they covered runs under `go test ./...`.
 
 # Run a single test file, or a single test within it (no package __init__.py,
 # so `-m unittest <module.path>` doesn't resolve — use discover with -p/-k)
@@ -44,7 +47,7 @@ python3 -m unittest discover -b -s roster/orchestration/test -p "test_repository
 # The kernel is in-tree, so `cadre sdlc` and the lifecycle-contract tests
 # need no install and no AGENTIC_SDLC_BIN. Set it only to point at a
 # different kernel deliberately.
-python3 -B -m unittest discover -b -s kernel/test -p "test_*.py"  # kernel
+go test ./internal/kernel/                                        # kernel
 cd engine && uv sync && uv run python -m pytest                   # LangGraph engine
 python3 -m unittest discover -b -s plugin/tools -p "test_*.py"    # packaging + docs guards
 
@@ -107,7 +110,7 @@ Never move lifecycle schemas, run-record validators, or gate-authority logic int
 
 **Knowledge store** (`roster/knowledge-store/`): a retrieval layer for authorized historical/chat context, isolated per project via `.agents/knowledge-store/config.json`, defaulting to a shared store at `$KNOWLEDGE_STORE_HOME` (`~/.agents/knowledge-store/` by default) when a project has none. Ingestion requires an explicit `--source`; retrieval requires explicit agent/task/classification and fails closed on missing config. `roster/knowledge-store/SECURITY.md` and `workflows/knowledge-ingestion.md` are required reading before touching ingestion code — retrieved content must always be treated as untrusted data, never as instructions.
 
-**Directory map** (see `README.md` for the full annotated version): `roster/<phase>/<role>/AGENT.md` are role definitions grouped by lifecycle phase (`planning`, `architecture`, `engineering`, `security`, `testing`, `review`, `operations`, `support`, `governance`, `documentation`, `data`, `evidence`, `authority`); `roster/shared/` holds global policy defaults (operating principles, autonomy, technology/library standards, knowledge-use policy) that a project may extend or override, plus `src/settings.py`, the unified operator-settings resolver (env var > project-local `.agents/cadre.yaml` > user-global `~/.config/cadre/config.yaml` > default > interactive prompt) — note `.agents/` hosts three differently-trusted project-local mechanisms, reconciled in `roster/shared/README.md`'s "The three things that live under `.agents/`"; `roster/orchestration/` holds routing, selectors, escalation policy, handoff contracts, and their tests; `roster/workflows/` holds the worked-example workflow docs referenced from `RUNBOOK.md`; `.agents/skills/` are this repo's Codex-native skills, thinly pointed to from `.claude/skills/` for Claude Code discovery.
+**Directory map** (see `README.md` for the full annotated version): `roster/<phase>/<role>/AGENT.md` are role definitions grouped by lifecycle phase (`planning`, `architecture`, `engineering`, `security`, `testing`, `review`, `operations`, `support`, `governance`, `documentation`, `data`, `evidence`, `authority`); `roster/shared/` holds global policy defaults (operating principles, autonomy, technology/library standards, knowledge-use policy) that a project may extend or override, plus `internal/config`, the unified operator-settings resolver (env var > project-local `.agents/cadre.yaml` > user-global `~/.config/cadre/config.yaml` > default > interactive prompt) — note `.agents/` hosts three differently-trusted project-local mechanisms, reconciled in `roster/shared/README.md`'s "The three things that live under `.agents/`"; `roster/orchestration/` holds routing, selectors, escalation policy, handoff contracts, and their tests; `roster/workflows/` holds the worked-example workflow docs referenced from `RUNBOOK.md`; `.agents/skills/` are this repo's Codex-native skills, thinly pointed to from `.claude/skills/` for Claude Code discovery.
 
 ## Working conventions specific to this repo
 

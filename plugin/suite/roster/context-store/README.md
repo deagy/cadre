@@ -154,7 +154,7 @@ cadre context get --handle ctx_… \
 Run the tests with:
 
 ```sh
-python3 -m unittest discover -s roster/context-store/test -p "test_*.py"
+go test ./internal/contextstore/
 ```
 
 ## Configuration

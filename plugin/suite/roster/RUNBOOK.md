@@ -191,7 +191,7 @@ Before adding a *generic* path glob to a base route (one likely to exist, unrela
 
 ### Customize routing.json with a project-local overlay
 
-A consuming project that wants an additional route, a widened risk-rule keyword, or an extra team recipe does not need to fork `orchestration/routing.json` and hand-maintain the fork. `internal/selector/overlay.go` resolves a project-local overlay at `.agents/orchestration/routing-overlay.json` (a plain JSON file, not YAML — `routing.json` is itself JSON-shaped despite its filename, so this avoids a PyYAML dependency), discovered by walking up from the current directory to the nearest `.git` boundary — the exact same convention `roster/shared/src/resolve.py::find_project_overlay` and `internal/knowledge/config.go` already use for `.agents/shared/<filename>` and project-local `config.json` (both now share one implementation, `resolve.find_file_at_project_root`, rather than three separate walk-up implementations). With no overlay present, the effective configuration is `routing.json`'s own bytes, unchanged — a project that hasn't opted in sees no behavior change.
+A consuming project that wants an additional route, a widened risk-rule keyword, or an extra team recipe does not need to fork `orchestration/routing.json` and hand-maintain the fork. `internal/selector/overlay.go` resolves a project-local overlay at `.agents/orchestration/routing-overlay.json` (a plain JSON file, not YAML — `routing.json` is itself JSON-shaped despite its filename, so this avoids a PyYAML dependency), discovered by walking up from the current directory to the nearest `.git` boundary — the exact same convention `internal/config`'s `FindProjectOverlay` and `internal/knowledge/config.go` already use for `.agents/shared/<filename>` and project-local `config.json` (both now share one implementation, `resolve.find_file_at_project_root`, rather than three separate walk-up implementations). With no overlay present, the effective configuration is `routing.json`'s own bytes, unchanged — a project that hasn't opted in sees no behavior change.
 
 Unlike `.agents/shared/`'s single deep-merge/narrowing-only rule, the overlay uses a different merge rule per `routing.json` construct, because most of its sections carry gating or review-separation semantics `.agents/shared/`'s policy-preference files do not:
 
@@ -662,7 +662,7 @@ Follow `workflows/knowledge-ingestion.md` and read `knowledge-store/SECURITY.md`
 ```sh
 mkdir -p ~/.agents/knowledge-store
 cp roster/knowledge-store/config.example.json ~/.agents/knowledge-store/config.json
-python3 -m unittest discover -b -s roster/knowledge-store/test -p "test_*.py"
+go test ./internal/knowledge/
 cadre knowledge init
 ```
 
@@ -941,13 +941,13 @@ generate-role-metadata --check` is the CI drift-guard equivalent. The
 packaged plugin then picks the change up when `./bin/cadre generate-plugin --output plugin`
 is re-run and committed, as described above.
 
-## 17a. Unified operator settings (`roster/shared/src/settings.py`)
+## 17a. Unified operator settings (`internal/config`)
 
 This repository's own tooling (the GitLab-evidence MCP server, the dispatch
 MCP server's Claude Code / Codex runner selection, the Agentic SDLC bin-path
 lookup, and the knowledge store's global-fallback home directory) reads its
 operator-configurable settings through one resolver,
-`roster/shared/src/settings.py`, instead of scattered `os.environ.get(...)`
+`internal/config`, instead of scattered environment lookups
 calls. Every setting resolves in this order, per field:
 
 1. an environment variable (an env var that is *set but empty/whitespace*

@@ -39,7 +39,7 @@ Highest precedence wins per file. The overlay is found by walking up from
 the current directory to the nearest `.git` (the same convention
 `internal/knowledge/config.go` uses for its project-local
 `config.json`). Resolve the effective value with `cadre resolve-shared
-<filename>` (see `roster/shared/src/resolve.py`), run from anywhere inside
+<filename>` (see `internal/config/shared_overlay.go`), run from anywhere inside
 the target project. It fails closed: a malformed overlay is an error, not a
 silent fallback to the default.
 
@@ -89,7 +89,7 @@ the tiers it applies to, and it must open with an explicit applicability
 header naming those tiers, because the scoping is generated-wrapper-only.
 
 **Any such scoping applies only to the generated wrapper, not to
-`cadre resolve-shared`.** `resolve.py` is filename-based and knows nothing
+`cadre resolve-shared`.** The resolver is filename-based and knows nothing
 about capability tiers, so `cadre resolve-shared <file>` from any role or
 shell returns the file's full resolved text — a tier gate only decides
 whether `internal/generators/plugin_generation.go` embeds the section into a *specific
@@ -194,9 +194,9 @@ adding anything here.
 
 | Path | What it is | Trust | Merge |
 | --- | --- | --- | --- |
-| `.agents/shared/<filename>` | Policy overlays — this document | **Trusted.** Alters agent policy; `agent-autonomy.yaml` is narrowing-only so an overlay can tighten but never loosen autonomy. | Deep-merged over the global default (`resolve.py`) |
+| `.agents/shared/<filename>` | Policy overlays — this document | **Trusted.** Alters agent policy; `agent-autonomy.yaml` is narrowing-only so an overlay can tighten but never loosen autonomy. | Deep-merged over the global default (`internal/config/shared_overlay.go`) |
 | `.agents/knowledge-store/config.json` | Knowledge-store configuration | Security-relevant. Its *presence* selects the project-local tier, which gates database confinement, prohibits remote embeddings, and changes `--source` enforcement. | Own three-tier resolver (`internal/knowledge/config.go`) |
-| `.agents/cadre.yaml` (or `.json`) | Operator settings — endpoints, binary paths, store location | **Untrusted.** Arrives with `git clone` and is editable by anyone who can open a pull request. Fields that select an executable, a data-store location, or a token-receiving destination are `global_only` and are rejected outright if set here. | First-wins precedence, no merging (`shared/src/settings.py`) |
+| `.agents/cadre.yaml` (or `.json`) | Operator settings — endpoints, binary paths, store location | **Untrusted.** Arrives with `git clone` and is editable by anyone who can open a pull request. Fields that select an executable, a data-store location, or a token-receiving destination are `global_only` and are rejected outright if set here. | First-wins precedence, no merging (`internal/config`) |
 
 The asymmetry is deliberate. A policy overlay can only ever *narrow* what
 agents may do, so trusting it is safe. An operator setting picks which
@@ -207,7 +207,7 @@ and the reasoning behind each `global_only` field.
 
 `.agents/knowledge-store/config.json` is deliberately **not** folded into
 `.agents/cadre.yaml`: only its `home` directory is an operator setting, and
-that one field now resolves through `settings.py` as a lower-precedence
+that one field now resolves through `internal/config` as a lower-precedence
 fallback beneath `KNOWLEDGE_STORE_HOME`. The rest of that file is store
 schema, and its tier detection is load-bearing security state that a second
 resolver must not perturb.

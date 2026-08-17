@@ -94,55 +94,19 @@ class TestRosterNeverImportsTheKernel(unittest.TestCase):
             + "\n".join(offenders),
         )
 
-    def test_kernel_executable_resolution_stays_in_one_sanctioned_place(self) -> None:
-        """Exactly one Python module may resolve a kernel executable.
-
-        `settings.py` owns the `agentic_sdlc.bin_path` field itself (env var
-        > config > computed default). Spreading resolution beyond it makes
-        the boundary unauditable and easy to widen by accident.
-
-        This named two modules until `agentic_sdlc_contracts.py` -- the
-        single caller that turned that path into a subprocess -- was deleted
-        with the rest of the dead orchestration Python. The subprocess side
-        is Go now, and internal/kernel/kernel_boundary_test.go guards it
-        there. Narrowing the set was a decision rather than a quiet edit
-        because this assertion refused to pass without one.
-        """
-        sanctioned = {
-            ROSTER_ROOT / "shared" / "src" / "settings.py",
-        }
-        for path in sanctioned:
-            self.assertTrue(path.is_file(), str(path))
-
-        offenders: list[str] = []
-        for path in _roster_python_files():
-            if path in sanctioned or "test" in path.relative_to(ROSTER_ROOT).parts:
-                continue
-            text = path.read_text(encoding="utf-8")
-            if 'which("agentic-sdlc")' in text or "which('agentic-sdlc')" in text:
-                offenders.append(str(path.relative_to(REPOSITORY_ROOT)))
-
-        self.assertEqual(
-            offenders,
-            [],
-            "Only settings.py (the field) and agentic_sdlc_contracts.py (the caller) "
-            "may resolve the kernel executable; everything else must go through them.\n"
-            + "\n".join(offenders),
-        )
-
-    def test_kernel_bin_path_cannot_be_set_by_a_project_local_file(self) -> None:
-        """`agentic_sdlc.bin_path` selects an executable to run.
-
-        A project-local `.agents/cadre.yaml` is untrusted input -- checking
-        out a repository must never be able to redirect which binary runs.
-        The field is therefore global-scope-only, and that is a security
-        property of the boundary, not a preference.
-        """
-        text = (ROSTER_ROOT / "shared" / "src" / "settings.py").read_text(encoding="utf-8")
-        field_start = text.index('"agentic_sdlc.bin_path": FieldSpec(')
-        field_block = text[field_start : text.index("),", field_start)]
-        self.assertIn("SCOPE_GLOBAL_ONLY", field_block)
-
+    # Two assertions stood here and are gone with roster/shared/src/settings.py,
+    # the only sanctioned Python module either of them was about.
+    #
+    #   - `agentic_sdlc.bin_path` is global-scope-only, so a project-local
+    #     .agents/cadre.yaml cannot redirect which binary runs. Now asserted by
+    #     internal/config/trust_scope_test.go, which pins the trust tier of
+    #     every field and refuses each one from a project file behaviourally.
+    #   - Exactly one Python module may resolve a kernel executable. Zero do
+    #     now: no file under roster/ calls which("agentic-sdlc"), and the
+    #     subprocess side is internal/kernel's, guarded by
+    #     internal/kernel/kernel_boundary_test.go.
+    #
+    # Re-adding either here means re-adding Python that resolves a kernel path.
 
 class TestKernelStaysIndependentlyReleasable(unittest.TestCase):
     def test_kernel_carries_its_own_version(self) -> None:

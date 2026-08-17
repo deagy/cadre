@@ -749,7 +749,7 @@ allowlist entry above). All three are consumed in exactly one function,
   nothing else about the provider; `base_url`, `wire_api` and `env_key` live
   in the operator's own `$CODEX_HOME/<name>.config.toml`, which Codex owns.
   There is no Cadre setting that can hold a `base_url` for this runner, and
-  `settings.py`'s `_SECRET_LEAF_PATTERNS` refuses a credential-shaped key in
+  `internal/config`'s secret-leaf patterns refuse a credential-shaped key in
   any config file it manages. Tested by
   `SelfHostedProviderFieldTests.test_every_new_field_is_global_only` and
   `test_an_api_key_leaf_is_still_refused_in_a_config_file`.
@@ -907,7 +907,7 @@ written to be read before enabling it, not after.
   **Two distinct halves, deliberately cited separately.** An earlier revision
   cited only the configuration-time tests as proof of the whole bullet,
   including redirect refusal -- which those tests do not touch at all. They
-  validate URL *strings* in `settings.py`; they never construct a
+  validate URL *strings* in `internal/config`; they never construct a
   `ChatEndpoint` or open a socket. A runtime behavior needs a runtime test:
   - *Configuration-time URL policy* (scheme, host class, userinfo): tested by
     `SelfHostedProviderFieldTests.test_plaintext_http_toward_a_public_host_is_refused`,
@@ -1259,7 +1259,7 @@ mechanically-enforced/advisory classification as above.
   statement. If this integration is ever pointed at a project that also holds
   higher-classification content, this boundary must be revisited before that
   happens, not assumed to still hold. Both `GITLAB_BASE_URL` and
-  `GITLAB_DOCS_PROJECT_ID` are `global_only` in `roster/shared/src/settings.py`'s
+  `GITLAB_DOCS_PROJECT_ID` are `global_only` in `internal/config`'s
   field registry (see `roster/RUNBOOK.md`'s config-file section) specifically
   so this operational containment can't be silently weakened by a
   project-local `.agents/cadre.yaml` -- untrusted, clonable repository
