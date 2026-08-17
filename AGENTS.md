@@ -10,8 +10,10 @@ Read `roster/RUNBOOK.md` for orchestration and any project-local `AGENTS.md` bef
 
 Resolve Python 3.10+ as documented in the runbook. From each internal-tool component, run:
 
-```powershell
-<python> -B -m unittest discover -b -s test -p "test_*.py"
+```sh
+go test ./...                                                    # the CLI, kernel, stores, generators
+python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"   # repo-health guards
+python3 -m unittest discover -b -s plugin/tools -p "test_*.py"               # packaging
 ```
 
 After changing `roster/catalog.yaml`, `roster/`, or `.agents/skills/`, regenerate derived output before committing. `git add` any new files **first** — the generator copies git-tracked files and silently skips untracked ones, so regenerating before staging ships a package referencing a file it does not contain:

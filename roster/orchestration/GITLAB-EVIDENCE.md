@@ -37,7 +37,7 @@ them — an operator who sets a differently-named variable gets a fail-closed
 fallback.
 
 All four variables below can also be set via a config file, resolved
-through `roster/shared/src/settings.py` (env var still wins if both are
+through `internal/config` (env var still wins if both are
 set) -- see `roster/RUNBOOK.md`'s config-file section for the full
 precedence chain and file locations. `GITLAB_BASE_URL` and
 `GITLAB_DOCS_PROJECT_ID` are `global_only` there and may only come from an

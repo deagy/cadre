@@ -216,8 +216,11 @@ func TestTheDeadReferenceScanWouldNoticeOne(t *testing.T) {
 				matches[0][1])
 		}
 	}
-	// And a file that does exist is not reported.
-	for _, alive := range []string{"port_cline_agents.py", "settings.py"} {
+	// And a file that does exist is not reported. Both of these are packaging
+	// tooling the documented regeneration sequence still invokes, so they are
+	// the last Python likely to go -- but if one does, update this fixture
+	// rather than the scan.
+	for _, alive := range []string{"port_cline_agents.py", "bootstrap_sdlc.py"} {
 		if !live[alive] {
 			t.Errorf("%s is expected to still exist; if it was deleted, update this "+
 				"fixture rather than the scan", alive)
@@ -239,4 +242,64 @@ func itoaLocal(n int) string { //nolint:unused
 		n /= 10
 	}
 	return string(digits)
+}
+
+func TestNoOperationalDocPointsAtAnEmptyTestSuite(t *testing.T) {
+	// The companion to the check above, for a failure it cannot see.
+	//
+	// CLAUDE.md told people to run `unittest discover -s
+	// roster/knowledge-store/test` and `-s roster/shared/test` after both
+	// directories had been emptied. Neither line names a .py file, so the
+	// scan above passes over them -- and `discover` on an empty directory
+	// reports "NO TESTS RAN" and exits 0. Following the instruction produced
+	// a green result that asserted nothing, which is worse than an
+	// instruction that fails.
+	root := filepath.Dir(filepath.Dir(mustGetwd(t)))
+	if _, err := os.Stat(filepath.Join(root, "roster")); err != nil {
+		t.Skipf("not running inside a source checkout: %v", err)
+	}
+	discover := regexp.MustCompile(`discover\s+(?:-b\s+)?-s\s+(\S+)`)
+
+	checked := 0
+	var findings []string
+	for _, relative := range operationalDocs {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
+		if err != nil {
+			continue
+		}
+		checked++
+		for number, line := range strings.Split(string(content), "\n") {
+			for _, match := range discover.FindAllStringSubmatch(line, -1) {
+				directory := filepath.Join(root, filepath.FromSlash(match[1]))
+				entries, err := os.ReadDir(directory)
+				if err != nil {
+					findings = append(findings, relative+":"+itoaLocal(number+1)+
+						" runs a suite in "+match[1]+", which does not exist")
+					continue
+				}
+				tests := 0
+				for _, entry := range entries {
+					if strings.HasPrefix(entry.Name(), "test_") &&
+						strings.HasSuffix(entry.Name(), ".py") {
+						tests++
+					}
+				}
+				if tests == 0 {
+					findings = append(findings, relative+":"+itoaLocal(number+1)+
+						" runs a suite in "+match[1]+", which holds no test files")
+				}
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no operational documents were read")
+	}
+	sort.Strings(findings)
+	if len(findings) > 0 {
+		t.Errorf("%d documented test invocation(s) would assert nothing:\n  %s\n\n"+
+			"`unittest discover` over an empty directory reports NO TESTS RAN and "+
+			"exits 0. Following the instruction produces a green result covering "+
+			"nothing, which is worse than an instruction that fails.",
+			len(findings), strings.Join(findings, "\n  "))
+	}
 }
