@@ -54,7 +54,7 @@ func gitOutput(t *testing.T, root string, args ...string) (string, bool) {
 // releaseTagsNewestFirst returns every plugin-vX.Y.Z tag in version order.
 //
 // Not `git describe` (it matches the inherited bare v* tags), not a string
-// sort (lexically 0.9.0 beats 0.18.0), and not commit date (a patch release
+// sort (lexically a 0.9.x tag beats a 0.18.x one), and not commit date (a patch
 // may be tagged after a later minor).
 func releaseTagsNewestFirst(t *testing.T, root string) []string {
 	t.Helper()
@@ -492,10 +492,15 @@ func TestAChangedFieldSetIsDetectedAndAReworkIsNot(t *testing.T) {
 // --- the release guard itself ---
 
 func TestReleaseTagsAreOrderedByVersionNotByString(t *testing.T) {
-	// Which tag is "latest" decides what the baseline is. A string sort puts
-	// plugin-v0.9.0 above plugin-v0.23.3, so the guard would compare against a
-	// schema from long before the last release and report drift that was
-	// already shipped -- or miss drift that was not.
+	// Which tag is "latest" decides what the baseline is. Lexically a 0.9.x
+	// tag sorts above a 0.18.x one, so a string sort would compare against a
+	// schema from long before the last release -- reporting drift that was
+	// already shipped, or missing drift that was not.
+	//
+	// The versions are described rather than spelled out: this repository
+	// forbids a hardcoded release tag outside its historical records, and this
+	// file is scanned like any other. Writing the example out tripped that
+	// guard, which is how the rule got found.
 	root := repoRootForDrift(t)
 	tags := releaseTagsNewestFirst(t, root)
 	if len(tags) < 2 {
