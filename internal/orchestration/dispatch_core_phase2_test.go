@@ -117,6 +117,11 @@ func TestDispatchConfirmationRequired(t *testing.T) {
 }
 
 func TestPollDispatchStatus(t *testing.T) {
+	// The limiter is process-wide, so without this the test passes or fails on
+	// how many async dispatches ran before it -- see
+	// dispatch_limiter_isolation_test.go.
+	withFreshDispatchLimiter(t)
+
 	// Async dispatch should return job_id immediately
 	result := DispatchSecureCloudRole(
 		testRoots(t, "code-reviewer"),
