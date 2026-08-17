@@ -61,6 +61,19 @@ func loadStructured(path string) (map[string]any, error) {
 			return nil, overlayErrorf("%s: invalid YAML: %v", path, err)
 		}
 	}
+	if loaded == nil {
+		// The document parsed to nothing. The TrimSpace check above catches a
+		// file that is *textually* blank; this catches one that is
+		// semantically blank -- comments only, or a bare `---`. Commenting an
+		// overlay out is the ordinary way to clear it while keeping a record
+		// of what was there, and it used to fail closed with "root must be a
+		// mapping" pointing at a file that reads as perfectly fine.
+		//
+		// Failing closed is not the safe default here: these overlays are
+		// narrowing-only, so an empty one can only mean "no narrowing".
+		// Refusing it withholds nothing and breaks the project.
+		return map[string]any{}, nil
+	}
 	m, ok := loaded.(map[string]any)
 	if !ok {
 		return nil, overlayErrorf("%s: root must be a mapping", path)
