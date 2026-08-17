@@ -168,7 +168,7 @@ caller can drive a task end to end.
 | `requirement_issues.py` | Stage A `create-requirement-issues`/`list-requirement-issues`: item validation, sanitization, plan-digest, sidecar ledger, orchestration -- backend-neutral, never imported by `graph.py` |
 | `runtime.py`, `cli.py`, `service.py` | Cross-process graph rebuild, CLI, and HTTP service |
 
-Every module's docstring documents which legacy `agentic_sdlc.py` function
+Every module's docstring documents which legacy `agentic_sdlc.py` (deleted) function
 (if any) it ports, and calls out deliberate deviations explicitly — most
 are either a fix for a legacy bug (e.g. dead/broken authority-role checks
 in `validate_repository` weren't ported) or a required architectural

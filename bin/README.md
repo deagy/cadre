@@ -9,12 +9,11 @@ This directory contains the executable dispatch entry point for the Cadre agent 
 |------|---------|
 | `cadre` | POSIX shell shim — the primary CLI dispatch mechanism |
 | `cadre.ps1` | PowerShell shim — Windows equivalent |
-| `cadre.py` | Python dispatch table — routes to subcommand handlers |
 | `subcommands.tsv` | Tab-separated subcommand registry — defines available commands |
 
 ## Dispatch mechanism
 
-`cadre` resolves the Python interpreter and routes every subcommand through `bin/cadre.py`. The dispatch table in `subcommands.tsv` maps subcommand names to their handler modules.
+`cadre` builds and execs the Go binary at `cmd/cadre`, which routes every subcommand. The dispatch table in `subcommands.tsv` maps subcommand names to their handler modules.
 
 ### Running subcommands
 

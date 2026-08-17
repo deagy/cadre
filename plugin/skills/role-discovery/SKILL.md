@@ -17,7 +17,7 @@ next."
 
 This skill is a conversational **front end**, not a second selector. The
 only authoritative, deterministic answer is `cadre select` itself
-(`roster/orchestration/src/select_agents.py`, driven by
+(`internal/selector`, driven by
 `roster/orchestration/routing.json`). Never present a role you name in
 conversation as final — always frame it as "this looks like the
 `<route-id>` route, primary role `<role>`; run `cadre select` to confirm and

@@ -184,7 +184,7 @@ func TestNoRuleExcludesAwayItsOwnPathCoverage(t *testing.T) {
 	// its reviewers and its human_gate, and matches on keywords alone. Nothing
 	// about it looks wrong: the glob is still listed, and it never fires.
 	document := routingDocument(t)
-	checked := 0
+	checked, undecided := 0, 0
 	var shadowed []string
 
 	for _, section := range []string{"routes", "risk_rules"} {
@@ -196,15 +196,27 @@ func TestNoRuleExcludesAwayItsOwnPathCoverage(t *testing.T) {
 			}
 			for _, include := range stringsAt(rule["paths"]) {
 				checked++
-				if GlobContains(include, excludes) == Contained {
+				switch GlobContains(include, excludes) {
+				case Contained:
 					shadowed = append(shadowed, section+"/"+id+": "+include+
 						" is fully covered by "+strings.Join(excludes, ", "))
+				case Undetermined:
+					undecided++
 				}
 			}
 		}
 	}
 	if checked == 0 {
 		t.Skip("no rule declares both paths and exclude_paths")
+	}
+	// Counting what was looked at is not the same as counting what was
+	// decided. This reports only on Contained, so 46 Undetermined verdicts and
+	// 46 clean ones produce identical output -- the reassuring "checked 46"
+	// below included. TestEveryRealRoutingPatternIsActuallyDecided holds the
+	// strict version; this is the floor.
+	if undecided == checked {
+		t.Fatalf("all %d include globs came back Undetermined; this check is "+
+			"passing without deciding anything", checked)
 	}
 	sort.Strings(shadowed)
 	if len(shadowed) > 0 {

@@ -14,7 +14,7 @@ primarily [`.agents/skills/run-agent-orchestration/references/runner-adapters.md
 (on `main`), cross-checked against the structured
 [`roster/runner-capabilities.json`](../roster/runner-capabilities.json)
 manifest, which is a machine-readable representation of the same rules
-`runner-adapters.md` documents in prose. `roster/orchestration/test/test_runner_capabilities.py`
+`runner-adapters.md` documents in prose. `internal/generators/runner_capabilities_test.go`
 validates it against `roster/runner-capabilities.schema.json`.
 
 ## How to tell which runner you're in

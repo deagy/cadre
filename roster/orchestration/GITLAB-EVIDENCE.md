@@ -19,7 +19,7 @@ does not repeat that detail, only cross-references it.
 
 **This server never closes, approves, reopens, resolves, or relabels an
 issue away from open review, and calls no function anywhere in its own
-source or in the dispatch MCP server's shared `dispatch_core.py` that does.**
+source or in the dispatch MCP server's shared `internal/orchestration/dispatch_core.go` that does.**
 A GitLab issue, wiki page, or comment created through these tools is an
 *evidence pointer*, never a gate-authority record. The authoritative
 approval/gate record for a consuming project remains that project's own
@@ -84,7 +84,7 @@ Register it in your MCP-capable host the same way you would register the
 dispatch server — an `[mcp_servers]` entry with `command = "cadre"` and
 `args = ["mcp-gitlab-server"]`, substituting your host's own config syntax.
 
-This was `python3 roster/orchestration/mcp/gitlab_server.py` plus a
+This was a standalone Python server plus a
 `pip install mcp`, with no `bin/cadre` subcommand of its own. Both the Python
 server and that dependency are gone: the tools are served by the same Go
 JSON-RPC transport `cadre mcp-dispatch-server` uses.

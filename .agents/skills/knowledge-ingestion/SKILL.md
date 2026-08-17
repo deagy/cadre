@@ -23,7 +23,7 @@ content separate from every other project), or the shared store across every
 project on this machine (`~/.agents/knowledge-store/config.json`)? Suggest
 project-local as the default if the human doesn't have a preference. Create
 only the one chosen — an empty `{}` is sufficient, since `load_config()` fills
-every other setting from built-in defaults (`roster/knowledge-store/src/config.py`).
+every other setting from built-in defaults (`internal/knowledge/config.go`).
 Skip asking (and skip creating anything) once a tier already resolves.
 
 ## Workflow

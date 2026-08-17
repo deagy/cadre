@@ -30,19 +30,25 @@ repos:
         pass_filenames: false
         files: "roster/catalog\\.yaml$|roster/orchestration/routing\\.yaml$"
 
-      # The catalog-health hook that stood here ran routing_health.py, which
+      # The catalog-health hook that stood here ran routing_health.py (deleted),
       # linted orphaned and dangling role references and globs a rule excludes
       # away entirely. That linter is now
       # internal/orchestration/routing_health_test.go: it runs in `go test`
       # and in CI, rather than as a subcommand a hook could call. Re-adding a
       # hook here means adding a `cadre` command for it first.
 
-      - id: staged-knowledge-records
-        name: Check staged knowledge records are well-formed
-        entry: python3 roster/knowledge-store/src/staged_records.py
-        language: python
-        pass_filenames: false
-        files: "roster/knowledge-store/proposed-knowledge/.*\\.md$|roster/knowledge-store/proposed-knowledge\\.schema\\.json$"
+      # The staged-knowledge-records hook that stood here ran
+      # roster/knowledge-store/src/staged_records.py (deleted), which b418031e removed
+      # with the rest of the Python staged-records subsystem. The hook was
+      # left behind, invoking a path that does not exist -- failing for
+      # anyone with pre-commit installed and doing nothing for anyone
+      # without it. Either way the records stopped being checked.
+      #
+      # internal/knowledge/committed_records_test.go now validates every
+      # record under proposed-knowledge/ through ValidateStagedRecordText,
+      # the Go port of the same contract. It runs in `go test` and in CI, so
+      # it covers everyone rather than only contributors who installed the
+      # hook. Re-adding a hook here means adding a `cadre` verb for it first.
 
       - id: generate-role-metadata-check
         name: Verify generated role metadata is in sync

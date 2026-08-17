@@ -1,6 +1,10 @@
 package orchestration
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/deagy/cadre/cli/internal/selector"
+)
 
 func TestGlobContainsIdenticalPatternIsContained(t *testing.T) {
 	verdict := GlobContains("**/*.txt", []string{"**/*.txt"})
@@ -164,12 +168,12 @@ func TestCheckRouteExcludeShadowingNoExcludes(t *testing.T) {
 // calls out -- a NOT_CONTAINED verdict can be checked, not just trusted.
 func assertWitnessIsValid(t *testing.T, witness, include string, excludes []string) {
 	t.Helper()
-	includeRe := globToRegex(include)
+	includeRe := selector.GlobToRegex(include)
 	if !includeRe.MatchString(witness) {
 		t.Fatalf("witness %q does not match include pattern %q (regex %s)", witness, include, includeRe.String())
 	}
 	for _, exclude := range excludes {
-		excludeRe := globToRegex(exclude)
+		excludeRe := selector.GlobToRegex(exclude)
 		if excludeRe.MatchString(witness) {
 			t.Fatalf("witness %q unexpectedly matches exclude pattern %q (regex %s)", witness, exclude, excludeRe.String())
 		}

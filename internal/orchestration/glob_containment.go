@@ -16,24 +16,30 @@
 // strictly easier to satisfy, which is the false-accusation direction), so
 // this is a decision procedure, not a heuristic.
 //
-// This is a from-scratch port, not a reuse of the Python module's NFA
-// construction: it must model route_matching.go's actual globToRegex
-// tokenization and regexp.Regexp semantics (Go's RE2-backed package),
-// which differ from Python's re-backed dialect in two ways that matter for
-// correctness:
+// The dialect modelled here is selector.GlobToRegex's -- the function that
+// compiles every route path glob, and therefore the only matcher whose
+// answers this check is about. Getting that wrong does not make the check
+// stricter or looser in a useful way; it makes it a check on a language
+// nothing matches in.
 //
-//   - Case sensitivity: globToRegex never sets an IGNORECASE-equivalent
-//     flag, so Go's matcher (and this containment check) is case-sensitive.
-//     Python's re.IGNORECASE made its version case-insensitive.
-//   - `**` semantics: globToRegex always compiles `**` (with or without a
-//     following `/`) to `(?:.*/)?` -- there is only one doublestar
-//     construct in this dialect, unlike Python's dialect which distinguishes
-//     a bare `**` (compiles to `.`) from `**/ ` (compiles to
-//     `(?:.*/)?`).
-//   - Anchoring: Go's regexp `$` (no `(?m)` flag) matches only the absolute
-//     end of text, unlike Python's `$` which also matches just before a
-//     single trailing newline -- so no extra "trailing newline" acceptance
-//     state is needed here, unlike the Python original.
+// Two properties of that dialect, both of which this file previously got
+// backwards, and both found by the brute-force differential rather than by
+// reading:
+//
+//   - Case: selector.GlobToRegex sets `(?i)`. Literals are folded here to
+//     match. The earlier note claiming otherwise cited a private copy of
+//     globToRegex that lived in this file and had no non-test callers; that
+//     copy has been deleted in favour of calling the real matcher.
+//   - `**`: the compilation depends on what follows. `**/` becomes
+//     `(?:.*/)?` -- nothing, or anything ending on a separator -- while a
+//     `**` with no `/` after it becomes `.*`. Treating both as the former
+//     understates a trailing `**`, and an understated include is easier to
+//     contain, which is the false-accusation direction.
+//
+// One property it got right, worth keeping written down: Go's regexp `$`
+// (no `(?m)`) matches only the absolute end of text, unlike Python's `$`,
+// which also matches just before a single trailing newline. No extra
+// acceptance state is needed here, unlike the Python original.
 //
 // Method: each glob becomes an NFA over a finite abstract alphabet: the
 // distinct literal bytes appearing in the globs under comparison, plus `/`,
@@ -52,7 +58,6 @@
 package orchestration
 
 import (
-	"regexp"
 	"sort"
 	"strings"
 )
@@ -69,7 +74,12 @@ const (
 // verdict, so a caller that reports only on Contained cannot be made to
 // accuse falsely by a pathological pattern. routing.json's real patterns
 // explore a few dozen.
-const maxContainmentProductStates = 50_000
+// A var, not a const, only so a test can lower it. Exhausting the budget must
+// yield Undetermined and never Contained -- the caller reports on Contained,
+// so a skipped pattern is a missed finding while a guessed one is a false
+// accusation. Reaching the real bound with a realistic pattern is not
+// practical, and an untested bound is a bound nobody knows the behaviour of.
+var maxContainmentProductStates = 50_000
 
 const (
 	symOther = "\x00other" // Sentinel: any byte that appears in no pattern under comparison.
@@ -83,7 +93,18 @@ const (
 	globLiteral globTokenKind = iota
 	globQuestion
 	globStar
+	// globDoubleStar is `**` with a `/` after it, which the matcher compiles
+	// to `(?:.*/)?` -- nothing, or anything ending on a separator.
 	globDoubleStar
+	// globDoubleStarAny is `**` with no `/` after it, which the matcher
+	// compiles to `.*` -- anything at all, separators included, not required
+	// to end on one.
+	//
+	// The two were one token. Modelling a trailing `**` as `(?:.*/)?` makes
+	// the pattern's language narrower than it really is, and a narrower
+	// include is easier to contain: `**` came back contained by `**/`, which
+	// matches only the empty string and paths ending in `/`.
+	globDoubleStarAny
 )
 
 type globToken struct {
@@ -96,16 +117,32 @@ type globToken struct {
 // the regexp.Regexp itself. Returns ok=false if the pattern contains a `[`
 // (a character class) -- see package doc.
 func tokenizeGlobForContainment(glob string) ([]globToken, bool) {
+	// Backslashes become separators first, exactly as iterGlobTokens does, so
+	// a Windows-style pattern tokenises identically to its POSIX spelling.
+	//
+	// Without this, `foo\bar/**` and `foo/bar/**` -- which the matcher compiles
+	// to the byte-identical regex `(?i)^foo/bar/.*$` -- came back
+	// not-contained. A pattern was not contained by itself, which is the silent
+	// direction: the linter misses a rule whose exclude_paths really do swallow
+	// its own include and reports nothing.
+	glob = strings.ReplaceAll(glob, `\`, "/")
+
 	var tokens []globToken
 	for i := 0; i < len(glob); i++ {
 		c := glob[i]
 		switch c {
 		case '*':
 			if i+1 < len(glob) && glob[i+1] == '*' {
-				tokens = append(tokens, globToken{kind: globDoubleStar})
 				i++
+				// Which `**` this is depends on what follows it, so the
+				// separator has to be looked at before the token is emitted.
+				// The previous version consumed the `/` and emitted the same
+				// token either way, which is how the distinction was lost.
 				if i+1 < len(glob) && glob[i+1] == '/' {
 					i++
+					tokens = append(tokens, globToken{kind: globDoubleStar})
+				} else {
+					tokens = append(tokens, globToken{kind: globDoubleStarAny})
 				}
 			} else {
 				tokens = append(tokens, globToken{kind: globStar})
@@ -181,6 +218,12 @@ func newContainmentNFA(tokens []globToken) *containmentNFA {
 			n.epsilon[state] = append(n.epsilon[state], consumed, target)
 			n.loops[consumed] = globDoubleStar
 			n.moves[consumed] = append(n.moves[consumed], globMove{kind: globLiteral, lit: symSep, target: target})
+		case globDoubleStarAny:
+			// `.*`: any run of symbols but a newline -- separators included --
+			// and no obligation to end on one. Same loop predicate as the
+			// branch above, without the commitment to a final separator.
+			n.loops[state] = globDoubleStar
+			n.epsilon[state] = append(n.epsilon[state], target)
 		}
 		state = target
 	}
@@ -454,67 +497,4 @@ func CheckRouteExcludeShadowing(route Route) map[string]string {
 		results[path] = GlobContains(path, route.ExcludePaths)
 	}
 	return results
-}
-
-// globToRegex moved here from the removed route_matching.go. It is a
-// general glob-to-regex utility, not part of the divergent selector that
-// file carried, and glob_containment_test.go's assertWitnessIsValid uses
-// it to check a NotContained witness independently rather than trusting
-// the verdict -- the verification property this file exists to provide.
-// globToRegex converts a shell glob pattern to a regex.
-// Supports *, ?, and [...] patterns.
-func globToRegex(glob string) *regexp.Regexp {
-	var pattern strings.Builder
-	// (?i) because selector.GlobToRegex sets it. This function exists to check
-	// a witness against the dialect the selector actually matches with, so a
-	// difference here is not a stricter check -- it is this package validating
-	// its answers against a matcher that is not the one in use.
-	pattern.WriteString("(?i)^")
-
-	for i := 0; i < len(glob); i++ {
-		c := glob[i]
-		switch c {
-		case '*':
-			if i+1 < len(glob) && glob[i+1] == '*' {
-				// ** matches anything including / (with optional /)
-				// src/**/*.go should match src/main.go and src/cmd/main.go
-				pattern.WriteString("(?:.*/)?")
-				i++ // Skip the next *
-				// Skip any following / character
-				if i+1 < len(glob) && glob[i+1] == '/' {
-					i++
-				}
-			} else {
-				// * matches anything except /
-				pattern.WriteString("[^/]*")
-			}
-		case '?':
-			// ? matches any single character except /
-			pattern.WriteString("[^/]")
-		case '[':
-			// Character class [...] - find the closing ]
-			j := strings.IndexByte(glob[i:], ']')
-			if j == -1 {
-				pattern.WriteByte('[')
-			} else {
-				pattern.WriteString(glob[i : i+j+1])
-				i += j
-			}
-		case '.', '+', '^', '$', '(', ')', '|', '{', '}':
-			// Escape regex special characters
-			pattern.WriteByte('\\')
-			pattern.WriteByte(c)
-		default:
-			pattern.WriteByte(c)
-		}
-	}
-
-	pattern.WriteString("$")
-
-	re, err := regexp.Compile(pattern.String())
-	if err != nil {
-		// Fallback to exact match if regex compilation fails
-		re, _ = regexp.Compile("^" + regexp.QuoteMeta(glob) + "$")
-	}
-	return re
 }
