@@ -1,7 +1,6 @@
 package orchestration
 
 import (
-	"sync"
 	"testing"
 )
 
@@ -26,6 +25,11 @@ import (
 // withFreshDispatchLimiter gives a test its own limiter and restores the
 // previous one, so a test that dispatches neither inherits a poisoned pool nor
 // poisons the tests after it.
+//
+// The variable is an atomic pointer for this reason. Swapping a plain package
+// var races with the dispatch paths reading it from goroutines -- caught by
+// `go test -race`, invisible without it, and merged once already because I ran
+// the suite without the flag CI uses.
 
 // withFreshDispatchLimiter swaps in an empty limiter for the duration of t.
 //
@@ -34,21 +38,9 @@ import (
 // Each test gets its own.
 func withFreshDispatchLimiter(t *testing.T) {
 	t.Helper()
-	dispatchLimiterMu.Lock()
-	previous := dispatchLimiter
-	dispatchLimiter = NewConcurrencyLimiter(MaxConcurrentChildren)
-	dispatchLimiterMu.Unlock()
-
-	t.Cleanup(func() {
-		dispatchLimiterMu.Lock()
-		dispatchLimiter = previous
-		dispatchLimiterMu.Unlock()
-	})
+	previous := dispatchLimiter.Swap(NewConcurrencyLimiter(MaxConcurrentChildren))
+	t.Cleanup(func() { dispatchLimiter.Store(previous) })
 }
-
-// dispatchLimiterMu guards replacement of the package-level limiter. Only
-// tests replace it; production reads it and never swaps it.
-var dispatchLimiterMu sync.Mutex
 
 func TestTheLimiterRefusesBeyondItsCapAndRecovers(t *testing.T) {
 	// The cap's own behaviour, which nothing asserted -- it was only ever
@@ -89,15 +81,11 @@ func TestAFreshLimiterStartsEmpty(t *testing.T) {
 	//
 	// The property is about the replacement being empty and the original being
 	// restored. Neither needs the shared pool emptied.
-	dispatchLimiterMu.Lock()
-	before := dispatchLimiter
-	dispatchLimiterMu.Unlock()
+	before := dispatchLimiter.Load()
 
 	func() {
 		withFreshDispatchLimiter(t)
-		dispatchLimiterMu.Lock()
-		fresh := dispatchLimiter
-		dispatchLimiterMu.Unlock()
+		fresh := dispatchLimiter.Load()
 
 		if fresh == before {
 			t.Fatal("withFreshDispatchLimiter did not replace the limiter")

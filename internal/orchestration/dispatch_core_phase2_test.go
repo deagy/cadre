@@ -140,13 +140,37 @@ func TestPollDispatchStatus(t *testing.T) {
 		return
 	}
 
-	// Poll the job status
+	// Poll the job status.
+	//
+	// The property is that polling a job id this process just handed out
+	// returns a coherent status -- not that the child succeeded. In a test
+	// fixture the child cannot run: the role resolves against a temp roster
+	// that has no executable behind it, so the job reaches a terminal state
+	// almost immediately, and *which* terminal state depends on the machine.
+	//
+	// Locally the poll returns not_found at every interval, including a second
+	// later. On a CI runner it returns unavailable -- the async goroutine has
+	// already finished and recorded that the role could not be resolved. Both
+	// are legitimate answers about a job that will never complete; the
+	// original list simply did not include the second, so the test passed here
+	// and failed there.
 	pollResult := PollDispatchStatus(jobID)
 	pollStatus := pollResult["status"].(string)
 
-	// Job should either still be pending or completed
-	if pollStatus != "dispatched_async" && pollStatus != "success" && pollStatus != "not_found" {
-		t.Errorf("poll returned status %q, want 'dispatched_async', 'success', or 'not_found'", pollStatus)
+	acceptable := map[string]bool{
+		"dispatched_async": true, // still queued or running
+		"success":          true, // completed
+		"not_found":        true, // never recorded, or already reaped
+		"unavailable":      true, // completed, role not resolvable in a fixture
+	}
+	if !acceptable[pollStatus] {
+		t.Errorf("poll returned status %q, which is not a status this job could "+
+			"legitimately be in (reason %v)", pollStatus, pollResult["reason"])
+	}
+	// And it is a status, not an empty string -- a poll that returned nothing
+	// would satisfy a "not one of the bad ones" check.
+	if pollStatus == "" {
+		t.Error("poll returned an empty status")
 	}
 }
 
