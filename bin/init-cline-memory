@@ -70,7 +70,7 @@ git add .                                         # Stage new files first
 ./bin/cadre generate-role-metadata               # Sync catalog with roles
 ./bin/cadre generate-plugin --output plugin      # Regenerate plugin
 python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin
-python3 -m unittest discover -b -s roster/orchestration/test -p "test_repository_health.py"
+go test ./internal/generators/
 python3 -m unittest discover -b -s plugin/tools -p "test_*.py"
 ```
 
@@ -131,7 +131,7 @@ cat > .cline/memory/BEST_PRACTICES.md <<'CLINE_PRACTICES_EOF'
    ```
 3. Verify guards pass:
    ```bash
-   python3 -m unittest discover -b -s roster/orchestration/test -p "test_repository_health.py"
+   go test ./internal/generators/
    python3 -m unittest discover -b -s plugin/tools -p "test_*.py"
    ```
 

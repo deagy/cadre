@@ -74,7 +74,20 @@ jobs:
             echo "path=.github/requirements-validation.lock" >> "$GITHUB_OUTPUT"
           fi
       - run: pip install --no-cache-dir --require-hashes -r ${{ steps.lockfile.outputs.path }}
-      - run: python -B -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
+      # The roster/orchestration leg that used to run here is gone with
+      # test_repository_health.py, the last test module in that directory.
+      # What remains there is fixture data the Go tests read
+      # (select_corpus.json, select_golden.json, fixtures/, testdata/), so the
+      # directory stays while the suite does not -- and `unittest discover`
+      # over it would report "Ran 0 tests / NO TESTS RAN" and exit 0, passing
+      # while asserting nothing, as the knowledge-store and roster/shared legs
+      # did before it.
+      #
+      # Its 48 properties are in Go now, across internal/generators
+      # (packaging, hooks, skills, removed paths, packaged selector),
+      # internal/cli (wrapper, wheel, help surface, release tags) and
+      # internal/kernel (compatibility window, independence).
+      # Do not re-add a discover leg here without test files behind it.
       # The knowledge-store leg that used to run here is gone. Commit
       # b418031e deleted roster/knowledge-store/src and its Python tests
       # (the Go store under internal/knowledge replaces them), which left
