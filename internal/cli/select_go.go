@@ -25,11 +25,11 @@ import (
 func runSelectGo(args []string) int {
 	options := flag.NewFlagSet("cadre select", flag.ContinueOnError)
 	options.SetOutput(os.Stderr)
-	// Go's flag package opens with "Usage of cadre select:"; argparse opens
-	// with "usage: cadre select ...". The difference is not cosmetic here --
-	// test_cli_surface.py requires every subcommand to name itself the same
-	// way, so that `cadre <thing> --help` is one recognisable shape across a
-	// CLI that is half Go and half Python.
+	// Go's flag package opens with "Usage of cadre select:"; the form this CLI
+	// uses is "usage: cadre select ...". The difference is not cosmetic:
+	// internal/cli/help_surface_test.go requires every subcommand to name
+	// itself the same way, so `cadre <thing> --help` is one recognisable shape
+	// across the whole CLI.
 	options.Usage = func() {
 		fmt.Fprint(os.Stderr, selectUsage)
 		options.PrintDefaults()
