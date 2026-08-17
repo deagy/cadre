@@ -27,8 +27,8 @@ const (
 
 // setUsage gives fs a `--help` block opening with the command's public name,
 // in the exact `usage: cadre <name> ...` form that
-// roster/orchestration/test/test_cli_surface.py requires of every subcommand
-// in bin/subcommands.tsv.
+// internal/cli/help_surface_test.go requires of every subcommand in
+// bin/subcommands.tsv.
 //
 // Without it, Go's flag package prints its own `Usage of cadre <name>:`
 // header -- which names the flag set rather than the command the user typed,

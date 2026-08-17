@@ -376,7 +376,7 @@ rather than failing. Those old tags are left as-is.
 Keep the version lines independent: `provider/provider.json`'s
 `kernel_compatibility` window is only meaningful if the kernel can move
 separately from the role catalog, and
-`roster/orchestration/test/test_kernel_boundary.py` asserts it.
+`internal/kernel/kernel_boundary_test.go` asserts it.
 
 To ship a change through to installed plugins:
 
