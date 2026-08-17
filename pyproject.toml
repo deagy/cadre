@@ -2,7 +2,7 @@
 # Pinned to the exact reviewed version installed/verified in this
 # environment (see supply-chain-security-reviewer finding on PR #48); bump
 # deliberately after review, not implicitly via an unbounded requirement.
-requires = ["hatchling==1.31.0"]
+requires = ["hatchling==1.32.0"]
 build-backend = "hatchling.build"
 
 [project]
