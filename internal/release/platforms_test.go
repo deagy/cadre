@@ -55,28 +55,49 @@ func crossBuildRecipe(t *testing.T) string {
 var goosGoarch = regexp.MustCompile(`GOOS=(\S+)\s+GOARCH=(\S+)`)
 
 func TestTheCrossBuildMatrixIsExactlyTheContractedOne(t *testing.T) {
-	// Equality in both directions. A missing leg means a platform we promise
-	// and never build; an extra leg means one we build and never document --
-	// including windows/arm64, whose reappearance is a release-blocking
-	// regression rather than a welcome addition, for the reason recorded on
-	// SupportedPlatforms.
-	built := map[string]bool{}
-	for _, match := range goosGoarch.FindAllStringSubmatch(crossBuildRecipe(t), -1) {
-		built[match[1]+"/"+match[2]] = true
-	}
-	contracted := map[string]bool{}
-	for _, platform := range SupportedPlatforms {
-		contracted[platform.String()] = true
-	}
-	for platform := range contracted {
-		if !built[platform] {
-			t.Errorf("cross-build does not build %s, which the contract promises", platform)
+	// Equality in both directions, per program. A missing leg means a
+	// platform we promise and never build; an extra leg means one we build
+	// and never document -- including windows/arm64, whose reappearance is a
+	// release-blocking regression rather than a welcome addition, for the
+	// reason recorded on SupportedPlatforms.
+	//
+	// Per program because the two sets are no longer the same. The kernel
+	// cross-compiles to all five from one Linux runner; the CLI needs cgo and
+	// a native host, and no longer publishes darwin/amd64 (see
+	// `unpublishable`). Checking the union would let either program lose a
+	// leg silently, so long as the other still built it.
+	recipe := crossBuildRecipe(t)
+
+	for _, program := range Programs {
+		built := map[string]bool{}
+		for _, line := range strings.Split(recipe, "\n") {
+			if !strings.Contains(line, "./cmd/"+program) {
+				continue
+			}
+			if match := goosGoarch.FindStringSubmatch(line); match != nil {
+				built[match[1]+"/"+match[2]] = true
+			}
 		}
-	}
-	for platform := range built {
-		if !contracted[platform] {
-			t.Errorf("cross-build builds %s, which is not in SupportedPlatforms. "+
-				"Add it there deliberately, or remove the Makefile leg.", platform)
+		if len(built) == 0 {
+			t.Errorf("cross-build has no legs for %s at all", program)
+			continue
+		}
+
+		contracted := map[string]bool{}
+		for _, platform := range PlatformsFor(program) {
+			contracted[platform.String()] = true
+		}
+		for platform := range contracted {
+			if !built[platform] {
+				t.Errorf("cross-build does not build %s for %s, which the contract promises", platform, program)
+			}
+		}
+		for platform := range built {
+			if !contracted[platform] {
+				t.Errorf("cross-build builds %s for %s, which PlatformsFor(%q) excludes. "+
+					"Add it to SupportedPlatforms deliberately, drop the `unpublishable` entry, "+
+					"or remove the Makefile leg.", platform, program, program)
+			}
 		}
 	}
 }
@@ -227,8 +248,11 @@ func TestTheReleaseMatrixIsExactlyTheContractedOne(t *testing.T) {
 	if len(published) == 0 {
 		t.Fatal("release.yml's cli job has no build matrix; this guard read nothing")
 	}
+	// Against the CLI's own set, not SupportedPlatforms: this job builds the
+	// CLI, which needs cgo and a native host per platform and so publishes
+	// fewer platforms than the kernel. See `unpublishable`.
 	contracted := map[string]bool{}
-	for _, platform := range SupportedPlatforms {
+	for _, platform := range PlatformsFor(ProgramCLI) {
 		contracted[platform.String()] = true
 	}
 	for platform := range contracted {
@@ -239,7 +263,7 @@ func TestTheReleaseMatrixIsExactlyTheContractedOne(t *testing.T) {
 	}
 	for platform := range published {
 		if !contracted[platform] {
-			t.Errorf("release.yml publishes %s, which is not in SupportedPlatforms and "+
+			t.Errorf("release.yml publishes %s, which PlatformsFor(cadre) excludes and "+
 				"so appears in no documentation the shim or a human reads", platform)
 		}
 	}
@@ -267,7 +291,10 @@ func TestCrossBuildCoversEveryPublishedProgramOnEveryPlatform(t *testing.T) {
 		t.Fatal("no build legs parsed out of cross-build; this guard checked nothing")
 	}
 	for _, program := range Programs {
-		for _, platform := range SupportedPlatforms {
+		// PlatformsFor, not SupportedPlatforms: a program may contract for
+		// fewer platforms than the repository does, and requiring a leg it
+		// deliberately does not publish would demand a build nothing ships.
+		for _, platform := range PlatformsFor(program) {
 			key := program + " " + platform.String()
 			if !built[key] {
 				t.Errorf("cross-build never builds %s for %s, so a release cannot "+
@@ -492,4 +519,39 @@ func currentVersionOf(t *testing.T, root, program string) (string, bool) {
 	}
 	t.Errorf("no way to read %s's version; add one when adding a program", program)
 	return "", false
+}
+
+// A platform a program does not publish must not be advertised as one it does.
+//
+// The presence-only check above cannot see this. It asks whether each
+// contracted platform is documented, so removing darwin/amd64 from the CLI
+// left DISTRIBUTION.md still listing `cadre-v<version>-darwin-amd64.tar.gz`
+// and the suite still green: the platform is documented, just for the wrong
+// program. A user following that list downloads a 404.
+//
+// Scoped to the CLI's own asset prefix so the kernel's darwin/amd64 line,
+// which is genuine, does not trip it.
+func TestNoExcludedPlatformIsAdvertisedForItsProgram(t *testing.T) {
+	doc := readRepoFile(t, "DISTRIBUTION.md")
+
+	checked := 0
+	for _, program := range Programs {
+		for _, platform := range SupportedPlatforms {
+			reason, excluded := ExclusionReason(program, platform)
+			if !excluded {
+				continue
+			}
+			checked++
+
+			asset := fmt.Sprintf(`%s-v<version>-%s-%s`, program, platform.GOOS, platform.GOARCH)
+			if strings.Contains(doc, asset) {
+				t.Errorf("DISTRIBUTION.md advertises %q, but %s does not publish %s.\n  reason on record: %s",
+					asset, program, platform, reason)
+			}
+		}
+	}
+
+	if checked == 0 {
+		t.Skip("no program excludes any platform; nothing to check")
+	}
 }

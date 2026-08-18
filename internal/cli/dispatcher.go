@@ -89,6 +89,7 @@ func Usage(subcommands []Subcommand) string {
 		{Name: "changelog-entry", Description: "Print one version's release notes from the packaged CHANGELOG.md"},
 		{Name: "changed-components", Description: "Report which releasable components had their version bumped"},
 		{Name: "sbom-check", Description: "Refuse an SBOM that inventoried the wrong thing"},
+		{Name: "release-assets", Description: "List the archives a program publishes at a version, from the platform contract"},
 		{Name: "upgrade", Description: "Check for Cadre updates and upgrade the CLI (--check, --force, --help)"},
 		{Name: "mcp-dispatch-server", Description: "Run the MCP dispatch server (stdio)"},
 		{Name: "mcp-gitlab-server", Description: "Run the GitLab evidence MCP server (stdio; three create-only tools)"},
@@ -229,6 +230,9 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 	}
 	if command == "sbom-check" {
 		return SBOMCheckCmd(rest)
+	}
+	if command == "release-assets" {
+		return ReleaseAssetsCmd(rest)
 	}
 	if command == "generate-role-metadata" {
 		return GenerateRoleMetadata(rest)

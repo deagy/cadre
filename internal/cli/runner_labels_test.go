@@ -32,7 +32,6 @@ var (
 	approvedRunnerLabels = map[string]string{
 		"ubuntu-latest":  "standard Linux runner",
 		"macos-latest":   "current macOS Arm64 (macOS 26 arm64 as of 2026-08)",
-		"macos-15-intel": "Intel x86_64 macOS; replaces the retired macos-13 for darwin/amd64 builds",
 		"windows-latest": "standard Windows runner",
 	}
 

@@ -95,3 +95,58 @@ func ExecutableNameFor(program, goos string) string {
 	}
 	return program
 }
+
+// unpublishable records platforms a specific program cannot ship, and why.
+//
+// The matrix above is what this repository contracts for in general. One
+// program can still be unable to reach a corner of it, and that is a property
+// of the program rather than of the platform: the kernel cross-compiles to
+// every entry from a single Linux runner, while the CLI links the knowledge
+// store's sqlite and so needs CGO_ENABLED=1 and a native host per platform.
+//
+// Recorded as data rather than prose so the Makefile, the workflow and the
+// documentation are all checked against one list. An entry here is a
+// deliberate reduction of what a program publishes, so it carries its reason
+// with it.
+var unpublishable = map[string]map[Platform]string{
+	ProgramCLI: {
+		{GOOS: "darwin", GOARCH: "amd64"}: "the CLI needs cgo, so darwin/amd64 needs a " +
+			"native Intel macOS runner. GitHub retired macos-13 and the surviving Intel " +
+			"labels (macos-15-intel, macos-26-intel) are a separate, more expensive SKU. " +
+			"Dropped deliberately: Apple Silicon Macs are served by darwin/arm64, and an " +
+			"Intel Mac cannot run that binary under Rosetta -- Rosetta translates x86_64 " +
+			"for Apple Silicon, not the reverse. Intel macOS users must build from source",
+	},
+}
+
+// PlatformsFor returns the platforms a program publishes, in matrix order.
+//
+// Use this rather than SupportedPlatforms wherever the subject is one
+// program's assets: the two differ, and the difference is the point.
+func PlatformsFor(program string) []Platform {
+	excluded := unpublishable[program]
+	platforms := make([]Platform, 0, len(SupportedPlatforms))
+	for _, platform := range SupportedPlatforms {
+		if _, skip := excluded[platform]; skip {
+			continue
+		}
+		platforms = append(platforms, platform)
+	}
+	return platforms
+}
+
+// ExclusionReason reports why a program does not publish a platform.
+func ExclusionReason(program string, platform Platform) (string, bool) {
+	reason, ok := unpublishable[program][platform]
+	return reason, ok
+}
+
+// ArchiveNamesFor renders every asset a program publishes at a version.
+func ArchiveNamesFor(program, version string) []string {
+	platforms := PlatformsFor(program)
+	names := make([]string, 0, len(platforms))
+	for _, platform := range platforms {
+		names = append(names, ArchiveName(program, platform.GOOS, platform.GOARCH, version))
+	}
+	return names
+}

@@ -39,6 +39,19 @@ try_resolve_binary() {
     *)      return 1 ;;  # Unsupported architecture
   esac
   
+  # No darwin/amd64 release. The CLI links sqlite and so needs cgo and a
+  # native host per platform; GitHub retired the free Intel macOS runner.
+  # Rosetta cannot help -- it translates x86_64 for Apple Silicon, not the
+  # reverse -- so this is a build-from-source platform. Said here rather
+  # than left to a 404 on an asset name.
+  if [ "$GOOS" = "darwin" ] && [ "$GOARCH" = "amd64" ]; then
+    echo "cadre: no release binary for Intel macOS (darwin/amd64)." >&2
+    echo "  Apple Silicon is served by darwin/arm64; Rosetta does not run it on Intel." >&2
+    echo "  Build from source: go build -o cadre ./cmd/cadre  (needs Go and cgo)" >&2
+    echo "  Or set CADRE_BINARY to a cadre binary you already have." >&2
+    return 1
+  fi
+  
   # Try to use a cached binary if it exists, is a regular file, and is executable.
   CANDIDATE="$CACHE_DIR/cadre-v$CADRE_CLI_VERSION-$GOOS-$GOARCH"
   if [ -f "$CANDIDATE" ] && [ -x "$CANDIDATE" ]; then

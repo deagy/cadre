@@ -319,19 +319,14 @@ jobs:
             goarch: arm64
             cc: clang
             platform-tag: macosx_11_0_arm64
-          # macOS AMD64: native Intel x86_64.
-          #
-          # Was macos-13, which GitHub has retired: the label no longer
-          # resolves to any runner, so the leg queued with no runner ever
-          # assigned while every other leg finished. Nothing failed -- it
-          # simply never started -- and with no timeout on this job that
-          # stalls the release for hours. actions/runner-images now
-          # publishes Intel as macos-15-intel and macos-26-intel.
-          - os: macos-15-intel
-            goos: darwin
-            goarch: amd64
-            cc: clang
-            platform-tag: macosx_10_12_x86_64
+          # No macOS AMD64 leg, deliberately. See internal/release's
+          # `unpublishable`: the CLI links sqlite and so needs CGO_ENABLED=1
+          # and a native host per platform. macos-13 provided that host free;
+          # GitHub retired it, and the surviving Intel labels are a separate,
+          # dearer SKU. darwin/arm64 does not cover Intel Macs -- Rosetta
+          # translates x86_64 for Apple Silicon, not the reverse -- so Intel
+          # macOS users build from source. `cadre release-assets` is the
+          # contract; nothing here restates it.
           # Windows AMD64
           - os: windows-latest
             goos: windows
@@ -507,38 +502,38 @@ jobs:
           done
 
       - name: Verify all contracted platforms are present
+        # The expected asset list comes from internal/release, not from a set
+        # retyped here. It used to be an inline Python block whose comment
+        # read "Five platforms"; that comment was the only statement of the
+        # contract in this job, and a comment cannot fail. The CLI now
+        # publishes four -- darwin/amd64 is excluded, with its reason, in
+        # internal/release's `unpublishable` -- while the kernel still
+        # publishes five, so any single list written here is wrong for one of
+        # the two jobs.
         if: steps.tag.outputs.skip == 'false'
         run: |
           set -eu
-          python3 << 'VERIFY'
-          import sys, re
-          from pathlib import Path
-
-          # Five platforms: linux-amd64, linux-arm64, darwin-amd64, darwin-arm64, windows-amd64.
-          # windows-arm64 is unsupported (no ARM64 Windows cross-toolchain on windows-latest).
-          contracted = {
-              ('linux', 'amd64'), ('linux', 'arm64'),
-              ('darwin', 'amd64'), ('darwin', 'arm64'),
-              ('windows', 'amd64'),
-          }
-
-          flat_dist = Path('flat-dist')
-          found = set()
-
-          for f in flat_dist.glob('cadre-v*.*'):
-              # Extract goos-goarch from filename cadre-vX.Y.Z-goos-goarch.tar.gz or .zip
-              match = re.search(r'cadre-v[\d.]+-([a-z]+)-([a-z0-9]+)\.(?:tar\.gz|zip)', f.name)
-              if match:
-                  goos, goarch = match.group(1), match.group(2)
-                  found.add((goos, goarch))
-
-          missing = contracted - found
-          if missing:
-              print(f'ERROR: Missing archives for platforms {missing}', file=sys.stderr)
-              sys.exit(1)
-
-          print(f'✓ All {len(contracted)} contracted platforms present')
-          VERIFY
+          version="${{ steps.version.outputs.value }}"
+          go run ./cmd/cadre release-assets --program cadre --version "$version" > expected-assets.txt
+          # An empty list would make every check below vacuously true: zero
+          # assets expected, zero missing, "all 0 present", exit 0. That is the
+          # shape of a guard that passes while asserting nothing.
+          [ -s expected-assets.txt ] || { echo "ERROR: the platform contract produced no assets" >&2; exit 1; }
+          missing=""
+          count=0
+          # Read from a file, not a pipe: `while read` in a pipeline runs in a
+          # subshell and $missing would be empty again by the time it is tested.
+          while read -r asset; do
+            count=$((count + 1))
+            [ -f "flat-dist/$asset" ] || missing="$missing $asset"
+          done < expected-assets.txt
+          if [ -n "$missing" ]; then
+            echo "ERROR: missing contracted archives:$missing" >&2
+            echo "present:" >&2
+            ls -1 flat-dist >&2
+            exit 1
+          fi
+          echo "all $count contracted platforms present"
 
       # Phase 2 of PYTHON_ELIMINATION_PLAN.md: `pip install cadre` ships the
       # binary, not Python. One wheel per platform, each carrying the *same*
@@ -583,7 +578,6 @@ jobs:
           done <<'PLATFORMS'
           linux amd64 manylinux_2_17_x86_64 
           linux arm64 manylinux_2_17_aarch64 
-          darwin amd64 macosx_10_12_x86_64 
           darwin arm64 macosx_11_0_arm64 
           windows amd64 win_amd64 .exe
           PLATFORMS
@@ -772,19 +766,23 @@ jobs:
         if: steps.tag.outputs.skip == 'false'
         run: |
           set -eu
-          # The build loop above and internal/release's SupportedPlatforms are
-          # two lists. This is what stops a release shipping fewer assets than
-          # the contract promises.
+          # The build loop above and internal/release's contract are two
+          # lists. This is what stops a release shipping fewer assets than the
+          # contract promises. The expected names come from the contract
+          # itself rather than being retyped: the kernel publishes all five
+          # platforms, the CLI four, and a list written here would drift from
+          # whichever one it was not copied from.
           version="${{ steps.version.outputs.value }}"
+          go run ./cmd/cadre release-assets --program agentic-sdlc --version "$version" > expected-assets.txt
+          [ -s expected-assets.txt ] || { echo "the platform contract produced no assets" >&2; exit 1; }
           missing=""
-          for target in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64; do
-            case "$target" in
-              windows-*) expected="flat-dist/agentic-sdlc-v$version-$target.zip" ;;
-              *)         expected="flat-dist/agentic-sdlc-v$version-$target.tar.gz" ;;
-            esac
-            [ -f "$expected" ] || missing="$missing $expected"
-          done
+          count=0
+          while read -r asset; do
+            count=$((count + 1))
+            [ -f "flat-dist/$asset" ] || missing="$missing $asset"
+          done < expected-assets.txt
           [ -z "$missing" ] || { echo "missing kernel assets:$missing" >&2; exit 1; }
+          echo "all $count contracted kernel platforms present"
           ls -la flat-dist
 
       - name: Checksum the artifacts

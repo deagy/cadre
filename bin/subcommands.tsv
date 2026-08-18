@@ -20,3 +20,4 @@ config	Show resolved operator settings, config file paths, or resolve one settin
 doctor	Report which cadre binary is running, what kind of install it is, and warn on a cwd/checkout mismatch
 role-fidelity	Measure whether role briefs survive a given model: context-budget analysis, or live probes
 upgrade	Check for Cadre updates and upgrade the CLI (--check, --force, --help)
+release-assets	List the archives a program publishes at a version, from the platform contract

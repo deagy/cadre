@@ -116,7 +116,6 @@ cross-build:
 	@mkdir -p dist
 	CGO_ENABLED=1 GOOS=linux   GOARCH=amd64 go build -o dist/cadre-linux-amd64         ./cmd/cadre
 	CGO_ENABLED=1 GOOS=linux   GOARCH=arm64 go build -o dist/cadre-linux-arm64         ./cmd/cadre
-	CGO_ENABLED=1 GOOS=darwin  GOARCH=amd64 go build -o dist/cadre-darwin-amd64        ./cmd/cadre
 	CGO_ENABLED=1 GOOS=darwin  GOARCH=arm64 go build -o dist/cadre-darwin-arm64        ./cmd/cadre
 	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o dist/cadre-windows-amd64.exe   ./cmd/cadre
 	CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -o dist/agentic-sdlc-linux-amd64       ./cmd/agentic-sdlc

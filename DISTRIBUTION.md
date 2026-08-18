@@ -36,10 +36,10 @@ the byte-exact-plan requirement, the permanent implementation for `select`.
 
 ### Rejected alternative: vendor per-platform binaries in the plugin package
 
-The current `cmd/cadre` binary is ~9.5 MB. Five supported platforms
-(`linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`,
-`windows/amd64` -- see "Platform support" below for why the matrix is five,
-not six) is ~48 MB committed into a repository a marketplace install `git
+The current `cmd/cadre` binary is ~9.5 MB. The four platforms the CLI
+publishes (`linux/amd64`, `linux/arm64`, `darwin/arm64`, `windows/amd64` --
+see "Platform support" below for why the matrix is neither five nor six) is
+~38 MB committed into a repository a marketplace install `git
 clone`s or pulls in full, on every release, forever -- `plugin/`'s generated
 content is already committed by design (see `plugin/CLAUDE.md`) precisely
 because the marketplace serves the repository tree rather than a downloaded
@@ -101,14 +101,23 @@ cadre-v<version>-<goos>-<goarch>.tar.gz   (all platforms except Windows)
 cadre-v<version>-<goos>-<goarch>.zip      (Windows)
 ```
 
-Rendered against the five supported platforms (placeholder version
+Rendered against the four platforms the CLI publishes (placeholder version
 `<version>`):
 
 - `cadre-v<version>-linux-amd64.tar.gz`
 - `cadre-v<version>-linux-arm64.tar.gz`
-- `cadre-v<version>-darwin-amd64.tar.gz`
 - `cadre-v<version>-darwin-arm64.tar.gz`
 - `cadre-v<version>-windows-amd64.zip`
+
+The kernel publishes five, including `agentic-sdlc-v<version>-darwin-amd64.tar.gz`:
+it does not link cgo and cross-compiles to every platform from one runner. The
+CLI does link cgo (the knowledge store's sqlite), so each platform needs a
+native host, and GitHub retired the free Intel macOS runner. `cadre
+release-assets --program <name> --version <x.y.z>` prints either list.
+
+**Intel macOS is not covered by `darwin/arm64`.** Rosetta translates x86_64
+for Apple Silicon, not the reverse, so an Intel Mac cannot run the arm64
+binary. Those users build from source: `go build ./cmd/cadre`.
 
 Each archive contains exactly one executable, named `cadre` (`cadre.exe` on
 Windows). `internal/release/platforms.go` is the single source of truth
@@ -138,8 +147,17 @@ target runner.
 **The human decision, made:** drop `windows/arm64` from the contract
 entirely rather than provision a dedicated ARM64 Windows runner. Five
 platforms -- `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`,
-`windows/amd64` -- is the contract now, recorded in
-`internal/release/platforms.go`. This is a decided exclusion, not a gap:
+`windows/amd64` -- is the repository contract, recorded in
+`internal/release/platforms.go`.
+
+**A second decision, made later:** the CLI publishes four of those five. It
+links the knowledge store's sqlite, so it needs `CGO_ENABLED=1` and a native
+host per platform, and GitHub retired `macos-13` -- the free Intel macOS
+runner. The surviving Intel labels are a dearer SKU, and the leg was dropped
+rather than paid for. The kernel is unaffected: it links no cgo and
+cross-compiles to all five from one Linux runner. Both sets live in
+`internal/release`, the exclusion carrying its reason, and
+`cadre release-assets --program <name>` prints either. This is a decided exclusion, not a gap:
 re-adding `windows/arm64` requires provisioning a real ARM64 Windows runner
 (or an equivalent cross toolchain capable of emitting ARM64 Windows PE
 objects with cgo) first, and that provisioning has not happened.
