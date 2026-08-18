@@ -68,21 +68,6 @@ var knownDivergentSections = map[divergentSection]string{
 		"which is why the extra clause is what diverges rather than the name.",
 }
 
-// bootstrapGeneratedCopies is a different case from the skills: the kernel
-// bootstrap has one hand-maintained source that generate-plugin fans out
-// verbatim, so the invariant is not "the copies agree" but "each copy still
-// equals its source" -- which also catches a hand-edit to a copy, the thing
-// the fan-out exists to make unnecessary.
-//
-// generate-plugin --check covers this by regenerating everything. This is here
-// because it is nearly free, names the specific file, and fails with a message
-// pointing at the source rather than a diff of hundreds of regenerated files.
-var bootstrapGeneratedCopies = []string{
-	"lifecycle/tools/bootstrap_sdlc.py",
-	"lifecycle-github/tools/bootstrap_sdlc.py",
-	"lifecycle-gitlab/tools/bootstrap_sdlc.py",
-}
-
 var (
 	duplicatedSkillFrontmatter = regexp.MustCompile(`(?s)\A---\n.*?\n---\n`)
 	duplicationNote            = regexp.MustCompile(`(?m)^> (?:Duplication|Packaged suite) note:.*$`)
@@ -290,31 +275,6 @@ func TestDuplicationNotesDoNotClaimUnenforcedChecks(t *testing.T) {
 					"enforces it. A note citing nothing is how the copies drifted "+
 					"the first time.", relative, enforcer)
 			}
-		}
-	}
-}
-
-func TestGeneratedBootstrapCopiesMatchTheirSource(t *testing.T) {
-	// Unlike the skills, bootstrap_sdlc.py carries no forge-specific content
-	// and is not hand-maintained per plugin -- it is generated from a single
-	// source, so any difference at all is drift.
-	sourcePath := filepath.Join(repositoryRoot(t), "plugin", "tools", "bootstrap_sdlc.py")
-	source, err := os.ReadFile(sourcePath)
-	if err != nil {
-		t.Fatalf("missing bootstrap source %s: %v", sourcePath, err)
-	}
-	for _, relative := range bootstrapGeneratedCopies {
-		path := filepath.Join(pluginsRoot(t), filepath.FromSlash(relative))
-		copied, err := os.ReadFile(path)
-		if err != nil {
-			t.Errorf("missing bootstrap copy %s: %v", relative, err)
-			continue
-		}
-		if string(copied) != string(source) {
-			t.Errorf("plugins/%s has drifted from its source bootstrap_sdlc.py. "+
-				"It is generated -- edit the source and re-run `cadre "+
-				"generate-plugin --output plugin` rather than editing the copy.",
-				relative)
 		}
 	}
 }

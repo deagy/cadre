@@ -331,7 +331,6 @@ func TestGeneratePluginPackage(t *testing.T) {
 		"plugins/lifecycle/skills/lifecycle-review/SKILL.md",
 		"plugins/lifecycle/tools/kernel-compatibility.json",
 		"plugins/lifecycle-github/bin/agentic-sdlc",
-		"plugins/lifecycle-gitlab/skills/cadre-install-kernel/SKILL.md",
 	}
 	for _, relative := range required {
 		if _, err := os.Stat(filepath.Join(output, filepath.FromSlash(relative))); err != nil {

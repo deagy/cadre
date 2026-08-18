@@ -414,39 +414,50 @@ func TestEveryReleaseVersionReadNamesAPathThatExists(t *testing.T) {
 	t.Logf("checked %d version-read path(s)", checked)
 }
 
-// A program's current version must not already be a tag.
+// A program's current version must not be claimed by a tag that predates the
+// program.
 //
-// kernel-publish, like cli-publish, skips when its tag exists -- that is what
-// stops a re-run from re-releasing. It also means a version that is *already*
-// tagged can never publish at all, silently, forever.
+// The publish job skips when its tag exists. That is correct and is what stops
+// a re-run re-releasing -- after a real release the current version IS tagged,
+// which is why this cannot simply forbid an existing tag. An earlier version
+// of this guard did, and started failing the moment the kernel's first real
+// release was published.
 //
-// That was live rather than hypothetical. Every kernel-v0.13.* tag was cut
-// from the Python kernel that #317 deleted, and the Go kernel declared 0.13.2,
-// so the publish job added moments earlier would have skipped every time. The
-// job was correct; the version it wanted was taken, by a different
-// implementation's bits.
-func TestNoPublishedProgramDeclaresAVersionThatIsAlreadyTagged(t *testing.T) {
+// The failure it exists for is narrower and was live: every kernel tag in the
+// 0.13 range was cut from the Python kernel that #317 deleted, so the Go kernel
+// declaring 0.13.2 meant its publish job would skip forever, against a tag
+// naming a different implementation's bits. Tag existence cannot tell those
+// apart; the tag's own tree can. A tag cut before the program existed does not
+// contain the program.
+func TestNoPublishedProgramsVersionIsClaimedByATagThatPredatesIt(t *testing.T) {
 	root := repositoryRoot(t)
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not available")
 	}
 	checked := 0
 	for _, program := range Programs {
-		prefix := TagPrefix[program]
 		version, ok := currentVersionOf(t, root, program)
 		if !ok {
 			continue
 		}
 		checked++
-		tag := prefix + version
-		command := exec.Command("git", "rev-parse", "--verify", "--quiet", "refs/tags/"+tag)
-		command.Dir = root
-		if err := command.Run(); err == nil {
-			t.Errorf("%s declares version %s, and %s already exists as a tag. The "+
-				"publish job skips an existing tag, so this version can never be "+
-				"released -- and the tag names whatever was built when it was cut, "+
-				"which may be a different implementation entirely.",
-				program, version, tag)
+		tag := TagPrefix[program] + version
+		exists := exec.Command("git", "rev-parse", "--verify", "--quiet", "refs/tags/"+tag)
+		exists.Dir = root
+		if err := exists.Run(); err != nil {
+			continue // not released yet, which is the ordinary pre-release state
+		}
+		// The tag exists. It is only a problem if it was cut from a tree that
+		// did not contain this program -- then it can never be re-cut, and it
+		// describes something else.
+		contains := exec.Command("git", "cat-file", "-e", tag+":cmd/"+program+"/main.go")
+		contains.Dir = root
+		if err := contains.Run(); err != nil {
+			t.Errorf("%s declares version %s, and %s already exists as a tag cut from a "+
+				"tree with no cmd/%s in it -- a different implementation's release. "+
+				"The publish job skips an existing tag, so this version can never be "+
+				"published. Bump past the occupied range.",
+				program, version, tag, program)
 		}
 	}
 	if checked == 0 {

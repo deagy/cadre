@@ -129,7 +129,7 @@ cat > .cline/memory/BEST_PRACTICES.md <<'CLINE_PRACTICES_EOF'
 3. Verify guards pass:
    ```bash
    go test ./internal/generators/
-   python3 -m unittest discover -b -s plugin/tools -p "test_*.py"
+   go test ./...
    ```
 
 ### Knowledge Store or Context Store Changes

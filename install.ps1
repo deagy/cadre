@@ -67,21 +67,9 @@ function Invoke-Step {
     & $Action
 }
 
-function Find-Python {
-    foreach ($candidate in @('python', 'python3', 'py')) {
-        $exe = Get-Command $candidate -ErrorAction SilentlyContinue
-        if (-not $exe) { continue }
-        $args = if ($candidate -eq 'py') { @('-3', '-c') } else { @('-c') }
-        & $exe.Source @args 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>$null
-        if ($LASTEXITCODE -eq 0) { return $exe.Source }
-    }
-    return $null
-}
-
 function Test-Prerequisites {
     $missing = @()
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) { $missing += 'git' }
-    if (-not (Find-Python)) { $missing += 'python 3.10+' }
     if ($missing.Count -gt 0) {
         throw "cadre-install: missing prerequisite(s): $($missing -join ', ')"
     }
@@ -213,11 +201,18 @@ function Install-Cline {
 }
 
 function Install-Kernel {
+    # Pre-warm the kernel the lifecycle shim resolves, by asking it its
+    # version. The shim downloads and verifies the release it was generated
+    # against and caches it, so this is the same path a first real call takes;
+    # doing it here surfaces a failure while the operator is still watching.
+    #
+    # This used to run bootstrap_sdlc.py, which created a venv and
+    # pip-installed the kernel. That kernel was Python and no longer exists in
+    # this repository; the shim fetches the Go one.
     Write-Step 'lifecycle kernel:'
-    $python = Find-Python
-    $script = Join-Path $Checkout 'plugin\tools\bootstrap_sdlc.py'
-    Invoke-Step "$python $script --skip-init" {
-        & $python $script --skip-init --data-dir (Join-Path $CacheDir 'kernel')
+    $shim = Join-Path $Checkout 'plugin\plugins\lifecycle\bin\agentic-sdlc'
+    Invoke-Step "$shim --version" {
+        & $shim --version
     }
 }
 

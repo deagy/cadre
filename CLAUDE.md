@@ -48,7 +48,6 @@ go test ./internal/generators/ -run TestNameHere -v
 # different kernel deliberately.
 go test ./internal/kernel/                                        # kernel
 cd engine && uv sync && uv run python -m pytest                   # LangGraph engine
-python3 -m unittest discover -b -s plugin/tools -p "test_*.py"    # workspace guard, its TS parity, kernel bootstrap
 
 # Regeneration after editing roster/, .agents/skills/, or AGENTS.md.
 # git add new files FIRST -- untracked files are silently skipped (see below)

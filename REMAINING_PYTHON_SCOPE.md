@@ -1,20 +1,12 @@
 # Remaining Python -> Go Scope
 
-**Status:** The porting backlog is empty. Every module this document once
-described as pending has shipped as native Go; `roster/` contains no Python at
-all, and `plugin/tools/` now holds nothing but the two scripts below and their
-tests. What remains outside `engine/` is 9,319 lines, all of it downstream of
-one distribution decision rather than of any porting work -- see "What actually
-remains" below.
-**Last verified:** 2026-08-17, against this branch, by porting the last
-`plugin/tools/` guard and re-reading how each remaining script is invoked
-(`plugin/hooks/hooks.json`, `plugin/plugins/lifecycle/bin/cadre-install-kernel`,
-and the regeneration sequence in `CLAUDE.md`). Re-verify against the tree
-before trusting a specific number here; these move.
-
-Do not read the git history of this file's earlier revisions as a reliable
-timeline — an earlier version of this document (dated the same day) claimed
-"no implementation started" for scope that had, in fact, already shipped.
+**Status:** **`engine/` is the only Python left in this repository.** Every
+other module, script, hook and guard is Go. `roster/`, `kernel/`, `cadre_cli/`,
+every `plugin/tools` guard, the workspace-mutation hook and the kernel
+bootstrap are gone; both installers are Python-free; no workflow runs an
+inline Python block.
+**Last verified:** 2026-08-18, by measuring the tree after retiring the last
+non-engine Python. Re-measure before trusting a number here; these move.
 
 ---
 
@@ -25,99 +17,44 @@ timeline — an earlier version of this document (dated the same day) claimed
 
 ## What actually remains
 
-One script, its packaged copies, and its test:
-
 | | lines |
 |---|---:|
-| `bootstrap_sdlc.py` x4 copies | 2,884 |
-| `test_bootstrap_sdlc.py` | 600 |
-| **total** | **3,484** |
+| `engine/` production | 5,995 |
+| `engine/` tests | 5,933 |
+| **total** | **11,928** |
+| **everything else** | **0** |
 
-`engine/` is a separate question and is not counted here: it is a LangGraph
-runtime, and reimplementing the graph engine is Phase 6 of the sequencing
-plan, not a port.
+`engine/` is a LangGraph orchestration runtime. Porting it is a
+reimplementation rather than a translation, it has no callers in code, and
+Phase 6 of the sequencing plan scopes it in detail -- including the finding
+that decides whether to do it at all.
 
-### The workspace guard is a binary now, not a hook script
+## How the last two came out, since neither was a port
 
-It used to be listed here as structural, on the reasoning that a `PreToolUse`
-hook has to run on an installer's machine with no setup while the packaged
-`bin/cadre` is a *downloader*, so porting it would make a safety hook depend on
-a network fetch. That reasoning was sound about the download and wrong about
-the conclusion: the answer was to stop downloading, not to stay in Python.
+Both were listed here for years as "Python for a structural reason". Both
+reasons were true about the constraint and wrong about the conclusion.
 
-`cmd/cadre-guard` ships compiled, one binary per platform, committed under
-`hooks/bin/` and copied into the plugin by `generate-plugin`. There is no
-network path in it at all. `hooks/guard` is a POSIX `sh` selector that picks
-the right binary -- including under Git Bash on Windows, which is the only way
-the windows build is reachable.
+**The workspace-mutation guard** was a `PreToolUse` hook, and the packaged
+`bin/cadre` is a downloader, so porting it looked like making a safety hook
+depend on a network fetch. It fails OPEN, so a failed fetch would remove the
+protection silently. The answer was to stop downloading: it ships compiled,
+one committed binary per platform under `hooks/bin/`, selected by a POSIX `sh`
+script with no network path at all. 13MB per release, measured before
+deciding.
 
-The cost is real and was measured before deciding: 2.5-2.7MB per platform,
-**13MB per release**, and binaries do not delta-compress, so the repository
-grows by that much every time one ships.
+**The kernel bootstrap** created a venv and `pip install`ed the kernel. That
+kernel was Python and this repository deleted it in #317 -- the install kept
+succeeding only because a `kernel-v` tag is a snapshot, so an installed plugin
+quietly ran a kernel that no longer exists here. Porting the bootstrap would
+have preserved that faithfully. Instead the Go kernel was made publishable
+(#410-#414, four independently broken links) and each lifecycle plugin's
+`bin/agentic-sdlc` shim now fetches it from its own checksum-verified release,
+pinned at generation time.
 
-The guard **fails open by design**, which is what made the download
-unacceptable: a binary that could not be fetched would remove the protection
-silently, on an offline machine or a first run, with nothing to report it.
-Shipping it removes that failure mode rather than trading it for a smaller
-repository.
-
-Staleness is the hazard this buys instead -- a committed binary is a copy of
-source that can drift. `internal/generators/guard_binaries_test.go` checks it
-by BEHAVIOUR rather than by bytes, because `go build` is only reproducible
-when the toolchain matches and a drift guard that fires when there is no drift
-gets ignored.
-
-### `bootstrap_sdlc.py` should probably be deleted, not ported
-
-**`bootstrap_sdlc.py`** (721 lines, plus three packaged copies, plus a
-600-line test). Invoked by `plugin/plugins/lifecycle/bin/cadre-install-kernel`
-through `$AGENT_PYTHON`, and by `install.sh`.
-
-Its job is to create a Python venv and `pip install` the Agentic SDLC kernel,
-so an installed lifecycle plugin has a kernel to shell out to. Porting it to
-Go was the obvious next step after the workspace guard. Reading it first says
-otherwise.
-
-**The kernel it installs no longer exists here.** `kernel/` contains zero
-Python files -- 22 of them were deleted in `c58024f6`, "chore(kernel): delete
-the Python kernel" (#317). What ships now is `cmd/agentic-sdlc`, a Go binary,
-which `bin/agentic-sdlc` builds from source in a checkout.
-
-The bootstrap installs from `git+https://github.com/deagy/cadre.git@kernel-v<ref>#subdirectory=kernel`
-or a release wheel. The newest kernel tag still carries all 22 Python modules,
-because a tag is a snapshot. So the install still
-*works*, and installs the pre-#317 Python kernel.
-
-**Nothing publishes the Go kernel.** `release.yml` builds and attaches the
-`cadre` CLI per platform and does not build `cmd/agentic-sdlc` at all --
-`Makefile`'s `cross-build` says so in a comment, deliberately, because the Go
-kernel implemented one subcommand when that was written. It implements ~30 now.
-
-So an installed lifecycle plugin resolves its kernel in this order --
-`$AGENTIC_SDLC_BIN`, then the managed venv the bootstrap created, then `PATH`
--- and **none of those routes can reach the Go kernel**. The distributed
-plugin runs a kernel this repository deleted. Both report version 0.13.2, so
-the compatibility window (`>=0.13.2, <1.0.0`) is satisfied by either and
-nothing detects the difference.
-
-Porting the bootstrap faithfully would preserve that. The Python is not the
-problem; what it installs is.
-
-**The likely right shape**, by analogy with the workspace guard: ship the Go
-kernel binary with the plugin instead of installing a kernel at all, which
-deletes 3,484 lines rather than translating them and closes the divergence.
-Measured: 4.4-4.9MB per platform, ~23MB for the five-platform set.
-
-Fanning that into all three lifecycle plugins the way `bootstrap_sdlc.py` is
-fanned out would be ~70MB per release, which is a much worse trade than the
-guard's 13MB. But the three lifecycle plugins already declare a hard
-dependency on the `cadre` plugin (`dependencies: ["cadre"]`, enforced by
-`TestLifecyclePluginsDeclareTheirDependencyInArrayForm`), so the binary can
-live once in `cadre` and be resolved from there -- ~23MB, once.
-
-That is a change to how the kernel is distributed, not a port, and it should
-be decided rather than assumed. Recorded here so the next person does not
-start by translating the script.
+The two took opposite answers to the same question, and the difference is the
+failure mode. A guard that cannot be fetched fails open and silent, so it is
+shipped. A kernel that cannot be fetched fails loud at the point of use, so it
+is downloaded -- and 23MB per platform buys nothing.
 
 ### Everything portable is ported
 

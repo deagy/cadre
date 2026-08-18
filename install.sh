@@ -85,21 +85,9 @@ done
 # already having modified a runner's plugin store, is the outcome worth
 # avoiding.
 
-find_python() {
-  for candidate in python3 python; do
-    if command -v "$candidate" >/dev/null 2>&1 &&
-       "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
-      printf '%s' "$candidate"
-      return 0
-    fi
-  done
-  return 1
-}
-
 preflight() {
   missing=""
   command -v git >/dev/null 2>&1 || missing="$missing git"
-  find_python >/dev/null 2>&1 || missing="$missing python3.10+"
   [ -z "$missing" ] || die "missing prerequisite(s):$missing"
 
   case "$(uname -s 2>/dev/null || echo unknown)" in
@@ -240,10 +228,17 @@ install_cline() {
 }
 
 install_kernel() {
+  # Pre-warm the kernel the lifecycle shim resolves, by asking it its version.
+  # The shim downloads and verifies the release it was generated against and
+  # caches it, so this is the same code path a first real call would take --
+  # doing it here just moves the wait to install time and surfaces a failure
+  # while the operator is still watching.
+  #
+  # This used to run bootstrap_sdlc.py, which created a venv and pip-installed
+  # the kernel. That kernel was Python and no longer exists in this
+  # repository; the shim fetches the Go one.
   say "lifecycle kernel:"
-  python_bin="$(find_python)"
-  run "$python_bin" "$CHECKOUT/plugin/tools/bootstrap_sdlc.py" \
-      --skip-init --data-dir "$CACHE_DIR/kernel"
+  run "$CHECKOUT/plugin/plugins/lifecycle/bin/agentic-sdlc" --version
 }
 
 # --- uninstall ---------------------------------------------------------
