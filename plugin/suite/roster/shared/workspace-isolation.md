@@ -177,8 +177,9 @@ section. If a leftover inspection worktree is untidy, say so in your result
 and let the operator remove it.
 
 On Claude Code and Cline this rule is also enforced structurally, not by
-prompt text alone: a guard (`.claude/hooks/guard_workspace_mutation.py` for
-Claude Code, the equivalent in the Cline agents plugin) refuses `git
+prompt text alone: a guard (`hooks/guard` for
+Claude Code, a compiled binary shipped per platform; the equivalent in the
+Cline agents plugin) refuses `git
 worktree remove` and `git worktree move` outright, refuses `git worktree
 prune` whenever its own dry run shows a registration would actually be
 removed, and refuses `git gc` when gc's own worktree pruning would

@@ -1,0 +1,45 @@
+#!/bin/sh
+# PreToolUse selector for the workspace-mutation guard.
+#
+# The guard is a compiled binary, one per platform, shipped in the plugin
+# rather than downloaded. That is deliberate and it is the whole reason this
+# script exists: the guard FAILS OPEN by design, so a binary that could not be
+# fetched would remove the protection silently, on a machine that is offline or
+# on its very first run. Nothing would report it -- the destructive command
+# would simply be allowed.
+#
+# So there is no network path here at all. If no binary matches this platform,
+# the guard says nothing, which is the same "no opinion" every other
+# unresolvable case produces.
+#
+# Platform detection mirrors the packaged bin/cadre shim's, including the
+# MINGW/MSYS/CYGWIN cases: this POSIX sh script is what runs on Windows under
+# Git Bash, and without them the windows-amd64 binary is unreachable.
+set -u
+
+HERE="$(dirname "$0")"
+
+case "$(uname -s 2>/dev/null || echo unknown)" in
+  Linux)  GOOS=linux ;;
+  Darwin) GOOS=darwin ;;
+  MINGW*|MSYS*|CYGWIN*) GOOS=windows ;;
+  *)      exit 0 ;;
+esac
+
+case "$(uname -m 2>/dev/null || echo unknown)" in
+  x86_64|amd64)  GOARCH=amd64 ;;
+  aarch64|arm64) GOARCH=arm64 ;;
+  *)             exit 0 ;;
+esac
+
+SUFFIX=""
+if [ "$GOOS" = "windows" ]; then
+  SUFFIX=".exe"
+fi
+
+BINARY="$HERE/bin/cadre-guard-$GOOS-$GOARCH$SUFFIX"
+if [ ! -x "$BINARY" ]; then
+  exit 0
+fi
+
+exec "$BINARY"
