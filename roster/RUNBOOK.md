@@ -84,7 +84,7 @@ Use `catalog.yaml` when an orchestrator needs a machine-readable role inventory.
 ./bin/cadre schema-validate
 ```
 
-Use `--catalog`/`--routing`/`--catalog-schema`/`--routing-schema` to point at alternate files (e.g. a fixture under test). Exits non-zero with findings on stderr when either file is schema-invalid; exits zero with a summary line on stdout when both are clean. Wired into `internal/orchestration/schema_validate_test.go` (part of the standard `unittest discover` invocation above) and into CI (`.github/workflows/validate.yml`'s `python-contracts` job).
+Use `--catalog`/`--routing`/`--catalog-schema`/`--routing-schema` to point at alternate files (e.g. a fixture under test). Exits non-zero with findings on stderr when either file is schema-invalid; exits zero with a summary line on stdout when both are clean. Wired into `internal/orchestration/schema_validate_test.go`, so it runs under `go test ./...` and in CI's `cmd/, internal/` job. There is no longer a `python-contracts` job, and the check is not part of any `unittest discover` run.
 
 `roster/runner-capabilities.json` (validated by `roster/runner-capabilities.schema.json`, both JSON Schema Draft 2020-12) is the single declarative source of truth for runner/capability/model-tier data that used to be hand-duplicated across `internal/generators/plugin_generation.go`'s `CAPABILITY_PROFILES`/`ALLOWED_MODELS`/`ALLOWED_CODEX_MODELS`/`ALLOWED_REASONING_EFFORTS`, `internal/generators/catalog_generation.go`'s `TIER_MAP`, and eight structural facts in `.agents/skills/run-agent-orchestration/references/runner-adapters.md`. It declares, per the 5 capability tiers, their `tools`/`sandbox_mode` grant; per the 3 model tiers, their `codex_model`/`reasoning_effort`/`cline_tier` mapping (`cline_tier` is the capability-neutral `high`/`mid`/`low` name a Cline preset carries, consumed by `internal/generators/cline_port.go`); and per runner (`claude-code`, `codex`, `cline`), whether a generated dispatch wrapper exists, `communication_mode: "peer"` support and gating, nested-team support, named-agent-dispatch support and its workaround, and any concurrency-bound config key. It is build-time-only: no dispatch-time or runtime code currently reads it (see `roster/orchestration/runs/cadre-idea-8-capability-manifest-2026-07-29/requirements.md`'s OD-2 disposition for the grounding).
 
@@ -882,8 +882,9 @@ written `plugin/` tree:
 ```
 
 Its guard is separate too: `internal/generators/cline_port_test.go` compares
-the committed mirror byte-for-byte against a fresh port, run by CI's
-`plugin-tools` job rather than `generated-content`. A change that stops after
+the committed mirror byte-for-byte against a fresh port. It is a Go test, so
+it runs in CI's `cmd/, internal/` job rather than `generated-content` -- and
+not in `plugin-tools`, which is where it lived while the porter was Python. A change that stops after
 `generate-plugin` leaves `cline-plugins/cline-agents/agents/<role>.md`
 diverged from its source and fails there.
 

@@ -48,7 +48,7 @@ go test ./internal/generators/ -run TestNameHere -v
 # different kernel deliberately.
 go test ./internal/kernel/                                        # kernel
 cd engine && uv sync && uv run python -m pytest                   # LangGraph engine
-python3 -m unittest discover -b -s plugin/tools -p "test_*.py"    # packaging + docs guards
+python3 -m unittest discover -b -s plugin/tools -p "test_*.py"    # workspace guard, its TS parity, kernel bootstrap
 
 # Regeneration after editing roster/, .agents/skills/, or AGENTS.md.
 # git add new files FIRST -- untracked files are silently skipped (see below)
@@ -57,9 +57,12 @@ python3 -m unittest discover -b -s plugin/tools -p "test_*.py"    # packaging + 
 ./bin/cadre generate-plugin --output plugin        # the committed distribution under plugin/
 ./bin/cadre port-cline-agents --root cline-plugins --source plugin   # the Cline mirror
 
-# ...then re-run both guards — they fail the build on drift
+# ...then re-run the guards — they fail the build on drift.
+# The Cline mirror's byte-for-byte guard is a Go test too, so `./...` rather
+# than just the generators package. plugin/tools is deliberately absent: it
+# covers the workspace hook and the kernel bootstrap, not regeneration.
 go test ./internal/generators/
-python3 -m unittest discover -b -s plugin/tools -p "test_*.py"
+go test ./...
 
 # Scratch build of the distribution to inspect without touching committed
 # output (this path is gitignored; `--output plugin` above is the real one)
