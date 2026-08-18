@@ -18,12 +18,23 @@ build:
 	go build -o dist/cadre ./cmd/cadre
 	go build -o dist/agentic-sdlc ./cmd/agentic-sdlc
 
-# agentic-sdlc is deliberately absent from cross-build and the release
-# workflow. It implements one subcommand so far (show-contract); publishing a
-# kernel binary that answers a tenth of the CLI would be worse than publishing
-# none, because a consumer who installed it would find the gap at the point of
-# use rather than at the point of install. It joins the release matrix when
-# the port is complete -- see PYTHON_ELIMINATION_PLAN.md's Phase 5.
+# agentic-sdlc is built here too. It used to be deliberately absent, on the
+# reasoning that it "implements one subcommand so far (show-contract)" and
+# publishing a kernel answering a tenth of the CLI would be worse than
+# publishing none. That comment named its own expiry -- "it joins the release
+# matrix when the port is complete" -- and the port is: the Go kernel
+# dispatches about thirty subcommands and Phase 5 is marked complete.
+#
+# Leaving it unpublished had a consequence beyond tidiness. An installed
+# lifecycle plugin can only reach a kernel through $AGENTIC_SDLC_BIN, a venv
+# bootstrap_sdlc.py created, or PATH -- so with no published Go binary it
+# installs the pre-#317 *Python* kernel from an old tag, which is a kernel
+# this repository deleted. See REMAINING_PYTHON_SCOPE.md.
+#
+# Separately archived rather than added to the CLI's archive: the kernel is
+# separately versioned (kernel.Version, what providers declare compatibility
+# against), and one archive carrying both would force the two version lines
+# back together.
 
 # Race requires cgo; CI and local dev are expected to have a C toolchain
 # available. If not, fall back to `go test ./...` (no -race) rather than
@@ -108,6 +119,11 @@ cross-build:
 	CGO_ENABLED=1 GOOS=darwin  GOARCH=amd64 go build -o dist/cadre-darwin-amd64        ./cmd/cadre
 	CGO_ENABLED=1 GOOS=darwin  GOARCH=arm64 go build -o dist/cadre-darwin-arm64        ./cmd/cadre
 	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o dist/cadre-windows-amd64.exe   ./cmd/cadre
+	CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -o dist/agentic-sdlc-linux-amd64       ./cmd/agentic-sdlc
+	CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -o dist/agentic-sdlc-linux-arm64       ./cmd/agentic-sdlc
+	CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -o dist/agentic-sdlc-darwin-amd64      ./cmd/agentic-sdlc
+	CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -o dist/agentic-sdlc-darwin-arm64      ./cmd/agentic-sdlc
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o dist/agentic-sdlc-windows-amd64.exe ./cmd/agentic-sdlc
 
 # --- pip/pipx distribution -------------------------------------------------
 #

@@ -52,15 +52,35 @@ func ArchiveExtension(goos string) string {
 	return "tar.gz"
 }
 
-// ExecutableName is the single executable each archive contains.
+// ExecutableName is the single executable the CLI's archive contains.
 func ExecutableName(goos string) string {
-	if goos == "windows" {
-		return "cadre.exe"
-	}
-	return "cadre"
+	return ExecutableNameFor(ProgramCLI, goos)
 }
 
-// ArchiveName renders the published asset name for a platform.
-func ArchiveName(goos, goarch, version string) string {
-	return fmt.Sprintf("cadre-v%s-%s-%s.%s", version, goos, goarch, ArchiveExtension(goos))
+// Programs are the binaries this repository publishes per platform.
+//
+// The kernel is a separate program, not a second executable inside the CLI's
+// archive, because it is separately versioned: providers declare a
+// kernel_compatibility window against kernel.Version, which moves
+// independently of the CLI's own version. One archive carrying both would
+// force the two version lines back together.
+const (
+	ProgramCLI    = "cadre"
+	ProgramKernel = "agentic-sdlc"
+)
+
+// Programs is every published program, in the order a release builds them.
+var Programs = []string{ProgramCLI, ProgramKernel}
+
+// ArchiveName renders the published asset name for a program on a platform.
+func ArchiveName(program, goos, goarch, version string) string {
+	return fmt.Sprintf("%s-v%s-%s-%s.%s", program, version, goos, goarch, ArchiveExtension(goos))
+}
+
+// ExecutableNameFor is the single executable a program's archive contains.
+func ExecutableNameFor(program, goos string) string {
+	if goos == "windows" {
+		return program + ".exe"
+	}
+	return program
 }
