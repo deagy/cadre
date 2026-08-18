@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -328,4 +329,72 @@ func SearchIssuesByLabels(projectPath string, labels []string) ([]any, error) {
 		return nil, fmt.Errorf("GitLab issue search response must be a JSON array: %w", err)
 	}
 	return results, nil
+}
+
+// CreateIssue creates an issue and returns its iid.
+//
+// The request body is written to a 0600 file inside a private temp directory
+// and passed with --input, never as an argv string. Titles and descriptions
+// can carry sensitive content, and argv is readable by any process on the host
+// through /proc; a temp file is not. The file is removed whatever happens.
+func CreateIssue(projectPath, title, description string, labels []string) (int, error) {
+	key := strings.Join(labels, ",")
+
+	mock, err := loadMockObject(CreateMockEnvVar)
+	if err != nil {
+		return 0, err
+	}
+	if mock != nil {
+		creates, _ := mock["create"].(map[string]any)
+		entry, present := creates[key]
+		created, isObject := entry.(map[string]any)
+		if !present || !isObject {
+			return 0, fmt.Errorf("mocked create response for labels %q must be a JSON object", key)
+		}
+		iid, _ := created["iid"].(float64)
+		if iid == 0 {
+			return 0, fmt.Errorf("mocked create response for labels %q has no iid", key)
+		}
+		return int(iid), nil
+	}
+
+	body, err := json.Marshal(map[string]any{
+		"title": title, "description": description, "labels": labels,
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	workingDir, err := os.MkdirTemp("", "agentic-sdlc-glab-create-")
+	if err != nil {
+		return 0, err
+	}
+	defer os.RemoveAll(workingDir)
+
+	bodyPath := filepath.Join(workingDir, "issue-body.json")
+	if err := os.WriteFile(bodyPath, body, 0o600); err != nil {
+		return 0, err
+	}
+
+	stdout, stderr, code, err := runGlab([]string{
+		"glab", "api", fmt.Sprintf("projects/%s/issues", percentEncode(projectPath)),
+		"--method", "POST", "--input", bodyPath,
+	}, nil)
+	if err != nil {
+		return 0, err
+	}
+	if code != 0 {
+		return 0, fmt.Errorf("unable to create a GitLab issue in %s: %s", projectPath, glabFailure(stderr))
+	}
+
+	var created struct {
+		IID int `json:"iid"`
+	}
+	if err := json.Unmarshal(stdout, &created); err != nil {
+		return 0, fmt.Errorf("GitLab issue create response is not valid JSON: %w", err)
+	}
+	if created.IID == 0 {
+		return 0, fmt.Errorf("GitLab issue create response carries no iid")
+	}
+	return created.IID, nil
 }
