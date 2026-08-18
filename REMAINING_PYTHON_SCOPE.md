@@ -67,18 +67,57 @@ by BEHAVIOUR rather than by bytes, because `go build` is only reproducible
 when the toolchain matches and a drift guard that fires when there is no drift
 gets ignored.
 
-### `bootstrap_sdlc.py` is the last one, and stays for now
+### `bootstrap_sdlc.py` should probably be deleted, not ported
 
-**`bootstrap_sdlc.py`** (721 lines, plus three packaged copies). Invoked by
-`plugin/plugins/lifecycle/bin/cadre-install-kernel` through `$AGENT_PYTHON`.
-Its job is installing the kernel, so it runs *before* a working cadre
-installation is a given -- the bootstrap paradox the guard no longer has,
-since the guard now ships with the plugin rather than being fetched by it.
+**`bootstrap_sdlc.py`** (721 lines, plus three packaged copies, plus a
+600-line test). Invoked by `plugin/plugins/lifecycle/bin/cadre-install-kernel`
+through `$AGENT_PYTHON`, and by `install.sh`.
 
-The same answer is available here: ship it compiled. It is not done in the
-same change because the installer path is different -- `install.sh` resolves
-an interpreter and runs this script, so retiring it means changing what the
-installer executes, which is a separate blast radius from a plugin hook.
+Its job is to create a Python venv and `pip install` the Agentic SDLC kernel,
+so an installed lifecycle plugin has a kernel to shell out to. Porting it to
+Go was the obvious next step after the workspace guard. Reading it first says
+otherwise.
+
+**The kernel it installs no longer exists here.** `kernel/` contains zero
+Python files -- 22 of them were deleted in `c58024f6`, "chore(kernel): delete
+the Python kernel" (#317). What ships now is `cmd/agentic-sdlc`, a Go binary,
+which `bin/agentic-sdlc` builds from source in a checkout.
+
+The bootstrap installs from `git+https://github.com/deagy/cadre.git@kernel-v<ref>#subdirectory=kernel`
+or a release wheel. The newest kernel tag still carries all 22 Python modules,
+because a tag is a snapshot. So the install still
+*works*, and installs the pre-#317 Python kernel.
+
+**Nothing publishes the Go kernel.** `release.yml` builds and attaches the
+`cadre` CLI per platform and does not build `cmd/agentic-sdlc` at all --
+`Makefile`'s `cross-build` says so in a comment, deliberately, because the Go
+kernel implemented one subcommand when that was written. It implements ~30 now.
+
+So an installed lifecycle plugin resolves its kernel in this order --
+`$AGENTIC_SDLC_BIN`, then the managed venv the bootstrap created, then `PATH`
+-- and **none of those routes can reach the Go kernel**. The distributed
+plugin runs a kernel this repository deleted. Both report version 0.13.2, so
+the compatibility window (`>=0.13.2, <1.0.0`) is satisfied by either and
+nothing detects the difference.
+
+Porting the bootstrap faithfully would preserve that. The Python is not the
+problem; what it installs is.
+
+**The likely right shape**, by analogy with the workspace guard: ship the Go
+kernel binary with the plugin instead of installing a kernel at all, which
+deletes 3,484 lines rather than translating them and closes the divergence.
+Measured: 4.4-4.9MB per platform, ~23MB for the five-platform set.
+
+Fanning that into all three lifecycle plugins the way `bootstrap_sdlc.py` is
+fanned out would be ~70MB per release, which is a much worse trade than the
+guard's 13MB. But the three lifecycle plugins already declare a hard
+dependency on the `cadre` plugin (`dependencies: ["cadre"]`, enforced by
+`TestLifecyclePluginsDeclareTheirDependencyInArrayForm`), so the binary can
+live once in `cadre` and be resolved from there -- ~23MB, once.
+
+That is a change to how the kernel is distributed, not a port, and it should
+be decided rather than assumed. Recorded here so the next person does not
+start by translating the script.
 
 ### Everything portable is ported
 
