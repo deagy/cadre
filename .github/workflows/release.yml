@@ -609,7 +609,14 @@ jobs:
             fi
             echo "$(basename "$wheel"): 0 python, binary present, $roles roles"
           done
-          test "$count" -eq 5 || { echo "expected 5 wheels, found $count" >&2; exit 1; }
+          # One wheel per platform the CLI publishes, counted from the contract
+          # rather than written here. This said 5. Dropping the darwin/amd64 leg
+          # made it 4, and nothing connected the two, so the release failed at
+          # the last job -- after every build had succeeded -- on a number.
+          expected=$(go run ./cmd/cadre release-assets --program cadre --version "${{ steps.version.outputs.value }}" | wc -l)
+          [ "$expected" -gt 0 ] || { echo "the platform contract produced no assets" >&2; exit 1; }
+          test "$count" -eq "$expected" || { echo "expected $expected wheels, found $count" >&2; exit 1; }
+          echo "$count wheels, one per contracted platform"
 
       - name: Install syft
         if: steps.tag.outputs.skip == 'false'
