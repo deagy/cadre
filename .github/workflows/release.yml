@@ -40,6 +40,7 @@ name: Release
 # needless run is cheap; a release that quietly does not happen is not.
 on:
   push:
+    timeout-minutes: 30
     branches: [main]
     paths:
       - "plugin/.claude-plugin/plugin.json"
@@ -64,6 +65,7 @@ permissions:
 jobs:
   changed:
     name: Detect which versions changed
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -101,6 +103,7 @@ jobs:
 
   plugin:
     name: Release the plugin distribution
+    timeout-minutes: 30
     needs: changed
     if: needs.changed.outputs.plugin == 'true'
     runs-on: ubuntu-latest
@@ -285,6 +288,7 @@ jobs:
 
   cli:
     name: Release the Cadre CLI (Go binaries)
+    timeout-minutes: 30
     needs: changed
     if: needs.changed.outputs.cli == 'true'
     runs-on: ${{ matrix.os }}
@@ -315,8 +319,15 @@ jobs:
             goarch: arm64
             cc: clang
             platform-tag: macosx_11_0_arm64
-          # macOS AMD64: native on macos-13 (Intel x86_64)
-          - os: macos-13
+          # macOS AMD64: native Intel x86_64.
+          #
+          # Was macos-13, which GitHub has retired: the label no longer
+          # resolves to any runner, so the leg queued with no runner ever
+          # assigned while every other leg finished. Nothing failed -- it
+          # simply never started -- and with no timeout on this job that
+          # stalls the release for hours. actions/runner-images now
+          # publishes Intel as macos-15-intel and macos-26-intel.
+          - os: macos-15-intel
             goos: darwin
             goarch: amd64
             cc: clang
@@ -439,6 +450,7 @@ jobs:
 
   cli-publish:
     name: Publish Cadre CLI release
+    timeout-minutes: 30
     needs: [changed, cli]
     if: needs.changed.outputs.cli == 'true'
     runs-on: ubuntu-latest
@@ -696,6 +708,7 @@ jobs:
   # become a matrix.
   kernel-publish:
     name: Publish Agentic SDLC kernel release
+    timeout-minutes: 30
     needs: changed
     if: needs.changed.outputs.kernel == 'true'
     runs-on: ubuntu-latest
