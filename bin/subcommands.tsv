@@ -6,6 +6,8 @@ generate-authority-aides	Regenerate roster/authority/*-aide AGENT.md files
 port-cline-agents	Render the packaged plugin's agents and skills into the Cline preset/skill formats
 plugin-version	Read, check, or set the release version shared by all eight plugin manifests
 changelog-entry	Print one version's release notes from the packaged CHANGELOG.md
+changed-components	Report which releasable components had their version bumped
+sbom-check	Refuse an SBOM that inventoried the wrong thing
 generate-role-metadata	Regenerate roster/catalog.yaml and routing.json knowledge_focus from role metadata
 bootstrap-codex	Safely install namespaced Codex role wrappers
 resolve-shared	Resolve effective shared config for the current project

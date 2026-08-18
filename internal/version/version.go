@@ -106,3 +106,21 @@ func findVersionSubmatches(re *regexp.Regexp, contents []byte) *string {
 	}
 	return nil
 }
+
+// ParseMarker reads a version out of a marker file's contents.
+//
+// Exported so the release gate compares versions the same way `cadre
+// --version` reads them. Two independent parsers is how a marker's format and
+// its reader drift apart, and the release gate only fails when a release
+// silently does not happen -- which nobody notices until they go looking for
+// the artifact.
+//
+// Reports false when nothing in the contents looks like a version, which is
+// distinct from an absent file: a marker that exists but cannot be read is a
+// problem to report, not a version that did not change.
+func ParseMarker(contents []byte) (string, bool) {
+	if value := findVersionSubmatches(versionAssignment, contents); value != nil {
+		return *value, true
+	}
+	return "", false
+}

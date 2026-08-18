@@ -87,6 +87,8 @@ func Usage(subcommands []Subcommand) string {
 		{Name: "port-cline-agents", Description: "Render the packaged plugin's agents and skills into the Cline preset/skill formats"},
 		{Name: "plugin-version", Description: "Read, check, or set the release version shared by all eight plugin manifests"},
 		{Name: "changelog-entry", Description: "Print one version's release notes from the packaged CHANGELOG.md"},
+		{Name: "changed-components", Description: "Report which releasable components had their version bumped"},
+		{Name: "sbom-check", Description: "Refuse an SBOM that inventoried the wrong thing"},
 		{Name: "upgrade", Description: "Check for Cadre updates and upgrade the CLI (--check, --force, --help)"},
 		{Name: "mcp-dispatch-server", Description: "Run the MCP dispatch server (stdio)"},
 		{Name: "mcp-gitlab-server", Description: "Run the GitLab evidence MCP server (stdio; three create-only tools)"},
@@ -221,6 +223,12 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 	}
 	if command == "changelog-entry" {
 		return ChangelogEntryCmd(rest)
+	}
+	if command == "changed-components" {
+		return ChangedComponentsCmd(rest)
+	}
+	if command == "sbom-check" {
+		return SBOMCheckCmd(rest)
 	}
 	if command == "generate-role-metadata" {
 		return GenerateRoleMetadata(rest)
