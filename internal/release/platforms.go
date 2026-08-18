@@ -72,6 +72,17 @@ const (
 // Programs is every published program, in the order a release builds them.
 var Programs = []string{ProgramCLI, ProgramKernel}
 
+// TagPrefix is the release-tag namespace each program publishes under.
+//
+// The names differ from the binaries deliberately and cannot be derived from
+// them: the CLI publishes under cli-v while the packaged plugin publishes
+// under plugin-v, and both come out of the same repository. Recorded here so
+// the workflow and the guards read one list rather than two.
+var TagPrefix = map[string]string{
+	ProgramCLI:    "cli-v",
+	ProgramKernel: "kernel-v",
+}
+
 // ArchiveName renders the published asset name for a program on a platform.
 func ArchiveName(program, goos, goarch, version string) string {
 	return fmt.Sprintf("%s-v%s-%s-%s.%s", program, version, goos, goarch, ArchiveExtension(goos))
