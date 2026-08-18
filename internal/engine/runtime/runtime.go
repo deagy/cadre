@@ -412,3 +412,98 @@ func orEmpty(values []string) []string {
 	}
 	return values
 }
+
+// ResultPayload renders a run result as the small JSON shape both entry
+// points emit, so a CLI and a service describe the same run identically.
+func ResultPayload(result executor.Result) map[string]any {
+	if result.Suspended != nil {
+		return map[string]any{"status": "interrupted", "interrupt": result.Suspended.Payload}
+	}
+	return map[string]any{"status": "complete", "message": "no interrupt, run complete"}
+}
+
+// TaskRequest is a task to plan or reconnect to.
+type TaskRequest struct {
+	PlanRequest
+	Classification         string
+	IntentRecordID         string
+	RequirementsBaselineID string
+}
+
+// CreateOrReconnectTask plans a task, or reports that it is already planned.
+//
+// Reconnecting deliberately does not re-invoke: a planned task already has a
+// position, and running it again from the top would re-dispatch agents for
+// gates that were already decided.
+func CreateOrReconnectTask(request TaskRequest) (map[string]any, error) {
+	alreadyPlanned := TaskExists(request.Root, request.TaskID)
+
+	engine, metadata, err := ExecutorForTask(request.PlanRequest)
+	if err != nil {
+		return nil, err
+	}
+	if alreadyPlanned {
+		return map[string]any{
+			"status":        "already-planned",
+			"gate_sequence": metadata.GateSequenceIDs,
+		}, nil
+	}
+
+	result, err := engine.Start(request.TaskID, InitialState(
+		request.TaskID, request.TaskText, request.Classification,
+		request.IntentRecordID, request.RequirementsBaselineID))
+	if err != nil {
+		return nil, err
+	}
+	return ResultPayload(result), nil
+}
+
+// ResumeTask applies a human decision to a planned task.
+func ResumeTask(request PlanRequest, decision map[string]any) (map[string]any, error) {
+	engine, _, err := ExecutorForTask(request)
+	if err != nil {
+		return nil, err
+	}
+	result, err := engine.Resume(request.TaskID, decision)
+	if err != nil {
+		return nil, err
+	}
+	return ResultPayload(result), nil
+}
+
+// TaskStatus reports a planned task's current position without advancing it.
+//
+// Read-only on purpose: asking what a run is waiting for must never move it,
+// or a status check would dispatch agents.
+func TaskStatus(request PlanRequest) (map[string]any, error) {
+	engine, metadata, err := ExecutorForTask(request)
+	if err != nil {
+		return nil, err
+	}
+
+	checkpoint, found, err := engine.Checkpointer.Load(request.TaskID)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return map[string]any{
+			"status":        "planned",
+			"gate_sequence": metadata.GateSequenceIDs,
+			"message":       "planned but not yet started",
+		}, nil
+	}
+
+	payload := map[string]any{
+		"task_id":         request.TaskID,
+		"gate_sequence":   metadata.GateSequenceIDs,
+		"lifecycle_gates": checkpoint.State.LifecycleGates,
+		"run_halted":      checkpoint.State.RunHalted,
+	}
+	if checkpoint.Pending != nil {
+		payload["status"] = "interrupted"
+		payload["interrupt"] = checkpoint.Pending.Payload
+	} else {
+		payload["status"] = "complete"
+	}
+	return payload, nil
+}
