@@ -396,3 +396,115 @@ func TestUnassignedAuthoritiesAreRecordedAsUnknown(t *testing.T) {
 		t.Errorf("applicability = %q, want applicable when assigned", got)
 	}
 }
+
+// Re-entry actually re-dispatches, rather than flipping a status field.
+//
+// This is where the port earns its keep: the legacy CLI had no execution
+// engine, so its `reenter` only rewrote JSON. Here a re-entered gate must run
+// its agents again and stop at its own approval, or "re-entry" means nothing.
+func TestReenterRedispatchesTheGate(t *testing.T) {
+	executor := harness(t)
+
+	if _, err := executor.Start("task-1", state.SDLCState{Scope: "add a feature"}); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if _, err := executor.Resume("task-1", approvalDecision("product_owner")); err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+
+	loaded, _, _ := executor.Checkpointer.Load("task-1")
+	if loaded.State.LifecycleGates["G1"].Status != "approved" {
+		t.Fatal("G1 was not approved before re-entry")
+	}
+
+	record, err := executor.Reenter("task-1", "G1", "requirements changed", "alice")
+	if err != nil {
+		t.Fatalf("Reenter: %v", err)
+	}
+	if record.EarliestGate != "G1" || len(record.InvalidatedGateIDs) != 0 {
+		t.Errorf("record = %+v, want a reset entry naming G1 with no invalidated ids", record)
+	}
+
+	after, _, _ := executor.Checkpointer.Load("task-1")
+	g1 := after.State.LifecycleGates["G1"]
+	if g1.Status != "pending" {
+		t.Errorf("G1 status = %q after re-entry, want pending", g1.Status)
+	}
+	if len(g1.HumanApprovals) != 0 || len(g1.EvidenceRefs) != 0 || g1.DecidedAt != nil {
+		t.Error("re-entry left the previous decision's evidence in place")
+	}
+	for slot, output := range after.State.AgentOutputs {
+		if output["gate_id"] == "G1" {
+			t.Errorf("a stale agent output survived re-entry: %s", slot)
+		}
+	}
+
+	// The next advance must run G1's agents again and stop at its approval.
+	result, err := executor.Start("task-1", state.SDLCState{})
+	if err != nil {
+		t.Fatalf("Start after re-entry: %v", err)
+	}
+	if result.Done() || result.Suspended.GateID != "G1" {
+		t.Fatalf("after re-entry the run reached %+v, want G1's approval again", result.Suspended)
+	}
+	// Assert on what Reenter actually cleared. Preparers survive re-entry,
+	// so checking them proves nothing about whether agents ran again -- the
+	// old ones would still be there. The agent outputs were cleared, so
+	// their reappearance is the evidence that a dispatch happened.
+	redispatched := 0
+	for _, output := range result.State.AgentOutputs {
+		if output["gate_id"] == "G1" {
+			redispatched++
+		}
+	}
+	if redispatched == 0 {
+		t.Error("G1 suspended for approval without re-dispatching its agents")
+	}
+}
+
+// Invalidate records the claim without clearing the audit trail.
+func TestInvalidateKeepsTheStaleEvidenceVisible(t *testing.T) {
+	executor := harness(t)
+	if _, err := executor.Start("task-1", state.SDLCState{Scope: "add a feature"}); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if _, err := executor.Resume("task-1", approvalDecision("product_owner")); err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+
+	record, err := executor.Invalidate("task-1", "G1", "upstream change", "alice")
+	if err != nil {
+		t.Fatalf("Invalidate: %v", err)
+	}
+	if len(record.InvalidatedGateIDs) != 2 {
+		t.Errorf("invalidated %v, want G1 and everything after it", record.InvalidatedGateIDs)
+	}
+
+	after, _, _ := executor.Checkpointer.Load("task-1")
+	g1 := after.State.LifecycleGates["G1"]
+	if g1.Status != "invalidated" {
+		t.Errorf("G1 status = %q, want invalidated", g1.Status)
+	}
+	if g1.RequiredReentryGate == nil || *g1.RequiredReentryGate != "G1" {
+		t.Errorf("required_reentry_gate = %v, want G1", g1.RequiredReentryGate)
+	}
+	// The point of the split: invalidation states a claim, it does not erase
+	// what was believed when the gate was approved.
+	if len(g1.HumanApprovals) == 0 || len(g1.EvidenceRefs) == 0 {
+		t.Error("invalidation cleared the audit trail; only re-entry may")
+	}
+	if len(g1.InvalidationHistory) != 1 || len(after.State.ReEntryHistory) != 1 {
+		t.Error("the invalidation was not recorded on both the gate and the run")
+	}
+}
+
+// A gate outside the run's sequence cannot be re-entered.
+func TestReenteringAnUnknownGateIsRefused(t *testing.T) {
+	executor := harness(t)
+	if _, err := executor.Start("task-1", state.SDLCState{Scope: "add a feature"}); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if _, err := executor.Reenter("task-1", "G7", "x", "alice"); err == nil {
+		t.Error("re-entering a gate outside the sequence was accepted")
+	}
+}

@@ -152,7 +152,11 @@ func (e *Executor) advance(taskID string, current state.SDLCState) (Result, erro
 			continue
 		}
 
-		if !decided || existing.Status == "" {
+		// A gate needs dispatch until it has produced a decision. "" is a
+		// gate never reached; "pending" is one Reenter reset, whose agents
+		// must run again rather than the run suspending for an approval of
+		// work nobody redid.
+		if !decided || existing.Status == "" || existing.Status == "pending" {
 			dispatched, err := e.dispatchGate(current, gate)
 			if err != nil {
 				return Result{}, err
