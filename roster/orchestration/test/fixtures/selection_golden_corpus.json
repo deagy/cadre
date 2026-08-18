@@ -1008,10 +1008,10 @@
     },
     {
       "id": "PACKAGING-SUPPLY-CHAIN-DOUBLE-1",
-      "description": "#189 regression: plugin/tools/test_cline_git_plugin_packaging.py is the sole guard tying the root lockfile to cline-plugins/, so it must resolve to the supply-chain route by path alone even though the task text carries no supply-chain keyword (dependency/sbom/provenance/signing/etc. are all absent here) -- before the fix this returned an empty plan (needs-triage) purely because of task wording. It must simultaneously match the new packaging route (plugin/tools/** path, plus its own 'plugin packaging' keyword hit) -- deliberate double coverage per #189: packaging is the narrow owner, supply-chain is the fail-safe reviewer set for the sole SBOM-accuracy guard.",
+      "description": "#189 regression: internal/clinedeps is the sole guard tying the root lockfile to cline-plugins/, so it must resolve to the supply-chain route by path alone even though the task text carries no supply-chain keyword (dependency/sbom/provenance/signing are all absent here) -- before the fix this returned an empty plan (needs-triage) purely because of task wording. It lived at plugin/tools/test_cline_git_plugin_packaging.py until that guard was ported to Go; the path rule moved with it. packaging still matches, now on the task's own 'plugin packaging' wording rather than the plugin/tools/** glob, and backend/go-service-execution match because the guard is Go. The deliberate double coverage per #189 is unchanged: a narrow owner plus supply-chain as the fail-safe reviewer set.",
       "task": "Adjust the Cline git plugin packaging checker's tolerance",
       "changed_files": [
-        "plugin/tools/test_cline_git_plugin_packaging.py"
+        "internal/clinedeps/resolve.go"
       ],
       "classification": "internal",
       "task_id": "GOLDEN-PACKAGING-SUPPLY-CHAIN-DOUBLE-1",
@@ -1019,6 +1019,8 @@
       "expected": {
         "primary": [
           "application-engineer",
+          "backend-engineer",
+          "go-service-implementer",
           "debugging-engineer",
           "supply-chain-security-reviewer"
         ],
@@ -1031,18 +1033,20 @@
           "release-engineer"
         ],
         "matched_routes": [
+          "backend",
           "supply-chain",
-          "packaging"
+          "packaging",
+          "go-service-execution"
         ],
-        "workflow": "unclassified"
+        "workflow": "new-service"
       }
     },
     {
       "id": "PACKAGING-1",
       "description": "#189 fix: an ordinary plugin/tools/ file other than the lockfile-guard test must resolve to the packaging route only -- application-engineer/debugging-engineer with test-engineer/code-reviewer, not a security reviewer chain -- proving the fix does not broaden supply-chain's paths glob-wide.",
-      "task": "Tighten the plugin manifest health guard's field checks",
+      "task": "Tighten the workspace mutation guard's field checks",
       "changed_files": [
-        "plugin/tools/test_manifest_health.py"
+        "plugin/tools/test_guard_workspace_mutation.py"
       ],
       "classification": "internal",
       "task_id": "GOLDEN-PACKAGING-1",

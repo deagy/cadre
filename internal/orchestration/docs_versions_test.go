@@ -35,7 +35,13 @@ var (
 	pinnedCloneRef       = regexp.MustCompile(`clone\s+--branch\s+v[\d.]+`)
 	// Both spellings seen in practice: plain prose, and a backticked package
 	// reference followed by a release link.
-	kernelVersionProse = regexp.MustCompile(`(?:Agentic SDLC\s+v|` + "`agentic-sdlc`" + `\s*\[v)(\d+\.\d+)`)
+	//
+	// The patch level is captured, not stopped at major.minor. Capturing only
+	// the series makes v0.13.0 and v0.13.3 indistinguishable, and that is not
+	// hypothetical: bumping the window from 0.13.0 to 0.13.2 left two READMEs
+	// citing v0.13.0 -- with links to the archived repository's dead tag
+	// scheme -- and the guard read both as "0.13" and passed them.
+	kernelVersionProse = regexp.MustCompile(`(?:Agentic SDLC\s+v|` + "`agentic-sdlc`" + `\s*\[v)(\d+\.\d+(?:\.\d+)?)`)
 )
 
 const (
@@ -168,10 +174,19 @@ func TestQuotedKernelVersionsAgreeWithTheProviderManifest(t *testing.T) {
 	if len(parts) < 2 {
 		t.Fatalf("kernel_compatibility.minimum %q is not a version", minimum)
 	}
-	// The series, not the patch: prose reasonably says "v0.13" or "v0.13.3"
-	// for a 0.13.2 minimum, and pinning the patch would make every kernel
-	// patch release a documentation edit.
+	// Prose may state the series or a full version, and the two are held to
+	// different standards. "v0.13" is accepted for a 0.13.2 minimum, so a
+	// kernel patch release does not become a documentation edit. But a stated
+	// full version is a claim about a specific release and must be the right
+	// one -- accepting any patch under the series is what let two READMEs keep
+	// citing v0.13.0 after the window moved to 0.13.2.
 	series := parts[0] + "." + parts[1]
+	acceptable := func(found string) bool {
+		if strings.Count(found, ".") == 2 {
+			return found == minimum
+		}
+		return found == series
+	}
 
 	checked := 0
 	var mismatches []string
@@ -183,10 +198,10 @@ func TestQuotedKernelVersionsAgreeWithTheProviderManifest(t *testing.T) {
 		for number, line := range strings.Split(stripVersionHistory(string(content)), "\n") {
 			for _, match := range kernelVersionProse.FindAllStringSubmatch(line, -1) {
 				checked++
-				if match[1] != series {
+				if !acceptable(match[1]) {
 					mismatches = append(mismatches,
 						relative+":"+itoaVersion(number+1)+": quotes v"+match[1]+
-							", expected v"+series)
+							", expected v"+minimum+" (or v"+series+")")
 				}
 			}
 		}

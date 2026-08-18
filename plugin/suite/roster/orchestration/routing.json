@@ -1466,7 +1466,7 @@
         "**/sbom/**",
         "**/*.lock",
         "**/charts/Chart.yaml",
-        "plugin/tools/test_cline_git_plugin_packaging.py"
+        "internal/clinedeps/**"
       ],
       "keywords": [
         "dependency",

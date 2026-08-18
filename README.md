@@ -383,7 +383,7 @@ To ship a change through to installed plugins:
 1. Merge the change here, with `cadre generate-plugin --output plugin` run in
    the same pull request — the `generated-content` CI job fails otherwise.
 2. Bump the plugin version when it should reach existing installs:
-   `python3 plugin/tools/plugin_version.py --set X.Y.Z`
+   `./bin/cadre plugin-version --set X.Y.Z`
 
 Once that lands on `main`, [`release.yml`](.github/workflows/release.yml)
 tags and publishes automatically — no manual `git tag`. The kernel job does
