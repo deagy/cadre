@@ -12,7 +12,7 @@
 # artifact placed there would collide with and overwrite those files.
 # dist/ is gitignored.
 
-.PHONY: build test test-race lint fmt vet tidy clean cross-build
+.PHONY: build test test-race lint fmt vet tidy clean cross-build guard-binaries
 
 build:
 	go build -o dist/cadre ./cmd/cadre
@@ -83,6 +83,24 @@ clean:
 # a decided exclusion, not a gap to fill in later without re-deciding it.
 # Five platforms is the contract; internal/release/platforms_test.go guards
 # this list against internal/release/platforms.go.
+# The workspace-mutation guard ships as a committed binary per platform, so
+# the PreToolUse hook never depends on a network fetch. It fails open by
+# design: a binary that could not be downloaded would remove the protection
+# silently, on an offline machine or a first run, and nothing would report it.
+#
+# Committed rather than built at package time because `generate-plugin --check`
+# compares committed output against a fresh run, and a rebuilt binary is only
+# byte-identical when the Go toolchain matches. Staleness is caught
+# behaviourally instead, by running one -- see
+# internal/generators/guard_binaries_test.go.
+guard-binaries:
+	@mkdir -p hooks/bin
+	CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o hooks/bin/cadre-guard-linux-amd64       ./cmd/cadre-guard
+	CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o hooks/bin/cadre-guard-linux-arm64       ./cmd/cadre-guard
+	CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o hooks/bin/cadre-guard-darwin-amd64      ./cmd/cadre-guard
+	CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o hooks/bin/cadre-guard-darwin-arm64      ./cmd/cadre-guard
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o hooks/bin/cadre-guard-windows-amd64.exe ./cmd/cadre-guard
+
 cross-build:
 	@mkdir -p dist
 	CGO_ENABLED=1 GOOS=linux   GOARCH=amd64 go build -o dist/cadre-linux-amd64         ./cmd/cadre

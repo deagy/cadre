@@ -30,25 +30,28 @@ import (
 func TestThePackagedPluginWiresTheDestructiveGitGuard(t *testing.T) {
 	packageRoot, repoRoot := freshPackage(t)
 
-	packagedGuard := filepath.Join(packageRoot, "hooks", "guard_workspace_mutation.py")
+	packagedSelector := filepath.Join(packageRoot, "hooks", "guard")
 	packagedHooks := filepath.Join(packageRoot, "hooks", "hooks.json")
-	sourceGuard := filepath.Join(repoRoot, ".claude", "hooks", "guard_workspace_mutation.py")
+	sourceSelector := filepath.Join(repoRoot, "hooks", "guard")
 
-	shipped, err := os.ReadFile(packagedGuard)
+	shipped, err := os.ReadFile(packagedSelector)
 	if err != nil {
-		t.Fatalf("the plugin ships no destructive-git guard: %v", err)
+		t.Fatalf("the plugin ships no destructive-git guard selector: %v", err)
 	}
-	source, err := os.ReadFile(sourceGuard)
+	source, err := os.ReadFile(sourceSelector)
 	if err != nil {
-		t.Fatalf("this repository has no guard to compare against: %v", err)
+		t.Fatalf("this repository has no guard selector to compare against: %v", err)
 	}
 	if !bytes.Equal(shipped, source) {
-		t.Errorf("the packaged guard has drifted from .claude/hooks/"+
-			"guard_workspace_mutation.py (%d bytes vs %d).\n"+
+		t.Errorf("the packaged guard selector has drifted from hooks/guard "+
+			"(%d bytes vs %d).\n"+
 			"There is meant to be one script to review, fanned out at package "+
 			"time; two copies means the reviewed one and the shipped one can differ.",
 			len(shipped), len(source))
 	}
+	// The binaries it selects between are checked separately, by behaviour
+	// rather than by bytes -- see guard_binaries_test.go for why comparing
+	// compiled output would report drift that is only a toolchain difference.
 
 	raw, err := os.ReadFile(packagedHooks)
 	if err != nil {
@@ -81,7 +84,7 @@ func TestThePackagedPluginWiresTheDestructiveGitGuard(t *testing.T) {
 			// The guard only helps if it is the script being run. Matched on
 			// the filename rather than the whole command, since the plugin-root
 			// prefix is substituted at install time.
-			if strings.Contains(hook.Command, "guard_workspace_mutation.py") {
+			if strings.Contains(hook.Command, "hooks/guard") {
 				invokesGuard = true
 			}
 		}
@@ -91,8 +94,7 @@ func TestThePackagedPluginWiresTheDestructiveGitGuard(t *testing.T) {
 			"shell commands cannot refuse a destructive git operation")
 	}
 	if !invokesGuard {
-		t.Errorf("the Bash PreToolUse entry does not invoke "+
-			"guard_workspace_mutation.py:\n%s", string(raw))
+		t.Errorf("the Bash PreToolUse entry does not invoke hooks/guard:\n%s", string(raw))
 	}
 }
 

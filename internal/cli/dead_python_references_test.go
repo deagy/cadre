@@ -221,11 +221,15 @@ func TestTheDeadReferenceScanWouldNoticeOne(t *testing.T) {
 	// port_cline_agents.py stood here until it became
 	// internal/generators/cline_port.go. The test said to update this fixture
 	// rather than the scan if that happened, and then caught itself doing it.
-	// What is left is Python for a structural reason: bootstrap_sdlc.py
-	// installs the kernel, so it runs before a working cadre is a given, and
-	// guard_workspace_mutation.py is a PreToolUse hook that must run on an
-	// installer's machine with no setup.
-	for _, alive := range []string{"bootstrap_sdlc.py", "guard_workspace_mutation.py"} {
+	// guard_workspace_mutation.py stood here too, on the reasoning that a
+	// PreToolUse hook must run on an installer's machine with no setup. It is
+	// a compiled binary shipped per platform now, which needs no setup either
+	// and needs no network. This fixture has been updated twice by the change
+	// it was written to notice.
+	//
+	// bootstrap_sdlc.py remains: it installs the kernel, so it runs before a
+	// working cadre is a given.
+	for _, alive := range []string{"bootstrap_sdlc.py"} {
 		if !live[alive] {
 			t.Errorf("%s is expected to still exist; if it was deleted, update this "+
 				"fixture rather than the scan", alive)

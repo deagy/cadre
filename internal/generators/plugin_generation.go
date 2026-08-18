@@ -86,7 +86,16 @@ var lifecyclePluginDirs = []string{
 
 // guardHookTarget is the packaged path of this repository's destructive-git
 // PreToolUse guard.
-const guardHookTarget = "hooks/guard_workspace_mutation.py"
+//
+// A selector script, not the executable: the guard ships as one compiled
+// binary per platform, and something has to pick. hooks.json carries a single
+// command string, so the picking happens in sh -- which is also what runs on
+// Windows under Git Bash, the only way the windows binary is reachable.
+const guardHookTarget = "hooks/guard"
+
+// guardBinaryDir is where the per-platform executables are packaged, relative
+// to the plugin root.
+const guardBinaryDir = "hooks/bin"
 
 func lifecycleFanout(suffix string) []string {
 	out := make([]string, 0, len(lifecyclePluginDirs))
@@ -520,7 +529,7 @@ func newPluginGenerator(repoRoot string) (*pluginGenerator, error) {
 		providerRoot:    filepath.Join(repoRoot, "provider"),
 		packagingReadme: filepath.Join(repoRoot, "packaging", "plugin-README.md"),
 		bootstrapSource: filepath.Join(repoRoot, "plugin", "tools", "bootstrap_sdlc.py"),
-		guardHookSource: filepath.Join(repoRoot, ".claude", "hooks", "guard_workspace_mutation.py"),
+		guardHookSource: filepath.Join(repoRoot, "hooks"),
 	}
 	capabilities, err := loadRunnerCapabilities(filepath.Join(g.rosterRoot, "runner-capabilities.json"))
 	if err != nil {
@@ -1318,7 +1327,7 @@ func lifecycleHooks() *orderedJSON {
 func mainPluginHooks() *orderedJSON {
 	entry := newOrderedJSON().
 		Set("type", "command").
-		Set("command", `python3 "${CLAUDE_PLUGIN_ROOT}/`+guardHookTarget+`"`)
+		Set("command", `"${CLAUDE_PLUGIN_ROOT}/`+guardHookTarget+`"`)
 	matcher := newOrderedJSON().
 		Set("matcher", "Bash").
 		Set("hooks", []any{entry})
@@ -1330,15 +1339,50 @@ func mainPluginHooks() *orderedJSON {
 // the plugin gets the same structural protection this repository runs on
 // itself, without needing the separate cadre-lifecycle-* plugins.
 func (g *pluginGenerator) generateMainPluginHook(pluginRoot string) ([]string, error) {
+	written := []string{}
+
+	// The selector, then every platform binary it can reach. Copied rather
+	// than built: `generate-plugin --check` compares committed output against
+	// a fresh run, and a rebuilt binary is only byte-identical when the Go
+	// toolchain matches, which would make the drift guard fail for a reason
+	// that has nothing to do with drift. The binaries are committed under
+	// hooks/bin and refreshed by `make guard-binaries`;
+	// TestTheCommittedGuardBinaryMatchesTheSource checks they are current by
+	// running one, not by comparing bytes.
 	guardTarget := filepath.Join(pluginRoot, filepath.FromSlash(guardHookTarget))
-	if err := copyFile(g.guardHookSource, guardTarget); err != nil {
+	if err := copyFile(filepath.Join(g.guardHookSource, "guard"), guardTarget); err != nil {
 		return nil, err
 	}
+	written = append(written, guardTarget)
+
+	binaries, err := os.ReadDir(filepath.Join(g.guardHookSource, "bin"))
+	if err != nil {
+		return nil, fmt.Errorf("the guard binaries are missing (%w) -- run `make guard-binaries`", err)
+	}
+	copied := 0
+	for _, entry := range binaries {
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "cadre-guard-") {
+			continue
+		}
+		target := filepath.Join(pluginRoot, filepath.FromSlash(guardBinaryDir), entry.Name())
+		if err := copyFile(filepath.Join(g.guardHookSource, "bin", entry.Name()), target); err != nil {
+			return nil, err
+		}
+		written = append(written, target)
+		copied++
+	}
+	if copied == 0 {
+		// A plugin whose hook resolves to nothing is a plugin with no guard,
+		// and the guard fails open, so nothing downstream would report it.
+		return nil, fmt.Errorf("no guard binaries found under %s -- run `make guard-binaries`",
+			filepath.Join(g.guardHookSource, "bin"))
+	}
+
 	hooksTarget := filepath.Join(pluginRoot, "hooks", "hooks.json")
 	if err := writeFile(hooksTarget, pyJSONDumps(mainPluginHooks(), 0)+"\n"); err != nil {
 		return nil, err
 	}
-	return []string{guardTarget, hooksTarget}, nil
+	return append(written, hooksTarget), nil
 }
 
 // ---------------------------------------------------------------------------

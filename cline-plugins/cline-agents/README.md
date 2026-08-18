@@ -348,7 +348,7 @@ underneath `toolPolicies`/`mode: "plan"` (above), not instead of them, and
 closes a gap those constructs cannot express on their own: `toolPolicies`
 can only grant or deny the whole `run_commands` *category*, never "allow
 `run_commands`, but not `git reset --hard`". This is the Cline-side
-counterpart to `.claude/hooks/guard_workspace_mutation.py`'s `PreToolUse`
+counterpart to `cmd/cadre-guard`'s `PreToolUse`
 hook for Claude Code (deagy/cadre#129, deagy/cadre#192) — same design
 stance, ported logic, separate implementation (Cline exposes no equivalent
 of Claude Code's `PreToolUse`; the real interception point here is
@@ -381,7 +381,7 @@ refusing. It blocks:
 **Fail-open by design.** Any parse ambiguity, unresolvable git state (not a
 repo, `git` missing, a ref that doesn't resolve, a timeout), or an internal
 guard error results in the command being allowed, not blocked. The stance
-mirrors `guard_workspace_mutation.py`'s own reasoning (read that file's
+mirrors `internal/guard`'s own reasoning (read that file's
 module docstring directly for its current wording — it is maintained
 independently of this README and may be revised): false positives — blocking
 routine work — are the real risk here, not false negatives. A guard that
@@ -413,7 +413,7 @@ nothing; this guard is defense-in-depth on top of
   documented gap — not silently claimed as covered — see the regression test
   exercising exactly this case in `presets.test.mts`. This guard's bound
   (`3`) matches its Claude Code counterpart's
-  (`.claude/hooks/guard_workspace_mutation.py`'s
+  (`cmd/cadre-guard`'s
   `_MAX_SHELL_RECURSION_DEPTH`, also `3`).
 - `env`-prefixed invocations are recognized and their wrapped command is
   checked: `WRAPPER_TOKENS` includes `env` alongside `sudo`/`command`/
@@ -427,7 +427,7 @@ nothing; this guard is defense-in-depth on top of
   `git config alias.*` wrapping a destructive subcommand under a different
   name) — both can cause the guard to evaluate the wrong repository's state,
   or miss a destructive subcommand entirely, and are not handled as of this
-  writing. `.claude/hooks/guard_workspace_mutation.py`'s module docstring
+  writing. `cmd/cadre-guard`'s module docstring
   documents the identical gap for its Claude Code counterpart in more
   detail, if you want the fuller reasoning for why it's harder than the
   checks above.
@@ -435,7 +435,7 @@ nothing; this guard is defense-in-depth on top of
 **Opt-out.** Setting `CADRE_DISABLE_WORKSPACE_MUTATION_GUARD=1` (or `true`,
 case-insensitive) in the environment disables this guard, checked before any
 parsing or git state check — the same variable name and behavior as the
-Claude Code counterpart, `.claude/hooks/guard_workspace_mutation.py`. It is
+Claude Code counterpart, `cmd/cadre-guard`. It is
 never referenced by generated `hooks.json`/plugin manifest output, so a
 plugin regeneration cannot silently re-enable the guard for an operator who
 deliberately opted out via their own environment.

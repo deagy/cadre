@@ -25,38 +25,60 @@ timeline — an earlier version of this document (dated the same day) claimed
 
 ## What actually remains
 
-One group now. Two scripts, their packaged copies, and their tests:
+One script, its packaged copies, and its test:
 
 | | lines |
 |---|---:|
-| `guard_workspace_mutation.py` x2 copies | 3,888 |
 | `bootstrap_sdlc.py` x4 copies | 2,884 |
-| their tests (`test_guard_workspace_mutation`, `test_bootstrap_sdlc`, `test_guard_parity`) | 2,547 |
-| **total** | **9,319** |
+| `test_bootstrap_sdlc.py` | 600 |
+| **total** | **3,484** |
 
 `engine/` is a separate question and is not counted here: it is a LangGraph
 runtime, and reimplementing the graph engine is Phase 6 of the sequencing
 plan, not a port.
 
-### Two that are Python for a structural reason, and stay
+### The workspace guard is a binary now, not a hook script
 
-**`guard_workspace_mutation.py`** (1,944 lines, plus an identical packaged
-copy). Claude Code invokes it as
-`python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guard_workspace_mutation.py"`. A
-`PreToolUse` hook has to run on the installer's machine with no setup, and the
-packaged `bin/cadre` is a *downloader* -- it fetches a platform binary on
-first use. Porting the guard to Go would make a safety hook conditional on a
-successful network download, which is a worse property than the language it is
-written in.
+It used to be listed here as structural, on the reasoning that a `PreToolUse`
+hook has to run on an installer's machine with no setup while the packaged
+`bin/cadre` is a *downloader*, so porting it would make a safety hook depend on
+a network fetch. That reasoning was sound about the download and wrong about
+the conclusion: the answer was to stop downloading, not to stay in Python.
+
+`cmd/cadre-guard` ships compiled, one binary per platform, committed under
+`hooks/bin/` and copied into the plugin by `generate-plugin`. There is no
+network path in it at all. `hooks/guard` is a POSIX `sh` selector that picks
+the right binary -- including under Git Bash on Windows, which is the only way
+the windows build is reachable.
+
+The cost is real and was measured before deciding: 2.5-2.7MB per platform,
+**13MB per release**, and binaries do not delta-compress, so the repository
+grows by that much every time one ships.
+
+The guard **fails open by design**, which is what made the download
+unacceptable: a binary that could not be fetched would remove the protection
+silently, on an offline machine or a first run, with nothing to report it.
+Shipping it removes that failure mode rather than trading it for a smaller
+repository.
+
+Staleness is the hazard this buys instead -- a committed binary is a copy of
+source that can drift. `internal/generators/guard_binaries_test.go` checks it
+by BEHAVIOUR rather than by bytes, because `go build` is only reproducible
+when the toolchain matches and a drift guard that fires when there is no drift
+gets ignored.
+
+### `bootstrap_sdlc.py` is the last one, and stays for now
 
 **`bootstrap_sdlc.py`** (721 lines, plus three packaged copies). Invoked by
 `plugin/plugins/lifecycle/bin/cadre-install-kernel` through `$AGENT_PYTHON`.
 Its job is installing the kernel, so it runs *before* a working cadre
-installation is a given. Same bootstrap paradox.
+installation is a given -- the bootstrap paradox the guard no longer has,
+since the guard now ships with the plugin rather than being fetched by it.
 
-Neither is blocked on effort. Both would need the packaged wrapper to stop
-being a downloader first, which is a distribution decision rather than a
-porting one.
+The same answer is available here: ship it compiled. It is not done in the
+same change because the installer path is different -- `install.sh` resolves
+an interpreter and runs this script, so retiring it means changing what the
+installer executes, which is a separate blast radius from a plugin hook.
 
 ### Everything portable is ported
 

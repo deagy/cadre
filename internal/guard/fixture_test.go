@@ -19,10 +19,12 @@ import (
 // OUTCOMES rather than merely the same structure. This makes Go a third
 // participant in the same corpus, on the same disposable repositories.
 //
-// Two assertions per case, and they are not the same: the decision must match
-// what the fixture declares, and it must match what Python actually returns.
-// The first catches a port that is wrong; the second catches a port that is
-// wrong in the same way the fixture is.
+// The Python hook this was ported from is gone, and with it the Go/Python
+// differential that gated the port -- 4,812 command/state pairs across four
+// repository states, zero divergent, recorded in the porting commit. What
+// remains is this corpus plus the behavioural comparison against the Cline
+// TypeScript guard in typescript_parity_test.go, which is a live second
+// implementation rather than a retired one.
 
 type fixtureStep struct {
 	Op         string `json:"op"`
@@ -178,45 +180,6 @@ func shellQuote(script string) string {
 	return "'" + strings.ReplaceAll(script, "'", `'\''`) + "'"
 }
 
-// pythonDecision runs the Python hook over the same payload.
-func pythonDecision(t *testing.T, command, cwd string) (blocked bool, reason string, ok bool) {
-	t.Helper()
-	hook := filepath.Join(repositoryRoot(t), ".claude", "hooks", "guard_workspace_mutation.py")
-	if _, err := os.Stat(hook); err != nil {
-		return false, "", false
-	}
-	payload, err := json.Marshal(map[string]any{
-		"hook_event_name": "PreToolUse",
-		"tool_name":       "Bash",
-		"tool_input":      map[string]string{"command": command},
-		"cwd":             cwd,
-	})
-	if err != nil {
-		t.Fatalf("building the payload: %v", err)
-	}
-	run := exec.Command("python3", hook)
-	run.Stdin = strings.NewReader(string(payload))
-	output, err := run.Output()
-	if err != nil {
-		return false, "", false
-	}
-	text := strings.TrimSpace(string(output))
-	if text == "" {
-		return false, "", true
-	}
-	var decision struct {
-		HookSpecificOutput struct {
-			PermissionDecision       string `json:"permissionDecision"`
-			PermissionDecisionReason string `json:"permissionDecisionReason"`
-		} `json:"hookSpecificOutput"`
-	}
-	if err := json.Unmarshal([]byte(text), &decision); err != nil {
-		return false, "", false
-	}
-	return decision.HookSpecificOutput.PermissionDecision == "deny",
-		decision.HookSpecificOutput.PermissionDecisionReason, true
-}
-
 func TestTheSharedFixtureAgreesWithTheGoGuard(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not available")
@@ -261,61 +224,5 @@ func TestTheSharedFixtureAgreesWithTheGoGuard(t *testing.T) {
 	if len(mismatches) > 0 {
 		t.Errorf("%d of %d fixture case(s) disagree:\n    %s",
 			len(mismatches), len(cases), strings.Join(mismatches, "\n    "))
-	}
-}
-
-func TestTheGoAndPythonGuardsAgreeOnEveryFixtureCase(t *testing.T) {
-	// The differential. The fixture says what should happen; this says the two
-	// implementations do the same thing, which also catches a port that is
-	// wrong in exactly the way the fixture is.
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git is not available")
-	}
-	if _, err := exec.LookPath("python3"); err != nil {
-		t.Skip("python3 is not available to compare against")
-	}
-	cases := loadFixture(t)
-
-	compared := 0
-	var divergences []string
-	for _, testCase := range cases {
-		world := newFixtureWorld(t)
-		for _, step := range testCase.Setup {
-			world.apply(step)
-		}
-		command := world.resolve(testCase.Command)
-		for i := 0; i < testCase.WrapInBashC; i++ {
-			command = "bash -c " + shellQuote(command)
-		}
-		cwd := world.repo
-		if testCase.Cwd != "" {
-			cwd = world.resolve(testCase.Cwd)
-		}
-
-		pythonBlocked, pythonReason, ok := pythonDecision(t, command, cwd)
-		if !ok {
-			continue // the Python side could not be consulted for this case
-		}
-		compared++
-		decision := EvaluateCommand(command, cwd)
-		goBlocked := decision != nil
-		if goBlocked != pythonBlocked {
-			divergences = append(divergences, fmt.Sprintf(
-				"%s: python=%v go=%v\n      cmd: %s", testCase.ID, pythonBlocked, goBlocked, command))
-			continue
-		}
-		if goBlocked && decision.Reason != pythonReason {
-			divergences = append(divergences, fmt.Sprintf(
-				"%s: both blocked, different reasons\n      python: %s\n      go:     %s",
-				testCase.ID, pythonReason, decision.Reason))
-		}
-	}
-	if compared == 0 {
-		t.Fatal("the Python guard answered no case; this differential compared nothing")
-	}
-	t.Logf("compared %d of %d cases against the Python guard", compared, len(cases))
-	if len(divergences) > 0 {
-		t.Errorf("%d case(s) diverge from the Python guard:\n    %s",
-			len(divergences), strings.Join(divergences, "\n    "))
 	}
 }
