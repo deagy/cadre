@@ -213,13 +213,12 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
-          cache: pip
-          cache-dependency-path: .github/requirements-validation.lock
-      # test_manifest_health.py parses skill frontmatter as real YAML rather
-      # than pattern-matching it -- a `description` containing ": " ends a
-      # plain scalar, and that shipped four skills whose frontmatter silently
-      # did not parse. Same hash-pinned lock the roster job uses.
-      - run: pip install --no-cache-dir --require-hashes -r .github/requirements-validation.lock
+      # No pip install: what remains under plugin/tools imports only the
+      # standard library. The hash-pinned lock was here for PyYAML, which
+      # test_manifest_health.py needed to parse skill frontmatter as real YAML
+      # rather than pattern-match it. That guard is Go now
+      # (internal/generators/manifest_health_test.go) and reads the frontmatter
+      # with yaml.v3, so this job installs nothing.
       # One tools/ directory now: bootstrap_sdlc.py used to exist as three
       # byte-identical copies under plugins/lifecycle{,-github,-gitlab}/tools/,
       # each with its own test module and a duplication-health test holding
