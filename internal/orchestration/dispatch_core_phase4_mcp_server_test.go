@@ -79,6 +79,7 @@ func TestValidateConfigMissingPluginRoot(t *testing.T) {
 }
 
 func TestHandleDispatchSecureCloudRoleNilRequest(t *testing.T) {
+	stubRunner(t)
 	server := NewDispatchMCPServer(DispatchMCPServerConfig{
 		ProjectRoot: "/project",
 		GlobalRoot:  "/global",
@@ -97,6 +98,7 @@ func TestHandleDispatchSecureCloudRoleNilRequest(t *testing.T) {
 }
 
 func TestHandleDispatchSecureCloudRoleInvalidInput(t *testing.T) {
+	stubRunner(t)
 	server := NewDispatchMCPServer(DispatchMCPServerConfig{
 		ProjectRoot: "/project",
 		GlobalRoot:  "/global",
@@ -349,6 +351,7 @@ func TestGetToolDefinitions(t *testing.T) {
 }
 
 func TestDispatchToolCallDispatchSecureCloudRole(t *testing.T) {
+	stubRunner(t)
 	server := NewDispatchMCPServer(DispatchMCPServerConfig{
 		ProjectRoot: "/project",
 		GlobalRoot:  "/global",

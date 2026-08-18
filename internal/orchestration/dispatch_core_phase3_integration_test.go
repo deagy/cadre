@@ -57,6 +57,7 @@ func TestPhase3SyncDispatchWorkflow(t *testing.T) {
 }
 
 func TestPhase3AsyncDispatchWorkflow(t *testing.T) {
+	stubRunner(t)
 	// Test: Async dispatch with job tracking
 	// 1. Dispatch async (returns job_id)
 	// 2. Poll job status
@@ -98,6 +99,7 @@ func TestPhase3AsyncDispatchWorkflow(t *testing.T) {
 }
 
 func TestPhase3ConfirmationWorkflow(t *testing.T) {
+	stubRunner(t)
 	// Test: Confirmation flow for write-capable dispatch
 	// 1. Request dispatch (write mode)
 	// 2. Get confirmation token

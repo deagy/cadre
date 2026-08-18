@@ -9,6 +9,7 @@ import (
 // Phase 2 Tests: Main Dispatch Function, Confirmation Gating, Async Job Stores
 
 func TestDispatchSecureCloudRoleValidation(t *testing.T) {
+	stubRunner(t)
 	tests := []struct {
 		name           string
 		roleID         string
@@ -95,6 +96,7 @@ func TestDispatchSecureCloudRoleValidation(t *testing.T) {
 }
 
 func TestDispatchConfirmationRequired(t *testing.T) {
+	stubRunner(t)
 	// Repository edit mode should require confirmation for write-capable sandbox
 	result := DispatchSecureCloudRole(
 		testRoots(t, "code-reviewer"),
@@ -117,6 +119,7 @@ func TestDispatchConfirmationRequired(t *testing.T) {
 }
 
 func TestPollDispatchStatus(t *testing.T) {
+	stubRunner(t)
 	// The limiter is process-wide, so without this the test passes or fails on
 	// how many async dispatches ran before it -- see
 	// dispatch_limiter_isolation_test.go.
@@ -413,6 +416,7 @@ func TestPollTeamStatus(t *testing.T) {
 }
 
 func TestDispatchSyncWait(t *testing.T) {
+	stubRunner(t)
 	// Sync dispatch with wait=true should block and return result
 	result := DispatchSecureCloudRole(
 		testRoots(t, "code-reviewer"),
@@ -429,6 +433,7 @@ func TestDispatchSyncWait(t *testing.T) {
 }
 
 func TestDispatchAsyncNoWait(t *testing.T) {
+	stubRunner(t)
 	// Async dispatch with wait=false should return immediately with job_id
 	result := DispatchSecureCloudRole(
 		testRoots(t, "code-reviewer"),

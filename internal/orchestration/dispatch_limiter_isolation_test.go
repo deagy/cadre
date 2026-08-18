@@ -103,6 +103,7 @@ func TestAFreshLimiterStartsEmpty(t *testing.T) {
 }
 
 func TestPollDispatchStatusIsNotOrderDependent(t *testing.T) {
+	stubRunner(t)
 	// The regression this file is named for. Dispatching more times than the
 	// cap inside one test must not deny the later ones, because each gets a
 	// fresh pool.
