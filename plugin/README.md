@@ -57,7 +57,7 @@ on its own is the point of it.
 All eight plugin manifests share one version, bumped together:
 
 ```sh
-python3 tools/plugin_version.py --set 0.11.0
+./bin/cadre plugin-version --set 0.11.0
 ```
 
 Pushing that to `main` triggers the `plugin` job in `release.yml`, which tags

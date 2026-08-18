@@ -10,7 +10,7 @@ name: Release
 # jobs, each with its own component-prefixed tag namespace:
 #
 #   plugin-v<version>   the packaged plugin distribution (plugin/**/plugin.json,
-#                       all 8 manifests, see plugin/tools/plugin_version.py)
+#                       all 8 manifests, see internal/cli/release_metadata.go)
 #
 # Prefixes are not cosmetic. This repository inherited 25 bare `v*` tags from
 # the pre-monorepo deagy/cadre (v0.1.1 through v0.16.0, plus v1..v7), so a
@@ -98,7 +98,7 @@ jobs:
                   return json.loads(text).get("version")
               except json.JSONDecodeError:
                   # Unparseable is not "unchanged" -- let the job run and let
-                  # plugin_version.py --check report it properly.
+                  # `cadre plugin-version --check` report it properly.
                   return "<unparseable>"
 
 
@@ -111,7 +111,7 @@ jobs:
               return match.group(1) if match.group(1) else match.group(2)
 
           # All 8 plugin manifests, not just the first: if a bump lands in
-          # only some of them, this must still run so plugin_version.py
+          # only some of them, this must still run so plugin-version
           # --check can fail on the disagreement instead of the release
           # being silently skipped.
           PLUGIN_MANIFESTS = [
@@ -195,12 +195,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The version and changelog helpers are Go now, so this job needs a
+      # toolchain it did not before. `go run` rather than a built binary: it is
+      # two short reads, and building dist/cadre here would duplicate what the
+      # cli job already does per platform.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
       - name: Verify manifests agree on a valid version
-        run: python3 plugin/tools/plugin_version.py --check
+        run: go run ./cmd/cadre plugin-version --check
 
       - name: Read version
         id: version
-        run: echo "value=$(python3 plugin/tools/plugin_version.py)" >> "$GITHUB_OUTPUT"
+        run: echo "value=$(go run ./cmd/cadre plugin-version)" >> "$GITHUB_OUTPUT"
 
       - name: Skip if this version is already tagged
         id: tag
@@ -214,7 +223,7 @@ jobs:
 
       - name: Extract this version's CHANGELOG entry
         if: steps.tag.outputs.skip == 'false'
-        run: python3 plugin/tools/changelog_entry.py "${{ steps.version.outputs.value }}" > /tmp/release-notes.md
+        run: go run ./cmd/cadre changelog-entry "${{ steps.version.outputs.value }}" > /tmp/release-notes.md
 
       # SSH tag signing. The private key lives in the TAG_SIGNING_KEY secret
       # and the matching public key is registered on the account as a

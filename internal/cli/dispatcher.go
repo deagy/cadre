@@ -85,6 +85,8 @@ func Usage(subcommands []Subcommand) string {
 		{Name: "generate-role-metadata", Description: "Regenerate roster/catalog.yaml and routing.json from role metadata"},
 		{Name: "generate-authority-aides", Description: "Regenerate roster/authority/*-aide AGENT.md files"},
 		{Name: "port-cline-agents", Description: "Render the packaged plugin's agents and skills into the Cline preset/skill formats"},
+		{Name: "plugin-version", Description: "Read, check, or set the release version shared by all eight plugin manifests"},
+		{Name: "changelog-entry", Description: "Print one version's release notes from the packaged CHANGELOG.md"},
 		{Name: "upgrade", Description: "Check for Cadre updates and upgrade the CLI (--check, --force, --help)"},
 		{Name: "mcp-dispatch-server", Description: "Run the MCP dispatch server (stdio)"},
 		{Name: "mcp-gitlab-server", Description: "Run the GitLab evidence MCP server (stdio; three create-only tools)"},
@@ -213,6 +215,12 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 	}
 	if command == "port-cline-agents" {
 		return PortClineAgentsCmd(rest)
+	}
+	if command == "plugin-version" {
+		return PluginVersionCmd(rest)
+	}
+	if command == "changelog-entry" {
+		return ChangelogEntryCmd(rest)
 	}
 	if command == "generate-role-metadata" {
 		return GenerateRoleMetadata(rest)
