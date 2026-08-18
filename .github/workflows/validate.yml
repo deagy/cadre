@@ -156,6 +156,13 @@ jobs:
       # stops being true, fall back to a plain `go test ./...` leg rather
       # than disabling cgo globally, per the Makefile's test-race comment.
       - run: CGO_ENABLED=1 go test -race ./...
+        env:
+          # Resolves every SHA-pinned action against GitHub. Opt-in because
+          # the guard needs the network; wired here so a fabricated pin is
+          # caught on the pull request that introduces it rather than at the
+          # next release, which is where one was actually found.
+          CADRE_VERIFY_ACTION_PINS: "1"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # The shim a checkout actually runs: builds cmd/agentic-sdlc and execs
       # it. Checked here because this is the job that sets up Go.
       - run: ./bin/agentic-sdlc --version
