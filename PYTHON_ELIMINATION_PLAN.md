@@ -586,43 +586,138 @@ trusting any differential built for it.
 
 ## Phase 6 — Reimplement the graph runtime
 
-**Scope:** 5,995 production lines, 5,933 test lines.
+**Scope:** 5,995 production lines, 5,933 test lines, 254 tests.
+**Scoped in detail 2026-08-18**, by reading the engine rather than estimating
+from its size. What follows replaces the earlier sketch; where the two differ,
+this is the measured version.
 
-Better news than expected: **only 5 of 16 modules import LangGraph.** The
-other 11 — `requirement_issues` (884), `gitlab_issue`, `github_approval`,
-`contracts`, `export`, `provider`, `state`, `validate`, `planning`,
-`agents`, `service` — are ordinary ports.
+### Decide this before writing any code: nothing consumes the engine
 
-The LangGraph surface actually in use is small and nameable:
+`engine/` has **no callers in code.** Nothing in `cmd/`, `internal/`,
+`roster/`, `kernel/`, `plugin/` or `bin/` imports it or shells out to
+`agentic-sdlc-lg`. It is not in the plugin, not in the wheel, and not in any
+release artifact — CI runs its tests and nothing else.
+
+It does have *documented* users: `docs/kernel/usage-overview.md` names it as
+"real orchestration" and tells an operator to run `plan`/`resume` directly.
+So this is a user-facing tool invoked by hand from a checkout, not dead code —
+which matters, because a hand-run tool has no automated caller to catch a
+behavioural regression the way a library would.
+
+Its own README says it "replaces the plugin's earlier skill-based
+orchestration" and is "the only way to actually drive a task through the
+lifecycle now." Both can be true at once: it is the intended lifecycle driver
+and currently drives nothing here.
+
+That makes this phase different from every other one in this document. The
+others removed Python that something ran. This one removes Python that nothing
+runs, at a cost of ~6,000 lines of rewrite. **The question is not how to port
+it — that is answered below — but whether the engine is the direction.** If it
+is going to be wired into `cadre`, port it and do that first so the port has a
+consumer to be correct *for*. If it might be replaced, porting it now is
+building the second version of something whose first version has no users.
+
+### What the LangGraph coupling actually is
+
+Five primitives, not a framework:
 
 | primitive | used for | Go replacement |
 |---|---|---|
 | `StateGraph`, `START`, `END` | the gate graph | a node/edge executor over a typed state struct |
-| `Send` | fan-out to parallel agents | goroutines + a collected result set |
+| `Send` | fan-out to parallel agents | goroutines plus a collected result set |
 | `interrupt` | human-in-the-loop gate pauses | suspend to checkpoint, resume by task id |
-| `SqliteSaver` | checkpointing | the SQLite driver already used by the knowledge store |
 | `Command` | resume-with-value | the resume payload on the same checkpoint API |
+| `SqliteSaver` | checkpointing | the SQLite driver the knowledge store already uses |
 
-`anthropic` and `openai` both have usable Go clients, and `fastapi`'s role
-(`service.py`) maps onto `net/http`.
+And the coupling is far shallower than "5 of 16 modules import LangGraph"
+suggests, because four of those five barely touch it:
 
-**Method:** build the graph runtime first as a standalone Go package with
-its own tests — a graph engine is testable without any of the SDLC
-semantics on top of it. Then port the 11 non-LangGraph modules against a
-differential harness. Then move the 5 graph-coupled modules onto the Go
-runtime last, when both halves are already proven.
+| | lines | what it is |
+|---|---:|---|
+| **deep** — `graph.py` (28 refs), `runtime.py` (25) | 1,243 | the actual engine: graph construction and cross-process rebuild |
+| **shallow** — `cli.py` (5), `github_approval.py` (7), `a2a/server.py` (3), `export.py` (3), `reentry.py` (3), `state.py` (1), `gitlab_issue.py` (1), `planning.py` (1) | 2,212 | mostly `Command` to resume and `get_state` to read status |
+| **independent** — `requirement_issues.py` (884), `agents.py` (572), `provider.py` (405), `validate.py` (266), and five smaller | 2,540 | ordinary ports: JSON, HTTP, file I/O |
 
-**Gate:** the engine's own suite ported alongside, plus an end-to-end run of
-a task through G1–G10 compared against the Python engine's checkpoint
-sequence.
+`state.py` is counted shallow rather than independent on purpose: it imports
+nothing from LangGraph but defines the three reducers LangGraph applies
+(`merge_gate_updates`, `merge_agent_outputs`, `operator.add`). Two are dict
+merges and one is a list append — the reducer surface is three functions, not a
+system.
 
-**Breaks:** the `agentic-sdlc-lg` console script, same deprecation treatment
-as Phase 5.
+### The replay semantics are not load-bearing, which is the main de-risking find
 
-**Risk worth stating plainly:** this is the one phase that is a rewrite
-rather than a port. Interrupt-and-resume semantics under checkpointing are
-where a subtle difference will hide, and a differential harness over a graph
-engine is harder to build than one over a pure function. Budget accordingly.
+`interrupt()` pauses by raising; on `Command(resume=...)` LangGraph
+**re-executes the node from the top**, with `interrupt()` returning the resume
+value instead of pausing. Anything before the interrupt therefore runs twice.
+That is the semantic a naive port gets wrong, and it is why the earlier sketch
+called this a rewrite.
+
+There are exactly **two** interrupt sites — `mutation_gate_check` and
+`human_approval` — and both are pure computation, then `interrupt`, then record
+the decision. Nothing before either has a side effect. So a Go port can **split
+each node at its interrupt** into a pre-state and a post-state and never
+replay anything, rather than reproducing replay. That is a simpler engine and a
+more predictable one; it needs a test asserting the pre-interrupt half stays
+side-effect-free, since the property is what licenses the simplification.
+
+Only the interrupted node replays — completed nodes resume from the checkpoint,
+so this is the whole exposure.
+
+### The gate already exists, mostly
+
+Three things a differential needs are already there:
+
+- **An observable output contract.** The checkpointed state *is* the run
+  record; `export.py` reshapes it into `run-record.schema.json` and
+  `validate.py` checks it. That schema is owned by `kernel/`, not by the
+  engine, so it is a fixed target both implementations can be compared against.
+  Run both engines over the same task and diff the exported record.
+- **Hermetic tests.** 254 of them, with a `FakeModelClient` seam and a
+  `:memory:` checkpointer. No test needs an API key.
+- **Deterministic graph rebuild across processes.** `runtime.py` already writes
+  a per-task `graph-config.json` recording everything needed to rebuild the
+  identical graph shape in a later process, because the CLI is a new process
+  every invocation. A Go port inherits that design rather than inventing it.
+
+### Method
+
+1. **The graph executor first, standalone**, with its own tests. A node/edge
+   executor over a typed state with three reducers is testable with no SDLC
+   semantics on top, and it is the only genuinely new thing here.
+2. **The 2,540 independent lines next**, against a differential over their
+   existing tests. `requirement_issues.py` is the largest single module and is
+   explicitly never wired into graph dispatch — a test enforces that — so it
+   can move without touching graph semantics at all.
+3. **The shallow modules**, which mostly need `Command`/`get_state` replaced by
+   the new executor's equivalents.
+4. **`graph.py` and `runtime.py` last**, when both halves are proven.
+
+### Risks, in the order they will bite
+
+1. **Concurrent `Send` fan-out into three reducers.** Parallel agent nodes
+   write `lifecycle_gates` and `agent_outputs` concurrently, and the merge is
+   last-write-wins per key. Go will surface ordering non-determinism that
+   Python's GIL hides. Needs a deterministic merge order and a `-race` run over
+   a fan-out wider than the fixtures use.
+2. **Checkpoint format.** A Go engine will not read Python `SqliteSaver`
+   checkpoints. Either accept that in-flight tasks cannot cross the cutover, or
+   write a converter — decide deliberately rather than discovering it.
+3. **`jsonschema`.** `validate.py` leans on Draft 2020-12 plus a format
+   checker for `date-time`. Go's options are less mature; confirm one handles
+   this repository's schemas before committing to the port.
+4. **The model clients.** `agents.py` hides Anthropic and OpenAI behind a
+   `ModelClient` protocol with one method, lazily imported. That is a clean
+   seam, and the Go side can be plain HTTP rather than an SDK.
+5. **FastAPI.** `service.py` (95 lines) and `a2a/server.py` (311) map onto
+   `net/http`; the A2A wire types are already explicit in `a2a/types.py`.
+
+**Breaks:** the `agentic-sdlc-lg` console script, same deprecation treatment as
+Phase 5.
+
+**Estimate:** the executor is small; the bulk is the 2,540 independent lines,
+which are ordinary. The earlier framing of "a rewrite, budget accordingly"
+overstates it now that replay is known not to be load-bearing — but only if the
+split-at-interrupt property is tested rather than assumed.
 
 ## Phase 7 — The repo-wide guards
 
