@@ -34,14 +34,12 @@ jobs:
     name: roster/ (selection, knowledge store, shared policy)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        # pyproject.toml's requires-python floor is 3.10, but until now
-        # nothing in CI ran below 3.14 -- a 3.10-only incompatibility could
-        # reach a `pip install cadre` user without ever failing a build. 3.10
-        # is the declared floor; 3.14 stays as the primary/latest leg.
-        python-version: ["3.10", "3.14"]
+    # No Python matrix. It was here because pyproject.toml's requires-python
+    # floor is 3.10 and a 3.10-only incompatibility could reach a `pip install
+    # cadre` user -- but this job never runs pip, and every step below is a Go
+    # binary, so both legs ran the same Go twice. The job that does build and
+    # install the wheel is cadre-pip-package; if that floor is worth testing,
+    # that is where a matrix belongs.
     env:
       AGENTIC_SDLC_BIN: ${{ github.workspace }}/bin/agentic-sdlc
     steps:
@@ -53,27 +51,10 @@ jobs:
           # permanently skipped -- so it fails rather than skips under CI, and
           # this is what gives it a baseline to compare against.
           fetch-depth: 0
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: .github/requirements-validation*.lock
-      # requirements-validation.lock is compiled under Python 3.14 and pins
-      # rpds-py==2026.6.3, which declares Python>=3.11 -- uninstallable on
-      # the 3.10 leg. requirements-validation-py310.lock is the same input
-      # (.github/requirements-validation.in) recompiled under Python 3.10,
-      # which resolves an older rpds-py that supports both; see that file's
-      # header for the full explanation.
-      - name: Select the hash-locked requirements file for this Python version
-        id: lockfile
-        run: |
-          set -eu
-          if [ "${{ matrix.python-version }}" = "3.10" ]; then
-            echo "path=.github/requirements-validation-py310.lock" >> "$GITHUB_OUTPUT"
-          else
-            echo "path=.github/requirements-validation.lock" >> "$GITHUB_OUTPUT"
-          fi
-      - run: pip install --no-cache-dir --require-hashes -r ${{ steps.lockfile.outputs.path }}
+          go-version-file: go.mod
+          cache: true
       # The roster/orchestration leg that used to run here is gone with
       # test_repository_health.py, the last test module in that directory.
       # What remains there is fixture data the Go tests read
@@ -234,15 +215,12 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
-      # Version-pinned to the exact release reviewed/verified for this job
-      # (see supply-chain-security-reviewer finding on PR #48) rather than an
-      # unbounded `pip install build`; not part of the hash-pinned
-      # requirements-validation.lock mechanism since it is a single
-      # build-only tool, not a runtime/test dependency of this repository's
-      # own Python code.
-      # Version-pinned to the exact releases reviewed for this job rather
-      # than an unbounded install; not part of requirements-validation.lock
-      # since these are build-only tools, not runtime dependencies.
+      # Version-pinned to the exact releases reviewed for this job (see the
+      # supply-chain-security-reviewer finding on PR #48) rather than an
+      # unbounded install. These are the only pip installs left in CI: the
+      # hash-pinned requirements-validation.lock mechanism is gone with the
+      # Python it fed, and these are build-only tools rather than a runtime
+      # or test dependency of anything here.
       - run: pip install --no-cache-dir build==1.5.0 wheel==0.46.3
       - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
         with:
@@ -319,7 +297,12 @@ jobs:
             --task "CI pip package smoke test: redfish bmc inventory and ceph rook storage" \
             --files README.md --classification internal \
             --task-id ci-pip-smoke-1 --source ci \
-            | python3 -c 'import json,sys; p=json.load(sys.stdin)["context_packs"]; ids=sorted(x["id"] for x in p); assert ids==["ceph-rook-storage-context","redfish-bmc-context"], f"expected both context packs from the installed wheel, got {ids}"'
+            > /tmp/pip-smoke-1.json
+          packs="$(jq -r '[.context_packs[].id] | sort | join(",")' /tmp/pip-smoke-1.json)"
+          if [ "$packs" != "ceph-rook-storage-context,redfish-bmc-context" ]; then
+            echo "expected both context packs from the installed wheel, got: $packs" >&2
+            exit 1
+          fi
 
           # The plan must name a knowledge command that actually exists. The
           # installed layout puts the binary in bin/ and the roster in
@@ -328,7 +311,17 @@ jobs:
           "$CADRE" select --root . \
             --task "knowledge retrieval path check" --files README.md \
             --classification internal --task-id ci-pip-smoke-2 --source ci \
-            | python3 -c 'import json,os,sys; r=json.load(sys.stdin)["knowledge_context"].get("requests") or []; assert r, "expected a knowledge request"; c=r[0]["invocation"]["args"][0]; assert os.path.exists(c), f"plan names a knowledge command that does not exist: {c}"; print("knowledge command exists:", c)'
+            > /tmp/pip-smoke-2.json
+          command_path="$(jq -r '.knowledge_context.requests[0].invocation.args[0] // empty' /tmp/pip-smoke-2.json)"
+          if [ -z "$command_path" ]; then
+            echo "expected a knowledge request in the plan" >&2
+            exit 1
+          fi
+          if [ ! -e "$command_path" ]; then
+            echo "plan names a knowledge command that does not exist: $command_path" >&2
+            exit 1
+          fi
+          echo "knowledge command exists: $command_path"
 
           # Maintainer/regeneration subcommands need a full checkout. From an
           # install they must fail closed -- non-zero, no raw traceback --
@@ -593,9 +586,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          python-version: "3.14"
+          go-version-file: go.mod
+          cache: true
       # The generated half of plugin/ is committed because a GitHub-sourced
       # marketplace serves the repository tree -- an uncommitted distribution
       # installs a plugin with no roles in it. This job is what makes that

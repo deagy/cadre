@@ -69,6 +69,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      # fetch-depth: 0 above is load-bearing for the step below: it resolves
+      # `git show <before>:<path>`, which needs that commit present.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - name: Compare each component's version against the previous commit
         id: detect
@@ -77,92 +83,15 @@ jobs:
           EVENT: ${{ github.event_name }}
         run: |
           set -eu
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json, os, re, subprocess, sys
-
-          before = os.environ.get("BEFORE", "")
-          event = os.environ["EVENT"]
-
-          def at(ref, path):
-              """The file's text at `ref`, or None when it is not there."""
-              result = subprocess.run(
-                  ["git", "show", f"{ref}:{path}"],
-                  capture_output=True, text=True, encoding="utf-8",
-              )
-              return result.stdout if result.returncode == 0 else None
-
-          def manifest_version(text):
-              if text is None:
-                  return None
-              try:
-                  return json.loads(text).get("version")
-              except json.JSONDecodeError:
-                  # Unparseable is not "unchanged" -- let the job run and let
-                  # `cadre plugin-version --check` report it properly.
-                  return "<unparseable>"
-
-
-          def cli_version(text):
-              if text is None:
-                  return None
-              match = re.search(r'^VERSION = (?:"([^"]*)"|\'([^\']*)\')', text, re.MULTILINE)
-              if not match:
-                  return "<unreadable>"
-              return match.group(1) if match.group(1) else match.group(2)
-
-          # All 8 plugin manifests, not just the first: if a bump lands in
-          # only some of them, this must still run so plugin-version
-          # --check can fail on the disagreement instead of the release
-          # being silently skipped.
-          PLUGIN_MANIFESTS = [
-              "plugin/.claude-plugin/plugin.json",
-              "plugin/.codex-plugin/plugin.json",
-              "plugin/plugins/lifecycle/.claude-plugin/plugin.json",
-              "plugin/plugins/lifecycle/.codex-plugin/plugin.json",
-              "plugin/plugins/lifecycle-github/.claude-plugin/plugin.json",
-              "plugin/plugins/lifecycle-github/.codex-plugin/plugin.json",
-              "plugin/plugins/lifecycle-gitlab/.claude-plugin/plugin.json",
-              "plugin/plugins/lifecycle-gitlab/.codex-plugin/plugin.json",
-          ]
-
-          def commit_exists(ref):
-              return subprocess.run(
-                  ["git", "cat-file", "-e", f"{ref}^{{commit}}"],
-                  capture_output=True,
-              ).returncode == 0
-
-          # Nothing to diff against: workflow_dispatch carries no before-sha,
-          # and a force-push or a branch's first push reports all zeros.
-          # Fail open and let the already-tagged check decide.
-          comparable = (
-              event == "push"
-              and before
-              and set(before) != {"0"}
-              and commit_exists(before)
-          )
-          if not comparable:
-              print(f"no comparable previous commit (event={event}, before={before!r});"
-                    " treating every component as changed", file=sys.stderr)
-
-          components = {
-              "plugin": (PLUGIN_MANIFESTS, manifest_version),
-              "cli": (["cadre_cli/_version.py"], cli_version),
-          }
-          for name, (paths, read) in components.items():
-              if not comparable:
-                  print(f"{name}=true")
-                  continue
-              moved = [
-                  (path, read(at(before, path)), read(at("HEAD", path)))
-                  for path in paths
-              ]
-              moved = [entry for entry in moved if entry[1] != entry[2]]
-              for path, was, now in moved:
-                  print(f"{name}: {path} {was} -> {now}", file=sys.stderr)
-              if not moved:
-                  print(f"{name}: version unchanged in this push; not releasing", file=sys.stderr)
-              print(f"{name}={'true' if moved else 'false'}")
-          PY
+          # The detection is Go (`internal/cli/release_gate.go`), not 85 lines
+          # inlined here. It used to read the CLI version from
+          # cadre_cli/_version.py; that marker moved to VERSION and nothing
+          # tied the two together, so the file was absent at both ends of
+          # every comparison, both sides read as nil, and the CLI silently
+          # stopped being releasable. In Go the watched paths come from the
+          # same lists the CLI and `cadre plugin-version` use, and a test
+          # fails if one of them stops existing.
+          go run ./cmd/cadre changed-components --event "$EVENT" --before "$BEFORE" >> "$GITHUB_OUTPUT"
 
   plugin:
     name: Release the plugin distribution
@@ -319,17 +248,11 @@ jobs:
             --source-name cadre-plugin-cline \
             --source-version "${{ steps.version.outputs.value }}" \
             -o spdx-json=dist/cadre-plugin-cline-sbom.spdx.json
-          python3 -c "
-          import json, pathlib
-          d = json.loads(pathlib.Path('dist/cadre-plugin-cline-sbom.spdx.json').read_text())
-          names = {p['name'] for p in d.get('packages', []) if p.get('name')}
           # Fails the release rather than publishing a near-empty inventory,
-          # which is what scanning the wrong path produces.
-          assert len(names) >= 200, f'SBOM has only {len(names)} packages'
-          for required in ('@cline/sdk', '@cline/shared', 'zod'):
-              assert required in names, f'{required} missing from SBOM'
-          print(f'SBOM lists {len(names)} distinct packages')
-          "
+          # which is what scanning the wrong path produces -- syft succeeds on
+          # a path it found nothing in.
+          go run ./cmd/cadre sbom-check dist/cadre-plugin-cline-sbom.spdx.json \
+            --min 200 --require '@cline/sdk,@cline/shared,zod'
 
       # Attested because it is a real downloadable artifact. The plugin
       # itself deliberately gets no provenance: a marketplace installs by
@@ -508,6 +431,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      # `sbom-check` below is a Go command, so this job needs a toolchain.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - name: Read CLI version
         id: version
@@ -665,14 +593,8 @@ jobs:
             --source-name cadre-cli \
             --source-version "${{ steps.version.outputs.value }}" \
             -o spdx-json=flat-dist/cadre-cli-sbom.spdx.json
-          python3 -c "
-          import json, pathlib
-          d = json.loads(pathlib.Path('flat-dist/cadre-cli-sbom.spdx.json').read_text())
-          names = {p['name'] for p in d.get('packages', []) if p.get('name')}
-          assert len(names) >= 5, f'SBOM has only {len(names)} packages: {sorted(names)}'
-          assert 'github.com/mattn/go-sqlite3' in names, f'go-sqlite3 missing from SBOM'
-          print(f'SBOM lists {len(names)} distinct packages')
-          "
+          go run ./cmd/cadre sbom-check flat-dist/cadre-cli-sbom.spdx.json \
+            --min 5 --require github.com/mattn/go-sqlite3
 
       - name: Checksum the artifacts
         if: steps.tag.outputs.skip == 'false'

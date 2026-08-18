@@ -1,3 +1,0 @@
-# Direct CI validation dependencies. Compile with pip-tools and hashes.
-PyYAML==6.0.3
-jsonschema[format]==4.26.0
