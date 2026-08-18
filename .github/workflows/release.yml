@@ -332,6 +332,15 @@ jobs:
           # windows-latest is x64 with MinGW x86_64 gcc; cannot emit ARM64 objects with CGO_ENABLED=1.
           # Re-add if/when provisioning windows-11-arm hosted runner with proper cross-toolchain.
     environment: release
+    # The matrix spans Linux, macOS and Windows, and the steps below are
+    # written in sh. Without this, Windows runs them under pwsh, where
+    # `set -eu` and `[ -n "$x" ]` are parse errors -- "Missing type name
+    # after '['". Every such step failed on the first release that got far
+    # enough to run one. The Windows-only archive step sets `shell: pwsh`
+    # explicitly and overrides this.
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: read
     steps:
@@ -380,6 +389,28 @@ jobs:
           mkdir -p dist
           go build -o "dist/cadre-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.exe-suffix }}" ./cmd/cadre
 
+      - name: Smoke test binary on native platforms
+        # Runs here, before the archive steps: each of those deletes the
+        # binary after packing it, so a smoke test placed after them tests a
+        # file that no longer exists. That is exactly what happened on the
+        # first release to reach this step -- exit 127, "No such file or
+        # directory", on every native leg.
+        # Test the built binary on native (non-cross-compiled) platforms only.
+        # linux-arm64 is cross-compiled and cannot run without emulation, so it is excluded.
+        if: |
+          steps.tag.outputs.skip == 'false' && (
+            (matrix.goos == 'linux' && matrix.goarch == 'amd64') ||
+            (matrix.goos == 'darwin') ||
+            (matrix.goos == 'windows' && matrix.goarch == 'amd64')
+          )
+        shell: bash
+        run: |
+          set -eu
+          binary="dist/cadre-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.exe-suffix }}"
+          echo "Testing $binary..."
+          $binary --version
+          $binary knowledge --help
+
       - name: Create archive (tar.gz for Unix)
         if: steps.tag.outputs.skip == 'false' && matrix.goos != 'windows'
         run: |
@@ -405,23 +436,6 @@ jobs:
           name: cadre-binaries-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/cadre-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.*
           retention-days: 1
-
-      - name: Smoke test binary on native platforms
-        # Test the built binary on native (non-cross-compiled) platforms only.
-        # linux-arm64 is cross-compiled and cannot run without emulation, so it is excluded.
-        if: |
-          steps.tag.outputs.skip == 'false' && (
-            (matrix.goos == 'linux' && matrix.goarch == 'amd64') ||
-            (matrix.goos == 'darwin') ||
-            (matrix.goos == 'windows' && matrix.goarch == 'amd64')
-          )
-        shell: bash
-        run: |
-          set -eu
-          binary="dist/cadre-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.exe-suffix }}"
-          echo "Testing $binary..."
-          $binary --version
-          $binary knowledge --help
 
   cli-publish:
     name: Publish Cadre CLI release
