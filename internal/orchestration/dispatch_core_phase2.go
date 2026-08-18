@@ -297,13 +297,23 @@ func dispatchSync(
 	role *ResolvedRole,
 	classification, parentClassification, taskID, sessionID, runner, effectiveSandbox, mode string,
 ) map[string]any {
-	if !currentDispatchLimiter().TryAcquire() {
+	// Named, so the acquire and the release cannot drift apart.
+	//
+	// `defer currentDispatchLimiter().Release()` was already correct here --
+	// Go evaluates a deferred call's receiver at the point of the defer, so it
+	// resolved before any swap could land. But that correctness was
+	// accidental: rewriting it as `defer func() { ... }()`, which reads as an
+	// equivalent tidy-up, moves the resolve to return time and breaks it. The
+	// pointer is swappable, and releasing into a limiter that never issued the
+	// slot takes a token it does not own. See ConcurrencyLimiter.Release.
+	limiter := currentDispatchLimiter()
+	if !limiter.TryAcquire() {
 		return map[string]any{
 			"status": "denied",
 			"reason": fmt.Sprintf("too many concurrent dispatches (limit %d); retry later", MaxConcurrentChildren),
 		}
 	}
-	defer currentDispatchLimiter().Release()
+	defer limiter.Release()
 
 	env := BuildChildEnv(currentDispatchDepth()+1, roots.ProjectRoot)
 	env[ParentClassificationVar] = classification
@@ -337,7 +347,12 @@ func dispatchAsync(
 	// The slot is taken before returning, not inside the goroutine: an async
 	// dispatch that reported a job id and then queued behind the limiter
 	// would have told the caller work had started when it had not.
-	if !currentDispatchLimiter().TryAcquire() {
+	// Named for the same reason as dispatchSync, and here it was a live bug
+	// rather than a latent one. The release below sits inside a goroutine, so
+	// its defer ran when the goroutine did -- after any swap -- and released
+	// into whichever limiter was current then.
+	limiter := currentDispatchLimiter()
+	if !limiter.TryAcquire() {
 		return map[string]any{
 			"status": "denied",
 			"reason": fmt.Sprintf("too many concurrent dispatches (limit %d); retry later", MaxConcurrentChildren),
@@ -348,7 +363,7 @@ func dispatchAsync(
 	env[ParentClassificationVar] = classification
 
 	go func() {
-		defer currentDispatchLimiter().Release()
+		defer limiter.Release()
 		result := ExecuteDispatchChild(dispatchCtx, runner, env, DefaultTimeoutSeconds)
 		result["context_capture"] = AutomaticContextCapture(roots.ProjectRoot,
 			result, dispatchCtx.RoleID, taskID, sessionID, parentClassification, classification)

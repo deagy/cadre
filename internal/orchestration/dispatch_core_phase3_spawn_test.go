@@ -79,6 +79,12 @@ func TestSpawnClaudeCodeChildValidModels(t *testing.T) {
 }
 
 func TestSpawnCodexChildUnavailable(t *testing.T) {
+	// "Unavailable" means no codex binary resolves. That has to be arranged,
+	// not assumed: this asserted it by leaving the setting unset and relying on
+	// codex being absent from PATH, so it passed on CI and failed on any
+	// developer machine with the CLI installed -- where it spawned the real
+	// thing and got "failed" instead.
+	noRunnerBinary(t)
 	result := SpawnCodexChild("test prompt", "claude-sonnet-5", nil, 10.0)
 
 	status := result["status"].(string)
@@ -111,6 +117,10 @@ func TestExecuteDispatchChildInvalidContext(t *testing.T) {
 }
 
 func TestExecuteDispatchChildDefaultRunner(t *testing.T) {
+	// This one only checks that validation did not reject the model or
+	// sandbox, so it does not care what the child is -- but without a stub it
+	// launches whatever `claude` resolves to, which is a real agent session.
+	stubRunner(t)
 	ctx := &DispatchContext{
 		RoleID:  "test-role",
 		Model:   "claude-sonnet-5",
@@ -134,6 +144,9 @@ func TestExecuteDispatchChildDefaultRunner(t *testing.T) {
 }
 
 func TestExecuteDispatchChildCodexRunner(t *testing.T) {
+	// Same as above: the absence of a binary is the precondition, so it is
+	// arranged rather than inherited from whatever the machine has installed.
+	noRunnerBinary(t)
 	ctx := &DispatchContext{
 		RoleID:  "test-role",
 		Model:   "claude-sonnet-5",
