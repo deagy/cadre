@@ -1,0 +1,19 @@
+{
+ "architecture": [
+  "G1",
+  "G2",
+  "G3"
+ ],
+ "empty_text": [],
+ "no_match": [],
+ "unknown_ignored": "ignored_gate_ids contains unknown lifecycle gates: ['G99']",
+ "uppercase": [
+  "G1",
+  "G2",
+  "G3"
+ ],
+ "with_ignores": [
+  "G1",
+  "G3"
+ ]
+}
