@@ -377,3 +377,53 @@ func TestAHaltedRunCannotPublishRequirementIssues(t *testing.T) {
 		t.Errorf("the refusal did not name the halt: %s", h.stderr.String())
 	}
 }
+
+// A re-entered run is not finished.
+//
+// Completeness is a property of the gates, not of whether a decision is
+// outstanding. Re-entry clears the pending decision *and* resets its gates, so
+// deriving "complete" from "nothing pending" tells an operator a reopened run
+// is done -- which is what it did, until an end-to-end run showed it.
+func TestStatusAfterReentryIsNotComplete(t *testing.T) {
+	h := newHarness(t)
+	if code := h.run("plan", "--root", h.root, "--task-id", "task-1", "--task", "refactor the architecture"); code != 0 {
+		t.Fatalf("plan = %d: %s", code, h.stderr.String())
+	}
+
+	decision := filepath.Join(t.TempDir(), "decision.json")
+	if err := os.WriteFile(decision, []byte(`{
+	  "status": "approved",
+	  "approver": {"id": "product_owner", "role": "Product Owner", "kind": "human"},
+	  "evidence_refs": [{"evidence_id":"e1","uri":"https://x/1","hash_algorithm":"sha256","hash":"abc","classification":"internal"}]
+	}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Approve every gate until the run reports complete.
+	for attempt := 0; attempt < 12; attempt++ {
+		if code := h.run("resume", "--root", h.root, "--task-id", "task-1", "--decision", decision); code != 0 {
+			t.Fatalf("resume = %d: %s", code, h.stderr.String())
+		}
+		if h.json(t)["status"] == "complete" {
+			break
+		}
+	}
+	if code := h.run("status", "--root", h.root, "--task-id", "task-1"); code != 0 {
+		t.Fatalf("status = %d: %s", code, h.stderr.String())
+	}
+	if h.json(t)["status"] != "complete" {
+		t.Fatalf("the run did not finish: %v", h.json(t)["status"])
+	}
+
+	if code := h.run("reenter", "--root", h.root, "--task-id", "task-1",
+		"--gate", "G1", "--reason", "requirements changed", "--actor", "alice"); code != 0 {
+		t.Fatalf("reenter = %d: %s", code, h.stderr.String())
+	}
+
+	if code := h.run("status", "--root", h.root, "--task-id", "task-1"); code != 0 {
+		t.Fatalf("status after reenter = %d: %s", code, h.stderr.String())
+	}
+	if got := h.json(t)["status"]; got == "complete" {
+		t.Error("a re-entered run reports complete; its gates were reset and must run again")
+	}
+}

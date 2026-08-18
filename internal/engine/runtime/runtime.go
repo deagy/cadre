@@ -499,11 +499,42 @@ func TaskStatus(request PlanRequest) (map[string]any, error) {
 		"lifecycle_gates": checkpoint.State.LifecycleGates,
 		"run_halted":      checkpoint.State.RunHalted,
 	}
-	if checkpoint.Pending != nil {
+	switch {
+	case checkpoint.Pending != nil:
 		payload["status"] = "interrupted"
 		payload["interrupt"] = checkpoint.Pending.Payload
-	} else {
+	case gatesSettled(metadata.GateSequenceIDs, checkpoint.State.LifecycleGates):
 		payload["status"] = "complete"
+	default:
+		// Reset by a re-entry, or never advanced. Reporting "complete" here --
+		// which is what deriving the answer from a nil pending value did --
+		// tells an operator a reopened run is finished.
+		payload["status"] = "ready"
+		payload["message"] = "gates are pending; advance the run to dispatch them"
 	}
 	return payload, nil
+}
+
+// gatesSettled reports whether every gate in the sequence has been decided.
+//
+// Completeness is a property of the gates, not of whether a decision happens
+// to be outstanding: a re-entry clears the pending decision *and* resets its
+// gates, so "nothing is pending" and "the run is finished" are different
+// claims and only the gates can answer the second.
+func gatesSettled(sequence []string, gates map[string]state.GateState) bool {
+	if len(sequence) == 0 {
+		return false
+	}
+	for _, gateID := range sequence {
+		gate, present := gates[gateID]
+		if !present {
+			return false
+		}
+		switch gate.Status {
+		case "approved", "request-changes", "blocked":
+		default:
+			return false
+		}
+	}
+	return true
 }
