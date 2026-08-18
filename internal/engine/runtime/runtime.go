@@ -419,6 +419,15 @@ func ResultPayload(result executor.Result) map[string]any {
 	if result.Suspended != nil {
 		return map[string]any{"status": "interrupted", "interrupt": result.Suspended.Payload}
 	}
+	// A refused mutation gate ends the run without completing it. Reporting
+	// "complete" says the task finished, when what happened is that a human
+	// declined to authorise it and no gate ever ran.
+	if result.State.RunHalted {
+		return map[string]any{
+			"status":  "halted",
+			"message": "run halted at the mutation gate; no gate was dispatched",
+		}
+	}
 	return map[string]any{"status": "complete", "message": "no interrupt, run complete"}
 }
 
@@ -500,6 +509,12 @@ func TaskStatus(request PlanRequest) (map[string]any, error) {
 		"run_halted":      checkpoint.State.RunHalted,
 	}
 	switch {
+	case checkpoint.State.RunHalted:
+		// Checked before anything else: a halted run is neither waiting for a
+		// decision nor able to advance, and "ready" would invite an operator to
+		// advance something that will never dispatch.
+		payload["status"] = "halted"
+		payload["message"] = "run halted at the mutation gate; no gate was dispatched"
 	case checkpoint.Pending != nil:
 		payload["status"] = "interrupted"
 		payload["interrupt"] = checkpoint.Pending.Payload

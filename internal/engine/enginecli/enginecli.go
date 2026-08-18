@@ -83,6 +83,8 @@ func Run(argv []string, deps Deps) int {
 		return cmdCreateRequirementIssues(argv[1:], deps)
 	case "list-requirement-issues":
 		return cmdListRequirementIssues(argv[1:], deps)
+	case "serve":
+		return cmdServe(argv[1:], deps)
 	case "-h", "--help", "help":
 		fmt.Fprintln(deps.Stdout, usage)
 		return 0
@@ -104,7 +106,8 @@ Commands:
   validate    Validate a task's run record against the kernel schema
 
   create-requirement-issues  Plan or publish a gate's requirements as GitLab issues
-  list-requirement-issues    Print what a task has already published`
+  list-requirement-issues    Print what a task has already published
+  serve       Serve the lifecycle over HTTP (loopback by default)`
 
 // commonFlags are the two every command needs.
 func commonFlags(fs *flag.FlagSet) (root, taskID *string) {

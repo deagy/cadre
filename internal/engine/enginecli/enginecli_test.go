@@ -427,3 +427,41 @@ func TestStatusAfterReentryIsNotComplete(t *testing.T) {
 		t.Error("a re-entered run reports complete; its gates were reset and must run again")
 	}
 }
+
+// A refused run is halted, not complete and not ready.
+//
+// Both were reported at one point, and both mislead in their own direction:
+// "complete" says the task finished, when a human declined to authorise it and
+// no gate ever ran; "ready" invites an operator to advance something that will
+// never dispatch.
+func TestARefusedRunReportsItselfHalted(t *testing.T) {
+	h := newHarness(t)
+	if code := h.run("plan", "--root", h.root, "--task-id", "task-1",
+		"--task", "deploy to production now"); code != 0 {
+		t.Fatalf("plan = %d: %s", code, h.stderr.String())
+	}
+	if h.json(t)["status"] != "interrupted" {
+		t.Fatalf("the mutation gate did not stop the run: %v", h.json(t))
+	}
+
+	refusal := filepath.Join(t.TempDir(), "refusal.json")
+	if err := os.WriteFile(refusal, []byte(`{"authorized": false, "reason": "not now"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run("resume", "--root", h.root, "--task-id", "task-1", "--decision", refusal); code != 0 {
+		t.Fatalf("resume = %d: %s", code, h.stderr.String())
+	}
+	if got := h.json(t)["status"]; got != "halted" {
+		t.Errorf("resume reported %v for a refused run, want halted", got)
+	}
+
+	if code := h.run("status", "--root", h.root, "--task-id", "task-1"); code != 0 {
+		t.Fatalf("status = %d: %s", code, h.stderr.String())
+	}
+	if got := h.json(t)["status"]; got != "halted" {
+		t.Errorf("status reported %v for a refused run, want halted", got)
+	}
+	if h.json(t)["run_halted"] != true {
+		t.Error("status did not carry run_halted")
+	}
+}
