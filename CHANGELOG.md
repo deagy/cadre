@@ -266,6 +266,28 @@ target is still required so an incidental CWD never becomes a write target.
 
 ### Fixed
 
+- **A downloaded `cadre` binary could not run at all, including
+  `cadre --version`.** The dispatcher resolved a repository root before
+  dispatching anything and exited 1 if it could not find one. A release archive
+  contains the executable and nothing else, so every command failed on the
+  artifact the release publishes — `--version`, the first thing anyone runs to
+  check a download, along with `--help` and `doctor`, whose whole purpose is to
+  explain a situation like that one. `cli-v0.5.0` carries this; it is fixed
+  from `cli-v0.5.1`.
+
+  A missing root is no longer fatal. Commands needing an installation still
+  refuse and name what they needed (`cadre select: cannot locate
+  roster/catalog.yaml; set CADRE_REPO_ROOT ...`), which is more useful than one
+  blanket failure naming none of them. Version resolution now falls back to a
+  `VERSION` embedded at build time; a marker file still wins where one exists,
+  so a packaged plugin or an installed wheel keeps reporting its own version
+  rather than that of whichever binary reads it.
+
+  The release smoke test could not have caught this: it runs the built binary
+  from the checkout, where a root always resolves. The guard added with the fix
+  runs the real binary from a temporary directory instead.
+
+
 - **A plan emitted a retrieval its own store would refuse, and the refusal cost
   the whole query.** The two halves of source routing above were each tested and
   jointly broken: the selector named `proposed-knowledge` unconditionally, while
