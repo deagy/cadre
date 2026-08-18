@@ -7,7 +7,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/deagy/cadre/cli/internal/cli"
@@ -35,8 +34,20 @@ func run() int {
 		// This also checks CADRE_REPO_ROOT as a first step.
 		repoRoot, err = platform.FindInstallationRoot()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "cadre: could not resolve repository root: %s\n", err)
-			return 1
+			// Not fatal, and it used to be. Exiting here killed every
+			// subcommand before dispatch, including the ones that need no
+			// installation at all: a released archive contains the binary and
+			// nothing else, so `cadre --version` on a fresh download -- the
+			// first thing anyone runs -- failed with "could not resolve
+			// repository root". So did --help, and so did doctor, the command
+			// whose whole job is to explain a situation like this one.
+			//
+			// Dispatch instead with no root. Commands that genuinely need one
+			// already refuse without it, and say what they needed; the
+			// generators, for instance, decline to write outside a Cadre
+			// checkout. That is a better error than a blanket failure that
+			// names none of them.
+			repoRoot = ""
 		}
 	}
 

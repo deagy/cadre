@@ -48,14 +48,25 @@ func TestCLIVersion_VendoredWheelLayout(t *testing.T) {
 	}
 }
 
-func TestCLIVersion_MissingMarker(t *testing.T) {
+// No marker is no longer an error: the binary reports the version compiled
+// into it.
+//
+// This asserted an error, which was the behaviour that broke the released
+// artifact. A release archive ships the executable alone, so `cadre --version`
+// on a fresh download hit exactly this path and failed. Reporting the
+// embedded version is both correct and the only answer available.
+func TestCLIVersion_MissingMarkerFallsBackToTheEmbeddedVersion(t *testing.T) {
 	repoRoot := t.TempDir()
-	if _, err := CLIVersion(repoRoot); err == nil {
-		t.Error("CLIVersion() error = nil, want error for missing marker file")
+	got, err := CLIVersion(repoRoot)
+	if err != nil {
+		t.Fatalf("CLIVersion() error = %v; a binary must be able to report its own version", err)
+	}
+	if got == "" {
+		t.Error("CLIVersion() returned an empty version")
 	}
 }
 
-func TestCLIVersion_MarkerWithoutVersionAssignment(t *testing.T) {
+func TestCLIVersion_UnparseableMarkerFallsBackToTheEmbeddedVersion(t *testing.T) {
 	repoRoot := t.TempDir()
 	markerDir := filepath.Join(repoRoot, "cadre_cli")
 	if err := os.MkdirAll(markerDir, 0o755); err != nil {
@@ -65,8 +76,17 @@ func TestCLIVersion_MarkerWithoutVersionAssignment(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := CLIVersion(repoRoot); err == nil {
-		t.Error("CLIVersion() error = nil, want error for marker missing VERSION")
+	// An unparseable marker falls back too, rather than failing. The marker
+	// is preferred when it yields a version; when it does not, the embedded
+	// one is still a better answer than refusing to report any version at
+	// all -- and for a wheel or plugin install the two agree anyway, since
+	// the same distribution supplied both.
+	got, err := CLIVersion(repoRoot)
+	if err != nil {
+		t.Fatalf("CLIVersion() error = %v; an unreadable marker should not silence the version", err)
+	}
+	if got == "" {
+		t.Error("CLIVersion() returned an empty version")
 	}
 }
 

@@ -13,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+
+	cadre "github.com/deagy/cadre/cli"
 )
 
 // versionAssignment matches the version literal in the VERSION file.
@@ -69,6 +71,18 @@ func Resolve(repoRoot string) (string, error) {
 		if submatches := findVersionSubmatches(versionAssignment, contents); submatches != nil {
 			return *submatches, nil
 		}
+	}
+
+	// No readable marker. Fall back to the version compiled into this
+	// binary, which is the right answer precisely when there is no
+	// installation to ask: a released archive ships the executable alone, and
+	// `cadre --version` on it used to fail outright.
+	//
+	// Markers still win when present. A packaged plugin or an installed wheel
+	// must report its own version rather than that of whichever binary is
+	// reading it, and those two can differ across an upgrade.
+	if embedded := cadre.Version(); embedded != "" {
+		return embedded, nil
 	}
 
 	if lastPath != "" {
