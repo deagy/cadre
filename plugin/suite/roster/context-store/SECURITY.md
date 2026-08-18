@@ -106,7 +106,7 @@ same clock that deletes the content. `internal/contextstore/database.go`'s `prun
 is a manual, operator-invoked-only primitive for a deployment that has decided
 otherwise -- it takes no default `older_than_days` and nothing in this store
 calls it, on a schedule or otherwise. It is not wired to a CLI subcommand as of
-this change; that needs `service.py`/`cli.py`, which is a separate change.
+this change; that needs the service and CLI surfaces, which is a separate change.
 Before calling it at all, weigh that deleting `access_runs` loses attribution
 for reads and writes that already happened, and deleting `expiry_evidence`
 loses the record that a swept entry ever existed -- both are irreversible

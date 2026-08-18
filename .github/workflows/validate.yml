@@ -112,23 +112,6 @@ jobs:
             ./bin/cadre sdlc show-contract "$contract" >/dev/null
           done
 
-  engine:
-    name: engine/ (LangGraph orchestration)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.11"
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-      - name: Install locked dependencies (fails on lockfile drift)
-        working-directory: engine
-        run: uv sync --locked
-      - name: Run LangGraph engine tests
-        working-directory: engine
-        run: uv run pytest
-
   go:
     name: cmd/, internal/ (Go CLI dispatcher, Phase 1 -- ADR-001-CLI-GO-REFACTOR.md)
     runs-on: ubuntu-latest

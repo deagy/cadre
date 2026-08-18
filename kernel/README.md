@@ -147,7 +147,7 @@ agent catalog, and optional extensions through a versioned manifest:
 
 Keep `kernel_compatibility` a deliberately wide, honest range rather than
 pinning tightly to whatever the kernel's `VERSION` happens to read today.
-`VERSION` (`agentic_sdlc/__init__.py`) is bumped by hand on every tagged
+`Version` (`internal/kernel/provider.go`) is bumped by hand on every tagged
 release with nothing enforcing it stays in sync with the actual tag — it
 drifted for 9 releases (v0.4.0 through v0.12.0) before being caught, which
 silently made every provider pinning a narrow range (like this manifest's

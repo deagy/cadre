@@ -364,8 +364,8 @@ component-prefixed tags:
 | Component | Version source | Tag |
 | --- | --- | --- |
 | Plugin distribution | `plugin/**/plugin.json` (all 8 manifests) | `plugin-v*` |
-| Lifecycle kernel | `kernel/agentic_sdlc/__init__.py` | `kernel-v*` |
-| LangGraph engine | `engine/pyproject.toml` | not released separately yet |
+| Lifecycle kernel | `internal/kernel/provider.go` (`Version`) | `kernel-v*` |
+| Cadre CLI | `VERSION` | `cli-v*` |
 
 The prefixes are load-bearing. This repository inherited 25 bare `v*` tags
 from before the monorepo merge (`v0.1.1`–`v0.16.0`, plus `v1`–`v7`), so an
@@ -403,3 +403,37 @@ review it accordingly.
 See [docs/examples/](docs/examples/) for end-to-end workflow documentation:
 
 - [Role selection workflow](docs/examples/role-selection-workflow.md) — from task to dispatched agents
+
+## Running the lifecycle engine
+
+`cmd/agentic-sdlc-engine` drives a task through the G1-G10 gates: it plans a
+gate sequence, dispatches each gate's agents, and stops for a human at every
+approval.
+
+```sh
+go build ./cmd/agentic-sdlc-engine
+
+# A network-free run. The fake model client needs no credential, so this
+# exercises the whole lifecycle without dispatching to a real model.
+AGENTIC_SDLC_LANGGRAPH_FAKE_MODEL=1 agentic-sdlc-engine \
+  plan --root <project> --task-id demo --task "refactor the billing service"
+
+agentic-sdlc-engine resume --root <project> --task-id demo --decision <file>
+agentic-sdlc-engine status --root <project> --task-id demo
+agentic-sdlc-engine export --root <project> --task-id demo
+```
+
+`serve` exposes the same operations over HTTP, bound to loopback by default --
+nothing in it authenticates a caller, and it dispatches agents and accepts
+approval decisions, so exposing it beyond the host is a deliberate act.
+
+```sh
+agentic-sdlc-engine serve --address 127.0.0.1:8099
+```
+
+Dispatch needs a model provider, chosen explicitly:
+`AGENTIC_SDLC_LANGGRAPH_MODEL_PROVIDER=anthropic` (with `ANTHROPIC_API_KEY`) or
+`=openai` (with `OPENAI_API_KEY` or `OPENAI_BASE_URL`, plus
+`AGENTIC_SDLC_LANGGRAPH_OPENAI_MODEL`). With both configured, or neither, it
+refuses rather than guessing which one your agents should run through.
+`agentic-sdlc-engine --help` lists every subcommand.

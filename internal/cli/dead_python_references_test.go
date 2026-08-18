@@ -45,14 +45,17 @@ var operationalDocs = []string{
 	"CONTRIBUTING.md",
 	"DISTRIBUTION.md",
 	"README.md",
-	"REMAINING_PYTHON_SCOPE.md",
+	// REMAINING_PYTHON_SCOPE.md is deliberately absent. It described the
+	// migration while one was under way, which made it a claim about the
+	// present; with the migration finished it is a record of what was
+	// replaced, and naming the Python it replaced is its subject matter.
+	// Its operational half moved to README.md, which is scanned.
 	".pre-commit-config.yaml",
 	"bin/README.md",
 	"docs/adopt-cadre-quickstart.md",
 	"docs/sample-selection-output.md",
 	"docs/terminology.md",
 	"docs/which-runner-am-i-in.md",
-	"engine/README.md",
 	"internal/knowledge/README.md",
 	"kernel/README.md",
 	"roster/RUNBOOK.md",
@@ -121,10 +124,14 @@ func livePythonFiles(t *testing.T) map[string]bool {
 		}
 		live[filepath.Base(line)] = true
 	}
-	if len(live) < 10 {
-		t.Fatalf("git reports %d tracked Python files; the listing is broken, "+
-			"not the tree", len(live))
-	}
+	// Zero is the target state, not a broken listing.
+	//
+	// This guard exists to catch a doc still naming a .py file that has been
+	// deleted, and it once protected itself by insisting the tree still held
+	// some Python -- a reasonable assumption while any remained. The engine
+	// was the last of it. An empty set now means every reference in a doc to
+	// any .py file is dead by definition, which is a stricter check rather
+	// than a vacuous one.
 	return live
 }
 
