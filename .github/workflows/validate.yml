@@ -203,7 +203,7 @@ jobs:
           fi
       - run: go tool golangci-lint run ./...
   plugin-tools:
-    name: plugin/tools (packaging, docs guards, kernel bootstrap)
+    name: plugin/tools (workspace guard, TS parity, kernel bootstrap)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

@@ -15,7 +15,7 @@ Resolve Python 3.10+ as documented in the runbook. From each internal-tool compo
 ```sh
 go test ./...                                                    # the CLI, kernel, stores, generators
 go test ./internal/generators/                                   # repo-health guards
-python3 -m unittest discover -b -s plugin/tools -p "test_*.py"               # packaging
+python3 -m unittest discover -b -s plugin/tools -p "test_*.py"               # the workspace guard and the kernel bootstrap
 ```
 
 After changing `roster/catalog.yaml`, `roster/`, or `.agents/skills/`, regenerate derived output before committing. `git add` any new files **first** — the generator copies git-tracked files and silently skips untracked ones, so regenerating before staging ships a package referencing a file it does not contain:
@@ -27,7 +27,7 @@ After changing `roster/catalog.yaml`, `roster/`, or `.agents/skills/`, regenerat
 ./bin/cadre port-cline-agents --root cline-plugins --source plugin
 ```
 
-The order is load-bearing, `generate-plugin` never touches `cline-plugins/`, and this applies to code and to this file itself — `plugin/suite/` bundles `roster/` and `AGENTS.md`, so a new module under `roster/*/src/` is part of the packaged CLI. Then re-run both guards, whose coverage is not redundant: `go test ./internal/generators/` and `python3 -m unittest discover -b -s plugin/tools -p "test_*.py"`. Run lifecycle integration tests against the in-tree `kernel/`.
+The order is load-bearing, `generate-plugin` never touches `cline-plugins/`, and this applies to code and to this file itself — `plugin/suite/` bundles `roster/` and `AGENTS.md`, so a new module under `roster/*/src/` is part of the packaged CLI. Then re-run the regeneration guard, `go test ./internal/generators/` -- and `go test ./...` if you touched anything the Cline mirror reads, since its byte-for-byte guard is a Go test too. The `plugin/tools` suite is **not** a regeneration guard: what is left there covers the workspace-mutation hook, its parity with the TypeScript Cline implementation, and the kernel bootstrap. Run lifecycle integration tests against the in-tree `kernel/`.
 
 **`roster/RUNBOOK.md` §17, "Regenerating derived output", is the canonical version** — it explains why each step exists, why the order matters, what each guard catches, and the `git add` gotcha in both of its directions. Extend it there rather than restating it here.
 

@@ -123,10 +123,7 @@ A git worktree of the Cadre repository — a catalog of 159 specialist agent rol
 
 ### Run Tests
 ```bash
-python3 -m unittest discover -b -s roster/knowledge-store/test -p "test_*.py"
-python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
-python3 -m unittest discover -b -s roster/shared/test -p "test_*.py"
-python3 -m unittest discover -b -s kernel/test -p "test_*.py"
+go test ./...                    # the CLI, kernel, stores, selector, generators
 cd engine && uv sync && uv run python -m pytest
 ```
 
@@ -137,8 +134,8 @@ git add .                                         # Stage new files first
 ./bin/cadre generate-role-metadata               # Sync catalog with roles
 ./bin/cadre generate-plugin --output plugin      # Regenerate plugin
 ./bin/cadre port-cline-agents --root cline-plugins --source plugin
-python3 -m unittest discover -b -s roster/orchestration/test -p "test_repository_health.py"
-python3 -m unittest discover -b -s plugin/tools -p "test_*.py"
+go test ./internal/generators/                   # catalog/role/packaging drift
+go test ./...                                    # includes the Cline mirror guard
 ```
 
 ### Select Agents for a Task
@@ -198,8 +195,8 @@ cat > .cline/memory/BEST_PRACTICES.md <<'CLINE_PRACTICES_EOF'
    ```
 3. Verify guards pass:
    ```bash
-   python3 -m unittest discover -b -s roster/orchestration/test -p "test_repository_health.py"
-   python3 -m unittest discover -b -s plugin/tools -p "test_*.py"
+   go test ./internal/generators/
+   go test ./...
    ```
 
 ### Knowledge Store or Context Store Changes
@@ -216,7 +213,7 @@ cat > .cline/memory/BEST_PRACTICES.md <<'CLINE_PRACTICES_EOF'
 
 ### Testing a Change Before Committing
 - If it touches roles: regenerate and run repository health checks
-- If it touches gates/kernel: `cd kernel && python3 -m unittest discover -b -s test -p "test_*.py"`
+- If it touches gates/kernel: `go test ./internal/kernel/`
 - If it touches engine: `cd engine && uv sync && uv run python -m pytest`
 - If it touches CLI behavior: `cadre <subcommand> --help` and a manual smoke test
 
@@ -255,7 +252,7 @@ echo "Worktree ready at: $WORKTREE_PATH"
 echo ""
 echo "Next steps:"
 echo "  1. cd $WORKTREE_PATH"
-echo "  2. Run tests to verify: python3 -m unittest discover -b -s roster/knowledge-store/test"
+echo "  2. Run tests to verify: go test ./..."
 echo "  3. Open this directory in Cline (it will load .cline/memory automatically)"
 echo ""
 echo "Cline memory bank includes:"
