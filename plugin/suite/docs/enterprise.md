@@ -104,10 +104,20 @@ they are allowed to get it:
 | `system` | Use only a kernel you installed. The plugin never installs anything; it reports if none is present. |
 | `off` | No kernel checking at all. Silent. |
 
-The plugin **never installs software on its own initiative** in any mode. Its
-`SessionStart` hook only detects and reports; installation happens when a
-human runs `/cadre-install-kernel`. If your policy forbids a plugin fetching
-code from the network at all, use `off` and provide `AGENTIC_SDLC_BIN`:
+**This changed.** The plugin used to install nothing on its own initiative:
+its `SessionStart` hook detected and reported, and a human ran
+`/cadre-install-kernel` to install the kernel. That installer created a venv
+and pip-installed a Python kernel this repository has since deleted, so it has
+been removed.
+
+The lifecycle `bin/agentic-sdlc` shim now fetches the kernel itself, on first
+use, from the checksum-verified `kernel-v` release it was generated against --
+the same thing `bin/cadre` already does for the CLI binary. Nothing is fetched
+if a kernel already resolves.
+
+`AGENTIC_SDLC_BIN` is unchanged and is still checked **first**, before any
+cache or download, so a policy that forbids a plugin fetching code from the
+network is still satisfied by setting it:
 
 ```json
 {

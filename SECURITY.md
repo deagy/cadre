@@ -47,9 +47,10 @@ you have the wrong package. Uninstall it before continuing.
 
 ### Automated installers
 
-`plugin/tools/bootstrap_sdlc.py` installs this kernel from a checksum-verified
-release asset (falling back to a pinned git tag), never from PyPI, for exactly
-this reason.
+Each lifecycle plugin's `bin/agentic-sdlc` shim fetches this kernel from a
+checksum-verified release asset, pinned at plugin-generation time to a
+specific `kernel-v` release, for exactly this reason. It refuses on a checksum
+mismatch rather than running what it downloaded.
 If you write your own automation, do the same.
 
 ## Verifying a release

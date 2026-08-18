@@ -1,4 +1,0 @@
-interface:
-  display_name: "Install Lifecycle Kernel"
-  short_description: "Install the Agentic SDLC kernel the G1-G10 governance skills need, into a copy this plugin owns."
-  default_prompt: "Use $cadre-install-kernel to install the Agentic SDLC lifecycle kernel."

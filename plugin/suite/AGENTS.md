@@ -15,7 +15,6 @@ Resolve Python 3.10+ as documented in the runbook. From each internal-tool compo
 ```sh
 go test ./...                                                    # the CLI, kernel, stores, generators
 go test ./internal/generators/                                   # repo-health guards
-python3 -m unittest discover -b -s plugin/tools -p "test_*.py"               # the workspace guard and the kernel bootstrap
 ```
 
 After changing `roster/catalog.yaml`, `roster/`, or `.agents/skills/`, regenerate derived output before committing. `git add` any new files **first** — the generator copies git-tracked files and silently skips untracked ones, so regenerating before staging ships a package referencing a file it does not contain:

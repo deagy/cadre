@@ -2,17 +2,27 @@
 set -eu
 BIN_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
+# Pinned at generation time, like the CLI shim's CADRE_CLI_VERSION: a
+# version resolved at run time would make which kernel you get depend on
+# when you ran it.
+AGENTIC_SDLC_VERSION="0.14.1"
+
 if [ -n "${AGENTIC_SDLC_BIN:-}" ]; then
   exec "$AGENTIC_SDLC_BIN" "$@"
 fi
 
-if [ -n "${CLAUDE_PLUGIN_DATA:-}" ]; then
-  for subdir in bin Scripts; do
-    candidate="$CLAUDE_PLUGIN_DATA/kernel/$subdir/agentic-sdlc"
-    if [ -x "$candidate" ]; then
-      exec "$candidate" "$@"
-    fi
-  done
+CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+CACHE_DIR="$CACHE_HOME/cadre"
+CACHED="$CACHE_DIR/agentic-sdlc-v$AGENTIC_SDLC_VERSION"
+# A cached kernel is re-checked for writability before it is trusted,
+# the same gate the workspace guard applies to its own cache: anything
+# group- or other-writable is discarded and re-fetched rather than run.
+if [ -f "$CACHED" ] && [ -x "$CACHED" ]; then
+  PERMS=$(ls -l "$CACHED" 2>/dev/null | awk '{print $1}')
+  if [ "$(printf '%s' "$PERMS" | cut -c6)" != "w" ] && [ "$(printf '%s' "$PERMS" | cut -c9)" != "w" ]; then
+    exec "$CACHED" "$@"
+  fi
+  rm -f "$CACHED"
 fi
 
 # Strip this shim's own directory from PATH before looking, or `command -v`
@@ -23,5 +33,72 @@ if [ -n "$FOUND" ]; then
   exec "$FOUND" "$@"
 fi
 
-echo "agentic-sdlc: no lifecycle kernel available. Run cadre-install-kernel (or the /cadre-install-kernel skill) to set one up." >&2
-exit 1
+# Nothing resolved: fetch the kernel this plugin was generated against.
+case "$(uname -s 2>/dev/null || echo unknown)" in
+  Linux)  GOOS=linux ;;
+  Darwin) GOOS=darwin ;;
+  MINGW*|MSYS*|CYGWIN*) GOOS=windows ;;
+  *) echo "agentic-sdlc: no kernel for this platform" >&2; exit 1 ;;
+esac
+case "$(uname -m 2>/dev/null || echo unknown)" in
+  x86_64|amd64)  GOARCH=amd64 ;;
+  aarch64|arm64) GOARCH=arm64 ;;
+  *) echo "agentic-sdlc: no kernel for this architecture" >&2; exit 1 ;;
+esac
+
+if [ "$GOOS" = "windows" ]; then
+  ARCHIVE="agentic-sdlc-v$AGENTIC_SDLC_VERSION-$GOOS-$GOARCH.zip"
+  MEMBER="agentic-sdlc.exe"
+else
+  ARCHIVE="agentic-sdlc-v$AGENTIC_SDLC_VERSION-$GOOS-$GOARCH.tar.gz"
+  MEMBER="agentic-sdlc"
+fi
+BASE="https://github.com/deagy/cadre/releases/download/kernel-v$AGENTIC_SDLC_VERSION"
+
+TEMP_DIR=$(mktemp -d) || exit 1
+trap 'rm -rf "$TEMP_DIR"' EXIT
+
+fetch() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --connect-timeout 5 --max-time 60 --proto '=https' -o "$2" "$1"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q --timeout=5 -O "$2" "$1"
+  else
+    return 1
+  fi
+}
+
+if ! fetch "$BASE/$ARCHIVE" "$TEMP_DIR/$ARCHIVE" || ! fetch "$BASE/SHA256SUMS" "$TEMP_DIR/SHA256SUMS"; then
+  echo "agentic-sdlc: could not download the lifecycle kernel (v$AGENTIC_SDLC_VERSION). Set AGENTIC_SDLC_BIN to a kernel you already have, or install one on PATH." >&2
+  exit 1
+fi
+
+# Verify before trusting. An unverified kernel decides gate approvals.
+EXPECTED=$(grep " $ARCHIVE\$" "$TEMP_DIR/SHA256SUMS" 2>/dev/null | awk '{print $1}')
+if [ -z "$EXPECTED" ]; then
+  echo "agentic-sdlc: $ARCHIVE is not listed in the release's SHA256SUMS" >&2
+  exit 1
+fi
+if command -v sha256sum >/dev/null 2>&1; then
+  ACTUAL=$(sha256sum "$TEMP_DIR/$ARCHIVE" | awk '{print $1}')
+elif command -v shasum >/dev/null 2>&1; then
+  ACTUAL=$(shasum -a 256 "$TEMP_DIR/$ARCHIVE" | awk '{print $1}')
+else
+  echo "agentic-sdlc: no sha256 tool available to verify the download" >&2
+  exit 1
+fi
+if [ "$ACTUAL" != "$EXPECTED" ]; then
+  echo "agentic-sdlc: checksum mismatch on $ARCHIVE" >&2
+  exit 1
+fi
+
+if [ "$GOOS" = "windows" ]; then
+  unzip -q -o -j "$TEMP_DIR/$ARCHIVE" "$MEMBER" -d "$TEMP_DIR" || exit 1
+else
+  tar -xzf "$TEMP_DIR/$ARCHIVE" -C "$TEMP_DIR" "$MEMBER" || exit 1
+fi
+
+mkdir -p "$CACHE_DIR"
+chmod 700 "$TEMP_DIR/$MEMBER"
+mv "$TEMP_DIR/$MEMBER" "$CACHED"
+exec "$CACHED" "$@"

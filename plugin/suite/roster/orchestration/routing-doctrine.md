@@ -65,7 +65,7 @@ is a scoping miss rather than a legitimate hit.
   references this repository specifically. This condition holds.
 - `packaging` was purpose-built around this repository's own
   plugin-distribution tooling: its keywords are `plugin version bump`,
-  `plugin changelog entry`, `plugin install script`, `bootstrap_sdlc.py`,
+  `plugin changelog entry`, `plugin install script`, `kernel shim`,
   `port cline agents` (`CHANGELOG.md`'s `#189` entry), and its paths are
   `plugin/tools/**` plus one Cadre-specific `supply-chain` addition. The
   route's own scoping — not the general competence of the roles it

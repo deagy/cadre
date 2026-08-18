@@ -388,7 +388,8 @@ To ship a change through to installed plugins:
 Once that lands on `main`, [`release.yml`](.github/workflows/release.yml)
 tags and publishes automatically — no manual `git tag`. The kernel job does
 the same for `kernel/`, and additionally attaches a wheel, an sdist, and
-`SHA256SUMS`, which is what lets `bootstrap_sdlc.py` verify what it installs.
+`SHA256SUMS`, which is what lets the lifecycle `bin/agentic-sdlc` shim verify
+what it downloads.
 Both jobs are idempotent and only ever tag reviewed, merged content.
 
 **Merging a version-bump PR is the release approval.** The workflow itself

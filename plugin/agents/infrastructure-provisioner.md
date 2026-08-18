@@ -185,9 +185,10 @@ cicd:
     cosign keyless (Sigstore OIDC), sign once at build tier, verify before every
     promotion. This repository publishes two artifacts, on separate tags:
     the plugin distribution (plugin-v*) and the lifecycle kernel (kernel-v*).
-    The kernel release attaches a wheel, an sdist, and SHA256SUMS, and
-    bootstrap_sdlc.py verifies the checksum before installing -- refusing to
-    install on a mismatch rather than falling back. The plugin release is a
+    The kernel release attaches one archive per platform and SHA256SUMS, and
+    each lifecycle plugin's bin/agentic-sdlc shim verifies the checksum before
+    running what it downloaded -- refusing on a mismatch rather than falling
+    back. The plugin release is a
     tag plus release notes with no attached archive, since a marketplace
     installs from the repository tree rather than a downloaded artifact.
     The kernel release also carries an SPDX SBOM of its dependency tree and a

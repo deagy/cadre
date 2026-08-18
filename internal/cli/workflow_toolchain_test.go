@@ -123,11 +123,13 @@ func TestEveryWorkflowJobThatRunsGoPinsItsToolchain(t *testing.T) {
 // and the lockfile fed nothing. Its matrix comment explained the floor in
 // terms of `pip install cadre` users, on a job that never runs pip.
 var (
+	// install.sh and install.ps1 used to be counted as Python users without
+	// naming it, because they resolved an interpreter and ran
+	// bootstrap_sdlc.py. The bootstrap is gone and both installers are
+	// Python-free, so that exemption went with it -- keeping it would let a
+	// setup-python step sit unnoticed in those jobs, which is what this guard
+	// is for.
 	runsPython = regexp.MustCompile(`\b(python3?|pip3?|uv)\b`)
-	// The installers resolve an interpreter themselves and run
-	// bootstrap_sdlc.py, so a job executing one needs Python without ever
-	// naming it.
-	runsInstaller = regexp.MustCompile(`(^|[^\w./])\.?/?install\.(sh|ps1)\b`)
 )
 
 func TestNoWorkflowJobSetsUpAPythonItNeverUses(t *testing.T) {
@@ -160,7 +162,7 @@ func TestNoWorkflowJobSetsUpAPythonItNeverUses(t *testing.T) {
 				if strings.Contains(step.Uses, "setup-python") {
 					setsUp = true
 				}
-				if runsPython.MatchString(step.Run) || runsInstaller.MatchString(step.Run) {
+				if runsPython.MatchString(step.Run) {
 					uses = true
 				}
 			}
