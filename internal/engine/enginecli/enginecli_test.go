@@ -244,3 +244,136 @@ func TestValidateReportsABlockerRatherThanSuccess(t *testing.T) {
 		t.Errorf("validate did not name the blocker: %s", h.stderr.String())
 	}
 }
+
+// A dry run is the default: this is the one command that writes somewhere
+// other than the project's own .agentic-sdlc directory.
+func TestCreateRequirementIssuesDefaultsToADryRun(t *testing.T) {
+	h := newHarness(t)
+	if code := h.run("plan", "--root", h.root, "--task-id", "task-1", "--task", "refactor the architecture"); code != 0 {
+		t.Fatalf("plan = %d: %s", code, h.stderr.String())
+	}
+
+	items := filepath.Join(t.TempDir(), "items.json")
+	if err := os.WriteFile(items, []byte(`{"schema_version":1,"gate_id":"G2","items":[
+	  {"key":"req-1","title":"Add rate limiting","description":"Limit requests per client."}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code := h.run("create-requirement-issues", "--root", h.root, "--task-id", "task-1",
+		"--project", "group/project", "--items", items)
+	if code != 0 {
+		t.Fatalf("dry run = %d: %s", code, h.stderr.String())
+	}
+	payload := h.json(t)
+	if payload["mode"] != "dry-run" {
+		t.Errorf("mode = %v, want dry-run without --apply", payload["mode"])
+	}
+	if payload["plan_digest"] == nil || payload["plan_digest"] == "" {
+		t.Error("a dry run produced no plan digest to apply with")
+	}
+}
+
+// Applying without naming the expected bot would publish under whoever happens
+// to be authenticated.
+func TestApplyingRequiresTheBotIdentity(t *testing.T) {
+	h := newHarness(t)
+	if code := h.run("plan", "--root", h.root, "--task-id", "task-1", "--task", "refactor the architecture"); code != 0 {
+		t.Fatalf("plan = %d: %s", code, h.stderr.String())
+	}
+
+	items := filepath.Join(t.TempDir(), "items.json")
+	if err := os.WriteFile(items, []byte(`{"schema_version":1,"gate_id":"G2","items":[
+	  {"key":"req-1","title":"Add rate limiting","description":"Limit requests."}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code := h.run("create-requirement-issues", "--root", h.root, "--task-id", "task-1",
+		"--project", "group/project", "--items", items, "--apply", "--plan-digest", "sha256:x")
+	if code == 0 {
+		t.Error("an apply without --as-bot succeeded")
+	}
+	if !strings.Contains(h.stderr.String(), "--as-bot") {
+		t.Errorf("the refusal did not name --as-bot: %s", h.stderr.String())
+	}
+}
+
+// Sanitisation refusals reach the operator rather than being swallowed.
+func TestAQuickActionInAnItemIsRefused(t *testing.T) {
+	h := newHarness(t)
+	if code := h.run("plan", "--root", h.root, "--task-id", "task-1", "--task", "refactor the architecture"); code != 0 {
+		t.Fatalf("plan = %d: %s", code, h.stderr.String())
+	}
+
+	items := filepath.Join(t.TempDir(), "items.json")
+	if err := os.WriteFile(items, []byte(`{"schema_version":1,"gate_id":"G2","items":[
+	  {"key":"req-1","title":"Looks fine","description":"/assign @someone"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if code := h.run("create-requirement-issues", "--root", h.root, "--task-id", "task-1",
+		"--project", "group/project", "--items", items); code == 0 {
+		t.Error("an item containing a GitLab quick action was planned")
+	}
+	if !strings.Contains(h.stderr.String(), "quick-action") {
+		t.Errorf("the refusal did not explain itself: %s", h.stderr.String())
+	}
+}
+
+// Listing a task that has published nothing is an empty ledger, not an error.
+func TestListingAnUnpublishedTask(t *testing.T) {
+	h := newHarness(t)
+	if code := h.run("list-requirement-issues", "--root", h.root, "--task-id", "task-1"); code != 0 {
+		t.Fatalf("list = %d: %s", code, h.stderr.String())
+	}
+	payload := h.json(t)
+	if payload["count"] != float64(0) {
+		t.Errorf("count = %v, want 0", payload["count"])
+	}
+}
+
+// A refused mutation gate halts the run, and a halted run publishes nothing.
+//
+// Eligibility is read from the run's own checkpoint rather than taken from a
+// flag: whether a run was refused authorisation is a fact about the run, and
+// letting a caller assert otherwise would publish requirements from a task
+// somebody declined to authorise.
+func TestAHaltedRunCannotPublishRequirementIssues(t *testing.T) {
+	h := newHarness(t)
+
+	// "deploy to production" is a human-only phrase in the shipped contract,
+	// so planning stops for authorisation.
+	if code := h.run("plan", "--root", h.root, "--task-id", "task-1",
+		"--task", "refactor the architecture then deploy to production"); code != 0 {
+		t.Fatalf("plan = %d: %s", code, h.stderr.String())
+	}
+	if h.json(t)["status"] != "interrupted" {
+		t.Fatalf("the mutation gate did not stop the run: %v", h.json(t))
+	}
+
+	refusal := filepath.Join(t.TempDir(), "refusal.json")
+	if err := os.WriteFile(refusal, []byte(`{"authorized": false, "reason": "not now"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code := h.run("resume", "--root", h.root, "--task-id", "task-1", "--decision", refusal); code != 0 {
+		t.Fatalf("resume = %d: %s", code, h.stderr.String())
+	}
+
+	items := filepath.Join(t.TempDir(), "items.json")
+	if err := os.WriteFile(items, []byte(`{"schema_version":1,"gate_id":"G2","items":[
+	  {"key":"req-1","title":"Add rate limiting","description":"Limit requests."}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code := h.run("create-requirement-issues", "--root", h.root, "--task-id", "task-1",
+		"--project", "group/project", "--items", items)
+	if code == 0 {
+		t.Fatal("a halted run planned requirement issues")
+	}
+	// Blocked, not a defect: exit 2, the same distinction validate makes.
+	if code != 2 {
+		t.Errorf("exit = %d, want 2 for a blocked run: %s", code, h.stderr.String())
+	}
+	if !strings.Contains(h.stderr.String(), "halted") {
+		t.Errorf("the refusal did not name the halt: %s", h.stderr.String())
+	}
+}

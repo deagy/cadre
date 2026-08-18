@@ -79,6 +79,10 @@ func Run(argv []string, deps Deps) int {
 		return cmdExport(argv[1:], deps)
 	case "validate":
 		return cmdValidate(argv[1:], deps)
+	case "create-requirement-issues":
+		return cmdCreateRequirementIssues(argv[1:], deps)
+	case "list-requirement-issues":
+		return cmdListRequirementIssues(argv[1:], deps)
 	case "-h", "--help", "help":
 		fmt.Fprintln(deps.Stdout, usage)
 		return 0
@@ -97,7 +101,10 @@ Commands:
   invalidate  Invalidate a gate and every gate after it
   reenter     Reset a gate and every gate after it so they run again
   export      Print the run record for a task
-  validate    Validate a task's run record against the kernel schema`
+  validate    Validate a task's run record against the kernel schema
+
+  create-requirement-issues  Plan or publish a gate's requirements as GitLab issues
+  list-requirement-issues    Print what a task has already published`
 
 // commonFlags are the two every command needs.
 func commonFlags(fs *flag.FlagSet) (root, taskID *string) {
