@@ -3,6 +3,7 @@ package release
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -411,4 +412,73 @@ func TestEveryReleaseVersionReadNamesAPathThatExists(t *testing.T) {
 		t.Fatal("no version read was found in release.yml; this guard checked nothing")
 	}
 	t.Logf("checked %d version-read path(s)", checked)
+}
+
+// A program's current version must not already be a tag.
+//
+// kernel-publish, like cli-publish, skips when its tag exists -- that is what
+// stops a re-run from re-releasing. It also means a version that is *already*
+// tagged can never publish at all, silently, forever.
+//
+// That was live rather than hypothetical. Every kernel-v0.13.* tag was cut
+// from the Python kernel that #317 deleted, and the Go kernel declared 0.13.2,
+// so the publish job added moments earlier would have skipped every time. The
+// job was correct; the version it wanted was taken, by a different
+// implementation's bits.
+func TestNoPublishedProgramDeclaresAVersionThatIsAlreadyTagged(t *testing.T) {
+	root := repositoryRoot(t)
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not available")
+	}
+	checked := 0
+	for _, program := range Programs {
+		prefix := TagPrefix[program]
+		version, ok := currentVersionOf(t, root, program)
+		if !ok {
+			continue
+		}
+		checked++
+		tag := prefix + version
+		command := exec.Command("git", "rev-parse", "--verify", "--quiet", "refs/tags/"+tag)
+		command.Dir = root
+		if err := command.Run(); err == nil {
+			t.Errorf("%s declares version %s, and %s already exists as a tag. The "+
+				"publish job skips an existing tag, so this version can never be "+
+				"released -- and the tag names whatever was built when it was cut, "+
+				"which may be a different implementation entirely.",
+				program, version, tag)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no program's version could be read; this guard checked nothing")
+	}
+	t.Logf("checked %d program version(s) against existing tags", checked)
+}
+
+// currentVersionOf reads a program's declared version the same way the release
+// workflow does, so this guard and the release agree on what would be published.
+func currentVersionOf(t *testing.T, root, program string) (string, bool) {
+	t.Helper()
+	switch program {
+	case ProgramCLI:
+		contents, err := os.ReadFile(filepath.Join(root, "VERSION"))
+		if err != nil {
+			return "", false
+		}
+		return strings.TrimSpace(string(contents)), true
+	case ProgramKernel:
+		// Asked of the binary, matching the workflow. Building it is slower
+		// than parsing the constant and is the point: a guard that read the
+		// source could pass while the binary reported something else.
+		command := exec.Command("go", "run", "./cmd/agentic-sdlc", "--version")
+		command.Dir = root
+		out, err := command.Output()
+		if err != nil {
+			t.Logf("cannot ask the kernel its version: %v", err)
+			return "", false
+		}
+		return strings.TrimSpace(string(out)), true
+	}
+	t.Errorf("no way to read %s's version; add one when adding a program", program)
+	return "", false
 }

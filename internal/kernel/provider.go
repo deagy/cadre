@@ -41,7 +41,13 @@ import (
 // It is not decoration. Providers declare a kernel_compatibility range and
 // are refused outside it, so a wrong version here either rejects a provider
 // that should load or accepts one written for different gate semantics.
-const Version = "0.13.2"
+// 0.14.0 rather than 0.13.x: every kernel-v0.13.* tag was cut from the Python
+// kernel, which #317 deleted. The Go kernel claiming 0.13.2 meant
+// kernel-publish's "skip if already tagged" check would skip forever -- the
+// version it wanted to publish was already a tag, naming a different
+// implementation's bits. A minor bump both frees the namespace and says the
+// implementation changed. TestTheKernelVersionIsNotAlreadyTagged holds it.
+const Version = "0.14.0"
 
 var (
 	providerIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
