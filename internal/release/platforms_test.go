@@ -80,17 +80,23 @@ func TestTheCrossBuildMatrixIsExactlyTheContractedOne(t *testing.T) {
 	}
 }
 
-func TestEveryCrossBuildLegForcesCgo(t *testing.T) {
+func TestEveryCliCrossBuildLegForcesCgo(t *testing.T) {
 	// The knowledge store (github.com/mattn/go-sqlite3) needs cgo. A leg
 	// without CGO_ENABLED=1 builds fine and produces a binary whose `cadre
 	// knowledge` subcommand is a non-functional stub -- verified against a
 	// real build, not inferred.
+	//
+	// Scoped to the CLI rather than every leg. That reason is about the
+	// knowledge store, which only the CLI links; requiring cgo on the kernel's
+	// legs too would make it unbuildable without a cross toolchain for a
+	// dependency it does not have. TestTheKernelBuildsWithoutCgo holds the
+	// other half, so neither program can drift into the wrong setting.
 	for _, line := range strings.Split(crossBuildRecipe(t), "\n") {
-		if !strings.Contains(line, "GOOS=") {
+		if !strings.Contains(line, "./cmd/"+ProgramCLI) {
 			continue
 		}
 		if !strings.Contains(line, "CGO_ENABLED=1") {
-			t.Errorf("cross-build leg does not force cgo, so `cadre knowledge` "+
+			t.Errorf("a CLI cross-build leg does not force cgo, so `cadre knowledge` "+
 				"ships as a stub on that platform:\n  %s", strings.TrimSpace(line))
 		}
 	}
@@ -160,7 +166,7 @@ func TestTheNamingHelpersAgreeWithTheMatrix(t *testing.T) {
 	// helpers are what the guards above compare against -- if they disagreed
 	// with the matrix, every check above would be measuring the wrong thing.
 	for _, platform := range SupportedPlatforms {
-		name := ArchiveName(platform.GOOS, platform.GOARCH, "0.0.0")
+		name := ArchiveName(ProgramCLI, platform.GOOS, platform.GOARCH, "0.0.0")
 		if platform.GOOS == "windows" {
 			if !strings.HasSuffix(name, ".zip") {
 				t.Errorf("%s: archive %q is not a .zip", platform, name)
@@ -234,6 +240,68 @@ func TestTheReleaseMatrixIsExactlyTheContractedOne(t *testing.T) {
 		if !contracted[platform] {
 			t.Errorf("release.yml publishes %s, which is not in SupportedPlatforms and "+
 				"so appears in no documentation the shim or a human reads", platform)
+		}
+	}
+}
+
+// crossBuildLeg matches one build line: the program it builds and for what.
+var crossBuildLeg = regexp.MustCompile(
+	`GOOS=(\S+)\s+GOARCH=(\S+)\s+go build[^\n]*\./cmd/(\S+)`)
+
+func TestCrossBuildCoversEveryPublishedProgramOnEveryPlatform(t *testing.T) {
+	// Programs names what a release publishes; cross-build is what produces
+	// it. A program in one and not the other is an asset the release promises
+	// and never builds, or builds and never promises.
+	//
+	// The kernel was absent here for a long time on the reasoning that it
+	// "implements one subcommand so far". That comment named its own expiry
+	// and outlived it, and the consequence was not cosmetic: with no published
+	// Go kernel, an installed lifecycle plugin falls through to bootstrapping
+	// the Python kernel this repository deleted.
+	built := map[string]bool{}
+	for _, match := range crossBuildLeg.FindAllStringSubmatch(crossBuildRecipe(t), -1) {
+		built[match[3]+" "+match[1]+"/"+match[2]] = true
+	}
+	if len(built) == 0 {
+		t.Fatal("no build legs parsed out of cross-build; this guard checked nothing")
+	}
+	for _, program := range Programs {
+		for _, platform := range SupportedPlatforms {
+			key := program + " " + platform.String()
+			if !built[key] {
+				t.Errorf("cross-build never builds %s for %s, so a release cannot "+
+					"publish it there", program, platform)
+			}
+		}
+	}
+	for key := range built {
+		program := strings.Fields(key)[0]
+		known := false
+		for _, candidate := range Programs {
+			if candidate == program {
+				known = true
+			}
+		}
+		if !known {
+			t.Errorf("cross-build builds ./cmd/%s, which is not in Programs -- so it "+
+				"is built and never published, or published under a name nothing "+
+				"records", program)
+		}
+	}
+}
+
+func TestTheKernelBuildsWithoutCgo(t *testing.T) {
+	// The CLI legs force CGO_ENABLED=1 because the knowledge store needs it.
+	// The kernel does not, and forcing it there would make the kernel
+	// unbuildable on any machine without a cross toolchain -- including the
+	// one that would otherwise be able to produce every kernel asset locally.
+	for _, line := range strings.Split(crossBuildRecipe(t), "\n") {
+		if !strings.Contains(line, "./cmd/"+ProgramKernel) {
+			continue
+		}
+		if !strings.Contains(line, "CGO_ENABLED=0") {
+			t.Errorf("a kernel cross-build leg does not set CGO_ENABLED=0:\n  %s",
+				strings.TrimSpace(line))
 		}
 	}
 }
