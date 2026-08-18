@@ -79,10 +79,10 @@ clean:
 # future release, not just skip one platform. Re-adding it requires
 # provisioning a real ARM64 Windows runner (or an equivalent cross
 # toolchain) first; see DISTRIBUTION.md's "Platform support" section and
-# plugin/tools/binary_platforms.py's module docstring, which record this as
+# internal/release/platforms.go's SupportedPlatforms, which record this as
 # a decided exclusion, not a gap to fill in later without re-deciding it.
-# Five platforms is the contract; plugin/tools/test_binary_shim_contract.py
-# guards this list against plugin/tools/binary_platforms.py.
+# Five platforms is the contract; internal/release/platforms_test.go guards
+# this list against internal/release/platforms.go.
 cross-build:
 	@mkdir -p dist
 	CGO_ENABLED=1 GOOS=linux   GOARCH=amd64 go build -o dist/cadre-linux-amd64         ./cmd/cadre

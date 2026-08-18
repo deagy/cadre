@@ -589,7 +589,7 @@ jobs:
           mkdir -p wheel-binaries
 
           # goos goarch platform-tag exe-suffix. Kept in step with the build
-          # matrix above and with plugin/tools/binary_platforms.py, which the
+          # matrix above and with internal/release/platforms.go, which the
           # contract test guards.
           while read -r goos goarch tag suffix; do
             archive="flat-dist/cadre-v$version-$goos-$goarch"
