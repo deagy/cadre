@@ -1,0 +1,175 @@
+package agents
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// Every generic role prompt carries the separation-of-duties line and the
+// rule that a subagent must stop rather than guess.
+//
+// These are the two sentences that make a dispatched agent safe to run
+// unattended, so they are asserted rather than assumed.
+func TestGenericPromptsCarryTheSafetyRules(t *testing.T) {
+	author := ResolveRolePrompt(RolePromptRequest{AgentID: "backend-engineer", Kind: "author"})
+	reviewer := ResolveRolePrompt(RolePromptRequest{AgentID: "code-reviewer", Kind: "reviewer"})
+
+	for name, prompt := range map[string]string{"author": author, "reviewer": reviewer} {
+		if !strings.Contains(prompt, "Never approve a lifecycle or mutation gate.") {
+			t.Errorf("%s prompt does not forbid approving a gate:\n%s", name, prompt)
+		}
+		if !strings.Contains(prompt, AskHumanRule) {
+			t.Errorf("%s prompt omits the ask-human rule", name)
+		}
+	}
+
+	if !strings.Contains(author, "do not self-review") {
+		t.Errorf("the author prompt does not forbid self-review:\n%s", author)
+	}
+	if !strings.Contains(reviewer, "do not modify the artifact under review") {
+		t.Errorf("the reviewer prompt does not forbid modifying the artifact:\n%s", reviewer)
+	}
+	// The two must not be interchangeable: an author told to "remain
+	// independent" and a reviewer told to "prepare artifacts" would each be
+	// given the other's duty.
+	if author == reviewer {
+		t.Error("author and reviewer prompts are identical")
+	}
+}
+
+// A provider's definition is used only when the profile opts in.
+func TestRichContentRequiresOptIn(t *testing.T) {
+	root := t.TempDir()
+	definition := filepath.Join(root, "role.md")
+	if err := os.WriteFile(definition, []byte("  Provider role text.  "), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	metadata := map[string]any{"definition": definition}
+
+	withoutOptIn := ResolveRolePrompt(RolePromptRequest{
+		AgentID: "a", Kind: "author", Metadata: metadata, Profile: map[string]any{},
+	})
+	if strings.Contains(withoutOptIn, "Provider role text.") {
+		t.Error("a provider definition was used without the profile opting in")
+	}
+
+	withOptIn := ResolveRolePrompt(RolePromptRequest{
+		AgentID: "a", Kind: "author", Metadata: metadata,
+		Profile: map[string]any{"rich_content_source": true},
+	})
+	if !strings.Contains(withOptIn, "Provider role text.") {
+		t.Errorf("the opted-in definition was not used:\n%s", withOptIn)
+	}
+	// It came from another repository, so it must say so, and it still has to
+	// carry the ask-human rule.
+	if !strings.Contains(withOptIn, RichContentAdaptationNote) {
+		t.Error("rich content was used without the adaptation note")
+	}
+	if !strings.Contains(withOptIn, AskHumanRule) {
+		t.Error("rich content was used without the ask-human rule")
+	}
+}
+
+// With no provider root, a relative definition is unresolved rather than
+// resolved against the working directory.
+//
+// Resolving it would read whatever happens to sit at that path next to
+// whoever ran the process -- an unconfined escape hatch reached by a catalog
+// field.
+func TestARelativeDefinitionIsNotResolvedAgainstTheWorkingDirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "planted.md"), []byte("planted content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(root)
+
+	prompt := ResolveRolePrompt(RolePromptRequest{
+		AgentID: "a", Kind: "author",
+		Metadata: map[string]any{"definition": "planted.md"},
+		Profile:  map[string]any{"rich_content_source": true},
+	})
+	if strings.Contains(prompt, "planted content") {
+		t.Error("a relative definition was resolved against the working directory")
+	}
+	if !strings.Contains(prompt, "Act as the portable Agentic SDLC role") {
+		t.Error("the generic instruction was not used as the fallback")
+	}
+}
+
+// A definition escaping its provider root falls back rather than being read.
+func TestADefinitionEscapingItsProviderRootIsRefused(t *testing.T) {
+	providerRoot := t.TempDir()
+	outside := filepath.Join(filepath.Dir(providerRoot), "outside-role.md")
+	if err := os.WriteFile(outside, []byte("outside content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Remove(outside) })
+
+	prompt := ResolveRolePrompt(RolePromptRequest{
+		AgentID: "a", Kind: "author",
+		Metadata:     map[string]any{"definition": "../" + filepath.Base(outside)},
+		Profile:      map[string]any{"rich_content_source": true},
+		ProviderRoot: providerRoot,
+	})
+	if strings.Contains(prompt, "outside content") {
+		t.Error("a definition outside the provider root was read")
+	}
+}
+
+// A missing definition falls back rather than failing the dispatch.
+func TestAMissingDefinitionFallsBack(t *testing.T) {
+	prompt := ResolveRolePrompt(RolePromptRequest{
+		AgentID: "a", Kind: "author",
+		Metadata: map[string]any{"definition": "/nonexistent/role.md"},
+		Profile:  map[string]any{"rich_content_source": true},
+	})
+	if !strings.Contains(prompt, "Act as the portable Agentic SDLC role a.") {
+		t.Errorf("a missing definition did not fall back:\n%s", prompt)
+	}
+}
+
+func TestFakeModelClientIsDeterministic(t *testing.T) {
+	client := FakeModelClient{BlockingAgents: map[string]bool{"blocked-agent": true}}
+	request := CompletionRequest{AgentID: "backend-engineer", Kind: "author", GateID: "G3"}
+
+	first, err := client.Complete(request)
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	second, _ := client.Complete(request)
+	if first != second {
+		t.Errorf("two identical requests produced different contributions:\n  %+v\n  %+v", first, second)
+	}
+	if first.ArtifactID != "G3-backend-engineer-artifact" || first.Revision != "rev-1" {
+		t.Errorf("contribution = %+v", first)
+	}
+	if first.BlockingQuestion != nil {
+		t.Error("an unblocked agent returned a blocking question")
+	}
+
+	blocked, _ := client.Complete(CompletionRequest{AgentID: "blocked-agent", Kind: "author", GateID: "G3"})
+	if blocked.BlockingQuestion == nil {
+		t.Error("a blocking agent returned no question")
+	}
+}
+
+// The tool contract is shared so two clients cannot drift on it.
+func TestSubmitContributionSchema(t *testing.T) {
+	schema := SubmitContributionSchema()
+	if schema["additionalProperties"] != false {
+		t.Error("the schema permits additional properties; a model could return anything")
+	}
+	required, _ := schema["required"].([]any)
+	if len(required) != 3 {
+		t.Errorf("required = %v, want artifact_id, revision and summary", required)
+	}
+	properties, _ := schema["properties"].(map[string]any)
+	blocking, _ := properties["blocking_question"].(map[string]any)
+	types, _ := blocking["type"].([]any)
+	if len(types) != 2 {
+		t.Errorf("blocking_question type = %v, want it nullable", types)
+	}
+}
