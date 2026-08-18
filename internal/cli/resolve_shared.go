@@ -21,7 +21,7 @@ func ResolveSharedCmd(args []string) int {
 	fs := flag.NewFlagSet("cadre resolve-shared", flag.ContinueOnError)
 	setUsage(fs, "resolve-shared", usageResolveShared)
 	project := fs.String("project", "", "Directory to resolve overlays from (default: cwd)")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(flagsFirst(fs, args)); err != nil {
 		return parseExitCode(err)
 	}
 	if fs.NArg() != 1 {

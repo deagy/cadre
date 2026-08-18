@@ -84,7 +84,7 @@ func SBOMCheckCmd(args []string) int {
 	setUsage(fs, "sbom-check", usageSBOMCheck)
 	minimum := fs.Int("min", 1, "the fewest distinct packages a real inventory has")
 	required := fs.String("require", "", "comma-separated package names that must appear")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(flagsFirst(fs, args)); err != nil {
 		return parseExitCode(err)
 	}
 	if fs.NArg() != 1 {
