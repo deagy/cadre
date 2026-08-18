@@ -1,0 +1,69 @@
+{
+ "client_message_full": {
+  "contextId": "c1",
+  "metadata": {
+   "k": 1
+  },
+  "parts": [
+   {
+    "kind": "text",
+    "text": "hi"
+   }
+  ],
+  "role": "agent",
+  "taskId": "t1"
+ },
+ "client_message_min": {
+  "parts": [
+   {
+    "kind": "text",
+    "text": "hi"
+   }
+  ],
+  "role": "user"
+ },
+ "rpc_err": {
+  "error": {
+   "code": -32600,
+   "message": "bad"
+  },
+  "id": 1,
+  "jsonrpc": "2.0"
+ },
+ "rpc_ok": {
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": {
+   "artifacts": [],
+   "contextId": "c1",
+   "history": [],
+   "id": "t1",
+   "status": {
+    "message": null,
+    "state": "working",
+    "timestamp": null
+   }
+  }
+ },
+ "sse_event": {
+  "contextId": "c1",
+  "final": true,
+  "status": {
+   "message": null,
+   "state": "completed",
+   "timestamp": null
+  },
+  "taskId": "t1"
+ },
+ "task_result": {
+  "artifacts": [],
+  "contextId": "c1",
+  "history": [],
+  "id": "t1",
+  "status": {
+   "message": null,
+   "state": "working",
+   "timestamp": null
+  }
+ }
+}
