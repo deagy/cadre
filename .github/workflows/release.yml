@@ -51,6 +51,11 @@ on:
       - "plugin/plugins/lifecycle-gitlab/.claude-plugin/plugin.json"
       - "plugin/plugins/lifecycle-gitlab/.codex-plugin/plugin.json"
       - "VERSION"
+      # The kernel's version is a Go constant, not a marker file. Without this
+      # a kernel bump changed nothing the trigger watches, so the workflow
+      # never started -- the `changed` job would have reported kernel=true and
+      # kernel-publish would have run, if either had ever been reached.
+      - "internal/kernel/provider.go"
   workflow_dispatch:
 
 permissions:
