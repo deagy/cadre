@@ -1,8 +1,11 @@
 package contracts
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -240,5 +243,64 @@ func TestShippedMutationPhrasesAreLowercase(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Fatal("no phrases checked")
+	}
+}
+
+// Every key the shipped contract uses must have somewhere to land.
+//
+// Go's json decoder discards unknown keys in silence, so a field the
+// contract carries and the struct omits is not an error at any point -- it is
+// simply absent, and whatever depended on it behaves as though the contract
+// never said it.
+//
+// That is not hypothetical here. Gate.HumanOnly was missing from the first
+// version of this package. G9 sets human_only, and the validator uses it to
+// exempt a human-decision gate from the "approved gates need evidence_refs and
+// artifact_bindings" rule -- so a perfectly legitimate G9 approval would have
+// been reported as a hard error. It surfaced only when the module that
+// consumes the field was ported.
+func TestGateModelsEveryKeyTheContractUses(t *testing.T) {
+	root := repoRoot(t)
+	contents, err := os.ReadFile(filepath.Join(root, "kernel", "contracts", "lifecycle-gates.json"))
+	if err != nil {
+		t.Fatalf("reading the lifecycle contract: %v", err)
+	}
+	var document struct {
+		Gates []map[string]any `json:"gates"`
+	}
+	if err := json.Unmarshal(contents, &document); err != nil {
+		t.Fatalf("parsing the lifecycle contract: %v", err)
+	}
+	if len(document.Gates) == 0 {
+		t.Fatal("the contract declares no gates; this guard read nothing")
+	}
+
+	modelled := map[string]bool{}
+	structType := reflect.TypeOf(Gate{})
+	for i := 0; i < structType.NumField(); i++ {
+		tag := structType.Field(i).Tag.Get("json")
+		if tag == "" || tag == "-" {
+			continue
+		}
+		modelled[strings.Split(tag, ",")[0]] = true
+	}
+
+	used := map[string]bool{}
+	for _, gate := range document.Gates {
+		for key := range gate {
+			used[key] = true
+		}
+	}
+
+	var missing []string
+	for key := range used {
+		if !modelled[key] {
+			missing = append(missing, key)
+		}
+	}
+	sort.Strings(missing)
+	if len(missing) > 0 {
+		t.Errorf("lifecycle-gates.json uses keys Gate does not model: %v.\n"+
+			"They decode to nothing, so anything depending on them sees the zero value.", missing)
 	}
 }

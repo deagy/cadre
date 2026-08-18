@@ -22,6 +22,11 @@ type Gate struct {
 	Prerequisites         []string `json:"prerequisites"`
 	RequiredContributions []string `json:"required_contributions"`
 	AuthorityRequirements []string `json:"authority_requirements"`
+	// HumanOnly marks a gate whose evidence is the human decision itself.
+	// G9 sets it. A gate with it has no bound agents by design, so the
+	// validator must not demand agent-produced evidence_refs and
+	// artifact_bindings of it.
+	HumanOnly bool `json:"human_only"`
 }
 
 // MutationGate is one human-only gate from mutation-gates.json.
