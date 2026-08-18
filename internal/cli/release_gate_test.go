@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/deagy/cadre/cli/internal/version"
 )
 
@@ -368,4 +370,77 @@ func TestTheKernelVersionFileTheGateWatchesActuallyDeclaresIt(t *testing.T) {
 		t.Errorf("the gate reads %q from %s but the kernel reports %q",
 			declared, kernelVersionFile, got)
 	}
+}
+
+// Every path the release gate reads a version from must be a path the release
+// workflow is triggered by.
+//
+// These are two lists maintained apart, and both have to agree or the release
+// silently does nothing. The gate decides *whether* a component changed; the
+// trigger decides whether anything asks. A component watched by the gate but
+// absent from the trigger is a component that can never be released, and
+// nothing reports it -- the workflow simply does not start.
+//
+// That was live. The kernel's version is a Go constant rather than a marker
+// file, `changed-components` was taught to read it, `kernel-publish` was
+// written to publish it, and its version was bumped so the tag was free --
+// and none of it ran, because bumping a Go constant matched nothing in a
+// trigger list of eight JSON manifests and one VERSION file.
+func TestTheReleaseTriggerWatchesEveryVersionTheGateReads(t *testing.T) {
+	root := filepath.Dir(filepath.Dir(mustGetwd(t)))
+	contents, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release.yml"))
+	if err != nil {
+		t.Fatalf("cannot read release.yml: %v", err)
+	}
+	var workflow struct {
+		On struct {
+			Push struct {
+				Paths []string `yaml:"paths"`
+			} `yaml:"push"`
+		} `yaml:"on"`
+	}
+	if err := yaml.Unmarshal(contents, &workflow); err != nil {
+		t.Fatalf("release.yml does not parse: %v", err)
+	}
+	watched := map[string]bool{}
+	for _, path := range workflow.On.Push.Paths {
+		watched[path] = true
+	}
+	if len(watched) == 0 {
+		t.Fatal("the release trigger watches no paths; this guard read nothing")
+	}
+
+	checked := 0
+	for _, component := range releaseComponents(root) {
+		// anyOf components list alternative markers and only one need exist;
+		// requiring every historical spelling in the trigger would pin dead
+		// paths there forever.
+		covered := false
+		for _, path := range component.paths {
+			if watched[path] {
+				covered = true
+			}
+			if !component.anyOf {
+				checked++
+				if !watched[path] {
+					t.Errorf("the release gate reads %s's version from %s, which the "+
+						"release trigger does not watch -- a change there starts no "+
+						"workflow, so that component can never be released",
+						component.name, path)
+				}
+			}
+		}
+		if component.anyOf {
+			checked++
+			if !covered {
+				t.Errorf("none of %s's version markers (%s) is watched by the release "+
+					"trigger, so a bump there starts no workflow",
+					component.name, strings.Join(component.paths, ", "))
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no component's paths were checked against the trigger")
+	}
+	t.Logf("checked %d component(s) against %d trigger path(s)", checked, len(watched))
 }
