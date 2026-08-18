@@ -3,6 +3,7 @@ package kernel
 import (
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -41,7 +42,7 @@ const (
 // a guard like this is an incomplete list, and a list that has to be edited
 // when a package is added is one someone will notice.
 var rosterSidePackages = []string{
-	"selector", "orchestration", "contextstore", "knowledge", "generators", "cli",
+	"selector", "orchestration", "contextstore", "knowledge", "generators", "cli", "engine",
 }
 
 // packageImportsIn returns import path -> files that import it, for one
@@ -97,14 +98,22 @@ func TestNoRosterSidePackageImportsTheKernel(t *testing.T) {
 				"and may be silently covering nothing", name)
 			continue
 		}
-		checked++
-		for path, files := range packageImportsIn(t, directory) {
-			if path == kernelPkg || strings.HasPrefix(path, kernelPkg+"/") {
-				t.Errorf("internal/%s imports %s in %v.\n"+
-					"The kernel is shelled out to, never linked: roster/ asks and the kernel "+
-					"answers. An in-process call makes this repository authoritative for "+
-					"another project's gate approvals, which is the one thing the boundary "+
-					"exists to prevent.", name, path, files)
+		packageDirs := goPackageDirs(t, directory)
+		if len(packageDirs) == 0 {
+			t.Errorf("internal/%s contains no Go source; this guard would report it as covered "+
+				"while examining nothing", name)
+			continue
+		}
+		checked += len(packageDirs)
+		for _, packageDir := range packageDirs {
+			for path, files := range packageImportsIn(t, packageDir) {
+				if path == kernelPkg || strings.HasPrefix(path, kernelPkg+"/") {
+					t.Errorf("internal/%s imports %s in %v.\n"+
+						"The kernel is shelled out to, never linked: roster/ asks and the kernel "+
+						"answers. An in-process call makes this repository authoritative for "+
+						"another project's gate approvals, which is the one thing the boundary "+
+						"exists to prevent.", name, path, files)
+				}
 			}
 		}
 	}
@@ -299,4 +308,44 @@ func TestThisRepositoryRunsNoLifecycleOverlayOfItsOwn(t *testing.T) {
 			"These are written by `agentic-sdlc init` into a project that adopts the "+
 			"kernel. This repository supplies it.", strings.Join(managed, "\n  "))
 	}
+}
+
+// goPackageDirs returns every directory at or under root that holds Go source.
+//
+// The walk exists for internal/engine, which is a tree of packages rather than
+// one directory. Naming just "engine" in rosterSidePackages would have pointed
+// the guard at a directory containing no .go files at all: no imports found,
+// no findings reported, and `checked` incremented all the same -- a package
+// listed as covered while nothing about it was examined. That is precisely the
+// silent-coverage-of-nothing the list's own comment warns about.
+//
+// A no-op for the other six, none of which has a Go subpackage today. testdata
+// is skipped because the toolchain ignores it, so a fixture in there is not
+// something this repository builds.
+func goPackageDirs(t *testing.T, root string) []string {
+	t.Helper()
+	var dirs []string
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !entry.IsDir() {
+			return nil
+		}
+		if entry.Name() == "testdata" {
+			return filepath.SkipDir
+		}
+		matches, err := filepath.Glob(filepath.Join(path, "*.go"))
+		if err != nil {
+			return err
+		}
+		if len(matches) > 0 {
+			dirs = append(dirs, path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking %s: %v", root, err)
+	}
+	return dirs
 }
