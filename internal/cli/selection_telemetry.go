@@ -19,7 +19,7 @@ func SelectionTelemetryCmd(args []string) int {
 	summarizePath := fs.String("summarize", "", "Path to a selection-telemetry JSON-lines file (required)")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	if fs.NArg() > 0 {
 		fmt.Fprintf(os.Stderr, "cadre selection-telemetry: unexpected argument: %s\n", fs.Arg(0))

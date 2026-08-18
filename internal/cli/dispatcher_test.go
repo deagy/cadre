@@ -248,14 +248,18 @@ func TestRun_GenerateRoleMetadataRouting(t *testing.T) {
 		SubcommandsPath: subPath,
 	}
 
-	// generate-role-metadata should be routed to the Go CLI
-	// It will fail because the repo root structure doesn't exist, but it should
-	// reach the Go CLI code path (not Python dispatch)
+	// generate-role-metadata should be routed to the Go CLI, reaching its own
+	// flag parsing rather than any other dispatch path.
+	//
+	// This asserted exit 2, described as "flag parsing error for --help".
+	// That was the defect, not the contract: an explicit --help is a
+	// satisfied request and exits 0. Routing is what this test is for, and
+	// it still shows it -- an unrouted command would not print this
+	// command's usage at all.
 	code := Run(context.Background(), []string{"generate-role-metadata", "--help"}, deps)
 
-	// The command should exit with code 2 (flag parsing error for --help)
-	if code != 2 {
-		t.Errorf("Run() for generate-role-metadata code = %d, want 2", code)
+	if code != 0 {
+		t.Errorf("Run() for generate-role-metadata --help code = %d, want 0", code)
 	}
 }
 

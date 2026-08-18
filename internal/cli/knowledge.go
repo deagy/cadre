@@ -64,7 +64,7 @@ Options:
 	configFlag := fs.String("config", "", "Path to a knowledge-store config.json (not a database path)")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if fs.NArg() < 1 {
@@ -175,7 +175,7 @@ func knowledgeInit(dbPath string, args []string) int {
 	verifyOnly := fs.Bool("verify", false, "Verify existing store without creating")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if fs.NArg() > 0 {
@@ -253,7 +253,7 @@ func knowledgeStats(dbPath string, args []string) int {
 	jsonOutput := fs.Bool("json", false, "Output stats as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if fs.NArg() > 0 {
@@ -442,7 +442,7 @@ Options:
 	embeddingModel := fs.String("embedding", "local-hashing", "Embedding model (local-hashing or openai-compatible)")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if *source == "" {
@@ -697,7 +697,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "Output results as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if fs.NArg() < 1 {
@@ -804,7 +804,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "Output stats as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	// Validate that exactly one deletion mode is specified
@@ -891,7 +891,7 @@ func knowledgeShards(dbPath string, args []string) int {
 	jsonOutput := fs.Bool("json", false, "Output stats as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if fs.NArg() > 0 {
@@ -1015,7 +1015,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "Output results as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if fs.NArg() < 1 {
@@ -1156,7 +1156,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "Output stats as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	// Validate that exactly one deletion mode is specified
@@ -1284,7 +1284,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if fs.NArg() > 0 {
@@ -1405,7 +1405,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if fs.NArg() > 0 {
@@ -1586,7 +1586,7 @@ func knowledgeFTS5IndexInitialize(dbPath string, args []string) int {
 	}
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	// Get database connection
@@ -1657,7 +1657,7 @@ Options:
 	source := fs.String("source", "", "Source")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if *msgID == "" {
@@ -1714,7 +1714,7 @@ Options:
 	msgID := fs.String("message-id", "", "Message ID (required)")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if *msgID == "" {
@@ -1761,7 +1761,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	// Get database connection
@@ -1813,7 +1813,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if fs.NArg() > 0 {
@@ -1931,7 +1931,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if fs.NArg() > 0 {
@@ -2021,7 +2021,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if *query == "" {
@@ -2100,7 +2100,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if *vectorStr == "" {
@@ -2161,7 +2161,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if *jsonOutput {
@@ -2205,7 +2205,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if fs.NArg() > 0 {
@@ -2363,7 +2363,7 @@ Options:
 		jsonOutput := fs.Bool("json", false, "JSON output")
 
 		if err := fs.Parse(subArgs); err != nil {
-			return 2
+			return parseExitCode(err)
 		}
 
 		if *replicaID == "" || *address == "" {
@@ -2392,7 +2392,7 @@ Options:
 		jsonOutput := fs.Bool("json", false, "JSON output")
 
 		if err := fs.Parse(subArgs); err != nil {
-			return 2
+			return parseExitCode(err)
 		}
 
 		if *messageID == "" || *operation == "" {
@@ -2565,7 +2565,7 @@ Options:
 		jsonOutput := fs.Bool("json", false, "JSON output")
 
 		if err := fs.Parse(args[1:]); err != nil {
-			return 2
+			return parseExitCode(err)
 		}
 
 		if *backupID == "" {
@@ -2613,7 +2613,7 @@ Options:
 		jsonOutput := fs.Bool("json", false, "JSON output")
 
 		if err := fs.Parse(args[1:]); err != nil {
-			return 2
+			return parseExitCode(err)
 		}
 
 		if *backupID == "" {
@@ -2682,7 +2682,7 @@ Subcommands:
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if fs.NArg() < 1 {
@@ -2752,7 +2752,7 @@ func knowledgeHealthCheck(args []string) int {
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	// Get persistence database
@@ -2859,7 +2859,7 @@ func knowledgeDiagnostics(args []string) int {
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	// Get persistence database
@@ -2925,7 +2925,7 @@ func knowledgeMetrics(args []string) int {
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	// Get persistence database
@@ -2994,7 +2994,7 @@ Subcommands:
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if fs.NArg() < 1 {
@@ -3094,7 +3094,7 @@ func knowledgeExport(args []string) int {
 	jsonOutput := fs.Bool("json", false, "JSON output")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	// Get persistence database
@@ -3162,7 +3162,7 @@ func knowledgeImport(args []string) int {
 	jsonOutput := fs.Bool("json", false, "JSON output")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	// Get persistence database
@@ -3229,7 +3229,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "JSON output")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if *file == "" {
@@ -3302,7 +3302,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "JSON output")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if *classification == "" && *source == "" && *olderThan == 0 {
@@ -3369,7 +3369,7 @@ Options:
 	jsonOutput := fs.Bool("json", false, "JSON output")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	if *filter == "" {
@@ -3442,7 +3442,7 @@ func knowledgeCheckIntegrity(args []string) int {
 	jsonOutput := fs.Bool("json", false, "JSON output")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	// Get database path
@@ -3502,7 +3502,7 @@ func knowledgeRepair(args []string) int {
 	jsonOutput := fs.Bool("json", false, "JSON output")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	// Get database path
@@ -3557,7 +3557,7 @@ func knowledgeRebuildIndexes(args []string) int {
 	jsonOutput := fs.Bool("json", false, "JSON output")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	// Get database path
@@ -3607,7 +3607,7 @@ func knowledgeDefragment(args []string) int {
 	jsonOutput := fs.Bool("json", false, "JSON output")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	// Get database path

@@ -85,7 +85,7 @@ func SBOMCheckCmd(args []string) int {
 	minimum := fs.Int("min", 1, "the fewest distinct packages a real inventory has")
 	required := fs.String("require", "", "comma-separated package names that must appear")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	if fs.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "usage: cadre sbom-check <sbom.spdx.json> [--min N] [--require a,b]")

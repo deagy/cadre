@@ -5,10 +5,13 @@ import (
 )
 
 func TestGenerateRoleMetadataHelp(t *testing.T) {
-	// Test --help flag
+	// An explicit --help is a satisfied request, so it exits 0. This
+	// asserted 2, which is what the command actually did: flag.ErrHelp was
+	// folded in with genuine parse failures. Exit 2 belongs to the bad
+	// invocations the sibling tests cover.
 	code := GenerateRoleMetadata([]string{"--help"})
-	if code != 2 {
-		t.Errorf("expected exit code 2 for --help, got %d", code)
+	if code != 0 {
+		t.Errorf("expected exit code 0 for --help, got %d", code)
 	}
 }
 

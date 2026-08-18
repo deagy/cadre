@@ -135,7 +135,7 @@ func contextInit(args []string) int {
 	fs.SetOutput(os.Stderr)
 	configPath := fs.String("config", "", "explicit config file path")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	cfg, tier, err := contextstore.LoadConfig(*configPath)
 	if err != nil {
@@ -154,7 +154,7 @@ func contextStats(args []string) int {
 	fs.SetOutput(os.Stderr)
 	configPath := fs.String("config", "", "explicit config file path")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	cfg, tier, err := contextstore.LoadConfig(*configPath)
 	if err != nil {
@@ -183,7 +183,7 @@ func contextExpire(args []string) int {
 	asOf := fs.String("as-of", "", "ISO-8601 moment to evaluate expiry against")
 	dryRun := fs.Bool("dry-run", false, "report without destroying")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	cfg, _, err := contextstore.LoadConfig(*configPath)
 	if err != nil {
@@ -239,7 +239,7 @@ func contextPruneAudit(args []string) int {
 	olderThanDays := fs.Int("older-than-days", 0, "required: prune rows older than this many days")
 	acknowledgeLoss := fs.Bool("acknowledge-loss", false, "required: pruning audit rows destroys accountability, it is not hygiene")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	cfg, _, err := contextstore.LoadConfig(*configPath)
 	if err != nil {
@@ -265,7 +265,7 @@ func contextReindex(args []string) int {
 	configPath := fs.String("config", "", "explicit config file path")
 	force := fs.Bool("force", false, "rebuild every entry, not only those with no vectors under the current settings")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	cfg, _, err := contextstore.LoadConfig(*configPath)
 	if err != nil {
@@ -305,7 +305,7 @@ func contextPut(args []string) int {
 	ttlDays := fs.Int("ttl-days", 0, "0 means unset (use the scope's default)")
 	caller := addCallerFlags(fs)
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	cfg, tier, err := openScopedStore(*configPath)
@@ -349,7 +349,7 @@ func contextGet(args []string) int {
 	dispatchID := fs.String("dispatch-id", "", "")
 	caller := addCallerFlags(fs)
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	cfg, tier, err := openScopedStore(*configPath)
 	if err != nil {
@@ -391,7 +391,7 @@ func contextList(args []string) int {
 	top := fs.String("top", "", "")
 	caller := addCallerFlags(fs)
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	cfg, tier, err := openScopedStore(*configPath)
 	if err != nil {
@@ -430,7 +430,7 @@ func contextSearch(args []string) int {
 	top := fs.String("top", "", "")
 	caller := addCallerFlags(fs)
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	cfg, tier, err := openScopedStore(*configPath)
 	if err != nil {
@@ -472,7 +472,7 @@ func contextExport(args []string) int {
 	includeUntrusted := fs.Bool("include-untrusted", false, "required to export entries flagged untrusted_inputs")
 	caller := addCallerFlags(fs)
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	cfg, tier, err := openScopedStore(*configPath)
 	if err != nil {
@@ -515,7 +515,7 @@ func contextPromote(args []string) int {
 	findingOnly := fs.Bool("finding-only", false, "print just the finding object")
 	caller := addCallerFlags(fs)
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	cfg, tier, err := openScopedStore(*configPath)
 	if err != nil {
@@ -563,7 +563,7 @@ func contextDrop(args []string) int {
 	dispatchID := fs.String("dispatch-id", "", "")
 	caller := addCallerFlags(fs)
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	cfg, tier, err := openScopedStore(*configPath)
 	if err != nil {

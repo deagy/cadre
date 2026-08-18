@@ -13,6 +13,10 @@ import (
 // profile_diff.py. Read-only: never writes to, re-syncs, or remediates
 // anything belonging to a consuming project.
 func ProfileCmd(args []string) int {
+	if len(args) > 0 && isHelpArg(args[0]) {
+		fmt.Fprintln(os.Stderr, "usage: cadre profile diff --copy-provider PATH --copy-profile PATH [options]")
+		return 0
+	}
 	if len(args) == 0 || args[0] != "diff" {
 		fmt.Fprintln(os.Stderr, "usage: cadre profile diff --copy-provider PATH --copy-profile PATH [options]")
 		return 2
@@ -32,7 +36,7 @@ func profileDiff(args []string) int {
 	profileID := fs.String("profile-id", "secure-cloud", "profile id used to resolve the default --current-profile path")
 	asJSON := fs.Bool("json", false, "emit machine-readable JSON instead of text")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	if *copyProvider == "" || *copyProfile == "" {
 		fmt.Fprintln(os.Stderr, "cadre profile diff: --copy-provider and --copy-profile are required")

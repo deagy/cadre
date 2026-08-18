@@ -22,7 +22,7 @@ func ResolveSharedCmd(args []string) int {
 	setUsage(fs, "resolve-shared", usageResolveShared)
 	project := fs.String("project", "", "Directory to resolve overlays from (default: cwd)")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	if fs.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "usage: cadre resolve-shared "+usageResolveShared)

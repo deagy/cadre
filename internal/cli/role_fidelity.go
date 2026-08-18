@@ -46,7 +46,7 @@ func RoleFidelityCmd(args []string) int {
 	attestFile := fs.String("attest-file", "", "Write a role-fidelity attestation record for this run's --model into this JSON file")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	if fs.NArg() > 0 {
 		fmt.Fprintf(os.Stderr, "cadre role-fidelity: unexpected argument: %s\n", fs.Arg(0))

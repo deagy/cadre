@@ -22,8 +22,11 @@ func GeneratePlugin(args []string) int {
 		"Overwrite an existing downstream package's own README.md with the register's template")
 
 	if err := fs.Parse(args); err != nil {
-		fmt.Fprintf(os.Stderr, "cadre: %v\n", err)
-		return 2
+		if parseFailed(err) {
+			fmt.Fprintf(os.Stderr, "cadre: %v\n", err)
+			return 2
+		}
+		return 0
 	}
 
 	if fs.NArg() > 0 {

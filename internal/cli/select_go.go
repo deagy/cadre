@@ -59,7 +59,7 @@ func runSelectGo(args []string) int {
 	options.Var(&sources, "source", "Knowledge-store source to retrieve from; repeatable")
 
 	if err := options.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	if *task == "" {
 		fmt.Fprintln(os.Stderr, "cadre select: error: the following arguments are required: --task")

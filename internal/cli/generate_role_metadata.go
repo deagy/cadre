@@ -17,8 +17,11 @@ func GenerateRoleMetadata(args []string) int {
 	checkMode := fs.Bool("check", false, "Report whether files are current without writing anything (exit 1 if stale)")
 
 	if err := fs.Parse(args); err != nil {
-		fmt.Fprintf(os.Stderr, "cadre: %v\n", err)
-		return 2
+		if parseFailed(err) {
+			fmt.Fprintf(os.Stderr, "cadre: %v\n", err)
+			return 2
+		}
+		return 0
 	}
 
 	if fs.NArg() > 0 {

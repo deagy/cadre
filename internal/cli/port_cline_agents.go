@@ -23,7 +23,7 @@ func PortClineAgentsCmd(args []string) int {
 	root := fs.String("root", "cline-plugins", "directory containing cline-agents/ (the port target)")
 	source := fs.String("source", "", "directory containing the generated agents/ and skills/ (defaults to --root)")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	if fs.NArg() > 0 {
 		fmt.Fprintln(os.Stderr, "usage: cadre port-cline-agents "+usagePortClineAgents)

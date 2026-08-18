@@ -12,6 +12,10 @@ var secretEnvVars = []string{"GITLAB_SVC_TOKEN", "KNOWLEDGE_EMBEDDING_API_KEY"}
 // ConfigCmd is the `cadre config` command: show/path/resolve/set over the
 // unified operator-settings resolver (internal/config).
 func ConfigCmd(args []string) int {
+	if len(args) > 0 && isHelpArg(args[0]) {
+		fmt.Fprintln(os.Stderr, "usage: cadre config <show|path|resolve KEY|set KEY VALUE>")
+		return 0
+	}
 	if len(args) == 0 || (args[0] != "show" && args[0] != "path" && args[0] != "resolve" && args[0] != "set") {
 		fmt.Fprintln(os.Stderr, "usage: cadre config <show|path|resolve KEY|set KEY VALUE>")
 		return 2

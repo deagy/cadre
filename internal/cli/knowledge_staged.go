@@ -98,7 +98,7 @@ Options:
 	}
 	configFlag := fs.String("config", "", "Path to a knowledge store config file (optional)")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	if fs.NArg() < 1 {
 		fs.Usage()

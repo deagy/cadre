@@ -39,7 +39,7 @@ for the operator setup requirements, which are requirements, not guidance.
 `)
 	}
 	if err := flags.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 
 	// Unconditional, before anything can resolve a setting. stdin is the

@@ -71,7 +71,7 @@ func gitlabCreateReviewSubtaskCmd(args []string) int {
 	taskID := fs.String("task-id", "", "Task identifier (required)")
 	auditPath := fs.String("audit-path", "", "Override the audit log path (default: ~/.agents/mcp-gitlab/audit.jsonl)")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	if *parentIssueIID <= 0 || *title == "" || *gateID == "" || *taskID == "" {
 		fmt.Fprintln(os.Stderr, "cadre gitlab-evidence create-review-subtask: --parent-issue-iid, --title, --gate-id, and --task-id are required")
@@ -91,7 +91,7 @@ func gitlabWriteWikiPageCmd(args []string) int {
 	confirmationToken := fs.String("confirmation-token", "", "Confirmation token from a prior confirmation_required response")
 	auditPath := fs.String("audit-path", "", "Override the audit log path")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	if *slug == "" || *title == "" || *content == "" {
 		fmt.Fprintln(os.Stderr, "cadre gitlab-evidence write-wiki-page: --slug, --title, and --content are required")
@@ -109,7 +109,7 @@ func gitlabWriteEvidenceCommentCmd(args []string) int {
 	taskID := fs.String("task-id", "", "Task identifier (required)")
 	auditPath := fs.String("audit-path", "", "Override the audit log path")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	if *issueIID <= 0 || *content == "" || *taskID == "" {
 		fmt.Fprintln(os.Stderr, "cadre gitlab-evidence write-evidence-comment: --issue-iid, --content, and --task-id are required")

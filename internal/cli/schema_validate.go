@@ -26,7 +26,7 @@ func SchemaValidateCmd(args []string) int {
 	agentsRootFlag := fs.String("agents-root", "", "Base directory catalog.yaml's definition fields resolve against (default: --catalog's parent)")
 
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	if fs.NArg() > 0 {
 		fmt.Fprintf(os.Stderr, "cadre schema-validate: unexpected argument: %s\n", fs.Arg(0))

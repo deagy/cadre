@@ -42,7 +42,7 @@ func InitCmd(args []string) int {
 		return 2
 	}
 	if err := fs.Parse(flagArgs); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	if fs.NArg() > 0 {
 		fmt.Fprintln(os.Stderr, "usage: cadre init "+usageInit)
@@ -89,8 +89,14 @@ var (
 func extractPositional(args []string) (positional string, flagArgs []string, err error) {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		if len(arg) >= 2 && arg[0] == '-' && arg[1] == '-' {
-			name := arg[2:]
+		// Any leading dash marks a flag token, single or double. Matching
+		// only "--" left `-h` to fall through as TARGET, so `cadre init -h`
+		// meant "initialise a project in a directory named -h" -- it got as
+		// far as refusing to write into this checkout, exit 1, with no hint
+		// that a flag had been misread. The same applied to every
+		// single-dash spelling Go's flag package accepts.
+		if len(arg) >= 2 && arg[0] == '-' {
+			name := strings.TrimLeft(arg, "-")
 			if eq := strings.IndexByte(name, '='); eq >= 0 {
 				flagArgs = append(flagArgs, arg)
 				continue

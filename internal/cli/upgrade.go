@@ -29,7 +29,7 @@ func UpgradeCmd(args []string) int {
 	force := fs.Bool("force", false, "update without confirmation")
 	help := fs.Bool("help", false, "show this help message")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	if *help {
 		fmt.Fprintf(os.Stderr, "usage: cadre upgrade [--check|--force|--help]\n")

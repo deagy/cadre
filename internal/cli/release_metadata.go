@@ -159,7 +159,7 @@ func PluginVersionCmd(args []string) int {
 	set := fs.String("set", "", "write VERSION (MAJOR.MINOR.PATCH) into all eight manifests")
 	root := fs.String("package-root", "plugin", "directory holding the packaged plugin")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	_ = check
 	if *set != "" {
@@ -227,7 +227,7 @@ func ChangelogEntryCmd(args []string) int {
 	setUsage(fs, "changelog-entry", usageChangelogEntry)
 	root := fs.String("package-root", "plugin", "directory holding the packaged CHANGELOG.md")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	if fs.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "usage: cadre changelog-entry MAJOR.MINOR.PATCH")

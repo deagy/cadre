@@ -210,7 +210,7 @@ func ChangedComponentsCmd(args []string) int {
 	before := fs.String("before", "", "the sha this push is measured against")
 	root := fs.String("repo-root", ".", "the checkout to inspect")
 	if err := fs.Parse(args); err != nil {
-		return 2
+		return parseExitCode(err)
 	}
 	var diagnostics strings.Builder
 	changed := changedComponents(*root, *event, *before, &diagnostics)
