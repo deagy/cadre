@@ -2,6 +2,7 @@ package cli
 
 import (
 	"flag"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -11,7 +12,12 @@ import (
 
 func newOrderingFlagSet() *flag.FlagSet {
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
-	fs.SetOutput(os.NewFile(0, os.DevNull))
+	// io.Discard, not os.NewFile(0, os.DevNull): that call does not open
+	// /dev/null, it wraps file descriptor 0 and gives it that name. When the
+	// returned *os.File is garbage collected its finaliser closes fd 0, and a
+	// later os.ReadFile anywhere in the package fails with "bad file
+	// descriptor". It made this package fail roughly one run in three.
+	fs.SetOutput(io.Discard)
 	fs.Int("min", 1, "a value flag")
 	fs.String("require", "", "another value flag")
 	fs.Bool("force", false, "a boolean flag")
