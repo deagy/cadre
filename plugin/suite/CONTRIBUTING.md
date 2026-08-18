@@ -32,7 +32,7 @@ Edit a role's frontmatter, then regenerate `roster/catalog.yaml` and
 
 `generate-role-metadata` is the first of several regeneration steps, not the
 whole procedure: the packaged plugin (`cadre generate-plugin --output plugin`)
-and the Cline mirror (`python3 plugin/tools/port_cline_agents.py --root
+and the Cline mirror (`./bin/cadre port-cline-agents --root
 cline-plugins --source plugin`) each have their own CI guard, and stopping
 after the first step is the usual way to leave a pull request red. `git add`
 new files before regenerating — untracked files are silently skipped. See

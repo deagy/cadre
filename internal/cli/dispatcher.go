@@ -84,6 +84,7 @@ func Usage(subcommands []Subcommand) string {
 		{Name: "generate-plugin", Description: "Regenerate a deagy/cadre-lifecycle checkout (requires --output)"},
 		{Name: "generate-role-metadata", Description: "Regenerate roster/catalog.yaml and routing.json from role metadata"},
 		{Name: "generate-authority-aides", Description: "Regenerate roster/authority/*-aide AGENT.md files"},
+		{Name: "port-cline-agents", Description: "Render the packaged plugin's agents and skills into the Cline preset/skill formats"},
 		{Name: "upgrade", Description: "Check for Cadre updates and upgrade the CLI (--check, --force, --help)"},
 		{Name: "mcp-dispatch-server", Description: "Run the MCP dispatch server (stdio)"},
 		{Name: "mcp-gitlab-server", Description: "Run the GitLab evidence MCP server (stdio; three create-only tools)"},
@@ -209,6 +210,9 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 	// Route Go-implemented generators
 	if command == "generate-authority-aides" {
 		return GenerateAuthorityAides(rest)
+	}
+	if command == "port-cline-agents" {
+		return PortClineAgentsCmd(rest)
 	}
 	if command == "generate-role-metadata" {
 		return GenerateRoleMetadata(rest)

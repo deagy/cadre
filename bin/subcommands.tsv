@@ -3,6 +3,7 @@ selection-telemetry	Summarize opt-in, local cadre select telemetry
 context	Agent context store: park working material outside an agent's context window and get it back by handle
 generate-plugin	Regenerate the packaged plugin distribution (requires --output)
 generate-authority-aides	Regenerate roster/authority/*-aide AGENT.md files
+port-cline-agents	Render the packaged plugin's agents and skills into the Cline preset/skill formats
 generate-role-metadata	Regenerate roster/catalog.yaml and routing.json knowledge_focus from role metadata
 bootstrap-codex	Safely install namespaced Codex role wrappers
 resolve-shared	Resolve effective shared config for the current project
