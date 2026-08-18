@@ -122,6 +122,15 @@ cline-plugins/node_modules/
 /dist/
 /build/
 cadre
+# ...but plugin/bin/cadre is a generated shell SHIM, not a compiled binary, and
+# it is committed: a GitHub-sourced marketplace serves this repository's tree,
+# so a missing shim is a plugin that cannot launch. The rule above is
+# unanchored and matches it by name, which is a trap rather than a rule --
+# generate-plugin removes that file before rewriting it, so a generation that
+# fails in between leaves it deleted, and `git add -A` then cannot restore it
+# because the ignore hides the replacement. That happened once.
+# internal/generators/packaged_tracking_test.go is what notices now.
+!plugin/bin/cadre
 /.cadre-build-cache/
 
 # `make wheel` staging: the per-platform binary and the unpacked wheel it is

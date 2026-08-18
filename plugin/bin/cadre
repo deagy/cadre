@@ -1,0 +1,286 @@
+#!/bin/sh
+set -eu
+BIN_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PLUGIN_ROOT=$(CDPATH= cd -- "$BIN_DIR/.." && pwd)
+SUITE_ROOT="$PLUGIN_ROOT/suite"
+if [ "${1:-}" = "--interactive" ]; then
+  CADRE_INTERACTIVE=1
+  export CADRE_INTERACTIVE
+  shift
+fi
+command_name="${1:-help}"
+[ "$#" -gt 0 ] && shift || true
+if [ "$command_name" = "--version" ] && [ "$#" -eq 0 ]; then
+  plugin_version=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_ROOT/.claude-plugin/plugin.json")
+  [ -n "$plugin_version" ] || { echo "cadre: could not read plugin version from .claude-plugin/plugin.json" >&2; exit 1; }
+  printf 'cadre %s\n' "$plugin_version"
+  exit 0
+fi
+
+# Resolve the compiled binary. Every dispatch path below needs it.
+# Resolve a cached Go binary for the current platform, downloading if necessary.
+# Sets BINARY_CACHE to the path on success, or empty on failure.
+# All download noise is suppressed; return code signals success/failure only.
+try_resolve_binary() {
+  CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/cadre"
+  BINARY_CACHE=""
+  
+  # Determine platform from uname output.
+  case "$(uname -s)" in
+    Linux)  GOOS=linux ;;
+    Darwin) GOOS=darwin ;;
+    MINGW*|MSYS*|CYGWIN*) GOOS=windows ;;
+    *)      return 1 ;;  # Unsupported platform
+  esac
+  
+  case "$(uname -m)" in
+    x86_64|amd64) GOARCH=amd64 ;;
+    aarch64|arm64) GOARCH=arm64 ;;
+    *)      return 1 ;;  # Unsupported architecture
+  esac
+  
+  # Try to use a cached binary if it exists, is a regular file, and is executable.
+  CANDIDATE="$CACHE_DIR/cadre-v$CADRE_CLI_VERSION-$GOOS-$GOARCH"
+  if [ -f "$CANDIDATE" ] && [ -x "$CANDIDATE" ]; then
+    # Verify the cached binary's sidecar hash, ownership, and permissions (offline, no network).
+    if verify_cached_binary "$CANDIDATE"; then
+      BINARY_CACHE="$CANDIDATE"
+      return 0
+    fi
+    # Sidecar hash mismatch, ownership/permission violation, or missing sidecar:
+    # discard the cached binary and re-download it.
+    rm -f "$CANDIDATE" "${CANDIDATE}.sha256"
+  fi
+  
+  # Cached binary not available or verification failed; try to download, verify, and cache it.
+  download_binary "$GOOS" "$GOARCH" "$CANDIDATE" "$CADRE_CLI_VERSION" || return 1
+  BINARY_CACHE="$CANDIDATE"
+  return 0
+}
+
+# Verify a cached binary's sidecar hash and ownership.
+# Detects corruption, partial writes, and unprivileged tampering (offline, no network).
+# A process with user's UID is outside what cache-local controls can defend.
+# Returns 0 if valid, 1 if missing/mismatched/untrusted.
+verify_cached_binary() {
+  BINARY_PATH="$1"
+  
+  # Check that the cached binary still exists and is a regular file.
+  [ -f "$BINARY_PATH" ] || return 1
+  
+  # Check ownership: binary must be owned by current user.
+  CURRENT_UID=$(id -u) || return 1
+  BINARY_UID=$(ls -n "$BINARY_PATH" 2>/dev/null | awk '{print $3}') || return 1
+  [ "$CURRENT_UID" = "$BINARY_UID" ] || return 1
+  
+  # Check permissions: binary must not be writable by group (position 6) or others (position 9).
+  PERMS=$(ls -l "$BINARY_PATH" 2>/dev/null | awk '{print $1}') || return 1
+  # Extract group write bit (character 6) and other write bit (character 9)
+  GROUP_WRITE=$(echo "$PERMS" | cut -c6)
+  OTHER_WRITE=$(echo "$PERMS" | cut -c9)
+  [ "$GROUP_WRITE" != "w" ] || return 1
+  [ "$OTHER_WRITE" != "w" ] || return 1
+  
+  # Check sidecar hash: read expected hash from .sha256 file (computed at cache time).
+  SIDECAR_PATH="${BINARY_PATH}.sha256"
+  [ -f "$SIDECAR_PATH" ] || return 1
+  EXPECTED_HASH=$(cat "$SIDECAR_PATH" 2>/dev/null) || return 1
+  [ -n "$EXPECTED_HASH" ] || return 1
+  
+  # Compute actual hash of binary and compare.
+  if command -v sha256sum >/dev/null 2>&1; then
+    ACTUAL_HASH=$(sha256sum "$BINARY_PATH" 2>/dev/null | awk '{print $1}')
+  elif command -v shasum >/dev/null 2>&1; then
+    ACTUAL_HASH=$(shasum -a 256 "$BINARY_PATH" 2>/dev/null | awk '{print $1}')
+  else
+    return 1
+  fi
+  
+  [ "$ACTUAL_HASH" = "$EXPECTED_HASH" ]
+}
+
+# Download a release binary from GitHub, verify its checksum, and cache it.
+# All output is suppressed to avoid download noise.
+download_binary() {
+  GOOS="$1"
+  GOARCH="$2"
+  BINARY_CACHE="$3"
+  VERSION="$4"
+  
+  # Determine archive extension based on OS.
+  if [ "$GOOS" = "windows" ]; then
+    ARCHIVE_EXT="zip"
+    EXECUTABLE="cadre.exe"
+  else
+    ARCHIVE_EXT="tar.gz"
+    EXECUTABLE="cadre"
+  fi
+  
+  # Download from GitHub releases using cli-v<version> tag (not plugin-v).
+  ARCHIVE_NAME="cadre-v$VERSION-$GOOS-$GOARCH.$ARCHIVE_EXT"
+  RELEASE_URL="https://github.com/deagy/cadre/releases/download/cli-v$VERSION/$ARCHIVE_NAME"
+  SHA256SUMS_URL="https://github.com/deagy/cadre/releases/download/cli-v$VERSION/SHA256SUMS"
+  
+  # Download into a temporary location first, then verify and move.
+  TEMP_DIR=$(mktemp -d) || return 1
+  trap "rm -rf \"$TEMP_DIR\"" EXIT
+  
+  ARCHIVE_PATH="$TEMP_DIR/$ARCHIVE_NAME"
+  
+  # Try to download the archive. Use curl if available, fall back to wget.
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --connect-timeout 5 --max-time 10 --proto '=https' -o "$ARCHIVE_PATH" "$RELEASE_URL" 2>/dev/null || return 1
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q --timeout=5 -O "$ARCHIVE_PATH" "$RELEASE_URL" 2>/dev/null || return 1
+  else
+    return 1
+  fi
+  
+  # Download SHA256SUMS file for verification.
+  SHA256SUMS_PATH="$TEMP_DIR/SHA256SUMS"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --connect-timeout 5 --max-time 10 --proto '=https' -o "$SHA256SUMS_PATH" "$SHA256SUMS_URL" 2>/dev/null || return 1
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q --timeout=5 -O "$SHA256SUMS_PATH" "$SHA256SUMS_URL" 2>/dev/null || return 1
+  else
+    return 1
+  fi
+  
+  # Verify the checksum.
+  EXPECTED_HASH=$(grep "$ARCHIVE_NAME" "$SHA256SUMS_PATH" 2>/dev/null | awk '{print $1}') || return 1
+  if [ -z "$EXPECTED_HASH" ]; then
+    return 1
+  fi
+  
+  # Compute the actual hash of the downloaded archive.
+  if command -v sha256sum >/dev/null 2>&1; then
+    ACTUAL_HASH=$(sha256sum "$ARCHIVE_PATH" | awk '{print $1}')
+  elif command -v shasum >/dev/null 2>&1; then
+    ACTUAL_HASH=$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')
+  else
+    return 1
+  fi
+  
+  # Checksum mismatch is a failure condition.
+  if [ "$ACTUAL_HASH" != "$EXPECTED_HASH" ]; then
+    return 1
+  fi
+  
+  # Extract ONLY the named executable from the archive (defense-in-depth).
+  # This restricts extraction to the binary we expect, ignoring other archive contents.
+  if [ "$ARCHIVE_EXT" = "zip" ]; then
+    unzip -q -o "$ARCHIVE_PATH" "$EXECUTABLE" -d "$TEMP_DIR" 2>/dev/null || return 1
+  else
+    tar -xzf "$ARCHIVE_PATH" -C "$TEMP_DIR" "$EXECUTABLE" 2>/dev/null || return 1
+  fi
+  
+  EXTRACTED_BINARY="$TEMP_DIR/$EXECUTABLE"
+  # Verify the extracted binary is a regular file, not a symlink or directory.
+  if [ ! -f "$EXTRACTED_BINARY" ] || [ -L "$EXTRACTED_BINARY" ]; then
+    return 1
+  fi
+  
+  if [ ! -x "$EXTRACTED_BINARY" ]; then
+    return 1
+  fi
+  
+  # Opportunistically verify the build provenance (if gh CLI is available).
+  # This is a defense-in-depth check; it is not required to succeed.
+  if command -v gh >/dev/null 2>&1; then
+    # Try to verify the attestation for the archive we downloaded.
+    ATTEST_OUT=$(gh attestation verify "$ARCHIVE_PATH" --repo deagy/cadre 2>&1)
+    if [ $? -ne 0 ] && [ -n "$ATTEST_OUT" ]; then
+      # Attestation verification failed (not missing gh): emit non-blocking note.
+      echo "cadre: attestation verification failed (non-blocking)" >&2
+    fi
+  fi
+  
+  # Create the cache directory with restrictive permissions (mode 700).
+  # Use install unconditionally to enforce perms (existing 0755 dirs get tightened).
+  install -m 700 -d "$CACHE_DIR" 2>/dev/null || return 1
+  
+  # Atomically move the binary to the cache.
+  BINARY_TEMP="$CACHE_DIR/cadre-v$VERSION-$GOOS-$GOARCH.tmp.$$"
+  cp "$EXTRACTED_BINARY" "$BINARY_TEMP" || return 1
+  chmod +x "$BINARY_TEMP" || return 1
+  
+  # H2: Reject pre-existing directory at target path (mv would move file into it).
+  # Clean up BINARY_TEMP on the way out: it is created and chmod +x'd above,
+  # so returning here without removing it leaves an executable .tmp.$$ behind
+  # in the cache on every collision.
+  if [ -d "$BINARY_CACHE" ]; then
+    rm -f "$BINARY_TEMP"
+    return 1
+  fi
+  
+  if ! mv "$BINARY_TEMP" "$BINARY_CACHE" 2>/dev/null; then
+    rm -f "$BINARY_TEMP"
+    return 1
+  fi
+  
+  # Save the binary's hash to a sidecar file for offline verification.
+  # On the warm path, verify_cached_binary will check this hash without network.
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$BINARY_CACHE" 2>/dev/null | awk '{print $1}' > "${BINARY_CACHE}.sha256" || true
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$BINARY_CACHE" 2>/dev/null | awk '{print $1}' > "${BINARY_CACHE}.sha256" || true
+  fi
+  
+  return 0
+}
+
+# Plugin version for --version flag (read at runtime from .claude-plugin/plugin.json).
+plugin_version=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_ROOT/.claude-plugin/plugin.json") || plugin_version=""
+
+# Cadre CLI version for binary downloads. This is pinned at generation time from cadre_cli/_version.py.
+# Regenerating plugin (via 'cadre generate-plugin') updates this to match the repository's CLI version.
+CADRE_CLI_VERSION="0.5.0"
+
+# An explicit binary wins over cache lookup and download. This is the
+# supported answer for an air-gapped install, an unsupported platform,
+# or a site that mirrors its own builds -- the cases that used to fall
+# back to a bundled Python implementation.
+if [ -n "${CADRE_BINARY:-}" ]; then
+  [ -x "$CADRE_BINARY" ] || { echo "cadre: CADRE_BINARY is set but not executable: $CADRE_BINARY" >&2; exit 1; }
+  BINARY_CACHE="$CADRE_BINARY"
+else
+  # Resolve the binary (locate in cache or download it). A condition, so a
+  # failure does not terminate under set -eu before the diagnostic below.
+  if [ -z "$CADRE_CLI_VERSION" ] || ! try_resolve_binary; then
+    echo "cadre: could not obtain the cadre binary for this platform." >&2
+    echo "" >&2
+    echo "  platform:  $(uname -s)/$(uname -m)" >&2
+    echo "  version:   ${CADRE_CLI_VERSION:-unset}" >&2
+    echo "  cache:     ${BINARY_CACHE:-<not resolved>}" >&2
+    echo "" >&2
+    echo "The plugin used to fall back to a bundled Python implementation here." >&2
+    echo "It no longer ships one: two implementations of a byte-exact dispatch" >&2
+    echo "contract is the divergence this migration exists to remove." >&2
+    echo "" >&2
+    echo "Fix one of:" >&2
+    echo "  * set CADRE_BINARY to a cadre binary you already have" >&2
+    echo "  * network access to github.com/deagy/cadre releases on first run" >&2
+    echo "  * an unsupported platform -- released binaries cover linux/amd64," >&2
+    echo "    linux/arm64, darwin/amd64, darwin/arm64 and windows/amd64" >&2
+    echo "  * a prepopulated cache: place the binary at the path above" >&2
+    exit 1
+  fi
+fi
+
+if [ "$command_name" = "sdlc" ]; then
+  sdlc_bin="${AGENTIC_SDLC_BIN:-}"
+  if [ -z "$sdlc_bin" ]; then
+    sdlc_bin=$(CADRE_REPO_ROOT="$SUITE_ROOT" "$BINARY_CACHE" config resolve agentic_sdlc.bin_path) || exit 1
+  fi
+  [ -n "$sdlc_bin" ] || { echo "cadre: install Agentic SDLC v0.13.2+ from https://github.com/deagy/cadre" >&2; exit 1; }
+  exec "$sdlc_bin" --provider "$PLUGIN_ROOT/provider.json" "$@"
+fi
+
+# Everything else is the binary's own dispatch, including its help and
+# unknown-subcommand handling -- one implementation, not two.
+#
+# $command_name is passed back explicitly: it was shifted off above so
+# the sdlc branch could test it, and $@ holds only the arguments after
+# it. Exec'ing just $@ silently drops the subcommand, turning
+# `cadre select --task x` into `cadre --task x`.
+CADRE_REPO_ROOT="$SUITE_ROOT" exec "$BINARY_CACHE" "$command_name" "$@"
