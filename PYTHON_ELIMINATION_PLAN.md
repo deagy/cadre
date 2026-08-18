@@ -6,23 +6,31 @@ This is the sequencing document for that goal. `REMAINING_PYTHON_SCOPE.md`
 records *what* is still Python and why; this records *in what order it goes,
 what gates each step, and what breaks*.
 
-Status as of 2026-08-15, measured (not estimated) against the tree:
+Status as of 2026-08-17, measured (not estimated) against the tree:
 
 | | production | tests |
 |---|---:|---:|
-| `roster/orchestration/src` | 10,314 | 26,941 |
-| `roster/orchestration/mcp` | 6,822 | — |
-| `roster/shared/src` | 4,347 | 3,440 |
-| `roster/context-store/src` | 2,058 | 2,496 |
-| `cadre_cli/` (PyPI entry point) | 500 | — |
-| `kernel/agentic_sdlc` | 9,626 | 6,883 |
+| `.claude/hooks` + `plugin/hooks` (the workspace guard, 2 copies) | 3,888 | 1,556 |
+| `plugin/tools` + `plugin/plugins/*/tools` (kernel bootstrap, 4 copies) | 2,884 | 991 |
 | `engine/agentic_sdlc_langgraph` | 5,995 | 5,933 |
-| `plugin/tools` | — | 8,029 |
-| **total** | **39,662** | **53,722** |
+| **total** | **12,767** | **8,480** |
 
-**93,384 lines.** `plugin/suite/` holds another 24,534 lines, but it is a
-vendored copy of `roster/` produced by `generate-plugin` — it retires
-automatically when its source does and is not separate work.
+**21,247 lines**, down from 93,384 on 2026-08-15. Phases 1 through 4 are
+complete and Phase 7 is complete for everything except the two scripts
+above: `roster/`, `kernel/`, `cadre_cli/` and every `plugin/tools` guard are
+Go. `plugin/suite/` is a vendored copy of `roster/` produced by
+`generate-plugin`; it retired automatically with its source.
+
+What is left is two groups, and neither is a porting problem:
+
+- **The workspace guard and the kernel bootstrap** are blocked on the packaged
+  `bin/cadre` being a downloader. Making a `PreToolUse` safety hook depend on a
+  successful network fetch is a worse property than the language it is written
+  in, so this waits on a distribution decision. Their tests stay with them --
+  porting a test of a Python script to Go means shelling out to `python3` and
+  rewriting it again when the script moves.
+- **`engine/`** is Phase 6: a LangGraph runtime, where the work is
+  reimplementing the graph engine rather than translating a module.
 
 ## The method, stated once
 

@@ -1,12 +1,13 @@
 # Remaining Python -> Go Scope
 
 **Status:** The porting backlog is empty. Every module this document once
-described as pending has shipped as native Go, and `roster/` now contains no
-Python at all. What remains is 13,736 lines in three groups, two of which are
-Python for a structural reason rather than for want of a port -- see
-"What actually remains" below.
-**Last verified:** 2026-08-17, against `main`, by deleting the last
-`roster/` Python module and re-reading how each remaining script is invoked
+described as pending has shipped as native Go; `roster/` contains no Python at
+all, and `plugin/tools/` now holds nothing but the two scripts below and their
+tests. What remains outside `engine/` is 9,319 lines, all of it downstream of
+one distribution decision rather than of any porting work -- see "What actually
+remains" below.
+**Last verified:** 2026-08-17, against this branch, by porting the last
+`plugin/tools/` guard and re-reading how each remaining script is invoked
 (`plugin/hooks/hooks.json`, `plugin/plugins/lifecycle/bin/cadre-install-kernel`,
 and the regeneration sequence in `CLAUDE.md`). Re-verify against the tree
 before trusting a specific number here; these move.
@@ -24,8 +25,18 @@ timeline — an earlier version of this document (dated the same day) claimed
 
 ## What actually remains
 
-Two groups now, and the distinction between them matters more than the line
-count.
+One group now. Two scripts, their packaged copies, and their tests:
+
+| | lines |
+|---|---:|
+| `guard_workspace_mutation.py` x2 copies | 3,888 |
+| `bootstrap_sdlc.py` x4 copies | 2,884 |
+| their tests (`test_guard_workspace_mutation`, `test_bootstrap_sdlc`, `test_guard_parity`) | 2,547 |
+| **total** | **9,319** |
+
+`engine/` is a separate question and is not counted here: it is a LangGraph
+runtime, and reimplementing the graph engine is Phase 6 of the sequencing
+plan, not a port.
 
 ### Two that are Python for a structural reason, and stay
 
@@ -47,21 +58,28 @@ Neither is blocked on effort. Both would need the packaged wrapper to stop
 being a downloader first, which is a distribution decision rather than a
 porting one.
 
-### The one that was portable is ported
+### Everything portable is ported
 
-**`port_cline_agents.py` (deleted) is gone.** It rendered the packaged plugin's agents
-and skills into the Cline preset formats, and was the last step of the
-documented regeneration sequence needing an interpreter. It is now
-`internal/generators/cline_port.go`, reached as `cadre port-cline-agents`.
+`port_cline_agents.py` was the last script; the fourteen guard modules under  <!-- (deleted) -->
+`plugin/tools/` were the last tests. All are Go:
 
-Its 124 substitution pairs were extracted from the Python mechanically rather
-than retyped, and the port is verified the only way this one can be: it
-reproduces all 159 committed presets and 9 skills byte-for-byte. A
-transcription slip would have changed one generated file in a way that reads
-as intentional.
+| was | is |
+|---|---|
+| `port_cline_agents.py` | `internal/generators/cline_port.go` (`cadre port-cline-agents`) <!-- (deleted) -->|
+| `plugin_version.py`, `changelog_entry.py` | `internal/cli/release_metadata.go` (`cadre plugin-version`, `cadre changelog-entry`) <!-- (deleted) -->|
+| `binary_platforms.py` + its contract test | `internal/release/` <!-- (deleted) -->|
+| `test_cline_git_plugin_packaging.py` | `internal/clinedeps/` <!-- (deleted) -->|
+| `test_binary_shim_{sidecar,hardening,behavioral}.py` | `internal/generators/shim_behaviour_test.go` <!-- (deleted) -->|
+| `test_manifest_health.py`, `test_readme_identity.py`, `test_version_separation.py`, `test_plugin_duplication_health.py` | `internal/generators/` <!-- (deleted) -->|
+| `test_install_script.py`, `test_archived_repo_references.py` | `internal/cli/` <!-- (deleted) -->|
+| `test_docs_versions.py` | already covered by `internal/orchestration/docs_versions_test.go` -- it was a second copy <!-- (deleted) -->|
+| `generated_package.py` | deleted; nothing imported it <!-- (deleted) -->|
 
-The remaining test modules under `plugin/tools/` cover the three scripts
-above and go with whichever of them moves.
+**The two remaining test modules stay with their subjects.** They test Python
+scripts by running them, so porting them now would mean writing Go tests that
+shell out to `python3` and then rewriting those again when the scripts move.
+Tests retire with their subject, which is what `PYTHON_ELIMINATION_PLAN.md`
+says and the reason this stops here rather than shaving the line count.
 
 
 ### `cadre select` — ported; the Python is gone
