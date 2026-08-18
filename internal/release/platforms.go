@@ -67,10 +67,15 @@ func ExecutableName(goos string) string {
 const (
 	ProgramCLI    = "cadre"
 	ProgramKernel = "agentic-sdlc"
+	// ProgramEngine drives a task through the lifecycle gates. It ships in
+	// the CLI's release rather than its own: it links the same sqlite
+	// checkpointer, so it needs cgo and a native host per platform, which is
+	// exactly the matrix the CLI already builds.
+	ProgramEngine = "agentic-sdlc-engine"
 )
 
 // Programs is every published program, in the order a release builds them.
-var Programs = []string{ProgramCLI, ProgramKernel}
+var Programs = []string{ProgramCLI, ProgramKernel, ProgramEngine}
 
 // TagPrefix is the release-tag namespace each program publishes under.
 //
@@ -81,6 +86,9 @@ var Programs = []string{ProgramCLI, ProgramKernel}
 var TagPrefix = map[string]string{
 	ProgramCLI:    "cli-v",
 	ProgramKernel: "kernel-v",
+	// The engine shares the CLI's tag because it ships in the same release:
+	// one archive set, one version, one thing to install.
+	ProgramEngine: "cli-v",
 }
 
 // ArchiveName renders the published asset name for a program on a platform.
@@ -116,6 +124,12 @@ var unpublishable = map[string]map[Platform]string{
 			"Dropped deliberately: Apple Silicon Macs are served by darwin/arm64, and an " +
 			"Intel Mac cannot run that binary under Rosetta -- Rosetta translates x86_64 " +
 			"for Apple Silicon, not the reverse. Intel macOS users must build from source",
+	},
+	ProgramEngine: {
+		{GOOS: "darwin", GOARCH: "amd64"}: "the engine links the same cgo sqlite checkpointer as the " +
+			"CLI, so it is excluded from darwin/amd64 for the same reason. The evidence is direct: " +
+			"built with CGO_ENABLED=0 it compiles and then fails at runtime, reporting that " +
+			"go-sqlite3 requires cgo and that what was linked is a stub",
 	},
 }
 

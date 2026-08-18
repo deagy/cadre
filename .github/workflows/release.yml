@@ -394,6 +394,10 @@ jobs:
           set -eu
           mkdir -p dist
           go build -o "dist/cadre-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.exe-suffix }}" ./cmd/cadre
+          # The engine ships in this release too, and needs the same cgo build:
+          # it links the same sqlite checkpointer. Built with CGO_ENABLED=0 it
+          # compiles and then fails at runtime saying go-sqlite3 is a stub.
+          go build -o "dist/agentic-sdlc-engine-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.exe-suffix }}" ./cmd/agentic-sdlc-engine
 
       - name: Smoke test binary on native platforms
         # Runs here, before the archive steps: each of those deletes the
@@ -416,6 +420,9 @@ jobs:
           echo "Testing $binary..."
           $binary --version
           $binary knowledge --help
+          engine="dist/agentic-sdlc-engine-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.exe-suffix }}"
+          echo "Testing $engine..."
+          $engine --help
 
       - name: Create archive (tar.gz for Unix)
         if: steps.tag.outputs.skip == 'false' && matrix.goos != 'windows'
@@ -425,6 +432,9 @@ jobs:
           tar czf "cadre-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" \
             "cadre-${{ matrix.goos }}-${{ matrix.goarch }}"
           rm "cadre-${{ matrix.goos }}-${{ matrix.goarch }}"
+          tar czf "agentic-sdlc-engine-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" \
+            "agentic-sdlc-engine-${{ matrix.goos }}-${{ matrix.goarch }}"
+          rm "agentic-sdlc-engine-${{ matrix.goos }}-${{ matrix.goarch }}"
 
       - name: Create archive (zip for Windows)
         if: steps.tag.outputs.skip == 'false' && matrix.goos == 'windows'
@@ -434,13 +444,22 @@ jobs:
           $archive = "dist\cadre-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.zip"
           Compress-Archive -Path $binary -DestinationPath $archive
           Remove-Item $binary
+          $engine = "dist\agentic-sdlc-engine-${{ matrix.goos }}-${{ matrix.goarch }}.exe"
+          $engineArchive = "dist\agentic-sdlc-engine-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.zip"
+          Compress-Archive -Path $engine -DestinationPath $engineArchive
+          Remove-Item $engine
 
       - name: Upload artifacts to workflow
         if: steps.tag.outputs.skip == 'false'
         uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # v4.5.0
         with:
           name: cadre-binaries-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/cadre-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.*
+          # Both programs shipped under this tag. A path matching only cadre-v*
+          # would upload the CLI and drop the engine, and the verify step below
+          # would then be the first thing to notice.
+          path: |
+            dist/cadre-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.*
+            dist/agentic-sdlc-engine-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.*
           retention-days: 1
 
   cli-publish:
@@ -497,7 +516,12 @@ jobs:
         run: |
           set -eu
           mkdir -p flat-dist
-          find dist -name "cadre-v*.tar.gz" -o -name "cadre-v*.zip" | while read f; do
+          # -o binds looser than an implicit -a, so the name tests are grouped
+          # explicitly. Without the parentheses a later predicate would apply to
+          # only the last alternative.
+          find dist \( -name "cadre-v*.tar.gz" -o -name "cadre-v*.zip" \
+            -o -name "agentic-sdlc-engine-v*.tar.gz" -o -name "agentic-sdlc-engine-v*.zip" \) \
+            | while read -r f; do
             cp "$f" flat-dist/
           done
 
@@ -514,7 +538,10 @@ jobs:
         run: |
           set -eu
           version="${{ steps.version.outputs.value }}"
+          # Both programs ship under this tag, so both are verified. Listing only
+          # the CLI would let an engine asset go missing silently.
           go run ./cmd/cadre release-assets --program cadre --version "$version" > expected-assets.txt
+          go run ./cmd/cadre release-assets --program agentic-sdlc-engine --version "$version" >> expected-assets.txt
           # An empty list would make every check below vacuously true: zero
           # assets expected, zero missing, "all 0 present", exit 0. That is the
           # shape of a guard that passes while asserting nothing.

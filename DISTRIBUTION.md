@@ -109,6 +109,17 @@ Rendered against the four platforms the CLI publishes (placeholder version
 - `cadre-v<version>-darwin-arm64.tar.gz`
 - `cadre-v<version>-windows-amd64.zip`
 
+The engine ships in the same release, under the same tag:
+
+- `agentic-sdlc-engine-v<version>-linux-amd64.tar.gz`
+- `agentic-sdlc-engine-v<version>-linux-arm64.tar.gz`
+- `agentic-sdlc-engine-v<version>-darwin-arm64.tar.gz`
+- `agentic-sdlc-engine-v<version>-windows-amd64.zip`
+
+It is excluded from `darwin/amd64` for the same reason the CLI is: it links
+the same cgo sqlite checkpointer, and a cgo-less build compiles and then fails
+on its first checkpoint write.
+
 The kernel publishes five, including `agentic-sdlc-v<version>-darwin-amd64.tar.gz`:
 it does not link cgo and cross-compiles to every platform from one runner. The
 CLI does link cgo (the knowledge store's sqlite), so each platform needs a

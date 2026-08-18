@@ -71,7 +71,7 @@ func TestTheCrossBuildMatrixIsExactlyTheContractedOne(t *testing.T) {
 	for _, program := range Programs {
 		built := map[string]bool{}
 		for _, line := range strings.Split(recipe, "\n") {
-			if !strings.Contains(line, "./cmd/"+program) {
+			if !buildsProgram(line, program) {
 				continue
 			}
 			if match := goosGoarch.FindStringSubmatch(line); match != nil {
@@ -114,7 +114,7 @@ func TestEveryCliCrossBuildLegForcesCgo(t *testing.T) {
 	// dependency it does not have. TestTheKernelBuildsWithoutCgo holds the
 	// other half, so neither program can drift into the wrong setting.
 	for _, line := range strings.Split(crossBuildRecipe(t), "\n") {
-		if !strings.Contains(line, "./cmd/"+ProgramCLI) {
+		if !buildsProgram(line, ProgramCLI) {
 			continue
 		}
 		if !strings.Contains(line, "CGO_ENABLED=1") {
@@ -324,7 +324,7 @@ func TestTheKernelBuildsWithoutCgo(t *testing.T) {
 	// unbuildable on any machine without a cross toolchain -- including the
 	// one that would otherwise be able to produce every kernel asset locally.
 	for _, line := range strings.Split(crossBuildRecipe(t), "\n") {
-		if !strings.Contains(line, "./cmd/"+ProgramKernel) {
+		if !buildsProgram(line, ProgramKernel) {
 			continue
 		}
 		if !strings.Contains(line, "CGO_ENABLED=0") {
@@ -498,7 +498,10 @@ func TestNoPublishedProgramsVersionIsClaimedByATagThatPredatesIt(t *testing.T) {
 func currentVersionOf(t *testing.T, root, program string) (string, bool) {
 	t.Helper()
 	switch program {
-	case ProgramCLI:
+	case ProgramCLI, ProgramEngine:
+		// The engine ships in the CLI's release and carries the CLI's version:
+		// one archive set, one tag, one thing to install. Reading it from the
+		// same marker is what keeps that true rather than merely intended.
 		contents, err := os.ReadFile(filepath.Join(root, "VERSION"))
 		if err != nil {
 			return "", false
@@ -553,5 +556,70 @@ func TestNoExcludedPlatformIsAdvertisedForItsProgram(t *testing.T) {
 
 	if checked == 0 {
 		t.Skip("no program excludes any platform; nothing to check")
+	}
+}
+
+// buildsProgram reports whether a cross-build line builds exactly this program.
+//
+// A substring match on "./cmd/"+program cannot do this once one program's name
+// extends another's: "./cmd/agentic-sdlc" is a prefix of
+// "./cmd/agentic-sdlc-engine", so every engine leg read as a kernel leg and the
+// kernel's no-cgo rule was applied to a program that requires cgo. The
+// boundary has to be explicit.
+func buildsProgram(line, program string) bool {
+	target := "./cmd/" + program
+	index := strings.Index(line, target)
+	if index < 0 {
+		return false
+	}
+	rest := line[index+len(target):]
+	return rest == "" || strings.HasPrefix(rest, " ") || strings.HasPrefix(rest, "\t")
+}
+
+// A program whose cmd path extends another's must not be mistaken for it.
+//
+// "./cmd/agentic-sdlc" is a prefix of "./cmd/agentic-sdlc-engine", so a
+// substring match read every engine build line as a kernel line -- and applied
+// the kernel's no-cgo rule to a program that fails at runtime without cgo.
+// Found by adding the engine; kept because the next program to be added may
+// extend a name too.
+func TestBuildsProgramDoesNotMatchAPrefix(t *testing.T) {
+	engineLine := "\tCGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o dist/x ./cmd/agentic-sdlc-engine"
+	kernelLine := "\tCGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/y ./cmd/agentic-sdlc"
+
+	if buildsProgram(engineLine, ProgramKernel) {
+		t.Error("an engine build line was read as a kernel line")
+	}
+	if !buildsProgram(engineLine, ProgramEngine) {
+		t.Error("an engine build line was not recognised as one")
+	}
+	if !buildsProgram(kernelLine, ProgramKernel) {
+		t.Error("a kernel build line was not recognised as one")
+	}
+	if buildsProgram(kernelLine, ProgramEngine) {
+		t.Error("a kernel build line was read as an engine line")
+	}
+}
+
+// The engine forces cgo everywhere it is built.
+//
+// Not a style rule. Built with CGO_ENABLED=0 the engine compiles and then
+// fails on its first checkpoint write, reporting that go-sqlite3 requires cgo
+// and that what was linked is a stub -- so a cgo-less leg ships a binary that
+// cannot plan a single task.
+func TestEveryEngineCrossBuildLegForcesCgo(t *testing.T) {
+	checked := 0
+	for _, line := range strings.Split(crossBuildRecipe(t), "\n") {
+		if !buildsProgram(line, ProgramEngine) {
+			continue
+		}
+		checked++
+		if !strings.Contains(line, "CGO_ENABLED=1") {
+			t.Errorf("an engine cross-build leg does not force cgo, so it ships a binary "+
+				"that fails on its first checkpoint write:\n  %s", strings.TrimSpace(line))
+		}
+	}
+	if checked == 0 {
+		t.Error("no engine cross-build leg found; this guard checked nothing")
 	}
 }
