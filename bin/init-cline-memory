@@ -56,10 +56,7 @@ The Cadre repository — a catalog of 159 specialist agent roles, their lifecycl
 
 ### Run Tests
 ```bash
-python3 -m unittest discover -b -s roster/knowledge-store/test -p "test_*.py"
-python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
-python3 -m unittest discover -b -s roster/shared/test -p "test_*.py"
-python3 -m unittest discover -b -s kernel/test -p "test_*.py"
+go test ./...                    # the CLI, kernel, stores, selector, generators
 cd engine && uv sync && uv run python -m pytest
 ```
 
@@ -70,8 +67,8 @@ git add .                                         # Stage new files first
 ./bin/cadre generate-role-metadata               # Sync catalog with roles
 ./bin/cadre generate-plugin --output plugin      # Regenerate plugin
 ./bin/cadre port-cline-agents --root cline-plugins --source plugin
-go test ./internal/generators/
-python3 -m unittest discover -b -s plugin/tools -p "test_*.py"
+go test ./internal/generators/   # regeneration drift
+go test ./...                    # includes the Cline mirror's byte-for-byte guard
 ```
 
 ### Select Agents for a Task
@@ -149,7 +146,7 @@ cat > .cline/memory/BEST_PRACTICES.md <<'CLINE_PRACTICES_EOF'
 
 ### Testing a Change Before Committing
 - If it touches roles: regenerate and run repository health checks
-- If it touches gates/kernel: `cd kernel && python3 -m unittest discover -b -s test -p "test_*.py"`
+- If it touches gates/kernel: `go test ./internal/kernel/`
 - If it touches engine: `cd engine && uv sync && uv run python -m pytest`
 - If it touches CLI behavior: `cadre <subcommand> --help` and a manual smoke test
 
