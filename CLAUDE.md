@@ -55,7 +55,7 @@ python3 -m unittest discover -b -s plugin/tools -p "test_*.py"    # packaging + 
 ./bin/cadre generate-authority-aides   # only for roster/authority/aides.yaml or _template.md.tmpl
 ./bin/cadre generate-role-metadata     # roster/catalog.yaml, routing.json's knowledge_focus, provider/
 ./bin/cadre generate-plugin --output plugin        # the committed distribution under plugin/
-python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin   # the Cline mirror
+./bin/cadre port-cline-agents --root cline-plugins --source plugin   # the Cline mirror
 
 # ...then re-run both guards — they fail the build on drift
 go test ./internal/generators/

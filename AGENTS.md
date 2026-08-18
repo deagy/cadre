@@ -22,7 +22,7 @@ After changing `roster/catalog.yaml`, `roster/`, or `.agents/skills/`, regenerat
 ./bin/cadre generate-authority-aides   # only when editing roster/authority/aides.yaml or _template.md.tmpl
 ./bin/cadre generate-role-metadata     # roster/catalog.yaml, routing's knowledge_focus, generated half of provider/
 ./bin/cadre generate-plugin --output plugin
-python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin
+./bin/cadre port-cline-agents --root cline-plugins --source plugin
 ```
 
 The order is load-bearing, `generate-plugin` never touches `cline-plugins/`, and this applies to code and to this file itself — `plugin/suite/` bundles `roster/` and `AGENTS.md`, so a new module under `roster/*/src/` is part of the packaged CLI. Then re-run both guards, whose coverage is not redundant: `go test ./internal/generators/` and `python3 -m unittest discover -b -s plugin/tools -p "test_*.py"`. Run lifecycle integration tests against the in-tree `kernel/`.

@@ -24,10 +24,10 @@ timeline — an earlier version of this document (dated the same day) claimed
 
 ## What actually remains
 
-Three groups, and the distinction between them matters more than the line
+Two groups now, and the distinction between them matters more than the line
 count.
 
-### Two that are Python for a structural reason
+### Two that are Python for a structural reason, and stay
 
 **`guard_workspace_mutation.py`** (1,944 lines, plus an identical packaged
 copy). Claude Code invokes it as
@@ -47,13 +47,18 @@ Neither is blocked on effort. Both would need the packaged wrapper to stop
 being a downloader first, which is a distribution decision rather than a
 porting one.
 
-### One that is genuinely portable
+### The one that was portable is ported
 
-**`port_cline_agents.py`** (680 lines, plus a 438-line test). A build-time
-tool run by maintainers inside a checkout, from the documented regeneration
-sequence. Nothing about it needs Python: a `cadre` subcommand would do, and
-the sequence in `CLAUDE.md` and `AGENTS.md` would name that instead. This is
-the next port, and the last one that is purely a porting question.
+**`port_cline_agents.py` (deleted) is gone.** It rendered the packaged plugin's agents
+and skills into the Cline preset formats, and was the last step of the
+documented regeneration sequence needing an interpreter. It is now
+`internal/generators/cline_port.go`, reached as `cadre port-cline-agents`.
+
+Its 124 substitution pairs were extracted from the Python mechanically rather
+than retyped, and the port is verified the only way this one can be: it
+reproduces all 159 committed presets and 9 skills byte-for-byte. A
+transcription slip would have changed one generated file in a way that reads
+as intentional.
 
 The remaining test modules under `plugin/tools/` cover the three scripts
 above and go with whichever of them moves.

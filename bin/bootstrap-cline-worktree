@@ -136,7 +136,7 @@ After editing `roster/catalog.yaml`, `roster/<phase>/<role>/AGENT.md`, or `.agen
 git add .                                         # Stage new files first
 ./bin/cadre generate-role-metadata               # Sync catalog with roles
 ./bin/cadre generate-plugin --output plugin      # Regenerate plugin
-python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin
+./bin/cadre port-cline-agents --root cline-plugins --source plugin
 python3 -m unittest discover -b -s roster/orchestration/test -p "test_repository_health.py"
 python3 -m unittest discover -b -s plugin/tools -p "test_*.py"
 ```
@@ -194,7 +194,7 @@ cat > .cline/memory/BEST_PRACTICES.md <<'CLINE_PRACTICES_EOF'
    ```bash
    ./bin/cadre generate-role-metadata
    ./bin/cadre generate-plugin --output plugin
-   python3 plugin/tools/port_cline_agents.py --root cline-plugins --source plugin
+   ./bin/cadre port-cline-agents --root cline-plugins --source plugin
    ```
 3. Verify guards pass:
    ```bash

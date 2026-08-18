@@ -216,11 +216,16 @@ func TestTheDeadReferenceScanWouldNoticeOne(t *testing.T) {
 				matches[0][1])
 		}
 	}
-	// And a file that does exist is not reported. Both of these are packaging
-	// tooling the documented regeneration sequence still invokes, so they are
-	// the last Python likely to go -- but if one does, update this fixture
-	// rather than the scan.
-	for _, alive := range []string{"port_cline_agents.py", "bootstrap_sdlc.py"} {
+	// And a file that does exist is not reported.
+	//
+	// port_cline_agents.py stood here until it became
+	// internal/generators/cline_port.go. The test said to update this fixture
+	// rather than the scan if that happened, and then caught itself doing it.
+	// What is left is Python for a structural reason: bootstrap_sdlc.py
+	// installs the kernel, so it runs before a working cadre is a given, and
+	// guard_workspace_mutation.py is a PreToolUse hook that must run on an
+	// installer's machine with no setup.
+	for _, alive := range []string{"bootstrap_sdlc.py", "guard_workspace_mutation.py"} {
 		if !live[alive] {
 			t.Errorf("%s is expected to still exist; if it was deleted, update this "+
 				"fixture rather than the scan", alive)
