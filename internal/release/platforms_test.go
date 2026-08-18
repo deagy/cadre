@@ -305,3 +305,110 @@ func TestTheKernelBuildsWithoutCgo(t *testing.T) {
 		}
 	}
 }
+
+// The release workflow has to publish what the contract says it publishes,
+// and its wiring has to resolve.
+//
+// Both halves below were written after finding the bugs by hand. The CLI's
+// publish job read its version from cadre_cli/_version.py, a marker deleted
+// when the last Python left the distribution -- under `set -eu` that aborts,
+// so every CLI publish failed at that step. And adding a job gated on
+// `needs.changed.outputs.kernel` while the `changed` job declared only
+// `plugin` and `cli` produced a job that silently never runs.
+//
+// Neither is visible outside a release, which is the worst place to find out.
+
+type releaseWorkflowShape struct {
+	Jobs map[string]struct {
+		If      string `yaml:"if"`
+		Outputs map[string]string
+		Steps   []struct {
+			Name string `yaml:"name"`
+			Run  string `yaml:"run"`
+		} `yaml:"steps"`
+	} `yaml:"jobs"`
+}
+
+func releaseWorkflowText(t *testing.T) (string, releaseWorkflowShape) {
+	t.Helper()
+	text := readRepoFile(t, ".github/workflows/release.yml")
+	var shape releaseWorkflowShape
+	if err := yaml.Unmarshal([]byte(text), &shape); err != nil {
+		t.Fatalf("release.yml does not parse: %v", err)
+	}
+	if len(shape.Jobs) == 0 {
+		t.Fatal("release.yml declares no jobs; this guard read nothing")
+	}
+	return text, shape
+}
+
+func TestEveryPublishedProgramHasAReleaseJobThatTagsIt(t *testing.T) {
+	text, _ := releaseWorkflowText(t)
+	for _, program := range Programs {
+		prefix, recorded := TagPrefix[program]
+		if !recorded {
+			t.Errorf("%s is published but has no tag prefix recorded", program)
+			continue
+		}
+		// The tag is what makes a release findable at all; an asset published
+		// under no tag is one nobody can ask for by version.
+		if !strings.Contains(text, `git tag -s "`+prefix) && !strings.Contains(text, `git tag -a "`+prefix) {
+			t.Errorf("release.yml never tags %s under %s, so %s is built and never "+
+				"published under a version anyone can name", program, prefix, program)
+		}
+		if !strings.Contains(text, "./cmd/"+program) {
+			t.Errorf("release.yml never builds ./cmd/%s", program)
+		}
+	}
+}
+
+var changedOutputReference = regexp.MustCompile(`needs\.changed\.outputs\.(\w+)`)
+
+func TestEveryChangedOutputAJobGatesOnIsDeclared(t *testing.T) {
+	text, shape := releaseWorkflowText(t)
+	declared := shape.Jobs["changed"].Outputs
+	if len(declared) == 0 {
+		t.Fatal("the changed job declares no outputs; every gated job would be dead")
+	}
+	seen := 0
+	for _, match := range changedOutputReference.FindAllStringSubmatch(text, -1) {
+		name := match[1]
+		if _, ok := declared[name]; ok {
+			seen++
+			continue
+		}
+		// A gate on an undeclared output evaluates empty, so the job never
+		// runs and nothing says so.
+		t.Errorf("a job gates on needs.changed.outputs.%s, which the changed job "+
+			"does not declare -- that job silently never runs", name)
+	}
+	if seen == 0 {
+		t.Fatal("no job gates on a changed output; this guard checked nothing")
+	}
+}
+
+var versionReadPath = regexp.MustCompile(`(?m)value=\$\((?:tr[^<]*<\s*|grep\s+\S+\s+)([^\s|)]+)`)
+
+func TestEveryReleaseVersionReadNamesAPathThatExists(t *testing.T) {
+	// The specific failure: a publish job reading its version out of a file
+	// that had been deleted. `set -eu` turns that into a failed release rather
+	// than a wrong tag, but either way it is found at release time.
+	text, _ := releaseWorkflowText(t)
+	root := repositoryRoot(t)
+	checked := 0
+	for _, match := range versionReadPath.FindAllStringSubmatch(text, -1) {
+		candidate := strings.Trim(match[1], `"'`)
+		if strings.HasPrefix(candidate, "$") || strings.Contains(candidate, "{{") {
+			continue // resolved at run time, not a path this can check
+		}
+		checked++
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(candidate))); err != nil {
+			t.Errorf("a release step reads a version from %s, which does not exist: %v",
+				candidate, err)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no version read was found in release.yml; this guard checked nothing")
+	}
+	t.Logf("checked %d version-read path(s)", checked)
+}
