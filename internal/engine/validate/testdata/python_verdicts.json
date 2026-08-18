@@ -1,0 +1,4072 @@
+{
+ "approved_missing_evidence": {
+  "code": 1,
+  "contracts": {
+   "G1": {
+    "authority_requirements": [
+     "product_owner"
+    ]
+   }
+  },
+  "messages": [
+   "G1: approved gate must have non-empty evidence_refs and artifact_bindings"
+  ],
+  "record": {
+   "baseline_revision": "unresolved",
+   "classification": "internal",
+   "contract_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "current_lifecycle_phase": "feedback",
+   "dispatch_binding_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "dispatch_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "disposition": "pending",
+   "execution_summary": {
+    "gates": {
+     "G1": {
+      "completed_tasks": [],
+      "configured": true,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G10": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G2": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G3": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G4": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G5": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G6": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G7": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G8": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G9": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     }
+    }
+   },
+   "impact_profile": {
+    "blocking_unknowns": [],
+    "impact_categories": [],
+    "profile_id": "phase1-langgraph",
+    "specialized_boms": [],
+    "status": "draft"
+   },
+   "intent_record_id": null,
+   "kernel_version": "0.1.0-langgraph-phase1",
+   "knowledge_retrieval": {
+    "evidence_refs": [],
+    "influence": "none",
+    "query_ids": [],
+    "reason": "No portable knowledge source configured in this project",
+    "status": "unavailable"
+   },
+   "lifecycle_gates": [
+    {
+     "applicability": "applicable",
+     "applicability_rationale": "Lifecycle gate applies by default",
+     "artifact_bindings": [
+      {
+       "artifact_id": "G1-artifact",
+       "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+       "revision": "rev-1"
+      }
+     ],
+     "authority_requirements": [
+      {
+       "applicability": "applicable",
+       "authority_id": "product_owner",
+       "authority_type": "human-approver",
+       "rationale": "Assigned in project authority map",
+       "role": "Product Owner"
+      }
+     ],
+     "decided_at": "2026-08-18T20:12:02.481711+00:00",
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G1",
+     "human_approvals": [
+      {
+       "approver": {
+        "id": "product_owner",
+        "kind": "human",
+        "role": "Product Owner"
+       },
+       "decided_at": "2026-08-18T20:12:02.481708+00:00",
+       "evidence_refs": [
+        {
+         "classification": "internal",
+         "evidence_id": "G1-approval-evidence",
+         "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+         "hash_algorithm": "sha256",
+         "uri": "fake://evidence/G1-approval-evidence"
+        }
+       ],
+       "status": "approved"
+      }
+     ],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": true,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": {
+      "id": "code-reviewer",
+      "kind": "agent",
+      "role": "reviewer:code-reviewer"
+     },
+     "invalidation_history": [],
+     "knowledge_status": "unavailable",
+     "name": "Intent",
+     "preparers": [
+      {
+       "id": "product-intent-agent",
+       "kind": "agent",
+       "role": "author:product-intent-agent"
+      }
+     ],
+     "required_reentry_gate": null,
+     "status": "approved",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G2",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Requirements Baseline",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G3",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Architecture",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G4",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Governance and Data",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G5",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Security and Crypto",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G6",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Verification and Test",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G7",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Evidence",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G8",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Release Readiness",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G9",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Deployment Authorization",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G10",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Runtime Conformance",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    }
+   ],
+   "mode": "langgraph-phase1",
+   "profile": "generic",
+   "profile_digest": null,
+   "provider_bindings": [],
+   "re_entry_history": [],
+   "recorded_at": "2026-08-18T20:12:02.481725+00:00",
+   "requirements_baseline_id": null,
+   "scope": "validate a small task",
+   "specialist_attestations": [],
+   "task_id": "validate-test",
+   "version": 2
+  }
+ },
+ "approver_is_preparer": {
+  "code": 1,
+  "contracts": {
+   "G1": {
+    "authority_requirements": [
+     "product_owner"
+    ]
+   }
+  },
+  "messages": [
+   "G1: human_approvals[0].approver is not independent"
+  ],
+  "record": {
+   "baseline_revision": "unresolved",
+   "classification": "internal",
+   "contract_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "current_lifecycle_phase": "feedback",
+   "dispatch_binding_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "dispatch_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "disposition": "pending",
+   "execution_summary": {
+    "gates": {
+     "G1": {
+      "completed_tasks": [],
+      "configured": true,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G10": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G2": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G3": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G4": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G5": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G6": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G7": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G8": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G9": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     }
+    }
+   },
+   "impact_profile": {
+    "blocking_unknowns": [],
+    "impact_categories": [],
+    "profile_id": "phase1-langgraph",
+    "specialized_boms": [],
+    "status": "draft"
+   },
+   "intent_record_id": null,
+   "kernel_version": "0.1.0-langgraph-phase1",
+   "knowledge_retrieval": {
+    "evidence_refs": [],
+    "influence": "none",
+    "query_ids": [],
+    "reason": "No portable knowledge source configured in this project",
+    "status": "unavailable"
+   },
+   "lifecycle_gates": [
+    {
+     "applicability": "applicable",
+     "applicability_rationale": "Lifecycle gate applies by default",
+     "artifact_bindings": [
+      {
+       "artifact_id": "G1-artifact",
+       "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+       "revision": "rev-1"
+      }
+     ],
+     "authority_requirements": [
+      {
+       "applicability": "applicable",
+       "authority_id": "product_owner",
+       "authority_type": "human-approver",
+       "rationale": "Assigned in project authority map",
+       "role": "Product Owner"
+      }
+     ],
+     "decided_at": "2026-08-18T20:12:02.485414+00:00",
+     "evidence_refs": [
+      {
+       "classification": "internal",
+       "evidence_id": "G1-evidence",
+       "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+       "hash_algorithm": "sha256",
+       "uri": "fake://evidence/G1-evidence"
+      }
+     ],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G1",
+     "human_approvals": [
+      {
+       "approver": {
+        "id": "product-intent-agent",
+        "kind": "agent",
+        "role": "Product Owner"
+       },
+       "decided_at": "2026-08-18T20:12:02.485411+00:00",
+       "evidence_refs": [
+        {
+         "classification": "internal",
+         "evidence_id": "G1-approval-evidence",
+         "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+         "hash_algorithm": "sha256",
+         "uri": "fake://evidence/G1-approval-evidence"
+        }
+       ],
+       "status": "approved"
+      }
+     ],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": true,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": {
+      "id": "code-reviewer",
+      "kind": "agent",
+      "role": "reviewer:code-reviewer"
+     },
+     "invalidation_history": [],
+     "knowledge_status": "unavailable",
+     "name": "Intent",
+     "preparers": [
+      {
+       "id": "product-intent-agent",
+       "kind": "agent",
+       "role": "author:product-intent-agent"
+      }
+     ],
+     "required_reentry_gate": null,
+     "status": "approved",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G2",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Requirements Baseline",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G3",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Architecture",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G4",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Governance and Data",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G5",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Security and Crypto",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G6",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Verification and Test",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G7",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Evidence",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G8",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Release Readiness",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G9",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Deployment Authorization",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G10",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Runtime Conformance",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    }
+   ],
+   "mode": "langgraph-phase1",
+   "profile": "generic",
+   "profile_digest": null,
+   "provider_bindings": [],
+   "re_entry_history": [],
+   "recorded_at": "2026-08-18T20:12:02.485425+00:00",
+   "requirements_baseline_id": null,
+   "scope": "validate a small task",
+   "specialist_attestations": [],
+   "task_id": "validate-test",
+   "version": 2
+  }
+ },
+ "bad_timestamp": {
+  "code": 1,
+  "contracts": {
+   "G1": {
+    "authority_requirements": [
+     "product_owner"
+    ]
+   }
+  },
+  "messages": [
+   "G1: decided_at 'not-a-real-timestamp' is not a valid date-time"
+  ],
+  "record": {
+   "baseline_revision": "unresolved",
+   "classification": "internal",
+   "contract_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "current_lifecycle_phase": "feedback",
+   "dispatch_binding_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "dispatch_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "disposition": "pending",
+   "execution_summary": {
+    "gates": {
+     "G1": {
+      "completed_tasks": [],
+      "configured": true,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G10": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G2": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G3": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G4": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G5": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G6": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G7": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G8": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G9": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     }
+    }
+   },
+   "impact_profile": {
+    "blocking_unknowns": [],
+    "impact_categories": [],
+    "profile_id": "phase1-langgraph",
+    "specialized_boms": [],
+    "status": "draft"
+   },
+   "intent_record_id": null,
+   "kernel_version": "0.1.0-langgraph-phase1",
+   "knowledge_retrieval": {
+    "evidence_refs": [],
+    "influence": "none",
+    "query_ids": [],
+    "reason": "No portable knowledge source configured in this project",
+    "status": "unavailable"
+   },
+   "lifecycle_gates": [
+    {
+     "applicability": "applicable",
+     "applicability_rationale": "Lifecycle gate applies by default",
+     "artifact_bindings": [
+      {
+       "artifact_id": "G1-artifact",
+       "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+       "revision": "rev-1"
+      }
+     ],
+     "authority_requirements": [
+      {
+       "applicability": "applicable",
+       "authority_id": "product_owner",
+       "authority_type": "human-approver",
+       "rationale": "Assigned in project authority map",
+       "role": "Product Owner"
+      }
+     ],
+     "decided_at": "not-a-real-timestamp",
+     "evidence_refs": [
+      {
+       "classification": "internal",
+       "evidence_id": "G1-evidence",
+       "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+       "hash_algorithm": "sha256",
+       "uri": "fake://evidence/G1-evidence"
+      }
+     ],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G1",
+     "human_approvals": [
+      {
+       "approver": {
+        "id": "product_owner",
+        "kind": "human",
+        "role": "Product Owner"
+       },
+       "decided_at": "2026-08-18T20:12:02.490562+00:00",
+       "evidence_refs": [
+        {
+         "classification": "internal",
+         "evidence_id": "G1-approval-evidence",
+         "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+         "hash_algorithm": "sha256",
+         "uri": "fake://evidence/G1-approval-evidence"
+        }
+       ],
+       "status": "approved"
+      }
+     ],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": true,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": {
+      "id": "code-reviewer",
+      "kind": "agent",
+      "role": "reviewer:code-reviewer"
+     },
+     "invalidation_history": [],
+     "knowledge_status": "unavailable",
+     "name": "Intent",
+     "preparers": [
+      {
+       "id": "product-intent-agent",
+       "kind": "agent",
+       "role": "author:product-intent-agent"
+      }
+     ],
+     "required_reentry_gate": null,
+     "status": "approved",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G2",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Requirements Baseline",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G3",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Architecture",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G4",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Governance and Data",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G5",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Security and Crypto",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G6",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Verification and Test",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G7",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Evidence",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G8",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Release Readiness",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G9",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Deployment Authorization",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G10",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Runtime Conformance",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    }
+   ],
+   "mode": "langgraph-phase1",
+   "profile": "generic",
+   "profile_digest": null,
+   "provider_bindings": [],
+   "re_entry_history": [],
+   "recorded_at": "2026-08-18T20:12:02.490579+00:00",
+   "requirements_baseline_id": null,
+   "scope": "validate a small task",
+   "specialist_attestations": [],
+   "task_id": "validate-test",
+   "version": 2
+  }
+ },
+ "human_only_gate_without_evidence": {
+  "code": 0,
+  "contracts": {
+   "G9": {
+    "authority_requirements": [],
+    "human_only": true
+   }
+  },
+  "messages": [],
+  "record": {
+   "baseline_revision": "unresolved",
+   "classification": "internal",
+   "contract_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "current_lifecycle_phase": "feedback",
+   "dispatch_binding_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "dispatch_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "disposition": "pending",
+   "execution_summary": {
+    "gates": {
+     "G1": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G10": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G2": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G3": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G4": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G5": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G6": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G7": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G8": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G9": {
+      "completed_tasks": [],
+      "configured": true,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     }
+    }
+   },
+   "impact_profile": {
+    "blocking_unknowns": [],
+    "impact_categories": [],
+    "profile_id": "phase1-langgraph",
+    "specialized_boms": [],
+    "status": "draft"
+   },
+   "intent_record_id": null,
+   "kernel_version": "0.1.0-langgraph-phase1",
+   "knowledge_retrieval": {
+    "evidence_refs": [],
+    "influence": "none",
+    "query_ids": [],
+    "reason": "No portable knowledge source configured in this project",
+    "status": "unavailable"
+   },
+   "lifecycle_gates": [
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G1",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Intent",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G2",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Requirements Baseline",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G3",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Architecture",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G4",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Governance and Data",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G5",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Security and Crypto",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G6",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Verification and Test",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G7",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Evidence",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G8",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Release Readiness",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "applicable",
+     "applicability_rationale": "Lifecycle gate applies by default",
+     "artifact_bindings": [],
+     "authority_requirements": [
+      {
+       "applicability": "applicable",
+       "authority_id": "product_owner",
+       "authority_type": "human-approver",
+       "rationale": "Assigned in project authority map",
+       "role": "Product Owner"
+      }
+     ],
+     "decided_at": "2026-08-18T20:12:02.493160+00:00",
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G9",
+     "human_approvals": [
+      {
+       "approver": {
+        "id": "product_owner",
+        "kind": "human",
+        "role": "Product Owner"
+       },
+       "decided_at": "2026-08-18T20:12:02.493158+00:00",
+       "evidence_refs": [
+        {
+         "classification": "internal",
+         "evidence_id": "G9-approval-evidence",
+         "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+         "hash_algorithm": "sha256",
+         "uri": "fake://evidence/G9-approval-evidence"
+        }
+       ],
+       "status": "approved"
+      }
+     ],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": true,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": {
+      "id": "code-reviewer",
+      "kind": "agent",
+      "role": "reviewer:code-reviewer"
+     },
+     "invalidation_history": [],
+     "knowledge_status": "unavailable",
+     "name": "Intent",
+     "preparers": [
+      {
+       "id": "product-intent-agent",
+       "kind": "agent",
+       "role": "author:product-intent-agent"
+      }
+     ],
+     "required_reentry_gate": null,
+     "status": "approved",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G10",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Runtime Conformance",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    }
+   ],
+   "mode": "langgraph-phase1",
+   "profile": "generic",
+   "profile_digest": null,
+   "provider_bindings": [],
+   "re_entry_history": [],
+   "recorded_at": "2026-08-18T20:12:02.493171+00:00",
+   "requirements_baseline_id": null,
+   "scope": "validate a small task",
+   "specialist_attestations": [],
+   "task_id": "validate-test",
+   "version": 2
+  }
+ },
+ "missing_authority_requirement": {
+  "code": 1,
+  "contracts": {
+   "G1": {
+    "authority_requirements": [
+     "product_owner",
+     "security_lead"
+    ]
+   }
+  },
+  "messages": [
+   "G1: missing authority requirements ['security_lead']"
+  ],
+  "record": {
+   "baseline_revision": "unresolved",
+   "classification": "internal",
+   "contract_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "current_lifecycle_phase": "feedback",
+   "dispatch_binding_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "dispatch_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "disposition": "pending",
+   "execution_summary": {
+    "gates": {
+     "G1": {
+      "completed_tasks": [],
+      "configured": true,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G10": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G2": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G3": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G4": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G5": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G6": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G7": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G8": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G9": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     }
+    }
+   },
+   "impact_profile": {
+    "blocking_unknowns": [],
+    "impact_categories": [],
+    "profile_id": "phase1-langgraph",
+    "specialized_boms": [],
+    "status": "draft"
+   },
+   "intent_record_id": null,
+   "kernel_version": "0.1.0-langgraph-phase1",
+   "knowledge_retrieval": {
+    "evidence_refs": [],
+    "influence": "none",
+    "query_ids": [],
+    "reason": "No portable knowledge source configured in this project",
+    "status": "unavailable"
+   },
+   "lifecycle_gates": [
+    {
+     "applicability": "applicable",
+     "applicability_rationale": "Lifecycle gate applies by default",
+     "artifact_bindings": [
+      {
+       "artifact_id": "G1-artifact",
+       "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+       "revision": "rev-1"
+      }
+     ],
+     "authority_requirements": [
+      {
+       "applicability": "applicable",
+       "authority_id": "product_owner",
+       "authority_type": "human-approver",
+       "rationale": "Assigned in project authority map",
+       "role": "Product Owner"
+      }
+     ],
+     "decided_at": "2026-08-18T20:12:02.487925+00:00",
+     "evidence_refs": [
+      {
+       "classification": "internal",
+       "evidence_id": "G1-evidence",
+       "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+       "hash_algorithm": "sha256",
+       "uri": "fake://evidence/G1-evidence"
+      }
+     ],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G1",
+     "human_approvals": [
+      {
+       "approver": {
+        "id": "product_owner",
+        "kind": "human",
+        "role": "Product Owner"
+       },
+       "decided_at": "2026-08-18T20:12:02.487909+00:00",
+       "evidence_refs": [
+        {
+         "classification": "internal",
+         "evidence_id": "G1-approval-evidence",
+         "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+         "hash_algorithm": "sha256",
+         "uri": "fake://evidence/G1-approval-evidence"
+        }
+       ],
+       "status": "approved"
+      }
+     ],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": true,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": {
+      "id": "code-reviewer",
+      "kind": "agent",
+      "role": "reviewer:code-reviewer"
+     },
+     "invalidation_history": [],
+     "knowledge_status": "unavailable",
+     "name": "Intent",
+     "preparers": [
+      {
+       "id": "product-intent-agent",
+       "kind": "agent",
+       "role": "author:product-intent-agent"
+      }
+     ],
+     "required_reentry_gate": null,
+     "status": "approved",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G2",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Requirements Baseline",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G3",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Architecture",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G4",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Governance and Data",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G5",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Security and Crypto",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G6",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Verification and Test",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G7",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Evidence",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G8",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Release Readiness",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G9",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Deployment Authorization",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G10",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Runtime Conformance",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    }
+   ],
+   "mode": "langgraph-phase1",
+   "profile": "generic",
+   "profile_digest": null,
+   "provider_bindings": [],
+   "re_entry_history": [],
+   "recorded_at": "2026-08-18T20:12:02.487964+00:00",
+   "requirements_baseline_id": null,
+   "scope": "validate a small task",
+   "specialist_attestations": [],
+   "task_id": "validate-test",
+   "version": 2
+  }
+ },
+ "no_contracts_supplied": {
+  "code": 0,
+  "contracts": null,
+  "messages": [],
+  "record": {
+   "baseline_revision": "unresolved",
+   "classification": "internal",
+   "contract_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "current_lifecycle_phase": "feedback",
+   "dispatch_binding_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "dispatch_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "disposition": "pending",
+   "execution_summary": {
+    "gates": {
+     "G1": {
+      "completed_tasks": [],
+      "configured": true,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G10": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G2": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G3": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G4": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G5": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G6": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G7": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G8": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G9": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     }
+    }
+   },
+   "impact_profile": {
+    "blocking_unknowns": [],
+    "impact_categories": [],
+    "profile_id": "phase1-langgraph",
+    "specialized_boms": [],
+    "status": "draft"
+   },
+   "intent_record_id": null,
+   "kernel_version": "0.1.0-langgraph-phase1",
+   "knowledge_retrieval": {
+    "evidence_refs": [],
+    "influence": "none",
+    "query_ids": [],
+    "reason": "No portable knowledge source configured in this project",
+    "status": "unavailable"
+   },
+   "lifecycle_gates": [
+    {
+     "applicability": "applicable",
+     "applicability_rationale": "Lifecycle gate applies by default",
+     "artifact_bindings": [
+      {
+       "artifact_id": "G1-artifact",
+       "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+       "revision": "rev-1"
+      }
+     ],
+     "authority_requirements": [
+      {
+       "applicability": "applicable",
+       "authority_id": "product_owner",
+       "authority_type": "human-approver",
+       "rationale": "Assigned in project authority map",
+       "role": "Product Owner"
+      }
+     ],
+     "decided_at": "2026-08-18T20:12:02.491773+00:00",
+     "evidence_refs": [
+      {
+       "classification": "internal",
+       "evidence_id": "G1-evidence",
+       "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+       "hash_algorithm": "sha256",
+       "uri": "fake://evidence/G1-evidence"
+      }
+     ],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G1",
+     "human_approvals": [
+      {
+       "approver": {
+        "id": "product_owner",
+        "kind": "human",
+        "role": "Product Owner"
+       },
+       "decided_at": "2026-08-18T20:12:02.491771+00:00",
+       "evidence_refs": [
+        {
+         "classification": "internal",
+         "evidence_id": "G1-approval-evidence",
+         "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+         "hash_algorithm": "sha256",
+         "uri": "fake://evidence/G1-approval-evidence"
+        }
+       ],
+       "status": "approved"
+      }
+     ],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": true,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": {
+      "id": "code-reviewer",
+      "kind": "agent",
+      "role": "reviewer:code-reviewer"
+     },
+     "invalidation_history": [],
+     "knowledge_status": "unavailable",
+     "name": "Intent",
+     "preparers": [
+      {
+       "id": "product-intent-agent",
+       "kind": "agent",
+       "role": "author:product-intent-agent"
+      }
+     ],
+     "required_reentry_gate": null,
+     "status": "approved",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G2",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Requirements Baseline",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G3",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Architecture",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G4",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Governance and Data",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G5",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Security and Crypto",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G6",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Verification and Test",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G7",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Evidence",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G8",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Release Readiness",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G9",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Deployment Authorization",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G10",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Runtime Conformance",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    }
+   ],
+   "mode": "langgraph-phase1",
+   "profile": "generic",
+   "profile_digest": null,
+   "provider_bindings": [],
+   "re_entry_history": [],
+   "recorded_at": "2026-08-18T20:12:02.491782+00:00",
+   "requirements_baseline_id": null,
+   "scope": "validate a small task",
+   "specialist_attestations": [],
+   "task_id": "validate-test",
+   "version": 2
+  }
+ },
+ "unresolved_authority": {
+  "code": 2,
+  "contracts": {
+   "G1": {
+    "authority_requirements": [
+     "product_owner"
+    ]
+   }
+  },
+  "messages": [
+   "G1: approved with unresolved authority applicability for ['product_owner']"
+  ],
+  "record": {
+   "baseline_revision": "unresolved",
+   "classification": "internal",
+   "contract_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "current_lifecycle_phase": "feedback",
+   "dispatch_binding_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "dispatch_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "disposition": "pending",
+   "execution_summary": {
+    "gates": {
+     "G1": {
+      "completed_tasks": [],
+      "configured": true,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G10": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G2": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G3": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G4": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G5": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G6": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G7": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G8": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G9": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     }
+    }
+   },
+   "impact_profile": {
+    "blocking_unknowns": [],
+    "impact_categories": [],
+    "profile_id": "phase1-langgraph",
+    "specialized_boms": [],
+    "status": "draft"
+   },
+   "intent_record_id": null,
+   "kernel_version": "0.1.0-langgraph-phase1",
+   "knowledge_retrieval": {
+    "evidence_refs": [],
+    "influence": "none",
+    "query_ids": [],
+    "reason": "No portable knowledge source configured in this project",
+    "status": "unavailable"
+   },
+   "lifecycle_gates": [
+    {
+     "applicability": "applicable",
+     "applicability_rationale": "Lifecycle gate applies by default",
+     "artifact_bindings": [
+      {
+       "artifact_id": "G1-artifact",
+       "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+       "revision": "rev-1"
+      }
+     ],
+     "authority_requirements": [
+      {
+       "applicability": "unknown",
+       "authority_id": "product_owner",
+       "authority_type": "human-approver",
+       "rationale": "Assigned in project authority map",
+       "role": "Product Owner"
+      }
+     ],
+     "decided_at": "2026-08-18T20:12:02.482883+00:00",
+     "evidence_refs": [
+      {
+       "classification": "internal",
+       "evidence_id": "G1-evidence",
+       "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+       "hash_algorithm": "sha256",
+       "uri": "fake://evidence/G1-evidence"
+      }
+     ],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G1",
+     "human_approvals": [
+      {
+       "approver": {
+        "id": "product_owner",
+        "kind": "human",
+        "role": "Product Owner"
+       },
+       "decided_at": "2026-08-18T20:12:02.482879+00:00",
+       "evidence_refs": [
+        {
+         "classification": "internal",
+         "evidence_id": "G1-approval-evidence",
+         "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+         "hash_algorithm": "sha256",
+         "uri": "fake://evidence/G1-approval-evidence"
+        }
+       ],
+       "status": "approved"
+      }
+     ],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": true,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": {
+      "id": "code-reviewer",
+      "kind": "agent",
+      "role": "reviewer:code-reviewer"
+     },
+     "invalidation_history": [],
+     "knowledge_status": "unavailable",
+     "name": "Intent",
+     "preparers": [
+      {
+       "id": "product-intent-agent",
+       "kind": "agent",
+       "role": "author:product-intent-agent"
+      }
+     ],
+     "required_reentry_gate": null,
+     "status": "approved",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G2",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Requirements Baseline",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G3",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Architecture",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G4",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Governance and Data",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G5",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Security and Crypto",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G6",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Verification and Test",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G7",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Evidence",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G8",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Release Readiness",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G9",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Deployment Authorization",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G10",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Runtime Conformance",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    }
+   ],
+   "mode": "langgraph-phase1",
+   "profile": "generic",
+   "profile_digest": null,
+   "provider_bindings": [],
+   "re_entry_history": [],
+   "recorded_at": "2026-08-18T20:12:02.482928+00:00",
+   "requirements_baseline_id": null,
+   "scope": "validate a small task",
+   "specialist_attestations": [],
+   "task_id": "validate-test",
+   "version": 2
+  }
+ },
+ "valid_approved": {
+  "code": 0,
+  "contracts": {
+   "G1": {
+    "authority_requirements": [
+     "product_owner"
+    ]
+   }
+  },
+  "messages": [],
+  "record": {
+   "baseline_revision": "unresolved",
+   "classification": "internal",
+   "contract_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "current_lifecycle_phase": "feedback",
+   "dispatch_binding_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "dispatch_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "disposition": "pending",
+   "execution_summary": {
+    "gates": {
+     "G1": {
+      "completed_tasks": [],
+      "configured": true,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G10": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G2": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G3": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G4": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G5": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G6": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G7": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G8": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G9": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     }
+    }
+   },
+   "impact_profile": {
+    "blocking_unknowns": [],
+    "impact_categories": [],
+    "profile_id": "phase1-langgraph",
+    "specialized_boms": [],
+    "status": "draft"
+   },
+   "intent_record_id": null,
+   "kernel_version": "0.1.0-langgraph-phase1",
+   "knowledge_retrieval": {
+    "evidence_refs": [],
+    "influence": "none",
+    "query_ids": [],
+    "reason": "No portable knowledge source configured in this project",
+    "status": "unavailable"
+   },
+   "lifecycle_gates": [
+    {
+     "applicability": "applicable",
+     "applicability_rationale": "Lifecycle gate applies by default",
+     "artifact_bindings": [
+      {
+       "artifact_id": "G1-artifact",
+       "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+       "revision": "rev-1"
+      }
+     ],
+     "authority_requirements": [
+      {
+       "applicability": "applicable",
+       "authority_id": "product_owner",
+       "authority_type": "human-approver",
+       "rationale": "Assigned in project authority map",
+       "role": "Product Owner"
+      }
+     ],
+     "decided_at": "2026-08-18T20:12:02.480265+00:00",
+     "evidence_refs": [
+      {
+       "classification": "internal",
+       "evidence_id": "G1-evidence",
+       "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+       "hash_algorithm": "sha256",
+       "uri": "fake://evidence/G1-evidence"
+      }
+     ],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G1",
+     "human_approvals": [
+      {
+       "approver": {
+        "id": "product_owner",
+        "kind": "human",
+        "role": "Product Owner"
+       },
+       "decided_at": "2026-08-18T20:12:02.480254+00:00",
+       "evidence_refs": [
+        {
+         "classification": "internal",
+         "evidence_id": "G1-approval-evidence",
+         "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+         "hash_algorithm": "sha256",
+         "uri": "fake://evidence/G1-approval-evidence"
+        }
+       ],
+       "status": "approved"
+      }
+     ],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": true,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": {
+      "id": "code-reviewer",
+      "kind": "agent",
+      "role": "reviewer:code-reviewer"
+     },
+     "invalidation_history": [],
+     "knowledge_status": "unavailable",
+     "name": "Intent",
+     "preparers": [
+      {
+       "id": "product-intent-agent",
+       "kind": "agent",
+       "role": "author:product-intent-agent"
+      }
+     ],
+     "required_reentry_gate": null,
+     "status": "approved",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G2",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Requirements Baseline",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G3",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Architecture",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G4",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Governance and Data",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G5",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Security and Crypto",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G6",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Verification and Test",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G7",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Evidence",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G8",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Release Readiness",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G9",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Deployment Authorization",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G10",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Runtime Conformance",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    }
+   ],
+   "mode": "langgraph-phase1",
+   "profile": "generic",
+   "profile_digest": null,
+   "provider_bindings": [],
+   "re_entry_history": [],
+   "recorded_at": "2026-08-18T20:12:02.480286+00:00",
+   "requirements_baseline_id": null,
+   "scope": "validate a small task",
+   "specialist_attestations": [],
+   "task_id": "validate-test",
+   "version": 2
+  }
+ },
+ "verifier_is_preparer": {
+  "code": 1,
+  "contracts": {
+   "G1": {
+    "authority_requirements": [
+     "product_owner"
+    ]
+   }
+  },
+  "messages": [
+   "G1: independent_verifier is also a preparer"
+  ],
+  "record": {
+   "baseline_revision": "unresolved",
+   "classification": "internal",
+   "contract_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "current_lifecycle_phase": "feedback",
+   "dispatch_binding_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "dispatch_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+   "disposition": "pending",
+   "execution_summary": {
+    "gates": {
+     "G1": {
+      "completed_tasks": [],
+      "configured": true,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G10": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G2": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G3": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G4": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G5": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G6": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G7": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G8": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     },
+     "G9": {
+      "completed_tasks": [],
+      "configured": false,
+      "dispatched_agents": [],
+      "ignore_reason": null,
+      "ignored": false,
+      "produced_agent_artifacts": [],
+      "required_agent_artifacts": [],
+      "required_agents": [],
+      "required_tasks": []
+     }
+    }
+   },
+   "impact_profile": {
+    "blocking_unknowns": [],
+    "impact_categories": [],
+    "profile_id": "phase1-langgraph",
+    "specialized_boms": [],
+    "status": "draft"
+   },
+   "intent_record_id": null,
+   "kernel_version": "0.1.0-langgraph-phase1",
+   "knowledge_retrieval": {
+    "evidence_refs": [],
+    "influence": "none",
+    "query_ids": [],
+    "reason": "No portable knowledge source configured in this project",
+    "status": "unavailable"
+   },
+   "lifecycle_gates": [
+    {
+     "applicability": "applicable",
+     "applicability_rationale": "Lifecycle gate applies by default",
+     "artifact_bindings": [
+      {
+       "artifact_id": "G1-artifact",
+       "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+       "revision": "rev-1"
+      }
+     ],
+     "authority_requirements": [
+      {
+       "applicability": "applicable",
+       "authority_id": "product_owner",
+       "authority_type": "human-approver",
+       "rationale": "Assigned in project authority map",
+       "role": "Product Owner"
+      }
+     ],
+     "decided_at": "2026-08-18T20:12:02.484094+00:00",
+     "evidence_refs": [
+      {
+       "classification": "internal",
+       "evidence_id": "G1-evidence",
+       "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+       "hash_algorithm": "sha256",
+       "uri": "fake://evidence/G1-evidence"
+      }
+     ],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G1",
+     "human_approvals": [
+      {
+       "approver": {
+        "id": "product_owner",
+        "kind": "human",
+        "role": "Product Owner"
+       },
+       "decided_at": "2026-08-18T20:12:02.484092+00:00",
+       "evidence_refs": [
+        {
+         "classification": "internal",
+         "evidence_id": "G1-approval-evidence",
+         "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+         "hash_algorithm": "sha256",
+         "uri": "fake://evidence/G1-approval-evidence"
+        }
+       ],
+       "status": "approved"
+      }
+     ],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": true,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": {
+      "id": "product-intent-agent",
+      "kind": "agent",
+      "role": "reviewer"
+     },
+     "invalidation_history": [],
+     "knowledge_status": "unavailable",
+     "name": "Intent",
+     "preparers": [
+      {
+       "id": "product-intent-agent",
+       "kind": "agent",
+       "role": "author:product-intent-agent"
+      }
+     ],
+     "required_reentry_gate": null,
+     "status": "approved",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G2",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Requirements Baseline",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G3",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Architecture",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G4",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Governance and Data",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G5",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Security and Crypto",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G6",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Verification and Test",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G7",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Evidence",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G8",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Release Readiness",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G9",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Deployment Authorization",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    },
+    {
+     "applicability": "not-applicable",
+     "applicability_rationale": "Not part of the derived gate sequence for this task",
+     "artifact_bindings": [],
+     "authority_requirements": [],
+     "decided_at": null,
+     "evidence_refs": [],
+     "exceptions": [],
+     "findings": [],
+     "gate_id": "G10",
+     "human_approvals": [],
+     "independence_declaration": {
+      "verifier_confirmed_not_preparer": false,
+      "verifier_made_material_correction": false
+     },
+     "independent_verifier": null,
+     "invalidation_history": [],
+     "knowledge_status": "not-applicable",
+     "name": "Runtime Conformance",
+     "preparers": [],
+     "required_reentry_gate": null,
+     "status": "pending",
+     "tier": "lifecycle"
+    }
+   ],
+   "mode": "langgraph-phase1",
+   "profile": "generic",
+   "profile_digest": null,
+   "provider_bindings": [],
+   "re_entry_history": [],
+   "recorded_at": "2026-08-18T20:12:02.484105+00:00",
+   "requirements_baseline_id": null,
+   "scope": "validate a small task",
+   "specialist_attestations": [],
+   "task_id": "validate-test",
+   "version": 2
+  }
+ }
+}
