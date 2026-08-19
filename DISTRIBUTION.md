@@ -120,6 +120,18 @@ It is excluded from `darwin/amd64` for the same reason the CLI is: it links
 the same cgo sqlite checkpointer, and a cgo-less build compiles and then fails
 on its first checkpoint write.
 
+Each archive contains a single executable named for its program and nothing
+else: `cadre`, `agentic-sdlc-engine`, `agentic-sdlc` (with `.exe` on Windows).
+Extract it and run it under that name -- no directory, no version suffix, no
+platform suffix.
+
+That is worth stating because it was wrong. Through `cli-v0.6.3` the CLI and
+engine archives contained the *build* output name -- `cadre-linux-arm64` --
+while the kernel's contained `agentic-sdlc`. `internal/release`'s
+`ExecutableNameFor` had always said otherwise; nothing compared the two until
+`archive_contents_test.go`, which now reads the workflow and fails when they
+disagree.
+
 The kernel publishes five, including `agentic-sdlc-v<version>-darwin-amd64.tar.gz`:
 it does not link cgo and cross-compiles to every platform from one runner. The
 CLI does link cgo (the knowledge store's sqlite), so each platform needs a

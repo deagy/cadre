@@ -432,25 +432,36 @@ jobs:
         run: |
           set -eu
           cd dist
-          tar czf "cadre-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" \
-            "cadre-${{ matrix.goos }}-${{ matrix.goarch }}"
-          rm "cadre-${{ matrix.goos }}-${{ matrix.goarch }}"
-          tar czf "agentic-sdlc-engine-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" \
-            "agentic-sdlc-engine-${{ matrix.goos }}-${{ matrix.goarch }}"
-          rm "agentic-sdlc-engine-${{ matrix.goos }}-${{ matrix.goarch }}"
+          # Renamed to the contract name before archiving.
+          #
+          # The build output carries a platform suffix so four matrix legs can
+          # coexist, but internal/release.ExecutableNameFor says the archive
+          # contains "cadre" -- and this used to pack "cadre-linux-arm64", so
+          # `tar xzf` gave you a binary that "extract and run cadre" could not
+          # find. Shipped that way through 0.6.3. The kernel job never had the
+          # bug because it builds straight to the contract name.
+          mv "cadre-${{ matrix.goos }}-${{ matrix.goarch }}" cadre
+          tar czf "cadre-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" cadre
+          rm cadre
+          mv "agentic-sdlc-engine-${{ matrix.goos }}-${{ matrix.goarch }}" agentic-sdlc-engine
+          tar czf "agentic-sdlc-engine-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" agentic-sdlc-engine
+          rm agentic-sdlc-engine
 
       - name: Create archive (zip for Windows)
         if: steps.tag.outputs.skip == 'false' && matrix.goos == 'windows'
         shell: pwsh
         run: |
+          # Renamed to the contract name before archiving; see the tar.gz step.
           $binary = "dist\cadre-${{ matrix.goos }}-${{ matrix.goarch }}.exe"
           $archive = "dist\cadre-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.zip"
-          Compress-Archive -Path $binary -DestinationPath $archive
-          Remove-Item $binary
+          Move-Item $binary "dist\cadre.exe"
+          Compress-Archive -Path "dist\cadre.exe" -DestinationPath $archive
+          Remove-Item "dist\cadre.exe"
           $engine = "dist\agentic-sdlc-engine-${{ matrix.goos }}-${{ matrix.goarch }}.exe"
           $engineArchive = "dist\agentic-sdlc-engine-v${{ steps.version.outputs.value }}-${{ matrix.goos }}-${{ matrix.goarch }}.zip"
-          Compress-Archive -Path $engine -DestinationPath $engineArchive
-          Remove-Item $engine
+          Move-Item $engine "dist\agentic-sdlc-engine.exe"
+          Compress-Archive -Path "dist\agentic-sdlc-engine.exe" -DestinationPath $engineArchive
+          Remove-Item "dist\agentic-sdlc-engine.exe"
 
       - name: Upload artifacts to workflow
         if: steps.tag.outputs.skip == 'false'
