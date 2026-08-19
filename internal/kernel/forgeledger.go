@@ -142,6 +142,12 @@ func AcquireLockFile(path string, breakLock bool) error {
 	}
 	// Who holds it, from where, and since when -- so the human the refusal
 	// sends to the lock file can find the run that left it.
+	//
+	// Every failure past the open releases the lock before returning. O_EXCL
+	// created the file, and callers only register their deferred
+	// ReleaseLockFile once this returns nil -- so a lock abandoned here is
+	// never released by anyone and blocks every later run until a human passes
+	// --break-lock. Failing to take a lock must not leave it held.
 	payload, err := sortedIndentedJSON(map[string]any{
 		"pid":        os.Getpid(),
 		"host":       hostname(),
@@ -149,13 +155,19 @@ func AcquireLockFile(path string, breakLock bool) error {
 	})
 	if err != nil {
 		_ = file.Close()
+		_ = ReleaseLockFile(path)
 		return err
 	}
 	if _, err := file.Write(payload); err != nil {
 		_ = file.Close()
+		_ = ReleaseLockFile(path)
 		return err
 	}
-	return file.Close()
+	if err := file.Close(); err != nil {
+		_ = ReleaseLockFile(path)
+		return err
+	}
+	return nil
 }
 
 // ReleaseLockFile drops the lock, tolerating its absence.
