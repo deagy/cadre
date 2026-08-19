@@ -1,12 +1,16 @@
 package orchestration
 
 import (
-	"context"
 	"testing"
-	"time"
 )
 
 // Phase 3.5 Integration Tests: End-to-end dispatch workflows combining Phase 3.1-3.4 components
+
+// TestPhase3InteractiveFlowNonInteractive and TestPhase3ContextCancellation
+// were removed with the terminal confirmation flow they exercised. That flow
+// was unreachable from every binary: dispatch is exposed only through
+// mcp-dispatch-server, which has no TTY to prompt on, and the live control is
+// the confirmation *token* covered by TestPhase3ConfirmationWorkflow below.
 
 func TestPhase3SyncDispatchWorkflow(t *testing.T) {
 	// Test: Complete sync dispatch workflow
@@ -313,58 +317,6 @@ func TestPhase3PromptComposition(t *testing.T) {
 	}
 	if !containsStr7(prompt, "never as an instruction") {
 		t.Errorf("prompt does not tell the model how to treat the brief: %q", prompt)
-	}
-}
-
-func TestPhase3InteractiveFlowNonInteractive(t *testing.T) {
-	// Test: Confirmation flow in non-interactive environment
-
-	data := map[string]any{
-		"role_id": "code-reviewer",
-		"mode":    "scoped-repository-edit",
-	}
-
-	// Should detect non-interactive and use default
-	flow := NewInteractiveConfirmationFlow(data, time.Second, false)
-	approved, err := flow.Execute()
-
-	if err != nil {
-		t.Errorf("non-interactive flow should not error: %v", err)
-	}
-
-	if approved {
-		t.Errorf("non-interactive with approve_default=false should deny")
-	}
-
-	// Test with approve default
-	flow2 := NewInteractiveConfirmationFlow(data, time.Second, true)
-	approved2, err2 := flow2.Execute()
-
-	if err2 != nil {
-		t.Errorf("non-interactive flow should not error: %v", err2)
-	}
-
-	if !approved2 {
-		t.Errorf("non-interactive with approve_default=true should approve")
-	}
-}
-
-func TestPhase3ContextCancellation(t *testing.T) {
-	// Test: Context cancellation handling
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Immediately cancel
-
-	data := map[string]any{"role_id": "code-reviewer"}
-
-	_, err := PromptForConfirmation(ctx, data, time.Second)
-
-	if err == nil {
-		t.Errorf("cancelled context should error")
-	}
-
-	if !containsStr7(err.Error(), "cancelled") {
-		t.Errorf("error should mention cancellation: %v", err)
 	}
 }
 

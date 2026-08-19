@@ -491,10 +491,17 @@ func notContainedSample(include string, includeTokens []globToken) (string, stri
 // shadow any one of its own paths globs -- the routing.json correctness bug
 // this file exists to catch. Returns, per paths entry: Contained (fully
 // shadowed -- a real bug), NotContained (fine), or Undetermined.
-func CheckRouteExcludeShadowing(route Route) map[string]string {
-	results := make(map[string]string, len(route.Paths))
-	for _, path := range route.Paths {
-		results[path] = GlobContains(path, route.ExcludePaths)
+// CheckRouteExcludeShadowing takes the two fields it needs rather than a Route.
+//
+// It used to take orchestration.Route, which lived in routing.go -- a
+// superseded loader deleted once internal/selector became the live owner of
+// routing.json. The function only ever read Paths and ExcludePaths, so the
+// dependency was incidental, and taking the slices keeps this file standing on
+// its own instead of holding a struct alive to satisfy a signature.
+func CheckRouteExcludeShadowing(paths, excludePaths []string) map[string]string {
+	results := make(map[string]string, len(paths))
+	for _, path := range paths {
+		results[path] = GlobContains(path, excludePaths)
 	}
 	return results
 }

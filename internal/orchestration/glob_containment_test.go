@@ -139,12 +139,10 @@ func TestGlobContainsDoubleStarSlashSemantics(t *testing.T) {
 }
 
 func TestCheckRouteExcludeShadowing(t *testing.T) {
-	route := Route{
-		ID:           "example",
-		Paths:        []string{"roster/**", "README.md"},
-		ExcludePaths: []string{"README.md"},
-	}
-	results := CheckRouteExcludeShadowing(route)
+	results := CheckRouteExcludeShadowing(
+		[]string{"roster/**", "README.md"},
+		[]string{"README.md"},
+	)
 	if results["README.md"] != Contained {
 		t.Errorf("README.md verdict = %q, want %q (fully shadowed by its own exclude)", results["README.md"], Contained)
 	}
@@ -154,8 +152,7 @@ func TestCheckRouteExcludeShadowing(t *testing.T) {
 }
 
 func TestCheckRouteExcludeShadowingNoExcludes(t *testing.T) {
-	route := Route{ID: "example", Paths: []string{"src/**"}}
-	results := CheckRouteExcludeShadowing(route)
+	results := CheckRouteExcludeShadowing([]string{"src/**"}, nil)
 	if results["src/**"] != NotContained {
 		t.Errorf("verdict = %q, want %q with no exclude_paths at all", results["src/**"], NotContained)
 	}
