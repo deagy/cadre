@@ -104,16 +104,30 @@ func writeOwnedWrapper(destination string, content []byte) (string, error) {
 
 	f, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err == nil {
-		defer func() { _ = f.Close() }()
-		info, err := f.Stat()
-		if err != nil {
-			return "", err
+		// O_EXCL means this process created the file, so every failure below
+		// removes it again. An abandoned empty wrapper is not a harmless
+		// partial write: the next run takes the "already exists" path below,
+		// finds no provenance marker in the empty content, and refuses it as an
+		// unowned wrapper -- permanently, and blaming the operator for a file
+		// this function created and left behind. Modelled on repairfs.go's
+		// atomic install, which removes its candidate the same way.
+		abandon := func(cause error) (string, error) {
+			_ = f.Close()
+			_ = os.Remove(destination)
+			return "", cause
+		}
+		info, statErr := f.Stat()
+		if statErr != nil {
+			return abandon(statErr)
 		}
 		if !info.Mode().IsRegular() {
-			return "", fmt.Errorf("refusing non-regular destination wrapper: %s", destination)
+			return abandon(fmt.Errorf("refusing non-regular destination wrapper: %s", destination))
 		}
-		if _, err := f.Write(content); err != nil {
-			return "", err
+		if _, writeErr := f.Write(content); writeErr != nil {
+			return abandon(writeErr)
+		}
+		if closeErr := f.Close(); closeErr != nil {
+			return abandon(closeErr)
 		}
 		return "installed", nil
 	}
