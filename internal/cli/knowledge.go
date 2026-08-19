@@ -150,13 +150,13 @@ Options:
 	case "batch-update":
 		return knowledgeBatchUpdate(subArgs)
 	case "check-integrity":
-		return knowledgeCheckIntegrity(subArgs)
+		return knowledgeCheckIntegrity(dbPath, subArgs)
 	case "repair":
-		return knowledgeRepair(subArgs)
+		return knowledgeRepair(dbPath, subArgs)
 	case "rebuild-indexes":
-		return knowledgeRebuildIndexes(subArgs)
+		return knowledgeRebuildIndexes(dbPath, subArgs)
 	case "defragment":
-		return knowledgeDefragment(subArgs)
+		return knowledgeDefragment(dbPath, subArgs)
 	default:
 		fmt.Fprintf(os.Stderr, "cadre knowledge: unknown subcommand '%s'\n", subcommand)
 		fs.Usage()
@@ -1603,6 +1603,9 @@ func knowledgeFTS5IndexInitialize(dbPath string, args []string) int {
 		fmt.Fprintf(os.Stderr, "cadre knowledge fts5-index initialize: initialization failed: %v\n", err)
 		return 1
 	}
+	if !requireFTS5(fts5, "fts5-index initialize") {
+		return 1
+	}
 
 	fmt.Printf("FTS5 index initialized successfully\n")
 	fmt.Printf("  Database: %s\n", dbPath)
@@ -1676,6 +1679,9 @@ Options:
 	// Create and initialize FTS5 index
 	fts5 := knowledge.NewFTS5Index(db)
 	_ = fts5.Initialize()
+	if !requireFTS5(fts5, "fts5-index document add") {
+		return 1
+	}
 
 	// Index document
 	doc := &knowledge.DocumentMetadata{
@@ -1733,6 +1739,9 @@ Options:
 	// Create and initialize FTS5 index
 	fts5 := knowledge.NewFTS5Index(db)
 	_ = fts5.Initialize()
+	if !requireFTS5(fts5, "fts5-index document delete") {
+		return 1
+	}
 
 	// Delete document
 	if err := fts5.DeleteDocument(*msgID); err != nil {
@@ -1775,6 +1784,9 @@ Options:
 	// Create and initialize FTS5 index
 	fts5 := knowledge.NewFTS5Index(db)
 	_ = fts5.Initialize()
+	if !requireFTS5(fts5, "fts5-index stats") {
+		return 1
+	}
 
 	count := fts5.GetDocumentCount()
 
@@ -1842,6 +1854,9 @@ Options:
 	// Initialize FTS5 index
 	fts5 := knowledge.NewFTS5Index(db)
 	_ = fts5.Initialize()
+	if !requireFTS5(fts5, "fts5-search") {
+		return 1
+	}
 
 	// Perform search
 	var results []knowledge.FTS5SearchResult
@@ -1972,6 +1987,9 @@ Options:
 	// Initialize FTS5 and create searcher
 	fts5 := knowledge.NewFTS5Index(db)
 	_ = fts5.Initialize()
+	if !requireFTS5(fts5, "hybrid-search combined") {
+		return 1
+	}
 
 	// Note: In a real implementation, this would use actual HNSW index
 	// For now, we'll show how the search would work with FTS5
@@ -2040,6 +2058,9 @@ Options:
 	// Initialize FTS5 and search
 	fts5 := knowledge.NewFTS5Index(db)
 	_ = fts5.Initialize()
+	if !requireFTS5(fts5, "hybrid-search text-only") {
+		return 1
+	}
 
 	var results []knowledge.FTS5SearchResult
 	var searchErr error
@@ -3343,7 +3364,7 @@ Options:
 }
 
 // knowledgeCheckIntegrity checks database integrity.
-func knowledgeCheckIntegrity(args []string) int {
+func knowledgeCheckIntegrity(dbPath string, args []string) int {
 	fs := flag.NewFlagSet("cadre knowledge check-integrity", flag.ContinueOnError)
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: cadre knowledge check-integrity [options]\n\nOptions:\n")
@@ -3357,10 +3378,10 @@ func knowledgeCheckIntegrity(args []string) int {
 		return parseExitCode(err)
 	}
 
-	// Get database path
-	wd, _ := os.Getwd()
-	repoRoot, _ := platform.FindProjectRoot(wd)
-	dbPath := filepath.Join(repoRoot, ".agents", "knowledge-store", "store.db")
+	// dbPath is the resolved store from the shared config -- the same value
+	// stats, search and delete use. These four rebuilt it by hand from
+	// FindProjectRoot instead, which is why all four failed with "no such file
+	// or directory" anywhere the layout did not match that guess.
 
 	// Open database
 	db, err := openDatabase(dbPath)
@@ -3402,7 +3423,7 @@ func knowledgeCheckIntegrity(args []string) int {
 }
 
 // knowledgeRepair repairs database issues.
-func knowledgeRepair(args []string) int {
+func knowledgeRepair(dbPath string, args []string) int {
 	fs := flag.NewFlagSet("cadre knowledge repair", flag.ContinueOnError)
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: cadre knowledge repair [options]\n\nOptions:\n")
@@ -3417,10 +3438,10 @@ func knowledgeRepair(args []string) int {
 		return parseExitCode(err)
 	}
 
-	// Get database path
-	wd, _ := os.Getwd()
-	repoRoot, _ := platform.FindProjectRoot(wd)
-	dbPath := filepath.Join(repoRoot, ".agents", "knowledge-store", "store.db")
+	// dbPath is the resolved store from the shared config -- the same value
+	// stats, search and delete use. These four rebuilt it by hand from
+	// FindProjectRoot instead, which is why all four failed with "no such file
+	// or directory" anywhere the layout did not match that guess.
 
 	// Open database
 	db, err := openDatabase(dbPath)
@@ -3458,7 +3479,7 @@ func knowledgeRepair(args []string) int {
 }
 
 // knowledgeRebuildIndexes rebuilds all database indices.
-func knowledgeRebuildIndexes(args []string) int {
+func knowledgeRebuildIndexes(dbPath string, args []string) int {
 	fs := flag.NewFlagSet("cadre knowledge rebuild-indexes", flag.ContinueOnError)
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: cadre knowledge rebuild-indexes [options]\n\nOptions:\n")
@@ -3472,10 +3493,10 @@ func knowledgeRebuildIndexes(args []string) int {
 		return parseExitCode(err)
 	}
 
-	// Get database path
-	wd, _ := os.Getwd()
-	repoRoot, _ := platform.FindProjectRoot(wd)
-	dbPath := filepath.Join(repoRoot, ".agents", "knowledge-store", "store.db")
+	// dbPath is the resolved store from the shared config -- the same value
+	// stats, search and delete use. These four rebuilt it by hand from
+	// FindProjectRoot instead, which is why all four failed with "no such file
+	// or directory" anywhere the layout did not match that guess.
 
 	// Open database
 	db, err := openDatabase(dbPath)
@@ -3508,7 +3529,7 @@ func knowledgeRebuildIndexes(args []string) int {
 }
 
 // knowledgeDefragment optimizes database file size.
-func knowledgeDefragment(args []string) int {
+func knowledgeDefragment(dbPath string, args []string) int {
 	fs := flag.NewFlagSet("cadre knowledge defragment", flag.ContinueOnError)
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: cadre knowledge defragment [options]\n\nOptions:\n")
@@ -3522,10 +3543,10 @@ func knowledgeDefragment(args []string) int {
 		return parseExitCode(err)
 	}
 
-	// Get database path
-	wd, _ := os.Getwd()
-	repoRoot, _ := platform.FindProjectRoot(wd)
-	dbPath := filepath.Join(repoRoot, ".agents", "knowledge-store", "store.db")
+	// dbPath is the resolved store from the shared config -- the same value
+	// stats, search and delete use. These four rebuilt it by hand from
+	// FindProjectRoot instead, which is why all four failed with "no such file
+	// or directory" anywhere the layout did not match that guess.
 
 	// Open database
 	db, err := openDatabase(dbPath)
@@ -3575,4 +3596,23 @@ func openDatabase(dbPath string) (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+// requireFTS5 refuses when the binary has no SQLite fts5 module.
+//
+// mattn/go-sqlite3 compiles FTS5 in only under `-tags sqlite_fts5`; without it
+// every CREATE VIRTUAL TABLE ... USING fts5 fails with "no such module: fts5".
+// The index then stayed absent and each fts5 command answered "no results",
+// which reads as an empty store rather than a missing feature. The Makefile and
+// the release workflow pass the tag, so a shipped binary has it; this catches
+// the hand-rolled `go build ./cmd/cadre` that does not.
+func requireFTS5(index *knowledge.FTS5Index, command string) bool {
+	if index.Available() {
+		return true
+	}
+	fmt.Fprintf(os.Stderr, "cadre knowledge %s: this build has no SQLite FTS5 module, "+
+		"so no full-text index exists. Rebuild with `go build -tags sqlite_fts5 ./cmd/cadre` "+
+		"(the Makefile and release builds already do). Content search "+
+		"(`cadre knowledge search --mode content`) works without it.\n", command)
+	return false
 }

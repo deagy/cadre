@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"testing"
+	"time"
 )
 
 func TestNewDatabaseRepair(t *testing.T) {
@@ -247,4 +248,46 @@ func contains(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// Repair must not block on its own lock.
+//
+// Repair takes dr.mu.Lock() and needs an integrity report before deciding what
+// to fix. It called CheckIntegrity, which takes dr.mu.RLock(); sync.RWMutex is
+// not reentrant, so the call blocked forever -- twice, once before the repairs
+// and once to verify them. `cadre knowledge repair` hung indefinitely, printing
+// nothing.
+//
+// It went unnoticed because the command failed at openDatabase on a path
+// nothing created, so no caller ever reached the deadlock. Fixing the path is
+// what exposed it.
+//
+// Asserted with a deadline rather than by calling Repair directly: a deadlock
+// does not fail a test, it hangs the whole package until the go test timeout,
+// which reports a panic somewhere unrelated ten minutes later.
+func TestRepairDoesNotDeadlockOnItsOwnLock(t *testing.T) {
+	// A real store, not NewDatabaseRepair(nil). Every other test in this file
+	// passes nil, and Repair returns at its `dr.db == nil` guard before reaching
+	// the locking bug -- which is exactly why a hang shipped under a green suite.
+	store, err := Open(t.TempDir() + "/repair.db")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	dr := NewDatabaseRepair(store.db)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := dr.Repair(false, true); err != nil {
+			t.Errorf("Repair: %v", err)
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(15 * time.Second):
+		t.Fatal("Repair did not return within 15s -- it is blocked on dr.mu, " +
+			"which is what calling CheckIntegrity under the write lock does")
+	}
 }

@@ -393,7 +393,10 @@ jobs:
         run: |
           set -eu
           mkdir -p dist
-          go build -o "dist/cadre-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.exe-suffix }}" ./cmd/cadre
+          # -tags sqlite_fts5: mattn/go-sqlite3 omits the FTS5 module by default,
+          # and `cadre knowledge fts5-*` needs it. Without the tag the published
+          # binary reports "no such module: fts5" and refuses those commands.
+          go build -tags sqlite_fts5 -o "dist/cadre-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.exe-suffix }}" ./cmd/cadre
           # The engine ships in this release too, and needs the same cgo build:
           # it links the same sqlite checkpointer. Built with CGO_ENABLED=0 it
           # compiles and then fails at runtime saying go-sqlite3 is a stub.

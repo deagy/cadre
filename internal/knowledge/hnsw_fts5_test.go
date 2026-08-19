@@ -10,10 +10,19 @@ import (
 )
 
 func setupFTS5TestDB() *sql.DB {
-	db, err := sql.Open("sqlite3", ":memory:")
+	// Shared cache and a single connection, not a bare ":memory:".
+	//
+	// database/sql pools connections, and each connection to ":memory:" gets
+	// its *own* database. Initialize would create documents_fts on one
+	// connection and the search would run on another that had never seen it,
+	// so every FTS5 path failed and silently fell back to the in-memory map.
+	// These tests therefore passed while asserting nothing about SQLite --
+	// which is why a real bug in the SQLite path could not have failed them.
+	db, err := sql.Open("sqlite3", "file:fts5test?mode=memory&cache=shared")
 	if err != nil {
 		panic(err)
 	}
+	db.SetMaxOpenConns(1)
 
 	// Create embeddings table for HNSW
 	createTableSQL := `

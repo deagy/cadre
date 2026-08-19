@@ -15,7 +15,7 @@
 .PHONY: build test test-race lint fmt vet tidy clean cross-build guard-binaries
 
 build:
-	go build -o dist/cadre ./cmd/cadre
+	go build -tags sqlite_fts5 -o dist/cadre ./cmd/cadre
 	go build -o dist/agentic-sdlc ./cmd/agentic-sdlc
 
 # agentic-sdlc is built here too. It used to be deliberately absent, on the
@@ -40,10 +40,10 @@ build:
 # available. If not, fall back to `go test ./...` (no -race) rather than
 # disabling cgo globally, since that would silently drop race coverage.
 test-race:
-	CGO_ENABLED=1 go test -race ./...
+	CGO_ENABLED=1 go test -tags sqlite_fts5 -race ./...
 
 test:
-	go test ./...
+	go test -tags sqlite_fts5 ./...
 
 fmt:
 	gofmt -l -w .
@@ -114,10 +114,10 @@ guard-binaries:
 
 cross-build:
 	@mkdir -p dist
-	CGO_ENABLED=1 GOOS=linux   GOARCH=amd64 go build -o dist/cadre-linux-amd64         ./cmd/cadre
-	CGO_ENABLED=1 GOOS=linux   GOARCH=arm64 go build -o dist/cadre-linux-arm64         ./cmd/cadre
-	CGO_ENABLED=1 GOOS=darwin  GOARCH=arm64 go build -o dist/cadre-darwin-arm64        ./cmd/cadre
-	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o dist/cadre-windows-amd64.exe   ./cmd/cadre
+	CGO_ENABLED=1 GOOS=linux   GOARCH=amd64 go build -tags sqlite_fts5 -o dist/cadre-linux-amd64         ./cmd/cadre
+	CGO_ENABLED=1 GOOS=linux   GOARCH=arm64 go build -tags sqlite_fts5 -o dist/cadre-linux-arm64         ./cmd/cadre
+	CGO_ENABLED=1 GOOS=darwin  GOARCH=arm64 go build -tags sqlite_fts5 -o dist/cadre-darwin-arm64        ./cmd/cadre
+	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -tags sqlite_fts5 -o dist/cadre-windows-amd64.exe   ./cmd/cadre
 	CGO_ENABLED=1 GOOS=linux   GOARCH=amd64 go build -o dist/agentic-sdlc-engine-linux-amd64       ./cmd/agentic-sdlc-engine
 	CGO_ENABLED=1 GOOS=linux   GOARCH=arm64 go build -o dist/agentic-sdlc-engine-linux-arm64       ./cmd/agentic-sdlc-engine
 	CGO_ENABLED=1 GOOS=darwin  GOARCH=arm64 go build -o dist/agentic-sdlc-engine-darwin-arm64      ./cmd/agentic-sdlc-engine
@@ -177,7 +177,7 @@ wheel:
 	@if [ -n "$(WHEEL_BINARY)" ]; then \
 	  cp "$(WHEEL_BINARY)" dist-staging/cadre; \
 	else \
-	  CGO_ENABLED=1 go build -o dist-staging/cadre ./cmd/cadre; \
+	  CGO_ENABLED=1 go build -tags sqlite_fts5 -o dist-staging/cadre ./cmd/cadre; \
 	fi
 	$(WHEEL_PYTHON) -m build --wheel --outdir dist
 	@# Unpack, add the data tree, repack. `wheel pack` rewrites RECORD.

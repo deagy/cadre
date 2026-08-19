@@ -144,6 +144,19 @@ func Open(dbPath string) (*Store, error) {
 		return nil, err
 	}
 
+	// Bring the full-text index up alongside the schema.
+	//
+	// Here rather than in the ingest path so that every writer maintains it and
+	// every reader can rely on it, including stores opened by tools that never
+	// ingest. Initialize is idempotent -- IF NOT EXISTS throughout -- and it
+	// backfills messages ingested before the index existed, so an old store
+	// becomes text-searchable the first time it is opened by this version.
+	//
+	// A failure is not fatal: it falls back internally, and content search
+	// (`cadre knowledge search --mode content`) queries the messages table
+	// directly and does not depend on this.
+	_ = NewFTS5Index(db).Initialize()
+
 	return &Store{db: db, path: dbPath}, nil
 }
 

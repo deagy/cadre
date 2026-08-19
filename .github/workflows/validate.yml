@@ -138,7 +138,10 @@ jobs:
       # -race needs cgo; ubuntu-latest ships a C toolchain. If that ever
       # stops being true, fall back to a plain `go test ./...` leg rather
       # than disabling cgo globally, per the Makefile's test-race comment.
-      - run: CGO_ENABLED=1 go test -race ./...
+      # -tags sqlite_fts5: mattn/go-sqlite3 omits the FTS5 module without it, and
+      # the full-text index tests skip rather than fail when it is absent -- so
+      # an untagged run would report success while asserting nothing about them.
+      - run: CGO_ENABLED=1 go test -tags sqlite_fts5 -race ./...
         env:
           # Resolves every SHA-pinned action against GitHub. Opt-in because
           # the guard needs the network; wired here so a fabricated pin is

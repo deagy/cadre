@@ -64,9 +64,21 @@ func NewDatabaseRepair(db *sql.DB) *DatabaseRepair {
 }
 
 // CheckIntegrity verifies database consistency.
+// CheckIntegrity inspects the store and reports what it found.
 func (dr *DatabaseRepair) CheckIntegrity(detailed bool) (*IntegrityCheckResult, error) {
 	dr.mu.RLock()
 	defer dr.mu.RUnlock()
+	return dr.checkIntegrityLocked(detailed)
+}
+
+// checkIntegrityLocked is CheckIntegrity's body, with the caller holding dr.mu.
+//
+// Split out because Repair holds the write lock and needs an integrity report
+// before deciding what to fix. It used to call CheckIntegrity directly, which
+// takes RLock -- and sync.RWMutex is not reentrant, so `cadre knowledge repair`
+// blocked forever on its own lock. Nobody had hit it: the command failed at
+// openDatabase, on a path nothing created, long before reaching this line.
+func (dr *DatabaseRepair) checkIntegrityLocked(detailed bool) (*IntegrityCheckResult, error) {
 
 	result := &IntegrityCheckResult{
 		StartTime:   time.Now(),
@@ -141,16 +153,27 @@ func (dr *DatabaseRepair) CheckIntegrity(detailed bool) (*IntegrityCheckResult, 
 		}
 	}
 
-	// Check for corrupt indices
+	// SQLite's own integrity check, which is the one that can actually find
+	// corruption. Without it DatabaseValid meant no more than "the connection
+	// opened and the rows counted" -- a reassuring answer from a command named
+	// check-integrity that had not looked for a corrupt page.
+	//
+	// This replaces a branch that read `var corruptCount int64` followed by
+	// `if corruptCount > 0`, which no execution could ever enter.
 	if detailed {
-		// Simulate checking indices - in real implementation would verify actual indices
-		var corruptCount int64
-
-		if corruptCount > 0 {
-			result.CorruptIndices = corruptCount
+		var integrity string
+		if err := dr.db.QueryRow("PRAGMA integrity_check").Scan(&integrity); err != nil {
 			result.IssuesFound = append(result.IssuesFound, IntegrityIssue{
-				IssueType:   "corrupt_indices",
-				Description: fmt.Sprintf("Found %d corrupt indices", corruptCount),
+				IssueType:   "integrity_check_failed",
+				Description: fmt.Sprintf("Could not run PRAGMA integrity_check: %v", err),
+				Severity:    "error",
+				Timestamp:   time.Now(),
+			})
+		} else if integrity != "ok" {
+			result.CorruptIndices++
+			result.IssuesFound = append(result.IssuesFound, IntegrityIssue{
+				IssueType:   "corrupt_database",
+				Description: fmt.Sprintf("PRAGMA integrity_check reported: %s", integrity),
 				Severity:    "error",
 				Timestamp:   time.Now(),
 			})
@@ -181,7 +204,7 @@ func (dr *DatabaseRepair) Repair(aggressive bool, dryRun bool) (*DatabaseRepairR
 	}
 
 	// Check integrity first
-	integrityCheck, _ := dr.CheckIntegrity(true)
+	integrityCheck, _ := dr.checkIntegrityLocked(true)
 
 	// Remove orphaned chunks
 	if integrityCheck.OrphanedChunks > 0 {
@@ -242,7 +265,8 @@ func (dr *DatabaseRepair) Repair(aggressive bool, dryRun bool) (*DatabaseRepairR
 	}
 
 	// Verify repair
-	finalCheck, _ := dr.CheckIntegrity(false)
+	// Locked variant: still inside Repair's write lock, same reason as above.
+	finalCheck, _ := dr.checkIntegrityLocked(false)
 	result.DatabaseValid = finalCheck.DatabaseValid
 
 	result.EndTime = time.Now()
