@@ -1,8 +1,9 @@
 package knowledge
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -45,11 +46,27 @@ func NewQueryCache(maxSize int, defaultTTLMinutes int) *QueryCache {
 }
 
 // QueryKey generates a cache key from search options.
+//
+// Fields are length-prefixed rather than delimiter-joined. Joining on ":" made
+// the key ambiguous -- QueryKey("a", "b:c", nil) and QueryKey("a:b", "c", nil)
+// produced the same key -- and classification is an access-control boundary in
+// this store, so two classifications colliding onto one cache entry would serve
+// results across it. The cache is not wired into retrieval yet; this is fixed
+// while it is still harmless rather than left for whoever wires it in.
+//
+// SHA-256 rather than MD5: nothing here needs collision resistance today, but a
+// cache key guarding a classification boundary is not where a governance tool
+// should be explaining why its weak hash is fine.
 func (qc *QueryCache) QueryKey(query, classification string, sourceFilters []string) string {
-	h := md5.New()
-	_, _ = fmt.Fprintf(h, "%s:%s:", query, classification)
+	h := sha256.New()
+	field := func(s string) {
+		_, _ = fmt.Fprintf(h, "%d:%s", len(s), s)
+	}
+	field(query)
+	field(classification)
+	field(strconv.Itoa(len(sourceFilters)))
 	for _, s := range sourceFilters {
-		_, _ = fmt.Fprintf(h, "%s,", s)
+		field(s)
 	}
 	return fmt.Sprintf("%x", h.Sum(nil))
 }

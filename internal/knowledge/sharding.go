@@ -332,6 +332,12 @@ func (r *StoreRegistry) Close() error {
 // Helper functions
 
 // hashShardKey computes a hash for shard key assignment.
+//
+// MD5 is deliberate and not a security decision: this picks a bucket, and
+// nothing downstream treats the digest as a commitment or an identity. It is
+// left as MD5 rather than modernised because the function *is* the placement --
+// changing it re-hashes every key onto a different shard, which is a data
+// migration, not a cleanup. gosec's G401/G501 flag the import, not a finding.
 func hashShardKey(key string) int {
 	h := md5.Sum([]byte(key))
 	// Convert first 4 bytes to int

@@ -287,3 +287,41 @@ func TestIndexOptimizerFastQueries(t *testing.T) {
 		t.Error("Should not recommend HNSW for fast queries")
 	}
 }
+
+// Two different (query, classification) pairs must never share a cache key.
+//
+// The original key joined the fields with ":", so QueryKey("a", "b:c", nil) and
+// QueryKey("a:b", "c", nil) collided. classification is an access-control
+// boundary in this store: a collision across it would serve one
+// classification's cached results to a query made at another. The same applies
+// to the source list, where "a,b" as one filter joined identically to "a" and
+// "b" as two.
+func TestQueryKeyDoesNotCollideAcrossFieldBoundaries(t *testing.T) {
+	cache := NewQueryCache(10, 5)
+
+	collisions := []struct {
+		name string
+		a, b string
+	}{
+		{"query absorbs the classification",
+			cache.QueryKey("a", "b:c", nil),
+			cache.QueryKey("a:b", "c", nil)},
+		{"query absorbs an empty classification",
+			cache.QueryKey("a:b", "", nil),
+			cache.QueryKey("a", "b", nil)},
+	}
+	for _, c := range collisions {
+		if c.a == c.b {
+			t.Errorf("%s: distinct inputs share cache key %s", c.name, c.a)
+		}
+	}
+
+	if one, two := cache.QueryKey("q", "c", []string{"a,b"}), cache.QueryKey("q", "c", []string{"a", "b"}); one == two {
+		t.Errorf("one source filter %q and two %q share cache key %s", "a,b", []string{"a", "b"}, one)
+	}
+
+	// Still stable for equal inputs, which is the point of a cache.
+	if one, two := cache.QueryKey("q", "c", []string{"a"}), cache.QueryKey("q", "c", []string{"a"}); one != two {
+		t.Errorf("equal inputs produced different keys: %s != %s", one, two)
+	}
+}
