@@ -146,14 +146,6 @@ func validateTristateBool(raw any, spec FieldSpec) (any, error) {
 	return b, nil // *bool, possibly nil
 }
 
-// ValidateTristateBool is the public entry point for a tri-state-bool
-// field's validation rule, exposed so gitlab.go's hierarchy-flag parsing
-// can reuse this single implementation instead of a second copy of the
-// same rule -- mirrors settings.py's exported validate_tristate_bool.
-func ValidateTristateBool(raw any, key string) (*bool, error) {
-	return validateTristateBoolValue(raw, key)
-}
-
 func hasPathSeparator(s string) bool {
 	return strings.Contains(s, "/") || (osPathSeparator != '/' && strings.ContainsRune(s, osPathSeparator))
 }

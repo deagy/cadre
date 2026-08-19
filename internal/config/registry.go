@@ -156,14 +156,6 @@ var (
 	rosterRootComputer   func() (string, bool)
 )
 
-// SetRosterRootComputer overrides how roster.root's computed default is
-// found. Pass nil to restore the default .git-boundary walk.
-func SetRosterRootComputer(f func() (string, bool)) {
-	rosterRootComputerMu.Lock()
-	defer rosterRootComputerMu.Unlock()
-	rosterRootComputer = f
-}
-
 func computeRosterRoot() (any, bool) {
 	rosterRootComputerMu.RLock()
 	f := rosterRootComputer

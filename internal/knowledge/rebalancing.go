@@ -128,29 +128,6 @@ func (sr *ShardRebalancer) AnalyzeShard() (*RebalanceAnalysis, error) {
 	}, nil
 }
 
-// RebalanceMessage moves a message from one shard to another.
-func (sr *ShardRebalancer) RebalanceMessage(messageID, sourceShardID, destShardID string, authorizedBy string) error {
-	sr.mu.RLock()
-	stores := sr.registry.GetStores()
-	sr.mu.RUnlock()
-
-	_, ok := stores[sourceShardID]
-	if !ok {
-		return fmt.Errorf("source shard not found: %s", sourceShardID)
-	}
-
-	_, ok = stores[destShardID]
-	if !ok {
-		return fmt.Errorf("destination shard not found: %s", destShardID)
-	}
-
-	// Get message from source and replicate to destination
-	// Note: This is a placeholder - Phase 5.7 will implement full message migration
-	// with consistency guarantees and rollback capability
-
-	return nil
-}
-
 // StartRebalance begins a rebalancing operation between two shards.
 func (sr *ShardRebalancer) StartRebalance(sourceShardID, destShardID string, authorizedBy string) (string, error) {
 	sr.mu.Lock()

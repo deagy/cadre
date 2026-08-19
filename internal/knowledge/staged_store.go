@@ -270,29 +270,6 @@ func (s *Store) ListStagedRecords(status string) ([]StagedSummary, error) {
 	return summaries, nil
 }
 
-// ExportStagedRecords returns every stored record as {id: record_text}.
-//
-// This is the durability path, so it must be lossless: what comes out must
-// parse and validate as what went in, digest and disposition included. The
-// disposition *history* cannot go in the frontmatter (the dialect is one level
-// deep and holds no list of mappings) -- callers that need it read
-// StagedHistory alongside.
-func (s *Store) ExportStagedRecords(status string) (map[string]string, error) {
-	summaries, err := s.ListStagedRecords(status)
-	if err != nil {
-		return nil, err
-	}
-	exported := make(map[string]string, len(summaries))
-	for _, summary := range summaries {
-		text, err := s.GetStagedRecordText(summary.ID)
-		if err != nil {
-			return nil, err
-		}
-		exported[summary.ID] = text
-	}
-	return exported, nil
-}
-
 // StagedHistory returns every disposition ever recorded for a record, oldest
 // first.
 //
@@ -458,15 +435,6 @@ func (s *Store) PutStagedRecord(frontmatter map[string]any, body string) (string
 		return "", fmt.Errorf("cannot store staged record %q: %w", recordID, err)
 	}
 	return recordID, nil
-}
-
-// PutStagedRecordText parses staged-record text, then stores it.
-func (s *Store) PutStagedRecordText(text string) (string, error) {
-	frontmatter, body, err := ParseStagedRecord(text)
-	if err != nil {
-		return "", err
-	}
-	return s.PutStagedRecord(frontmatter, body)
 }
 
 // GeneratedStagedResult reports what PutGeneratedStagedRecord did.

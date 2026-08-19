@@ -310,34 +310,6 @@ func (s *Store) recordRetrievalRunWith(opts SearchOptions, provider, model strin
 	return err
 }
 
-// GetSearchStats returns statistics about retrieval runs.
-func (s *Store) GetSearchStats(classification string) (map[string]int64, error) {
-	rows, err := s.db.Query(`
-		SELECT embedding_model, COUNT(*) as count
-		FROM retrieval_runs
-		WHERE classification = ?
-		GROUP BY embedding_model
-		ORDER BY count DESC
-	`, classification)
-
-	if err != nil {
-		return nil, fmt.Errorf("cannot query search stats: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	stats := make(map[string]int64)
-	for rows.Next() {
-		var model string
-		var count int64
-		if err := rows.Scan(&model, &count); err != nil {
-			return nil, err
-		}
-		stats[model] = count
-	}
-
-	return stats, rows.Err()
-}
-
 // --- The untrusted-data envelope -------------------------------------------
 
 // TrustLabel is stamped on every retrieval bundle this store hands back.

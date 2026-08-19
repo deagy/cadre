@@ -217,42 +217,6 @@ func BuildGuardrailsOverlay(targetRoot string, bullets []string) (content string
 // itself.
 // ---------------------------------------------------------------------
 
-// AutonomyAllowedChoices returns every ranked value at or above (more
-// restrictive than) defaultValue's rank -- the exhaustive, closed set
-// cadre init may ever offer or accept for an agent-autonomy.yaml field. No
-// free text is ever accepted.
-func AutonomyAllowedChoices(defaultValue string) ([]string, error) {
-	defaultRank, err := config.AutonomyRank("<candidate>", defaultValue)
-	if err != nil {
-		return nil, err
-	}
-	var all []rankedValue
-	for value, rank := range config.AutonomyRestrictivenessRank {
-		all = append(all, rankedValue{value, rank})
-	}
-	sortByRank(all)
-	var out []string
-	for _, e := range all {
-		if e.rank >= defaultRank {
-			out = append(out, e.value)
-		}
-	}
-	return out, nil
-}
-
-type rankedValue struct {
-	value string
-	rank  int
-}
-
-func sortByRank(items []rankedValue) {
-	for i := 1; i < len(items); i++ {
-		for j := i; j > 0 && items[j-1].rank > items[j].rank; j-- {
-			items[j-1], items[j] = items[j], items[j-1]
-		}
-	}
-}
-
 func sha256Hex(text string) string {
 	sum := sha256.Sum256([]byte(text))
 	return hex.EncodeToString(sum[:])

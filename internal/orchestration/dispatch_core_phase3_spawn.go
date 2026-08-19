@@ -1,7 +1,6 @@
 package orchestration
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -263,38 +262,6 @@ func ExecuteDispatchChild(
 	}
 }
 
-// SafelyKillProcess attempts graceful termination with timeout fallback
-func SafelyKillProcess(pid int, timeout time.Duration) error {
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return fmt.Errorf("failed to find process %d: %w", pid, err)
-	}
-
-	// Attempt graceful SIGTERM
-	if err := process.Signal(os.Interrupt); err != nil {
-		return fmt.Errorf("failed to send SIGTERM to %d: %w", pid, err)
-	}
-
-	// Wait with timeout, then force SIGKILL if needed
-	done := make(chan error, 1)
-	go func() {
-		_, err := process.Wait()
-		done <- err
-	}()
-
-	select {
-	case <-time.After(timeout):
-		// Process didn't exit gracefully, force kill
-		if err := process.Kill(); err != nil {
-			return fmt.Errorf("failed to force kill process %d: %w", pid, err)
-		}
-		<-done
-		return nil
-	case err := <-done:
-		return err
-	}
-}
-
 // Helper: validate Claude Code can be executed
 func validateClaudeCodeExecution(model, sandboxMode string) error {
 	// Check model is valid
@@ -366,52 +333,6 @@ func environmentMapToSlice(env map[string]string) []string {
 		envSlice = append(envSlice, key+"="+value)
 	}
 	return envSlice
-}
-
-// SpawnWithContextTimeout is a wrapper for spawning processes with context-based timeout
-func SpawnWithContextTimeout(
-	cmd *exec.Cmd,
-	timeout time.Duration,
-) map[string]any {
-	if cmd == nil {
-		return map[string]any{
-			"status": "error",
-			"reason": "command is nil",
-		}
-	}
-
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	// Attach the context by rebuilding the command: exec.Cmd has no way to
-	// bind a context after construction. CommandContext returns a *fresh*
-	// Cmd, so every caller-supplied field has to be carried across
-	// explicitly or the timeout wrapper silently discards it. Stdout/Stderr
-	// are deliberately *not* copied -- CombinedOutput below rejects a Cmd
-	// that already has them set.
-	original := cmd
-	cmd = exec.CommandContext(ctx, original.Path)
-	cmd.Args = original.Args // preserves argv[0] even when it differs from Path
-	cmd.Env = original.Env
-	cmd.Dir = original.Dir
-	cmd.Stdin = original.Stdin
-	cmd.ExtraFiles = original.ExtraFiles
-	cmd.SysProcAttr = original.SysProcAttr
-
-	// Execute and capture output
-	output, err := cmd.CombinedOutput()
-
-	// Check for context timeout
-	if ctx.Err() == context.DeadlineExceeded {
-		return map[string]any{
-			"status": "timeout",
-			"reason": fmt.Sprintf("process exceeded timeout of %v", timeout),
-			"output": string(output),
-		}
-	}
-
-	return parseCommandOutput(cmd.ProcessState, output, err)
 }
 
 // localModelForTier resolves runners.local_model_<tier>, or "" for no
