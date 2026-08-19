@@ -36,7 +36,18 @@ type Deps struct {
 	Prepare func(runtime.PlanRequest) (runtime.PlanRequest, error)
 }
 
+// prepare fills in the installation-derived parts of a request.
+//
+// A command that needs the kernel contracts says so here, once, and names the
+// way out. Letting it through produces "open kernel/contracts/
+// lifecycle-gates.json: no such file or directory", which tells a reader a
+// path rather than what to do about it.
 func (d Deps) prepare(request runtime.PlanRequest) (runtime.PlanRequest, error) {
+	if d.KernelRoot == "" {
+		return request, fmt.Errorf(
+			"cannot locate the kernel contracts; set CADRE_REPO_ROOT to a Cadre checkout, " +
+				"or run from inside one")
+	}
 	request.KernelRoot = d.KernelRoot
 	if d.Prepare == nil {
 		return request, nil

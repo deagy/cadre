@@ -6,7 +6,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/deagy/cadre/cli/internal/engine/enginecli"
@@ -21,11 +20,16 @@ func run() int {
 	// The kernel contracts live in the installation, not in whatever project
 	// the caller is standing in -- a task's gates are defined by the kernel it
 	// runs under, not by the repository it is about.
+	// Not fatal. Resolving this before dispatch means --help and an unknown
+	// command fail on a fresh download, which is exactly the defect cadre
+	// shipped in cli-v0.5.0 and fixed in 0.5.1 -- reproduced here because
+	// this main was written from the same instinct.
+	//
+	// Commands that need the contracts fail with their own message naming
+	// what was missing; the ones that do not, work.
 	kernelRoot, err := platform.FindInstallationRoot()
 	if err != nil {
-		fmt.Fprintf(os.Stderr,
-			"agentic-sdlc-engine: cannot locate the kernel contracts: %s\n", err)
-		return 1
+		kernelRoot = ""
 	}
 
 	return enginecli.Run(os.Args[1:], enginecli.Deps{
