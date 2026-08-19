@@ -125,110 +125,19 @@ func (c *CompositeShardingStrategy) Name() string {
 	return "composite"
 }
 
-// ConsistentHashRing implements consistent hashing for shard assignment.
-// Supports adding/removing shards with minimal key redistribution.
-type ConsistentHashRing struct {
-	shards      []string          // Ordered shard IDs
-	hashRing    map[uint32]string // Hash → shard ID mapping
-	virtualKeys int               // Virtual keys per shard for distribution
-}
-
-// NewConsistentHashRing creates a new consistent hash ring.
-func NewConsistentHashRing(shards []string, virtualKeys int) *ConsistentHashRing {
-	if virtualKeys <= 0 {
-		virtualKeys = 150 // Default: 150 virtual keys per shard
-	}
-
-	ring := &ConsistentHashRing{
-		shards:      make([]string, len(shards)),
-		hashRing:    make(map[uint32]string),
-		virtualKeys: virtualKeys,
-	}
-
-	copy(ring.shards, shards)
-	sort.Strings(ring.shards)
-	ring.buildRing()
-
-	return ring
-}
-
-// buildRing constructs the hash ring.
-func (c *ConsistentHashRing) buildRing() {
-	c.hashRing = make(map[uint32]string)
-
-	for _, shard := range c.shards {
-		for i := 0; i < c.virtualKeys; i++ {
-			// Create virtual key: "shard-id:virtual-key-index"
-			virtualKey := fmt.Sprintf("%s:%d", shard, i)
-			hash := hashConsistent(virtualKey)
-			c.hashRing[hash] = shard
-		}
-	}
-}
-
-// GetShard returns the shard for a given key.
-func (c *ConsistentHashRing) GetShard(key string) string {
-	if len(c.hashRing) == 0 {
-		return ""
-	}
-
-	hash := hashConsistent(key)
-
-	// Find the first shard with hash >= key's hash
-	for _, shard := range c.shards {
-		for i := 0; i < c.virtualKeys; i++ {
-			virtualKey := fmt.Sprintf("%s:%d", shard, i)
-			vHash := hashConsistent(virtualKey)
-			if vHash >= hash {
-				return shard
-			}
-		}
-	}
-
-	// Wrap around to first shard
-	return c.shards[0]
-}
-
-// AddShard adds a new shard to the ring.
-func (c *ConsistentHashRing) AddShard(shard string) {
-	// Check if already exists
-	for _, s := range c.shards {
-		if s == shard {
-			return // Already in ring
-		}
-	}
-
-	c.shards = append(c.shards, shard)
-	sort.Strings(c.shards)
-	c.buildRing()
-}
-
-// RemoveShard removes a shard from the ring.
-func (c *ConsistentHashRing) RemoveShard(shard string) {
-	newShards := make([]string, 0, len(c.shards)-1)
-	for _, s := range c.shards {
-		if s != shard {
-			newShards = append(newShards, s)
-		}
-	}
-
-	c.shards = newShards
-	c.buildRing()
-}
-
-// GetAllShards returns all shard IDs in the ring.
-func (c *ConsistentHashRing) GetAllShards() []string {
-	result := make([]string, len(c.shards))
-	copy(result, c.shards)
-	return result
-}
-
 // StoreRegistry manages multiple knowledge stores.
 type StoreRegistry struct {
 	stores   map[string]*Store // shard ID → Store
 	strategy ShardingStrategy
-	ring     *ConsistentHashRing
 }
+
+// There is no consistent-hash ring here, deliberately.
+//
+// StoreRegistry used to carry `ring *ConsistentHashRing`, and NewStoreRegistry
+// never set it -- so every ring branch was guarded by a field that was nil in
+// every execution, and shard routing always took the modulo path below. The
+// ring type itself was reachable from nothing at all. Both are gone; what
+// remains is what ran.
 
 // NewStoreRegistry creates a new store registry.
 func NewStoreRegistry(strategy ShardingStrategy) *StoreRegistry {
@@ -247,9 +156,6 @@ func (r *StoreRegistry) AddStore(shardID string, store *Store) error {
 	r.stores[shardID] = store
 
 	// Update consistent hash ring if needed
-	if r.ring != nil {
-		r.ring.AddShard(shardID)
-	}
 
 	return nil
 }
@@ -262,10 +168,6 @@ func (r *StoreRegistry) RemoveStore(shardID string) error {
 
 	delete(r.stores, shardID)
 
-	if r.ring != nil {
-		r.ring.RemoveShard(shardID)
-	}
-
 	return nil
 }
 
@@ -277,26 +179,15 @@ func (r *StoreRegistry) GetStore(source, classification, convID string) (*Store,
 
 	shardKey := r.strategy.GetShardKey(source, classification, convID)
 
-	// Simple modulo hashing if no consistent hash ring
-	if r.ring == nil {
-		shardID := r.strategy.GetShardID(shardKey, len(r.stores))
-		shardIDs := r.GetShardIDs()
-		if shardID < 0 || shardID >= len(shardIDs) {
-			shardID %= len(shardIDs)
-		}
-		shard := shardIDs[shardID]
-		store := r.stores[shard]
-		return store, shard, nil
+	// Modulo hashing over the registered shards. This was the `r.ring == nil`
+	// branch, and nothing ever set a ring, so it is simply what happens.
+	shardID := r.strategy.GetShardID(shardKey, len(r.stores))
+	shardIDs := r.GetShardIDs()
+	if shardID < 0 || shardID >= len(shardIDs) {
+		shardID %= len(shardIDs)
 	}
-
-	// Use consistent hashing
-	shardID := r.ring.GetShard(shardKey)
-	store := r.stores[shardID]
-	if store == nil {
-		return nil, "", fmt.Errorf("store not found for shard: %s", shardID)
-	}
-
-	return store, shardID, nil
+	shard := shardIDs[shardID]
+	return r.stores[shard], shard, nil
 }
 
 // GetStores returns all registered stores.
@@ -346,11 +237,4 @@ func hashShardKey(key string) int {
 		val = -val
 	}
 	return val
-}
-
-// hashConsistent computes a hash for consistent hashing.
-func hashConsistent(key string) uint32 {
-	h := md5.Sum([]byte(key))
-	// Convert first 4 bytes to uint32
-	return uint32(h[0])<<24 | uint32(h[1])<<16 | uint32(h[2])<<8 | uint32(h[3])
 }

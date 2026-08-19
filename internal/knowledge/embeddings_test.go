@@ -95,30 +95,6 @@ func TestCosineSimilarity(t *testing.T) {
 	}
 }
 
-func TestSearchIndex(t *testing.T) {
-	idx := NewSearchIndex()
-
-	// Add some vectors
-	idx.Add("a", []float64{1, 0, 0})
-	idx.Add("b", []float64{0.9, 0.1, 0})
-	idx.Add("c", []float64{0, 1, 0})
-
-	// Search for vector similar to "a"
-	results := idx.Search([]float64{1, 0, 0}, 2)
-
-	if len(results) != 2 {
-		t.Errorf("Expected 2 results, got %d", len(results))
-	}
-
-	if results[0].ID != "a" {
-		t.Errorf("Expected first result 'a', got %s", results[0].ID)
-	}
-
-	if math.Abs(results[0].Similarity-1.0) > 0.0001 {
-		t.Errorf("Expected similarity 1.0 for identical vector, got %f", results[0].Similarity)
-	}
-}
-
 func TestVectorSerialization(t *testing.T) {
 	original := []float64{0.1, 0.2, 0.3}
 

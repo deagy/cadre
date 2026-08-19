@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math"
-	"sort"
 )
 
 // LocalHashingEmbedder implements EmbeddingProvider using deterministic feature hashing.
@@ -159,67 +158,4 @@ func JSONToVector(s string) ([]float64, error) {
 	var v []float64
 	err := json.Unmarshal([]byte(s), &v)
 	return v, err
-}
-
-// SearchIndex provides efficient cosine similarity search over vectors.
-type SearchIndex struct {
-	vectors map[string][]float64 // ID -> vector
-	ids     []string             // Sorted IDs for stable ordering
-}
-
-// NewSearchIndex creates a new search index.
-func NewSearchIndex() *SearchIndex {
-	return &SearchIndex{
-		vectors: make(map[string][]float64),
-		ids:     make([]string, 0),
-	}
-}
-
-// Add adds a vector to the index.
-func (s *SearchIndex) Add(id string, vector []float64) {
-	if _, exists := s.vectors[id]; !exists {
-		s.ids = append(s.ids, id)
-		sort.Strings(s.ids)
-	}
-	s.vectors[id] = vector
-}
-
-// Search finds the top-k most similar vectors to the query.
-// Returns results sorted by similarity (highest first).
-func (s *SearchIndex) Search(query []float64, k int) []struct {
-	ID         string
-	Similarity float64
-} {
-	type result struct {
-		id         string
-		similarity float64
-	}
-
-	results := make([]result, 0, len(s.vectors))
-	for _, id := range s.ids {
-		sim := CosineSimilarity(query, s.vectors[id])
-		results = append(results, result{id, sim})
-	}
-
-	// Sort by similarity (descending)
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].similarity > results[j].similarity
-	})
-
-	// Limit to top k
-	if k > 0 && len(results) > k {
-		results = results[:k]
-	}
-
-	// Convert to output format
-	output := make([]struct {
-		ID         string
-		Similarity float64
-	}, len(results))
-	for i, r := range results {
-		output[i].ID = r.id
-		output[i].Similarity = r.similarity
-	}
-
-	return output
 }
