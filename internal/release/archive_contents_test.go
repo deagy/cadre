@@ -74,3 +74,25 @@ func readWorkflow(t *testing.T) string {
 	}
 	return string(data)
 }
+
+// Whatever unpacks an archive must expect the name that was packed into it.
+//
+// The archive step and the wheel builder live in the same file and disagreed:
+// the archives were fixed to contain `cadre`, and the wheel step went on
+// extracting them and looking for `cadre-linux-amd64`, so the release failed at
+// "no binary extracted for linux/amd64" -- after every build leg had passed.
+//
+// Guarding the producer was not enough. A contract needs both ends checked, or
+// fixing one end simply moves the breakage downstream.
+func TestWheelBuilderExpectsTheContractExecutableName(t *testing.T) {
+	workflow := readWorkflow(t)
+
+	// The wheel step composes the path with a $suffix variable holding ".exe"
+	// on Windows, so the contract name appears without an extension here.
+	want := `binary="wheel-binaries/` + ProgramCLI + `$suffix"`
+	if !strings.Contains(workflow, want) {
+		t.Errorf("the wheel builder does not look for %s; it must expect the name the archive step packs "+
+			"(ExecutableNameFor: %q), or every release fails after the binaries are already built",
+			want, ExecutableNameFor(ProgramCLI, "linux"))
+	}
+}

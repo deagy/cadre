@@ -608,7 +608,12 @@ jobs:
             else
               tar xzf "$archive.tar.gz" -C wheel-binaries
             fi
-            binary="wheel-binaries/cadre-$goos-$goarch$suffix"
+            # The contract name, matching what the archive step now packs.
+            # This read cadre-$goos-$goarch$suffix -- the *build* output name --
+            # and broke the moment the archives started carrying the name
+            # internal/release.ExecutableNameFor promises. Producer and consumer
+            # of the same archive, in one file, disagreeing.
+            binary="wheel-binaries/cadre$suffix"
             test -f "$binary" || { echo "no binary extracted for $goos/$goarch" >&2; exit 1; }
 
             make wheel WHEEL_BINARY="$binary" PLATFORM_TAG="$tag" WHEEL_EXE_SUFFIX="$suffix"
