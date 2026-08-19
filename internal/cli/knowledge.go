@@ -2097,7 +2097,7 @@ Options:
 	vectorStr := fs.String("embedding", "", "Vector embedding, comma-separated floats (required)")
 	limit := fs.Int("top-k", 10, "Number of results")
 	minScore := fs.Float64("min-score", 0.0, "Minimum similarity score")
-	jsonOutput := fs.Bool("json", false, "Output as JSON")
+	_ = fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
 		return parseExitCode(err)
@@ -2117,28 +2117,20 @@ Options:
 		embedding[i] = val
 	}
 
-	if *jsonOutput {
-		output := map[string]interface{}{
-			"mode":           "vector-only",
-			"embedding_dims": len(embedding),
-			"top_k":          *limit,
-			"min_score":      *minScore,
-			"results":        []interface{}{},
-			"count":          0,
-			"note":           "Vector search requires initialized HNSW index",
-		}
-		data, _ := json.MarshalIndent(output, "", "  ")
-		fmt.Printf("%s\n", data)
-	} else {
-		fmt.Printf("Vector-Only Search\n")
-		fmt.Printf("  Embedding dimensions: %d\n", len(embedding))
-		fmt.Printf("  Top-K: %d\n", *limit)
-		fmt.Printf("  Minimum score: %.2f\n", *minScore)
-		fmt.Printf("\nNote: Vector search requires initialized HNSW index.\n")
-		fmt.Printf("Use 'cadre knowledge init' to create the knowledge store.\n")
-	}
-
-	return 0
+	// Refused rather than answered. This returned `"count": 0` with an empty
+	// result list and exit 0 on every call, whatever the store held, under a
+	// note telling the operator to initialise an HNSW index. No command can:
+	// the index type is HSNWIndex -- a transposition of HNSW -- and every
+	// method on it is unreachable from any binary. A search that always
+	// succeeds and always finds nothing is indistinguishable from a store
+	// with no matches.
+	_ = embedding
+	_ = limit
+	_ = minScore
+	fmt.Fprintf(os.Stderr, "cadre knowledge hybrid-search vector-only: not implemented -- "+
+		"no vector index is built or queried. Use 'cadre knowledge search' for "+
+		"the vector search the store does perform.\n")
+	return 1
 }
 
 // knowledgeHybridSearchRerank applies ranking strategy to search results.
@@ -2158,35 +2150,24 @@ Options:
 	textWeight := fs.Float64("text-weight", 0.5, "Text weight")
 	boostClass := fs.String("boost-classification", "", "Classification to boost")
 	boostFactor := fs.Float64("boost-factor", 1.5, "Boost multiplier")
-	jsonOutput := fs.Bool("json", false, "Output as JSON")
+	_ = fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
 		return parseExitCode(err)
 	}
 
-	if *jsonOutput {
-		output := map[string]interface{}{
-			"strategy": map[string]interface{}{
-				"name":                 "custom-reranking",
-				"vector_weight":        *vectorWeight,
-				"text_weight":          *textWeight,
-				"boost_classification": *boostClass,
-				"boost_factor":         *boostFactor,
-			},
-			"note": "Reranking applied to results",
-		}
-		data, _ := json.MarshalIndent(output, "", "  ")
-		fmt.Printf("%s\n", data)
-	} else {
-		fmt.Printf("Reranking Strategy\n")
-		fmt.Printf("  Vector weight: %.2f\n", *vectorWeight)
-		fmt.Printf("  Text weight: %.2f\n", *textWeight)
-		fmt.Printf("  Boost classification: %s\n", *boostClass)
-		fmt.Printf("  Boost factor: %.2f\n", *boostFactor)
-		fmt.Printf("\nReranking strategy configured successfully.\n")
-	}
-
-	return 0
+	// Refused rather than answered. This echoed the weights back inside a
+	// "strategy" object with `"note": "Reranking applied to results"` -- a
+	// statement about work that had not happened, since no results were ever
+	// fetched, scored or ordered. Echoing arguments is harmless; asserting an
+	// effect is not.
+	_ = vectorWeight
+	_ = textWeight
+	_ = boostClass
+	_ = boostFactor
+	fmt.Fprintf(os.Stderr, "cadre knowledge hybrid-search rerank: not implemented -- "+
+		"no results are fetched or reordered.\n")
+	return 1
 }
 
 // knowledgeHybridStats displays hybrid search statistics.
@@ -2202,7 +2183,7 @@ Options:
 		fs.PrintDefaults()
 	}
 
-	jsonOutput := fs.Bool("json", false, "Output as JSON")
+	_ = fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
 		return parseExitCode(err)
@@ -2213,35 +2194,15 @@ Options:
 		return 2
 	}
 
-	// Create placeholder stats
-	stats := map[string]interface{}{
-		"total_queries":      0,
-		"vector_queries":     0,
-		"text_queries":       0,
-		"hybrid_queries":     0,
-		"average_latency_ms": 0.0,
-		"cache_hit_rate":     0.0,
-		"documents_indexed":  0,
-		"index_size_bytes":   0,
-		"last_update_time":   "",
-	}
-
-	if *jsonOutput {
-		data, _ := json.MarshalIndent(stats, "", "  ")
-		fmt.Printf("%s\n", data)
-	} else {
-		fmt.Printf("Hybrid Search Statistics\n")
-		fmt.Printf("  Total queries: %d\n", stats["total_queries"])
-		fmt.Printf("  Vector queries: %d\n", stats["vector_queries"])
-		fmt.Printf("  Text queries: %d\n", stats["text_queries"])
-		fmt.Printf("  Hybrid queries: %d\n", stats["hybrid_queries"])
-		fmt.Printf("  Average latency: %.2f ms\n", stats["average_latency_ms"])
-		fmt.Printf("  Cache hit rate: %.1f%%\n", stats["cache_hit_rate"].(float64)*100)
-		fmt.Printf("  Documents indexed: %d\n", stats["documents_indexed"])
-		fmt.Printf("  Index size: %d bytes\n", stats["index_size_bytes"])
-	}
-
-	return 0
+	// Refused rather than answered. This printed a block of zeros under the
+	// comment "Create placeholder stats" -- total_queries, cache_hit_rate,
+	// documents_indexed and the rest -- with nothing recording any of them and
+	// no note telling the reader so. Zeros are the most convincing possible
+	// lie here: they read as a quiet, healthy, freshly-started system.
+	fmt.Fprintf(os.Stderr, "cadre knowledge hybrid-stats: not implemented -- "+
+		"no hybrid-search statistics are recorded. Use 'cadre knowledge stats' "+
+		"for the counts the store does keep.\n")
+	return 1
 }
 
 // knowledgeFaultTolerance manages fault tolerance.
@@ -2511,30 +2472,15 @@ Options:
 
 	switch subcommand {
 	case "create":
+		// No JSON branch and no counts. This used to print message_count 1000
+		// and chunk_count 500 -- the literals it had just passed *into*
+		// CreateBackup -- alongside status "completed", on any store of any
+		// size. CreateBackup now refuses, so the only correct output here is
+		// that refusal.
 		dr := knowledge.NewDisasterRecovery("/backups")
-		backupID, err := dr.CreateBackup(1000, 500, 1024*1024)
-
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "cadre knowledge backup create: failed: %v\n", err)
+		if _, err := dr.CreateBackup(0, 0, 0); err != nil {
+			fmt.Fprintf(os.Stderr, "cadre knowledge backup create: %v\n", err)
 			return 1
-		}
-
-		if len(args) > 1 && args[1] == "--json" {
-			output := map[string]interface{}{
-				"backup_id":     backupID,
-				"status":        "completed",
-				"message_count": 1000,
-				"chunk_count":   500,
-				"duration_ms":   245,
-			}
-			data, _ := json.MarshalIndent(output, "", "  ")
-			fmt.Printf("%s\n", data)
-		} else {
-			fmt.Printf("Backup Created\n")
-			fmt.Printf("  Backup ID: %s\n", backupID)
-			fmt.Printf("  Status: completed\n")
-			fmt.Printf("  Messages: 1000\n")
-			fmt.Printf("  Duration: 245ms\n")
 		}
 		return 0
 
@@ -2778,12 +2724,26 @@ func knowledgeHealthCheck(args []string) int {
 	})
 
 	// Check replication
+	//
+	// The zero-replica case is named rather than folded into the healthy one.
+	// This defaulted to "All replicas in sync", which is vacuously true with no
+	// replicas configured and reads as a positive finding about replication
+	// that is not running at all -- the same failure as reporting an uptime
+	// nobody measured, in prose instead of a number.
 	repStatus, _ := persist.GetReplicationStatus()
+	totalReplicas := repStatus["total_replicas"].(int)
+	healthyReplicas := repStatus["healthy_replicas"].(int)
 	repHealth := "healthy"
-	repMsg := "All replicas in sync"
-	if repStatus["total_replicas"].(int) > 0 && repStatus["healthy_replicas"].(int) < repStatus["total_replicas"].(int) {
+	var repMsg string
+	switch {
+	case totalReplicas == 0:
+		repHealth = "not_configured"
+		repMsg = "No replication configured"
+	case healthyReplicas < totalReplicas:
 		repHealth = "degraded"
-		repMsg = "Some replicas out of sync"
+		repMsg = fmt.Sprintf("%d of %d replicas in sync", healthyReplicas, totalReplicas)
+	default:
+		repMsg = fmt.Sprintf("All %d replicas in sync", totalReplicas)
 	}
 	components = append(components, map[string]interface{}{
 		"name":    "replication",
@@ -2880,16 +2840,14 @@ func knowledgeDiagnostics(args []string) int {
 	repStatus, _ := persist.GetReplicationStatus()
 
 	report := map[string]interface{}{
-		"uptime_seconds":       stats["uptime_seconds"],
-		"operations":           stats["total_operations"],
-		"successful_ops":       stats["successful_ops"],
-		"failed_ops":           stats["failed_ops"],
-		"estimated_uptime_pct": stats["estimated_uptime_pct"],
-		"total_errors":         ftStats["total_errors"],
-		"circuit_state":        ftStats["circuit_state"],
-		"replicas":             repStatus["total_replicas"],
-		"healthy_replicas":     repStatus["healthy_replicas"],
-		"max_sync_lag_ms":      repStatus["max_sync_lag_ms"],
+		"operations":       stats["total_operations"],
+		"successful_ops":   stats["successful_ops"],
+		"failed_ops":       stats["failed_ops"],
+		"total_errors":     ftStats["total_errors"],
+		"circuit_state":    ftStats["circuit_state"],
+		"replicas":         repStatus["total_replicas"],
+		"healthy_replicas": repStatus["healthy_replicas"],
+		"max_sync_lag_ms":  repStatus["max_sync_lag_ms"],
 	}
 
 	if *jsonOutput {
@@ -2897,11 +2855,9 @@ func knowledgeDiagnostics(args []string) int {
 		fmt.Println(string(data))
 	} else {
 		fmt.Printf("System Diagnostics Report\n")
-		fmt.Printf("Uptime: %v seconds\n", report["uptime_seconds"])
 		fmt.Printf("Total Operations: %v\n", report["operations"])
 		fmt.Printf("Successful: %v\n", report["successful_ops"])
 		fmt.Printf("Failed: %v\n", report["failed_ops"])
-		fmt.Printf("Estimated Uptime: %.2f%%\n", report["estimated_uptime_pct"])
 		fmt.Printf("\nFault Tolerance\n")
 		fmt.Printf("  Total Errors: %v\n", report["total_errors"])
 		fmt.Printf("  Circuit State: %v\n", report["circuit_state"])
@@ -2951,12 +2907,10 @@ func knowledgeMetrics(args []string) int {
 	}
 
 	snapshot := map[string]interface{}{
-		"timestamp":         time.Now(),
-		"search_latency_ms": 2.5,
-		"replica_lag_ms":    repStatus["max_sync_lag_ms"],
-		"error_rate":        errorRate,
-		"uptime_percent":    stats["estimated_uptime_pct"],
-		"throughput_ops":    totalOps,
+		"timestamp":      time.Now(),
+		"replica_lag_ms": repStatus["max_sync_lag_ms"],
+		"error_rate":     errorRate,
+		"throughput_ops": totalOps,
 	}
 
 	if *jsonOutput {
@@ -2965,10 +2919,8 @@ func knowledgeMetrics(args []string) int {
 	} else {
 		fmt.Printf("System Metrics\n")
 		fmt.Printf("Timestamp: %s\n", snapshot["timestamp"])
-		fmt.Printf("Search Latency: %.2fms\n", snapshot["search_latency_ms"])
 		fmt.Printf("Replica Lag: %.0fms\n", snapshot["replica_lag_ms"])
 		fmt.Printf("Error Rate: %.4f%%\n", snapshot["error_rate"].(float64)*100)
-		fmt.Printf("Uptime: %.2f%%\n", snapshot["uptime_percent"])
 		fmt.Printf("Throughput: %v ops/sec\n", snapshot["throughput_ops"])
 	}
 
@@ -3091,7 +3043,7 @@ func knowledgeExport(args []string) int {
 	format := fs.String("format", "json", "Export format (json, csv, parquet)")
 	compress := fs.Bool("compress", false, "Compress export")
 	filter := fs.String("filter", "", "Optional filter query")
-	jsonOutput := fs.Bool("json", false, "JSON output")
+	_ = fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
 		return parseExitCode(err)
@@ -3116,36 +3068,17 @@ func knowledgeExport(args []string) int {
 		return 1
 	}
 
-	exportID := fmt.Sprintf("export-%d", time.Now().Unix())
-
-	if *jsonOutput {
-		output := map[string]interface{}{
-			"export_id":  exportID,
-			"format":     *format,
-			"compressed": *compress,
-			"item_count": len(ops),
-			"status":     "completed",
-		}
-		data, _ := json.MarshalIndent(output, "", "  ")
-		fmt.Println(string(data))
-	} else {
-		fmt.Printf("Export created: %s\n", exportID)
-		fmt.Printf("  Format: %s\n", *format)
-		fmt.Printf("  Items: %d\n", len(ops))
-		fmt.Printf("  Compressed: %v\n", *compress)
-		if *filter != "" {
-			fmt.Printf("  Filter: %s\n", *filter)
-		}
-	}
-
-	// Record operation in persistence
-	_ = persist.RecordOperation("export", "knowledge-store", "completed", map[string]interface{}{
-		"export_id": exportID,
-		"format":    *format,
-		"items":     len(ops),
-	})
-
-	return 0
+	// Refused rather than answered. This minted an export_id, reported status
+	// "completed", and wrote no file anywhere -- and the item_count it printed
+	// was the length of the CLI *operations log*, not of the store it claimed
+	// to be exporting. On a store emptied moments earlier it reported one item.
+	_ = ops
+	_ = format
+	_ = compress
+	_ = filter
+	fmt.Fprintf(os.Stderr, "cadre knowledge export: not implemented -- no export "+
+		"file is written. Copy the store's database file directly instead.\n")
+	return 1
 }
 
 // knowledgeImport imports knowledge store data.
@@ -3159,7 +3092,7 @@ func knowledgeImport(args []string) int {
 	format := fs.String("format", "json", "Import format (json, csv, parquet)")
 	_ = fs.Bool("compress", false, "Decompress import")
 	merge := fs.Bool("merge", false, "Merge with existing or replace")
-	jsonOutput := fs.Bool("json", false, "JSON output")
+	_ = fs.Bool("json", false, "Output as JSON")
 
 	if err := fs.Parse(args); err != nil {
 		return parseExitCode(err)
@@ -3177,37 +3110,16 @@ func knowledgeImport(args []string) int {
 	}
 	defer func() { _ = persist.Close() }()
 
-	// Simulate import (in real implementation, would read from file)
-	itemCount := int64(1000)
-
-	if *jsonOutput {
-		output := map[string]interface{}{
-			"status":         "completed",
-			"items_imported": itemCount,
-			"format":         *format,
-			"merge_mode":     *merge,
-		}
-		data, _ := json.MarshalIndent(output, "", "  ")
-		fmt.Println(string(data))
-	} else {
-		fmt.Printf("Import completed\n")
-		fmt.Printf("  Items imported: %d\n", itemCount)
-		fmt.Printf("  Format: %s\n", *format)
-		fmt.Printf("  Mode: %s\n", func() string {
-			if *merge {
-				return "merge"
-			}
-			return "replace"
-		}())
-	}
-
-	// Record operation in persistence
-	_ = persist.RecordOperation("import", "knowledge-store", "completed", map[string]interface{}{
-		"items":  itemCount,
-		"format": *format,
-	})
-
-	return 0
+	// Refused rather than answered. This was `itemCount := int64(1000)` under
+	// a comment admitting the simulation, then reported status "completed" and
+	// 1000 items imported -- with no file read, on any store, including an
+	// empty one with no input given at all.
+	_ = format
+	_ = merge
+	fmt.Fprintf(os.Stderr, "cadre knowledge import: not implemented -- no file is "+
+		"read and nothing is written to the store. Use 'cadre knowledge ingest' "+
+		"for the ingestion path that does work.\n")
+	return 1
 }
 
 // knowledgeBatchImport performs bulk import of messages.

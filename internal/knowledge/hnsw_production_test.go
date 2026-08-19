@@ -1,11 +1,49 @@
 package knowledge
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 )
 
+// Backup and restore refuse, and nothing is recorded as though they had run.
+//
+// This replaces four tests that asserted the simulation was intact:
+// TestCreateBackup checked for a backup id and a history entry reading
+// "completed" with 1000 messages; TestRestoreFromBackup checked that restore
+// returned nil, which it did by doing nothing at all; TestBackupHistory
+// checked that three backups that never happened were all remembered; and
+// TestRecoveryPointVerification checked rp.Verified, which was assigned true
+// unconditionally. Together they made the fabrication look deliberate and
+// protected it from removal -- a passing suite is not evidence of a working
+// feature if the suite asserts the placeholder.
+func TestBackupAndRestoreRefuseRatherThanReportSuccess(t *testing.T) {
+	dr := NewDisasterRecovery("/backups")
+
+	backupID, err := dr.CreateBackup(1000, 500, 1024*1024)
+	if !errors.Is(err, ErrNotImplemented) {
+		t.Errorf("CreateBackup error = %v, want ErrNotImplemented", err)
+	}
+	if backupID != "" {
+		t.Errorf("CreateBackup returned id %q; a refused backup must not be identified", backupID)
+	}
+	if err := dr.RestoreFromBackup("backup-anything"); !errors.Is(err, ErrNotImplemented) {
+		t.Errorf("RestoreFromBackup error = %v, want ErrNotImplemented", err)
+	}
+
+	// Nothing may be recorded as a backup. History that remembers a refused
+	// backup is what let `backup create` be believed in the first place.
+	if history := dr.GetBackupHistory(); len(history) != 0 {
+		t.Errorf("backup history has %d entries after a refused backup, want 0", len(history))
+	}
+	dr.mu.RLock()
+	points := len(dr.recoveryPoints)
+	dr.mu.RUnlock()
+	if points != 0 {
+		t.Errorf("%d recovery points exist after a refused backup, want 0", points)
+	}
+}
 func TestFaultToleranceCreation(t *testing.T) {
 	ft := NewFaultTolerance()
 	if ft == nil {
@@ -231,43 +269,6 @@ func TestDisasterRecoveryCreation(t *testing.T) {
 	}
 }
 
-func TestCreateBackup(t *testing.T) {
-	dr := NewDisasterRecovery("/backups")
-
-	backupID, err := dr.CreateBackup(1000, 500, 1024*1024)
-	if err != nil {
-		t.Fatalf("Failed to create backup: %v", err)
-	}
-
-	if backupID == "" {
-		t.Error("Backup ID should not be empty")
-	}
-
-	if len(dr.backupHistory) != 1 {
-		t.Errorf("Expected 1 backup in history, got %d", len(dr.backupHistory))
-	}
-
-	backup := dr.backupHistory[0]
-	if backup.MessageCount != 1000 {
-		t.Errorf("Expected 1000 messages, got %d", backup.MessageCount)
-	}
-
-	if backup.Status != "completed" {
-		t.Errorf("Expected status 'completed', got %s", backup.Status)
-	}
-}
-
-func TestRestoreFromBackup(t *testing.T) {
-	dr := NewDisasterRecovery("/backups")
-
-	backupID, _ := dr.CreateBackup(1000, 500, 1024*1024)
-
-	err := dr.RestoreFromBackup(backupID)
-	if err != nil {
-		t.Fatalf("Failed to restore: %v", err)
-	}
-}
-
 func TestRestoreFromInvalidBackup(t *testing.T) {
 	dr := NewDisasterRecovery("/backups")
 
@@ -277,51 +278,14 @@ func TestRestoreFromInvalidBackup(t *testing.T) {
 	}
 }
 
-func TestBackupHistory(t *testing.T) {
-	dr := NewDisasterRecovery("/backups")
-
-	for i := 0; i < 3; i++ {
-		dr.CreateBackup(int64(1000+i*100), 500, 1024*1024)
-	}
-
-	history := dr.GetBackupHistory()
-	if len(history) != 3 {
-		t.Errorf("Expected 3 backups in history, got %d", len(history))
-	}
-}
-
-func TestRecoveryPointVerification(t *testing.T) {
-	dr := NewDisasterRecovery("/backups")
-
-	backupID, _ := dr.CreateBackup(1000, 500, 1024*1024)
-
-	dr.mu.RLock()
-	rp, exists := dr.recoveryPoints[backupID]
-	dr.mu.RUnlock()
-
-	if !exists {
-		t.Error("Recovery point should exist")
-	}
-
-	if !rp.Verified {
-		t.Error("Recovery point should be verified")
-	}
-}
-
 func TestFaultToleranceIntegration(t *testing.T) {
 	ft := NewFaultTolerance()
 	dr := NewDisasterRecovery("/backups")
 
-	// Simulate operation with retry and backup
-	backupID, _ := dr.CreateBackup(1000, 500, 1024*1024)
-
-	err := ft.ExecuteWithRetry("restore-op", func() error {
-		return dr.RestoreFromBackup(backupID)
-	})
-
-	if err != nil {
-		t.Errorf("Expected successful restore operation: %v", err)
-	}
+	// Backup and restore are refused; asserted as such rather than used to
+	// manufacture a successful retry. ExecuteWithRetry itself is covered by
+	// the retry tests above.
+	assertBackupPathRefuses(t, dr)
 
 	stats := ft.GetStats()
 	if stats.TotalErrors != 0 {
@@ -356,8 +320,10 @@ func TestDisasterRecoveryWithReplication(t *testing.T) {
 
 	rep.RegisterReplica("replica-1", "10.0.0.1:8080")
 
-	// Create backup and verify recovery point
-	backupID, _ := dr.CreateBackup(1000, 500, 1024*1024)
+	// Backup and restore are refused, so the recovery leg is asserted as a
+	// refusal instead of driven as a working one. Retry, circuit breaking and
+	// replication above are real and still covered.
+	assertBackupPathRefuses(t, dr)
 
 	// Verify replication
 	rep.ReplicateOperation("msg-123", "delete")
@@ -371,11 +337,6 @@ func TestDisasterRecoveryWithReplication(t *testing.T) {
 		t.Errorf("Expected eventual consistency, got %v", report["consistency_level"])
 	}
 
-	// Restore from backup
-	err := dr.RestoreFromBackup(backupID)
-	if err != nil {
-		t.Errorf("Should successfully restore: %v", err)
-	}
 }
 
 func TestProductionEndToEnd(t *testing.T) {
@@ -400,17 +361,30 @@ func TestProductionEndToEnd(t *testing.T) {
 		t.Error("System should maintain consistency")
 	}
 
-	// Create backup
-	backupID, _ := dr.CreateBackup(1000, 500, 1024*1024)
-
-	// Simulate failure and recovery
-	ft.ExecuteWithRetry("recovery-op", func() error {
-		return dr.RestoreFromBackup(backupID)
-	})
+	// Backup and restore are refused, so the recovery leg is asserted as a
+	// refusal instead of driven as a working one. Retry, circuit breaking and
+	// replication above are real and still covered.
+	assertBackupPathRefuses(t, dr)
 
 	// Final consistency check
 	stats := ft.GetStats()
 	if stats.TotalErrors > 0 {
 		t.Errorf("System should have 0 errors in production scenario, got %d", stats.TotalErrors)
+	}
+}
+
+// assertBackupPathRefuses checks that both halves of disaster recovery refuse.
+//
+// Shared by the integration tests, which used to drive CreateBackup and
+// RestoreFromBackup as working steps and assert zero errors -- an end-to-end
+// test over a simulation, which is the most reassuring kind of test to have
+// and the least informative.
+func assertBackupPathRefuses(t *testing.T, dr *DisasterRecovery) {
+	t.Helper()
+	if _, err := dr.CreateBackup(1000, 500, 1024*1024); !errors.Is(err, ErrNotImplemented) {
+		t.Errorf("CreateBackup error = %v, want ErrNotImplemented", err)
+	}
+	if err := dr.RestoreFromBackup("backup-anything"); !errors.Is(err, ErrNotImplemented) {
+		t.Errorf("RestoreFromBackup error = %v, want ErrNotImplemented", err)
 	}
 }

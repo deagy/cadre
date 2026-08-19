@@ -433,22 +433,24 @@ func (cp *CLIPersistence) GetSystemStats() (map[string]interface{}, error) {
 	defer cp.mu.RUnlock()
 
 	var totalOps, successfulOps, failedOps int
-	var uptime int64
 
 	// Get operation counts
 	_ = cp.db.QueryRow("SELECT COUNT(*) FROM cli_operations_log").Scan(&totalOps)
 	_ = cp.db.QueryRow("SELECT COUNT(*) FROM cli_operations_log WHERE status = 'completed'").Scan(&successfulOps)
 	_ = cp.db.QueryRow("SELECT COUNT(*) FROM cli_operations_log WHERE status LIKE 'error%'").Scan(&failedOps)
 
-	// Estimate uptime from oldest operation (placeholder: assume 24 hours)
-	uptime = 86400
-
+	// uptime_seconds and estimated_uptime_pct are deliberately absent.
+	//
+	// They used to be `uptime = 86400 // placeholder: assume 24 hours` and a
+	// literal 99.99, returned in this same map beside the three counts below,
+	// which are real. Nothing distinguished the measured values from the
+	// invented ones, so `cadre knowledge diagnostics` reported a day of uptime
+	// and four nines on a database created seconds earlier. Omitting a figure
+	// nobody computed is the honest form of not knowing it.
 	stats := map[string]interface{}{
-		"total_operations":     totalOps,
-		"successful_ops":       successfulOps,
-		"failed_ops":           failedOps,
-		"uptime_seconds":       uptime,
-		"estimated_uptime_pct": 99.99,
+		"total_operations": totalOps,
+		"successful_ops":   successfulOps,
+		"failed_ops":       failedOps,
 	}
 
 	return stats, nil

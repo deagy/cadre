@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -156,20 +157,31 @@ func TestImportFromFile(t *testing.T) {
 	}
 }
 
-func TestDeleteByFilter(t *testing.T) {
+// Both batch filters refuse rather than reporting work they never did.
+//
+// The tests these replace asserted the fabrication into place: they checked
+// that DeleteByFilter returned no error and had recorded its filter, which the
+// placeholder satisfied while reporting 100 messages matched and deleted from
+// a query that was never run. A test can hold a defect still as easily as it
+// can catch one -- these now assert the refusal itself.
+func TestBatchFiltersRefuseRatherThanReportUnperformedWork(t *testing.T) {
 	bo := NewBatchOperations()
 
-	result, err := bo.DeleteByFilter("internal", "", 0, 100, true)
-	if err != nil {
-		t.Fatalf("DeleteByFilter() error = %v", err)
+	if _, err := bo.DeleteByFilter("internal", "", 0, 100, true); !errors.Is(err, ErrNotImplemented) {
+		t.Errorf("DeleteByFilter error = %v, want ErrNotImplemented", err)
+	}
+	changes := map[string]interface{}{"classification": "new_class"}
+	if _, err := bo.UpdateByFilter("source=test", changes, 100, true); !errors.Is(err, ErrNotImplemented) {
+		t.Errorf("UpdateByFilter error = %v, want ErrNotImplemented", err)
 	}
 
-	if result.DryRun != true {
-		t.Error("Expected dry run to be true")
+	// Argument validation still runs first: a caller who passes nothing to
+	// filter on gets that specific complaint, not the blanket refusal.
+	if _, err := bo.DeleteByFilter("", "", 0, 100, true); errors.Is(err, ErrNotImplemented) {
+		t.Error("a missing filter reported ErrNotImplemented; it should still name the missing filter")
 	}
-
-	if result.FilterUsed == "" {
-		t.Error("Expected filter to be set")
+	if _, err := bo.UpdateByFilter("", changes, 100, true); errors.Is(err, ErrNotImplemented) {
+		t.Error("a missing filter reported ErrNotImplemented; it should still name the missing filter")
 	}
 }
 
@@ -179,27 +191,6 @@ func TestDeleteByFilterNoFilter(t *testing.T) {
 	_, err := bo.DeleteByFilter("", "", 0, 100, true)
 	if err == nil {
 		t.Error("Expected error when no filter provided")
-	}
-}
-
-func TestUpdateByFilter(t *testing.T) {
-	bo := NewBatchOperations()
-
-	changes := map[string]interface{}{
-		"classification": "new_class",
-	}
-
-	result, err := bo.UpdateByFilter("source=test", changes, 100, true)
-	if err != nil {
-		t.Fatalf("UpdateByFilter() error = %v", err)
-	}
-
-	if result.ChangeCount != 1 {
-		t.Errorf("Expected 1 change, got %d", result.ChangeCount)
-	}
-
-	if result.DryRun != true {
-		t.Error("Expected dry run to be true")
 	}
 }
 

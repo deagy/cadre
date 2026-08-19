@@ -152,16 +152,11 @@ func (bo *BatchOperations) DeleteByFilter(classification string, source string, 
 		return result, fmt.Errorf("at least one filter required (classification, source, or older_than)")
 	}
 
-	// Simulate finding and deleting messages
-	// In real implementation, would query database with filters
-	result.TotalMatched = 100 // Placeholder
-
-	if !dryRun {
-		result.DeletedCount = result.TotalMatched
-	}
-
-	result.EndTime = time.Now()
-	return result, nil
+	// Refuses rather than reporting a deletion it never performed. This set
+	// `result.TotalMatched = 100 // Placeholder` and copied it into
+	// DeletedCount, so a filter matching nothing still reported 100 messages
+	// deleted -- a destructive-sounding success for work no query was run to do.
+	return result, fmt.Errorf("%w: no messages are matched or deleted", ErrNotImplemented)
 }
 
 // UpdateByFilter updates messages matching filter criteria in batch.
@@ -181,16 +176,9 @@ func (bo *BatchOperations) UpdateByFilter(filter string, changes map[string]inte
 		return result, fmt.Errorf("no changes specified")
 	}
 
-	// Simulate finding and updating messages
-	// In real implementation, would query database with filter
-	result.TotalMatched = 50 // Placeholder
-
-	if !dryRun {
-		result.UpdatedCount = result.TotalMatched
-	}
-
-	result.EndTime = time.Now()
-	return result, nil
+	// Refuses rather than reporting an update it never performed; the same
+	// defect as DeleteByFilter above.
+	return result, fmt.Errorf("%w: no messages are matched or updated", ErrNotImplemented)
 }
 
 // Helper methods
