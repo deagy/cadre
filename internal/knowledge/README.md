@@ -131,3 +131,29 @@ During transition, Python and Go implementations will coexist:
 - `internal/knowledge/database.go` — SQLite implementation
 - `internal/knowledge/embeddings.go` — Vector operations
 - `roster/knowledge-store/src/` — Python reference implementation
+
+## The phase reports are gone
+
+`CLI_PHASE5.5` through `CLI_PHASE8`, `CLI_COMPLETE`, `CLI_FULLY_FUNCTIONAL`,
+`CLI_STATUS`, `CLI_ROADMAP` and `MIGRATION_PYTHON_TO_GO` were deleted in
+2026-08. They were 7,400 lines of build-out reports that referenced only each
+other, and they had stopped being true.
+
+They described an HNSW vector index, hybrid search, distributed streaming,
+fault tolerance and replication as **Complete ✅** -- subsystems that were
+unreachable from every binary and have since been removed. `CLI_PHASE8`
+advertised "sub-millisecond fault detection" and "<100ms recovery overhead",
+figures nothing ever measured, from the same family as the placeholder metrics
+the CLI used to print. `CLI_FULLY_FUNCTIONAL` opened with "All 20+ commands are
+now fully functional"; eleven of them were reporting work they had not done,
+and nine now refuse.
+
+Documentation that asserts a capability the code does not have is the same
+defect as a command that prints a result it did not compute, and it is harder
+to catch because nothing runs it. The history is in git if the reasoning behind
+any of that work is ever wanted.
+
+What remains here is the reference material: `ARCHITECTURE.md`, `SCHEMA.md`,
+`PERFORMANCE.md` and `README_CLI.md`, each of which describes what the store
+actually does.
+
