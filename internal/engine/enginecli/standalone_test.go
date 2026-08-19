@@ -118,3 +118,23 @@ func TestTheEngineNamesTheMissingContracts(t *testing.T) {
 		t.Errorf("the failure does not say how to resolve it:\n  %s", strings.TrimSpace(output))
 	}
 }
+
+// Every published binary answers --version, standalone.
+//
+// It is the first thing anyone runs against a download, and the version is
+// compiled in precisely so it needs no installation. The engine had no
+// --version at all until this was checked across all four binaries rather
+// than the one that had just been fixed.
+func TestTheEngineReportsItsVersionStandalone(t *testing.T) {
+	for _, spelling := range []string{"--version", "-v", "version"} {
+		code, output := runStandaloneEngine(t, spelling)
+		if code != 0 {
+			t.Errorf("agentic-sdlc-engine %s: exit %d\n  %s", spelling, code, strings.TrimSpace(output))
+			continue
+		}
+		version := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(output), "agentic-sdlc-engine"))
+		if version == "" || version == "unknown" || !strings.ContainsRune(version, '.') {
+			t.Errorf("agentic-sdlc-engine %s printed %q, which names no build", spelling, strings.TrimSpace(output))
+		}
+	}
+}

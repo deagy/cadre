@@ -23,6 +23,7 @@ import (
 	"github.com/deagy/cadre/cli/internal/engine/export"
 	"github.com/deagy/cadre/cli/internal/engine/runtime"
 	"github.com/deagy/cadre/cli/internal/engine/validate"
+	"github.com/deagy/cadre/cli/internal/version"
 )
 
 // Deps are the process facilities a command uses, injectable for tests.
@@ -99,6 +100,16 @@ func Run(argv []string, deps Deps) int {
 	case "-h", "--help", "help":
 		fmt.Fprintln(deps.Stdout, usage)
 		return 0
+	case "--version", "-v", "version":
+		// The engine ships in the CLI's release and carries its version. This
+		// is the first thing anyone runs against a downloaded binary, so it
+		// must answer without an installation: the version is compiled in.
+		resolved, err := version.Resolve(deps.KernelRoot)
+		if err != nil {
+			return deps.fail("agentic-sdlc-engine: %v", err)
+		}
+		fmt.Fprintf(deps.Stdout, "agentic-sdlc-engine %s\n", resolved)
+		return 0
 	default:
 		fmt.Fprintf(deps.Stderr, "unknown command %q\n\n%s\n", argv[0], usage)
 		return 2
@@ -118,7 +129,9 @@ Commands:
 
   create-requirement-issues  Plan or publish a gate's requirements as GitLab issues
   list-requirement-issues    Print what a task has already published
-  serve       Serve the lifecycle over HTTP (loopback by default)`
+  serve       Serve the lifecycle over HTTP (loopback by default)
+
+  --version   Print the version this binary was built from`
 
 // commonFlags are the two every command needs.
 func commonFlags(fs *flag.FlagSet) (root, taskID *string) {
