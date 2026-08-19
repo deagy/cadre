@@ -47,7 +47,7 @@ import (
 // version it wanted to publish was already a tag, naming a different
 // implementation's bits. A minor bump both frees the namespace and says the
 // implementation changed. TestTheKernelVersionIsNotAlreadyTagged holds it.
-const Version = "0.14.1"
+const Version = "0.14.2"
 
 var (
 	providerIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)

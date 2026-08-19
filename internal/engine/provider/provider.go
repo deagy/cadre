@@ -37,7 +37,7 @@ import (
 // kernel's own source as text and fails when the two disagree, so the next
 // drift is caught where it happens rather than at the point someone cannot
 // load a provider.
-const KernelVersion = "0.14.1"
+const KernelVersion = "0.14.2"
 
 var (
 	validAgentKinds        = map[string]bool{"author": true, "reviewer": true, "specialist": true}
