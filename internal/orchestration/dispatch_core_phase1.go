@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -494,43 +493,4 @@ type ProjectTierNotGitCleanError struct {
 
 func (e ProjectTierNotGitCleanError) Error() string {
 	return e.Reason
-}
-
-// SpawnAndWait spawns a child process and waits for completion
-func SpawnAndWait(
-	cmd string,
-	args []string,
-	env map[string]string,
-	timeout float64,
-) (map[string]any, error) {
-	// Convert env map to []string for exec.Cmd
-	envSlice := make([]string, 0, len(env))
-	for k, v := range env {
-		envSlice = append(envSlice, k+"="+v)
-	}
-
-	command := exec.Command(cmd, args...)
-	command.Env = envSlice
-
-	// Capture output
-	output, err := command.CombinedOutput()
-	if err != nil {
-		exitCode := 1
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
-			exitCode = ee.ExitCode()
-		}
-		return map[string]any{
-			"status":    "error",
-			"exit_code": exitCode,
-			"error":     err.Error(),
-			"output":    string(output),
-		}, nil
-	}
-
-	return map[string]any{
-		"status":    "success",
-		"exit_code": 0,
-		"output":    string(output),
-	}, nil
 }

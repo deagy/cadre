@@ -14,7 +14,10 @@ import (
 // A port of dispatch_core.py's spawn_and_wait. The Go dispatch path had
 // SpawnAndWait, which ran exec.Command(...).CombinedOutput() with no stdin,
 // no deadline, no process group and no output cap -- and both runner
-// spawners passed the prompt as an argv element instead.
+// spawners passed the prompt as an argv element instead. It has since been
+// deleted: nothing called it, nothing tested it, and it accepted a timeout
+// parameter it never read, so anyone who found it and passed one would have
+// got no deadline at all.
 //
 // The prompt goes on stdin for two reasons that are not stylistic. It
 // contains the caller's brief, which is untrusted and can be long: as an
