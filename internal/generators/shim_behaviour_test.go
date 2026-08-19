@@ -47,6 +47,7 @@ type shimHarness struct {
 	cacheHome  string
 	cacheDir   string
 	stubBin    string
+	offlineBin string
 	version    string
 	goos       string
 	goarch     string
@@ -72,9 +73,17 @@ func newShimHarness(t *testing.T) *shimHarness {
 	harness.cacheHome = filepath.Join(harness.root, "cache")
 	harness.cacheDir = filepath.Join(harness.cacheHome, "cadre")
 	harness.stubBin = filepath.Join(harness.root, "stubbin")
-	for _, directory := range []string{binDir, manifestDir, harness.cacheDir, harness.stubBin} {
+	harness.offlineBin = filepath.Join(harness.root, "offlinebin")
+	for _, directory := range []string{binDir, manifestDir, harness.cacheDir, harness.stubBin, harness.offlineBin} {
 		if err := os.MkdirAll(directory, 0o755); err != nil {
 			t.Fatalf("mkdir %s: %v", directory, err)
+		}
+	}
+	// Downloaders that always fail, ahead of the real ones on PATH.
+	for _, tool := range []string{"curl", "wget"} {
+		stub := filepath.Join(harness.offlineBin, tool)
+		if err := os.WriteFile(stub, []byte("#!/bin/sh\nexit 7\n"), 0o755); err != nil {
+			t.Fatalf("writing the offline %s stub: %v", tool, err)
 		}
 	}
 	manifest := "{\n  \"version\": \"" + pluginManifestVersion + "\",\n  \"name\": \"cadre\"\n}\n"
@@ -117,7 +126,19 @@ func (h *shimHarness) run(extraPath bool, args ...string) shimResult {
 	h.t.Helper()
 	command := exec.Command(h.shim, args...)
 	command.Dir = h.root
-	path := "/usr/bin:/bin"
+	// "Offline" has to be enforced, not assumed.
+	//
+	// This used to be PATH=/usr/bin:/bin, which is where curl and wget live --
+	// so the shim could and did reach the network. The refusal tests passed
+	// only because the download failed for an unrelated reason: releases before
+	// cli-v0.6.4 packed the binary under its build name, so the shim's
+	// `tar -xzf ... cadre` never found what it asked for. Fixing the archives
+	// made the download work and those tests started executing a real,
+	// freshly-downloaded binary instead of refusing.
+	//
+	// offlineBin puts failing curl and wget ahead of the real ones, so the
+	// refusal under test is the one the shim reaches with no network at all.
+	path := h.offlineBin + ":/usr/bin:/bin"
 	if extraPath {
 		path = h.stubBin + ":" + os.Getenv("PATH")
 	}
