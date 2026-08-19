@@ -379,9 +379,32 @@ jobs:
 
       - name: Install Linux cross-compilation toolchain
         if: steps.tag.outputs.skip == 'false' && matrix.apt-packages != ''
+        # Bounded, and retried.
+        #
+        # apt-get has no timeout of its own: when a mirror accepts the
+        # connection and then stops responding, it waits forever. This step did
+        # exactly that on the linux/arm64 leg twice in a row, each time burning
+        # the whole 30-minute job budget before the build had started, which
+        # cancelled the leg and skipped the publish -- so a release failed on a
+        # stalled mirror with every other platform already built.
+        #
+        # The job timeout is a backstop against a hang, not a retry policy. Each
+        # apt call is bounded so a stall fails in minutes instead of thirty, and
+        # three attempts ride out a mirror that is briefly unwell.
+        timeout-minutes: 12
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ${{ matrix.apt-packages }}
+          set -eu
+          for attempt in 1 2 3; do
+            if timeout 150 sudo apt-get update \
+              && timeout 210 sudo apt-get install -y --no-install-recommends ${{ matrix.apt-packages }}; then
+              echo "toolchain installed on attempt $attempt"
+              exit 0
+            fi
+            echo "toolchain install attempt $attempt stalled or failed; retrying" >&2
+            sleep 10
+          done
+          echo "ERROR: could not install ${{ matrix.apt-packages }} after 3 attempts" >&2
+          exit 1
 
       - name: Build binary
         if: steps.tag.outputs.skip == 'false'
