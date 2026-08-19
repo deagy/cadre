@@ -338,6 +338,26 @@ func (cp *CLIPersistence) CompleteMaintenanceTask(taskID string) error {
 	return err
 }
 
+// FailMaintenanceTask records that a task did not finish.
+//
+// Without it a maintenance task that failed stayed 'started' forever, which
+// reads as still running. The commands that write these rows used to report
+// "completed" for work they had not done at all; a task record is only worth
+// keeping if both of its outcomes are true.
+func (cp *CLIPersistence) FailMaintenanceTask(taskID, reason string) error {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+
+	_, err := cp.db.Exec(`
+		UPDATE cli_maintenance_tasks
+		SET status = 'failed', description = description || ' -- failed: ' || ?,
+		    completed_at = CURRENT_TIMESTAMP
+		WHERE task_id = ?
+	`, reason, taskID)
+
+	return err
+}
+
 // GetMaintenanceTaskStatus retrieves task status.
 func (cp *CLIPersistence) GetMaintenanceTaskStatus(taskID string) (map[string]interface{}, error) {
 	cp.mu.RLock()

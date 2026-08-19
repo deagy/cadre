@@ -138,7 +138,7 @@ Options:
 	case "metrics":
 		return knowledgeMetrics(subArgs)
 	case "maintenance":
-		return knowledgeMaintenance(subArgs)
+		return knowledgeMaintenance(dbPath, subArgs)
 	case "export":
 		return knowledgeExport(subArgs)
 	case "import":
@@ -2949,7 +2949,7 @@ func knowledgeMetrics(args []string) int {
 }
 
 // knowledgeMaintenance runs maintenance tasks.
-func knowledgeMaintenance(args []string) int {
+func knowledgeMaintenance(dbPath string, args []string) int {
 	fs := flag.NewFlagSet("cadre knowledge maintenance", flag.ContinueOnError)
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge maintenance <subcommand> [options]
@@ -2996,8 +2996,22 @@ Subcommands:
 			fmt.Fprintf(os.Stderr, "cadre knowledge maintenance vacuum: %v\n", err)
 			return 1
 		}
-		// Simulate vacuum execution
-		time.Sleep(100 * time.Millisecond)
+		// Actually vacuum the store.
+		//
+		// This was `time.Sleep(100 * time.Millisecond)` under a comment saying
+		// "Simulate vacuum execution", followed by CompleteMaintenanceTask --
+		// so it recorded a completed maintenance task and printed "Vacuum
+		// completed" having run no VACUUM at all. DatabaseRepair.Defragment is
+		// the real thing and already backs `cadre knowledge defragment`; the
+		// task record now describes work that happened.
+		if err := runStoreMaintenance(dbPath, func(dr *knowledge.DatabaseRepair) error {
+			_, err := dr.Defragment(false)
+			return err
+		}); err != nil {
+			_ = persist.FailMaintenanceTask(taskID, err.Error())
+			fmt.Fprintf(os.Stderr, "cadre knowledge maintenance vacuum: %v\n", err)
+			return 1
+		}
 		_ = persist.CompleteMaintenanceTask(taskID)
 
 		if *jsonOutput {
@@ -3014,8 +3028,15 @@ Subcommands:
 			fmt.Fprintf(os.Stderr, "cadre knowledge maintenance optimize: %v\n", err)
 			return 1
 		}
-		// Simulate optimize execution
-		time.Sleep(100 * time.Millisecond)
+		// Actually optimize the indexes; see vacuum above for what this was.
+		if err := runStoreMaintenance(dbPath, func(dr *knowledge.DatabaseRepair) error {
+			_, err := dr.RebuildIndexes(false)
+			return err
+		}); err != nil {
+			_ = persist.FailMaintenanceTask(taskID, err.Error())
+			fmt.Fprintf(os.Stderr, "cadre knowledge maintenance optimize: %v\n", err)
+			return 1
+		}
 		_ = persist.CompleteMaintenanceTask(taskID)
 
 		if *jsonOutput {
@@ -3615,4 +3636,18 @@ func requireFTS5(index *knowledge.FTS5Index, command string) bool {
 		"(the Makefile and release builds already do). Content search "+
 		"(`cadre knowledge search --mode content`) works without it.\n", command)
 	return false
+}
+
+// runStoreMaintenance opens the knowledge store and runs one repair operation.
+//
+// The maintenance commands record their task in .agents/cli_state.db but must
+// operate on the store itself, which is a different database -- so the two are
+// opened separately and deliberately.
+func runStoreMaintenance(dbPath string, operation func(*knowledge.DatabaseRepair) error) error {
+	db, err := openDatabase(dbPath)
+	if err != nil {
+		return fmt.Errorf("cannot open the knowledge store: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	return operation(knowledge.NewDatabaseRepair(db))
 }
