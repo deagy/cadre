@@ -2,7 +2,10 @@
 // strict, standalone JSON Schema validation for roster/catalog.yaml and
 // roster/orchestration/routing.json.
 //
-// This is a distinct, complementary check from CheckRouteExcludeShadowing
+// This was described as complementary to CheckRouteExcludeShadowing, which
+// has been deleted: it was unreachable from every binary, nothing else
+// performed that check, and routing.json has 147 routes and no excludes at
+// all for it to examine.
 // (glob_containment.go, reachability/orphan coverage) and the role-metadata
 // generators (generation-drift detection). It instead asks a third,
 // independent question -- "is this file's own shape/type/enum content

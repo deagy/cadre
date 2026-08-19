@@ -179,51 +179,10 @@ func TestEveryRoleRoutingNamesExistsInTheCatalog(t *testing.T) {
 	}
 }
 
-func TestNoRuleExcludesAwayItsOwnPathCoverage(t *testing.T) {
-	// A rule whose exclude_paths fully shadow one of its own path globs keeps
-	// its reviewers and its human_gate, and matches on keywords alone. Nothing
-	// about it looks wrong: the glob is still listed, and it never fires.
-	document := routingDocument(t)
-	checked, undecided := 0, 0
-	var shadowed []string
-
-	for _, section := range []string{"routes", "risk_rules"} {
-		for _, rule := range objectListOf(document[section]) {
-			id, _ := rule["id"].(string)
-			excludes := stringsAt(rule["exclude_paths"])
-			if len(excludes) == 0 {
-				continue
-			}
-			for _, include := range stringsAt(rule["paths"]) {
-				checked++
-				switch GlobContains(include, excludes) {
-				case Contained:
-					shadowed = append(shadowed, section+"/"+id+": "+include+
-						" is fully covered by "+strings.Join(excludes, ", "))
-				case Undetermined:
-					undecided++
-				}
-			}
-		}
-	}
-	if checked == 0 {
-		t.Skip("no rule declares both paths and exclude_paths")
-	}
-	// Counting what was looked at is not the same as counting what was
-	// decided. This reports only on Contained, so 46 Undetermined verdicts and
-	// 46 clean ones produce identical output -- the reassuring "checked 46"
-	// below included. TestEveryRealRoutingPatternIsActuallyDecided holds the
-	// strict version; this is the floor.
-	if undecided == checked {
-		t.Fatalf("all %d include globs came back Undetermined; this check is "+
-			"passing without deciding anything", checked)
-	}
-	sort.Strings(shadowed)
-	if len(shadowed) > 0 {
-		t.Errorf("%d path glob(s) are excluded away entirely: %v", len(shadowed), shadowed)
-	}
-	t.Logf("checked %d include globs against their rule's exclusions", checked)
-}
+// TestNoRuleExcludesAwayItsOwnPathCoverage was removed with the glob
+// containment engine it drove. That engine was unreachable from every binary,
+// nothing else performed the check, and routing.json has 147 routes and no
+// exclude_paths at all -- so the property it asserted had no subject.
 
 func TestTheReachabilityWalkSeesEverySectionThatCanNameARole(t *testing.T) {
 	// Guards the guard. The orphan check passes if the walk finds a role
