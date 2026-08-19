@@ -105,16 +105,25 @@ Rendered against the four platforms the CLI publishes (placeholder version
 `<version>`):
 
 - `cadre-v<version>-linux-amd64.tar.gz`
-- `cadre-v<version>-linux-arm64.tar.gz`
 - `cadre-v<version>-darwin-arm64.tar.gz`
 - `cadre-v<version>-windows-amd64.zip`
 
 The engine ships in the same release, under the same tag:
 
 - `agentic-sdlc-engine-v<version>-linux-amd64.tar.gz`
-- `agentic-sdlc-engine-v<version>-linux-arm64.tar.gz`
 - `agentic-sdlc-engine-v<version>-darwin-arm64.tar.gz`
 - `agentic-sdlc-engine-v<version>-windows-amd64.zip`
+
+Both are also excluded from `linux/arm64`. They need cgo, so that platform
+needs either a native arm64 runner or a cross toolchain installed with `apt`,
+and the apt route failed four consecutive releases -- `apt-get` hung or errored
+against the Ubuntu mirror every time, burning the job budget before the build
+started and skipping the publish with every other platform already built.
+Dropped rather than left as the release's most fragile dependency. arm64 Linux
+users build from source.
+
+The kernel still publishes `linux/arm64`: it does not link cgo, so it
+cross-compiles from one runner with no toolchain to install.
 
 It is excluded from `darwin/amd64` for the same reason the CLI is: it links
 the same cgo sqlite checkpointer, and a cgo-less build compiles and then fails
@@ -132,7 +141,15 @@ while the kernel's contained `agentic-sdlc`. `internal/release`'s
 `archive_contents_test.go`, which now reads the workflow and fails when they
 disagree.
 
-The kernel publishes five, including `agentic-sdlc-v<version>-darwin-amd64.tar.gz`:
+The kernel publishes all five platforms:
+
+- `agentic-sdlc-v<version>-linux-amd64.tar.gz`
+- `agentic-sdlc-v<version>-linux-arm64.tar.gz`
+- `agentic-sdlc-v<version>-darwin-amd64.tar.gz`
+- `agentic-sdlc-v<version>-darwin-arm64.tar.gz`
+- `agentic-sdlc-v<version>-windows-amd64.zip`
+
+It reaches the two the CLI cannot because
 it does not link cgo and cross-compiles to every platform from one runner. The
 CLI does link cgo (the knowledge store's sqlite), so each platform needs a
 native host, and GitHub retired the free Intel macOS runner. `cadre

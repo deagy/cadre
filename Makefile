@@ -115,11 +115,9 @@ guard-binaries:
 cross-build:
 	@mkdir -p dist
 	CGO_ENABLED=1 GOOS=linux   GOARCH=amd64 go build -tags sqlite_fts5 -o dist/cadre-linux-amd64         ./cmd/cadre
-	CGO_ENABLED=1 GOOS=linux   GOARCH=arm64 go build -tags sqlite_fts5 -o dist/cadre-linux-arm64         ./cmd/cadre
 	CGO_ENABLED=1 GOOS=darwin  GOARCH=arm64 go build -tags sqlite_fts5 -o dist/cadre-darwin-arm64        ./cmd/cadre
 	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -tags sqlite_fts5 -o dist/cadre-windows-amd64.exe   ./cmd/cadre
 	CGO_ENABLED=1 GOOS=linux   GOARCH=amd64 go build -o dist/agentic-sdlc-engine-linux-amd64       ./cmd/agentic-sdlc-engine
-	CGO_ENABLED=1 GOOS=linux   GOARCH=arm64 go build -o dist/agentic-sdlc-engine-linux-arm64       ./cmd/agentic-sdlc-engine
 	CGO_ENABLED=1 GOOS=darwin  GOARCH=arm64 go build -o dist/agentic-sdlc-engine-darwin-arm64      ./cmd/agentic-sdlc-engine
 	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o dist/agentic-sdlc-engine-windows-amd64.exe ./cmd/agentic-sdlc-engine
 	CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -o dist/agentic-sdlc-linux-amd64       ./cmd/agentic-sdlc

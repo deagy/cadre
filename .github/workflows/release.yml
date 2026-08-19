@@ -304,15 +304,10 @@ jobs:
             # PEP 425 platform tags. pip matches these against the installing
             # interpreter, so a wrong one serves the wrong architecture's
             # binary. manylinux_2_17 is the glibc floor these are built
-            # against, matching the ubuntu-latest / aarch64 toolchains above.
+            # against. linux/arm64 is not published for the CLI (see
+            # internal/release.unpublishable): it needed a cross toolchain
+            # installed with apt, which failed four releases running.
             platform-tag: manylinux_2_17_x86_64
-          # Linux ARM64: cross-compile with aarch64 toolchain
-          - os: ubuntu-latest
-            goos: linux
-            goarch: arm64
-            cc: aarch64-linux-gnu-gcc
-            apt-packages: "gcc-aarch64-linux-gnu"
-            platform-tag: manylinux_2_17_aarch64
           # macOS ARM64: native on macos-latest (currently arm64)
           - os: macos-latest
             goos: darwin
@@ -646,7 +641,6 @@ jobs:
             echo "built $(basename "$built")"
           done <<'PLATFORMS'
           linux amd64 manylinux_2_17_x86_64 
-          linux arm64 manylinux_2_17_aarch64 
           darwin arm64 macosx_11_0_arm64 
           windows amd64 win_amd64 .exe
           PLATFORMS

@@ -124,8 +124,19 @@ var unpublishable = map[string]map[Platform]string{
 			"Dropped deliberately: Apple Silicon Macs are served by darwin/arm64, and an " +
 			"Intel Mac cannot run that binary under Rosetta -- Rosetta translates x86_64 " +
 			"for Apple Silicon, not the reverse. Intel macOS users must build from source",
+		{GOOS: "linux", GOARCH: "arm64"}: "the CLI needs cgo, so linux/arm64 needs either a native " +
+			"arm64 runner or a cross toolchain installed with apt. The apt route failed four " +
+			"releases running -- `apt-get` hung or errored against the Ubuntu mirror every time, " +
+			"burning the job budget before the build started and skipping the publish with every " +
+			"other platform already built. Dropped deliberately rather than made the release's " +
+			"most fragile dependency. The kernel still publishes linux/arm64: it does not link " +
+			"cgo and cross-compiles from a single runner with no toolchain to install. arm64 " +
+			"Linux users build from source, or install the pip wheel if one is published for " +
+			"their platform",
 	},
 	ProgramEngine: {
+		{GOOS: "linux", GOARCH: "arm64"}: "excluded with the CLI, for the same reason and on the " +
+			"same leg: it is built beside the CLI on that runner and shares its toolchain",
 		{GOOS: "darwin", GOARCH: "amd64"}: "the engine links the same cgo sqlite checkpointer as the " +
 			"CLI, so it is excluded from darwin/amd64 for the same reason. The evidence is direct: " +
 			"built with CGO_ENABLED=0 it compiles and then fails at runtime, reporting that " +
