@@ -66,14 +66,14 @@ func (d Deps) printJSON(payload any) error {
 }
 
 func (d Deps) fail(format string, args ...any) int {
-	fmt.Fprintf(d.Stderr, format+"\n", args...)
+	_, _ = fmt.Fprintf(d.Stderr, format+"\n", args...)
 	return 1
 }
 
 // Run dispatches one engine subcommand.
 func Run(argv []string, deps Deps) int {
 	if len(argv) == 0 {
-		fmt.Fprintln(deps.Stderr, usage)
+		_, _ = fmt.Fprintln(deps.Stderr, usage)
 		return 2
 	}
 	switch argv[0] {
@@ -98,7 +98,7 @@ func Run(argv []string, deps Deps) int {
 	case "serve":
 		return cmdServe(argv[1:], deps)
 	case "-h", "--help", "help":
-		fmt.Fprintln(deps.Stdout, usage)
+		_, _ = fmt.Fprintln(deps.Stdout, usage)
 		return 0
 	case "--version", "-v", "version":
 		// The engine ships in the CLI's release and carries its version. This
@@ -108,10 +108,10 @@ func Run(argv []string, deps Deps) int {
 		if err != nil {
 			return deps.fail("agentic-sdlc-engine: %v", err)
 		}
-		fmt.Fprintf(deps.Stdout, "agentic-sdlc-engine %s\n", resolved)
+		_, _ = fmt.Fprintf(deps.Stdout, "agentic-sdlc-engine %s\n", resolved)
 		return 0
 	default:
-		fmt.Fprintf(deps.Stderr, "unknown command %q\n\n%s\n", argv[0], usage)
+		_, _ = fmt.Fprintf(deps.Stderr, "unknown command %q\n\n%s\n", argv[0], usage)
 		return 2
 	}
 }
@@ -387,7 +387,7 @@ func cmdExport(argv []string, deps Deps) int {
 		}
 		return 0
 	}
-	fmt.Fprintln(deps.Stdout, string(encoded))
+	_, _ = fmt.Fprintln(deps.Stdout, string(encoded))
 	return 0
 }
 
@@ -424,10 +424,10 @@ func cmdValidate(argv []string, deps Deps) int {
 
 	code, messages := validate.RunRecord(record, schema, gateContracts)
 	for _, message := range messages {
-		fmt.Fprintln(deps.Stderr, message)
+		_, _ = fmt.Fprintln(deps.Stderr, message)
 	}
 	if code == 0 {
-		fmt.Fprintln(deps.Stdout, "run record is valid")
+		_, _ = fmt.Fprintln(deps.Stdout, "run record is valid")
 	}
 	return code
 }

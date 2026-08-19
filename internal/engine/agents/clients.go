@@ -185,7 +185,7 @@ func callToolAPI(client *http.Client, request *http.Request, extract func([]byte
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 
 	raw, err := io.ReadAll(response.Body)
 	if err != nil {

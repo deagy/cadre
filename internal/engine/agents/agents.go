@@ -154,7 +154,7 @@ type RolePromptRequest struct {
 // None of the three shipped profiles opts in, so the generic instruction is
 // what runs today.
 func ResolveRolePrompt(request RolePromptRequest) string {
-	if optedIn, _ := request.Profile["rich_content_source"]; truthy(optedIn) {
+	if optedIn := request.Profile["rich_content_source"]; truthy(optedIn) {
 		definition, _ := request.Metadata["definition"].(string)
 		if rich := richAgentContent(definition, request.ProviderRoot); rich != "" {
 			return strings.Join([]string{rich, RichContentAdaptationNote, AskHumanRule}, "\n\n")

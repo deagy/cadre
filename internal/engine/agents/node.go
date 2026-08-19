@@ -63,6 +63,13 @@ func sanitizedArtifactField(value, fallback string) string {
 func Run(dispatch Dispatch, request DispatchRequest, client ModelClient) (AgentOutput, error) {
 	var output AgentOutput
 
+	// Written field by field rather than as a RolePromptRequest(dispatch)
+	// conversion, which staticcheck suggests because the two structs are
+	// identical today. That identity is incidental: a Dispatch carries
+	// execution context, while this names the fields a *prompt* is entitled to
+	// read. Spelling them out keeps that list a decision rather than a
+	// consequence of the two types happening to still match.
+	//nolint:staticcheck // S1016: see above -- the explicit list is the point.
 	rolePrompt := ResolveRolePrompt(RolePromptRequest{
 		AgentID:      dispatch.AgentID,
 		Kind:         dispatch.Kind,

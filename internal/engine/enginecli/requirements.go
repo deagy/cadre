@@ -1,6 +1,7 @@
 package enginecli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"strings"
@@ -63,8 +64,13 @@ func cmdCreateRequirementIssues(argv []string, deps Deps) int {
 	if err != nil {
 		// A blocked publish is not a defect: it is a run state the operator
 		// has to resolve, and exit 2 says so the way validate does.
-		if _, blocked := err.(requirementissues.Blocked); blocked {
-			fmt.Fprintf(deps.Stderr, "cadre create-requirement-issues: %v\n", err)
+		//
+		// errors.As rather than a type assertion so this keeps working if any
+		// layer below ever wraps the Blocked -- an assertion would miss it and
+		// report a blocked run as a crash.
+		var blocked requirementissues.Blocked
+		if errors.As(err, &blocked) {
+			_, _ = fmt.Fprintf(deps.Stderr, "cadre create-requirement-issues: %v\n", err)
 			return 2
 		}
 		return deps.fail("cadre create-requirement-issues: %v", err)

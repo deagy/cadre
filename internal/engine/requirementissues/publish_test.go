@@ -2,6 +2,7 @@ package requirementissues
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -142,7 +143,7 @@ func TestApplyRequiresAMatchingPlanDigest(t *testing.T) {
 		Apply: true, PlanDigest: "sha256:wrong", AsBot: "release-bot", Eligibility: eligibility,
 	}); err == nil {
 		t.Error("an apply with a mismatched digest was accepted")
-	} else if _, blocked := err.(Blocked); !blocked {
+	} else if blocked := (Blocked{}); !errors.As(err, &blocked) {
 		t.Errorf("a digest mismatch is %T, want Blocked so a caller can tell it from a defect", err)
 	}
 }
@@ -172,7 +173,7 @@ func TestAReentryBetweenPlanAndApplyInvalidatesTheDigest(t *testing.T) {
 	if err == nil {
 		t.Fatal("an apply proceeded after a re-entry changed the run state")
 	}
-	if _, blocked := err.(Blocked); !blocked {
+	if blocked := (Blocked{}); !errors.As(err, &blocked) {
 		t.Errorf("error is %T, want Blocked", err)
 	}
 }
@@ -288,7 +289,7 @@ func TestTheLockIsHeldUntilExplicitlyBroken(t *testing.T) {
 
 	if _, err := AcquireLock(root, "task-1", false); err == nil {
 		t.Fatal("a second publisher acquired a held lock")
-	} else if _, blocked := err.(Blocked); !blocked {
+	} else if blocked := (Blocked{}); !errors.As(err, &blocked) {
 		t.Errorf("a held lock reports %T, want Blocked", err)
 	}
 
@@ -315,7 +316,7 @@ func TestAnIneligibleRunPublishesNothing(t *testing.T) {
 	if err == nil {
 		t.Fatal("a halted run published")
 	}
-	if _, blocked := err.(Blocked); !blocked {
+	if blocked := (Blocked{}); !errors.As(err, &blocked) {
 		t.Errorf("error is %T, want Blocked", err)
 	}
 }

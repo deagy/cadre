@@ -281,14 +281,28 @@ func AcquireLock(root, taskID string, breakLock bool) (string, error) {
 		}
 		return "", err
 	}
-	defer file.Close()
-
 	hostname, _ := os.Hostname()
 	payload, _ := json.MarshalIndent(map[string]any{
 		"pid": os.Getpid(), "host": hostname, "started_at": time.Now().UTC().Format(time.RFC3339Nano),
 	}, "", "  ")
-	_, err = file.Write(payload)
-	return path, err
+	// Close is checked rather than deferred and discarded: this handle is
+	// written to, so a flush failure is reported here or nowhere.
+	//
+	// Both failure paths remove the lock file. O_EXCL created it, and the only
+	// caller drops the returned path when the error is non-nil -- so a lock left
+	// behind here outlives the run that took it and blocks every later publish
+	// until a human passes --break-lock. Failing to take the lock must not leave
+	// it held.
+	if _, writeErr := file.Write(payload); writeErr != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return "", writeErr
+	}
+	if closeErr := file.Close(); closeErr != nil {
+		_ = os.Remove(path)
+		return "", closeErr
+	}
+	return path, nil
 }
 
 // ReleaseLock drops the publish lock.

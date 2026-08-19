@@ -195,9 +195,9 @@ func TestArtifactFieldsAreSanitized(t *testing.T) {
 		"too long":         strings.Repeat("x", 201),
 		"newline":          "artifact\nid",
 		"null byte":        "artifact\x00id",
-		"zero-width space": "artifact​id",
-		"rtl override":     "artifact‮id",
-		"soft hyphen":      "artifact­id",
+		"zero-width space": "artifact\u200bid",
+		"rtl override":     "artifact\u202eid",
+		"soft hyphen":      "artifact\u00adid",
 	}
 	for name, value := range replaced {
 		if got := sanitizedArtifactField(value, fallback); got != fallback {
@@ -244,7 +244,7 @@ func TestRunProducesBoundEvidence(t *testing.T) {
 
 // A model returning a hostile artifact id must not get it into the record.
 func TestAHostileArtifactIDDoesNotReachTheEvidence(t *testing.T) {
-	hostile := hostileClient{artifactID: "real-artifact‮gnp.exe", revision: "rev\x001"}
+	hostile := hostileClient{artifactID: "real-artifact\u202egnp.exe", revision: "rev\x001"}
 
 	output, err := Run(
 		Dispatch{AgentID: "a", Kind: "author"},

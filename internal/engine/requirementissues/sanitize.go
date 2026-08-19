@@ -37,7 +37,7 @@ const (
 )
 
 // zeroWidthSpace defuses an autolink without making text unreadable.
-const zeroWidthSpace = "​"
+const zeroWidthSpace = "\u200b"
 
 // Error is a refusal the caller must fix.
 type Error struct{ Message string }
@@ -68,7 +68,10 @@ var (
 // makes the two agree by construction.
 var forbiddenDescriptionRunes = map[rune]bool{
 	'\v': true, '\f': true, '\x1c': true, '\x1d': true, '\x1e': true,
-	'': true, ' ': true, ' ': true,
+	// NEL, line separator, paragraph separator. Written as escapes, like the
+	// five above: a literal here is invisible in a diff, which is the exact
+	// property this table exists to refuse in published content.
+	'\u0085': true, '\u2028': true, '\u2029': true,
 }
 
 // ComputeMarker is the hashed identity of one item.

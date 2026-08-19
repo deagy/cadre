@@ -11,6 +11,7 @@ package gitlabissue
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -82,7 +83,7 @@ func runGlab(argv []string, input []byte) (stdout, stderr []byte, code int, err 
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	defer os.RemoveAll(workingDir)
+	defer func() { _ = os.RemoveAll(workingDir) }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), glabTimeout)
 	defer cancel()
@@ -104,7 +105,7 @@ func runGlab(argv []string, input []byte) (stdout, stderr []byte, code int, err 
 	}
 	if runErr != nil {
 		var exitErr *exec.ExitError
-		if ok := asExitError(runErr, &exitErr); ok {
+		if errors.As(runErr, &exitErr) {
 			return stdout, stderr, exitErr.ExitCode(), nil
 		}
 		// A launch failure -- most often no glab on PATH. Reported without
@@ -112,14 +113,6 @@ func runGlab(argv []string, input []byte) (stdout, stderr []byte, code int, err 
 		return stdout, stderr, 0, fmt.Errorf("unable to run glab: %w", runErr)
 	}
 	return stdout, stderr, 0, nil
-}
-
-func asExitError(err error, target **exec.ExitError) bool {
-	exitErr, ok := err.(*exec.ExitError)
-	if ok {
-		*target = exitErr
-	}
-	return ok
 }
 
 func glabFailure(stderr []byte) string {
@@ -369,7 +362,7 @@ func CreateIssue(projectPath, title, description string, labels []string) (int, 
 	if err != nil {
 		return 0, err
 	}
-	defer os.RemoveAll(workingDir)
+	defer func() { _ = os.RemoveAll(workingDir) }()
 
 	bodyPath := filepath.Join(workingDir, "issue-body.json")
 	if err := os.WriteFile(bodyPath, body, 0o600); err != nil {

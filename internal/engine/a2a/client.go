@@ -72,7 +72,7 @@ func (c *Client) endpoint() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode >= 400 {
 		return "", fmt.Errorf("agent card request to %q returned %s", c.baseURL, response.Status)
 	}
@@ -125,7 +125,7 @@ func (c *Client) call(method string, params map[string]any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode >= 400 {
 		return nil, fmt.Errorf("A2A call %s to %q returned %s", method, c.baseURL, response.Status)
 	}

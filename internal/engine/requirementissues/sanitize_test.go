@@ -1,6 +1,7 @@
 package requirementissues
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -11,14 +12,19 @@ import (
 // embargoed project, while the target GitLab project is often visible far more
 // widely than the repository the task came from.
 func TestIdentifiersNeverCarryTheRawTaskID(t *testing.T) {
-	const secret = "acme-breach-2026-embargoed"
+	// Not named `secret`: gitleaks' generic-api-key rule keys off a keyword
+	// sitting immediately before an assignment, so `const secret = ...` is a
+	// finding whatever the value is. internal/contextstore/service_test.go
+	// documents the same trap at length. The value is a task id regardless --
+	// operator-chosen, and here one naming an embargoed project.
+	const embargoedTaskID = "acme-breach-2026-embargoed"
 
-	marker := ComputeMarker(secret, "G2", "req-1")
-	if strings.Contains(marker, secret) || len(marker) != 16 {
+	marker := ComputeMarker(embargoedTaskID, "G2", "req-1")
+	if strings.Contains(marker, embargoedTaskID) || len(marker) != 16 {
 		t.Errorf("marker = %q", marker)
 	}
-	hash := TaskHash(secret)
-	if strings.Contains(hash, secret) || len(hash) != 16 {
+	hash := TaskHash(embargoedTaskID)
+	if strings.Contains(hash, embargoedTaskID) || len(hash) != 16 {
 		t.Errorf("task hash = %q", hash)
 	}
 
@@ -26,12 +32,12 @@ func TestIdentifiersNeverCarryTheRawTaskID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ItemLabel: %v", err)
 	}
-	if strings.Contains(label, secret) {
+	if strings.Contains(label, embargoedTaskID) {
 		t.Errorf("label = %q", label)
 	}
 
-	body := RenderBody(secret, "G2", marker, "a description")
-	if strings.Contains(body, secret) {
+	body := RenderBody(embargoedTaskID, "G2", marker, "a description")
+	if strings.Contains(body, embargoedTaskID) {
 		t.Error("the rendered body carries the raw task id")
 	}
 	if !strings.Contains(body, hash) {
@@ -94,8 +100,8 @@ func TestSanitizeTitleRefusesEverythingButPrintableASCII(t *testing.T) {
 	}
 
 	refused := map[string]string{
-		"right-to-left override": "safe‮txt.exe",
-		"zero-width space":       "safe​title",
+		"right-to-left override": "safe\u202etxt.exe",
+		"zero-width space":       "safe\u200btitle",
 		"newline":                "line one\nline two",
 		"emoji":                  "ship it \U0001F680",
 		"empty":                  "   ",
@@ -142,9 +148,9 @@ func TestSeparatorsThatHideLinesAreRefused(t *testing.T) {
 		"file separator":   "visible\x1c/assign @someone",
 		"group separator":  "visible\x1d/assign @someone",
 		"record separator": "visible\x1e/assign @someone",
-		"next line":        "visible/assign @someone",
-		"line separator":   "visible /assign @someone",
-		"para separator":   "visible /assign @someone",
+		"next line":        "visible\u0085/assign @someone",
+		"line separator":   "visible\u2028/assign @someone",
+		"para separator":   "visible\u2029/assign @someone",
 	}
 	for name, description := range hidden {
 		if _, err := SanitizeDescription(description, "k"); err == nil {
@@ -288,7 +294,7 @@ func TestPublishEligibility(t *testing.T) {
 			t.Errorf("%s: publishing was permitted", name)
 			continue
 		}
-		if _, isBlocked := err.(Blocked); !isBlocked {
+		if blocked := (Blocked{}); !errors.As(err, &blocked) {
 			t.Errorf("%s: error is %T, want Blocked so a caller can tell it from a defect", name, err)
 		}
 	}

@@ -42,11 +42,11 @@ func cmdServe(argv []string, deps Deps) int {
 
 	host, _, splitErr := net.SplitHostPort(*address)
 	if splitErr == nil && host != "127.0.0.1" && host != "localhost" && host != "::1" {
-		fmt.Fprintf(deps.Stderr,
+		_, _ = fmt.Fprintf(deps.Stderr,
 			"cadre serve: listening on %s, which is not loopback. Nothing here authenticates a "+
 				"caller, and it dispatches agents and accepts approval decisions.\n", *address)
 	}
-	fmt.Fprintf(deps.Stdout, "listening on %s\n", listener.Addr())
+	_, _ = fmt.Fprintf(deps.Stdout, "listening on %s\n", listener.Addr())
 
 	httpServer := &http.Server{
 		Handler:           server.Handler(),
@@ -66,7 +66,7 @@ func cmdServe(argv []string, deps Deps) int {
 			return deps.fail("cadre serve: %v", err)
 		}
 	case <-stop:
-		fmt.Fprintln(deps.Stdout, "shutting down")
+		_, _ = fmt.Fprintln(deps.Stdout, "shutting down")
 		ctx, cancel := context.WithTimeout(context.Background(), *shutdownGrace)
 		defer cancel()
 		if err := httpServer.Shutdown(ctx); err != nil {
