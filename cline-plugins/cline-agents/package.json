@@ -18,7 +18,7 @@
     ]
   },
   "dependencies": {
-    "@cline/sdk": "0.0.65",
+    "@cline/sdk": "0.0.77",
     "@cline/shared": "0.0.71",
     "yaml": "2.9.0",
     "zod": "4.4.3"
