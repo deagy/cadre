@@ -37,6 +37,31 @@ Every handoff includes:
   unverified; silence is not an acceptable substitute for either. The broken
   variant is a probe, never a commit: discard it, and never leave it in a
   working tree the agent did not create.
+- `denials`: a refusal is a record, not a message. A handoff whose
+  `disposition` is `request-changes` or `blocked` carries one, conforming to
+  `roster/shared/output-schemas/denial.schema.json`. Each states its
+  `denial_id`, `task_id`, the exact `revision` denied, the `denier` role and
+  instance, the `findings` it rests on (a denial citing none is an opinion),
+  and what it `invalidates` -- which may be empty, but must be stated, because
+  silence and "nothing" have to be distinguishable.
+
+  Every denial states `author_within_authority`. When it is true the denial
+  carries a `disposition`: `amend` returns the work with a `reentry_step` and
+  an `amend_attempt`, `escalate` leaves the task, `halt` names a
+  `lift_condition`. `reentry_step` is the *earliest affected* step, not the one
+  that produced the denied artifact -- a review rejecting an implementation
+  because its acceptance criteria were ambiguous is not asking for a better
+  implementation, and sending it back to the implementer burns attempts on work
+  that was never the defect.
+
+  When `author_within_authority` is false the denial is an **objection** and
+  carries no disposition at all. A reviewer returning `request-changes` against
+  a decision a human gate authority already made cannot amend it: there is no
+  author to return work to, nothing downstream is invalidated, and recording it
+  as an amend would claim an authority the reviewer does not hold. An objection
+  belongs in the record the decision lives in, where the deciding human will
+  read it, not only in a task-local findings list.
+
 - Knowledge retrieval status, query identifiers, citations used, and stale/conflicting material.
 - `knowledge_steward_handoffs`: a list of durable decisions, findings, lessons,
   root causes, reusable patterns, stale guidance, or other store-worthy
@@ -67,7 +92,7 @@ Every handoff includes:
   `cadre-final-handoff` v1 envelope. The exact top-level keys are `kind`,
   `schema_version`, `handoff`, `artifacts`, and `derived_from`. `handoff` is
   limited to `summary`, `disposition`, `findings`, `assumptions`,
-  `unresolved_questions`, `next_action`, `context_handles`, and
+  `unresolved_questions`, `next_action`, `context_handles`, `denials`, and
   `knowledge_steward_handoffs`; `artifacts` is an identifier-only manifest,
   never copied artifact content. Each manifest entry carries a non-empty
   `id` and, optionally, `kind`, `revision`, `digest`, and `uri` -- those five

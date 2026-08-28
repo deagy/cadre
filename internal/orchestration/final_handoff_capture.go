@@ -53,7 +53,7 @@ var (
 	finalHandoffKeys = map[string]bool{
 		"summary": true, "disposition": true, "findings": true, "assumptions": true,
 		"unresolved_questions": true, "next_action": true, "context_handles": true,
-		"knowledge_steward_handoffs": true,
+		"knowledge_steward_handoffs": true, "denials": true,
 	}
 	artifactKeys = map[string]bool{
 		"id": true, "kind": true, "revision": true, "digest": true, "uri": true,
@@ -82,6 +82,24 @@ var (
 		"owner":            fieldNullableText, "due_date": fieldNullableText,
 		"exception_reference": fieldNullableText,
 	}
+	// Mirrors roster/shared/output-schemas/denial.schema.json, held in step by
+	// TestDenialKeysCoverTheDenialSchema. A refusal that returns work, escalates
+	// it, or halts it says so here; the conditional requirements the schema
+	// expresses through if/then are enforced by validateDenials below, because
+	// a flat allowlist cannot express them.
+	denialKeys = map[string]fieldKind{
+		"denial_id": fieldText, "task_id": fieldText, "revision": fieldText,
+		"denier": fieldText, "disposition": fieldText, "reentry_step": fieldText,
+		"lift_condition":  fieldText,
+		"input_revisions": fieldTextList, "invalidates": fieldTextList,
+		"author_within_authority": fieldBool, "amend_attempt": fieldCount,
+		"findings": fieldEntryList,
+	}
+
+	denialDispositions = map[string]bool{
+		"amend": true, "escalate": true, "halt": true,
+	}
+
 	knowledgeHandoffKeys = map[string]fieldKind{
 		"title": fieldText, "summary": fieldText, "evidence": fieldTextList,
 		"origin": fieldText, "proposed_classification": fieldText,
@@ -303,6 +321,12 @@ func validateHandoffBody(value any) (map[string]any, error) {
 				return nil, err
 			}
 			checked[field] = entries
+		case "denials":
+			entries, err := validateDenials(item, "final_handoff.handoff.denials")
+			if err != nil {
+				return nil, err
+			}
+			checked[field] = entries
 		case "knowledge_steward_handoffs":
 			entries, err := validateKeyedList(item,
 				"final_handoff.handoff.knowledge_steward_handoffs", knowledgeHandoffKeys, "knowledge handoff")
@@ -331,6 +355,9 @@ const (
 	fieldText fieldKind = iota
 	fieldTextList
 	fieldNullableText
+	fieldBool
+	fieldCount     // a positive integer; JSON decodes it as float64
+	fieldEntryList // a nested keyed list, validated against its own allowlist
 )
 
 func validateKeyedList(value any, field string, allowed map[string]fieldKind, entryName string) ([]map[string]any, error) {
@@ -362,6 +389,33 @@ func validateKeyedList(value any, field string, allowed map[string]fieldKind, en
 				checked[key] = nil
 				continue
 			}
+			if kind == fieldBool {
+				flag, ok := item.(bool)
+				if !ok {
+					return nil, fmt.Errorf("%s.%s must be true or false", entryName, key)
+				}
+				checked[key] = flag
+				continue
+			}
+			if kind == fieldCount {
+				count, ok := positiveCount(item)
+				if !ok {
+					return nil, fmt.Errorf("%s.%s must be a positive whole number", entryName, key)
+				}
+				checked[key] = count
+				continue
+			}
+			if kind == fieldEntryList {
+				nested, err := validateKeyedList(item, entryName+"."+key, findingKeys, "finding")
+				if err != nil {
+					return nil, err
+				}
+				if len(nested) == 0 {
+					return nil, fmt.Errorf("%s.%s must cite at least one finding", entryName, key)
+				}
+				checked[key] = nested
+				continue
+			}
 			text, err := shortText(item, entryName+"."+key)
 			if err != nil {
 				return nil, err
@@ -387,6 +441,80 @@ func validateHandleList(value any) ([]string, error) {
 		handles = append(handles, handle)
 	}
 	return handles, nil
+}
+
+// positiveCount accepts the JSON number shapes a decoded envelope can carry
+// for a whole-number field. encoding/json produces float64; a caller that
+// built the value in-process may pass an int.
+func positiveCount(value any) (int, bool) {
+	switch typed := value.(type) {
+	case float64:
+		if typed >= 1 && typed == float64(int(typed)) {
+			return int(typed), true
+		}
+	case int:
+		if typed >= 1 {
+			return typed, true
+		}
+	}
+	return 0, false
+}
+
+// validateDenials enforces what denial.schema.json states conditionally: a
+// denial against an artifact whose author is outside the issuer's authority is
+// an objection and carries no disposition, an amend names where work resumes
+// and which attempt it is, and a halt names what would lift it.
+//
+// The objection case is not a technicality. An agent reviewer returning
+// request-changes against a decision a human authority already made cannot
+// amend it -- there is no author to return work to -- and recording it as an
+// amend would claim an authority the reviewer does not have.
+func validateDenials(value any, field string) ([]map[string]any, error) {
+	entries, err := validateKeyedList(value, field, denialKeys, "denial")
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		for _, required := range []string{"denial_id", "task_id", "revision", "denier"} {
+			if _, present := entry[required]; !present {
+				return nil, fmt.Errorf("%s entries must state %s", field, required)
+			}
+		}
+		if _, present := entry["findings"]; !present {
+			return nil, fmt.Errorf("%s entries must cite at least one finding", field)
+		}
+		if _, present := entry["invalidates"]; !present {
+			return nil, fmt.Errorf("%s entries must state what they invalidate, even when nothing", field)
+		}
+		within, present := entry["author_within_authority"].(bool)
+		if !present {
+			return nil, fmt.Errorf("%s entries must state author_within_authority", field)
+		}
+		disposition, hasDisposition := entry["disposition"].(string)
+		if !within {
+			if hasDisposition {
+				return nil, fmt.Errorf(
+					"%s against an author outside the issuer's authority is an objection and carries no disposition", field)
+			}
+			continue
+		}
+		if !hasDisposition || !denialDispositions[disposition] {
+			return nil, fmt.Errorf("%s entries must carry a disposition of amend, escalate, or halt", field)
+		}
+		if disposition == "amend" {
+			for _, required := range []string{"reentry_step", "amend_attempt"} {
+				if _, ok := entry[required]; !ok {
+					return nil, fmt.Errorf("%s with disposition amend must state %s", field, required)
+				}
+			}
+		}
+		if disposition == "halt" {
+			if _, ok := entry["lift_condition"]; !ok {
+				return nil, fmt.Errorf("%s with disposition halt must state lift_condition", field)
+			}
+		}
+	}
+	return entries, nil
 }
 
 func validateArtifacts(value any) ([]map[string]any, error) {
