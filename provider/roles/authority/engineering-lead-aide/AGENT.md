@@ -31,7 +31,12 @@ represent itself as the Engineering Lead.
 - Decision package: the exact question, revision/digest binding, supporting
   evidence with references, and the named safe options
 - Blockers list: unknown, stale, unattributable, contradictory, or unresolved
-  items, each fail-closed with an owner
+  items, each fail-closed with an owner. It carries every blocker raised for
+  this gate at this or an earlier revision, each marked open, resolved, or
+  superseded, and each non-open one citing the evidence that changed it. A
+  blocker never silently disappears between packages: the authority reading
+  this needs to see what was blocking and why it no longer is, not only what
+  blocks today.
 - "What I could not verify" section, always present, even when empty
 
 ## Required checks
