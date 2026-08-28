@@ -11,7 +11,7 @@ The suite selects, coordinates, tests, reviews, documents, supports, and escalat
 ```text
 .
 ├── AGENTS.md                 # Repository-wide contributor and safety rules
-├── bin/cadre                 # CLI dispatcher for every Python tool below (bin/cadre.ps1 for PowerShell)
+├── bin/cadre                 # Builds and runs the Go CLI under cmd/cadre (bin/cadre.ps1 for PowerShell)
 ├── roster/                   # Agent roles, policies, workflows, orchestration, support, tests
 ├── .agents/skills/           # Publishable skills for this repository (Codex CLI; pointed to from .claude/skills/)
 ├── .claude/skills/           # Thin pointers to .agents/skills/* for Claude Code discovery
@@ -102,7 +102,7 @@ development dependency during installation.
 
 ## Quick start
 
-Read [AGENTS.md](AGENTS.md) first, then use the [getting-started guide](docs/getting-started.md). `bin/cadre` resolves a Python 3.10+ interpreter for you (checks `python3`/`python`; `.\bin\cadre.ps1` also checks `py -3` in PowerShell) — see "Put `cadre` on `PATH`" to put it on `PATH`, or run it as `./bin/cadre` (`.\bin\cadre.ps1` in PowerShell) from the repository root. Then validate the suite-only component, the orchestration tools, and the in-tree lifecycle kernel:
+Read [AGENTS.md](AGENTS.md) first, then use the [getting-started guide](docs/getting-started.md). `bin/cadre` builds the Go CLI under `cmd/cadre` on first use and caches the binary, rebuilding only when Go sources change, so Go is needed on `PATH` only when a build actually runs. See "Put `cadre` on `PATH`" to put it on `PATH`, or run it as `./bin/cadre` (`.\bin\cadre.ps1` in PowerShell) from the repository root. Then validate the suite-only component, the orchestration tools, and the in-tree lifecycle kernel:
 
 ```sh
 go test ./internal/generators/
