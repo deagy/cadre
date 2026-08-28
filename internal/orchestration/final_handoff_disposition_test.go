@@ -77,3 +77,28 @@ func TestGateDecisionSpellingsAreStillRejected(t *testing.T) {
 		}
 	}
 }
+
+// TestArtifactKeysMatchTheDocumentedManifest pins the manifest's field set to
+// what handoff-contracts.md tells an agent to send. There is no machine-readable
+// counterpart to diff against, so this is the canary: changing the map without
+// changing the prose fails here, and an entry an agent writes from the prose is
+// what the validator accepts. The kernel's artifact record is a different object
+// and spells its identifier artifact_id, which must stay rejected.
+func TestArtifactKeysMatchTheDocumentedManifest(t *testing.T) {
+	documented := map[string]bool{
+		"id": true, "kind": true, "revision": true, "digest": true, "uri": true,
+	}
+	for key := range artifactKeys {
+		if !documented[key] {
+			t.Errorf("artifactKeys accepts %q, which handoff-contracts.md does not document", key)
+		}
+	}
+	for key := range documented {
+		if !artifactKeys[key] {
+			t.Errorf("handoff-contracts.md documents %q, which artifactKeys rejects", key)
+		}
+	}
+	if artifactKeys["artifact_id"] {
+		t.Error("artifact_id is the kernel's spelling for a different object and must stay rejected")
+	}
+}

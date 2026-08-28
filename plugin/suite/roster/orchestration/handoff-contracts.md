@@ -69,7 +69,23 @@ Every handoff includes:
   limited to `summary`, `disposition`, `findings`, `assumptions`,
   `unresolved_questions`, `next_action`, `context_handles`, and
   `knowledge_steward_handoffs`; `artifacts` is an identifier-only manifest,
-  never copied artifact content. The dispatcher binds identity, source,
+  never copied artifact content. Each manifest entry carries a non-empty
+  `id` and, optionally, `kind`, `revision`, `digest`, and `uri` -- those five
+  and nothing else, at most 64 entries. Note that the entry's identifier field
+  is `id`; the kernel's lifecycle artifact record spells it `artifact_id` and
+  is a different object, so an entry written against that contract is rejected
+  here, and a rejected envelope is not captured.
+
+  Every one of those values is a *name*, never a location this process could be
+  made to read: absolute paths, Windows drive paths, query strings, and `file://`
+  URIs are all refused, because each names something outside the project and a
+  consumer resolving a manifest entry would be resolving one the child chose.
+  `uri` is stricter again -- an `https` URI with a host, or a repository-relative
+  identifier, and nothing else.
+
+  `derived_from` is equally closed: it holds context handles (`ctx_` followed by
+  32 hex characters) and `ks:untrusted:` markers, nothing else. A free string
+  there would be provenance the store cannot check. The dispatcher binds identity, source,
   classification, scope, and TTL from the dispatch rather than accepting them
   from the envelope. It does not parse stdout for a handoff: absent or invalid
   envelopes are not captured and do not change dispatch completion.
