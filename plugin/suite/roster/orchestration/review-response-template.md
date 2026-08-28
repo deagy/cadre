@@ -19,7 +19,7 @@
 
 ## Findings
 
-Use `../shared/output-schemas/finding.schema.json` for each finding. Include severity, evidence, affected assets, remediation, owner, and control mappings.
+Use `../shared/output-schemas/finding.schema.json` for each finding. Include severity, evidence, affected assets, remediation, owner, and control mappings. `owner` is null only for a coverage finding, where the point is that no role's remit covered the defect and the roster owns it; every other finding names an owner.
 
 ## Evidence
 

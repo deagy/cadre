@@ -62,15 +62,24 @@ var (
 		"complete": true, "approve": true, "request-changes": true,
 		"needs-information": true, "blocked": true,
 	}
-	findingKeys = map[string]bool{
-		"id": true, "title": true, "severity": true, "summary": true,
-		"evidence": true, "owner": true,
+	// Mirrors every property of roster/shared/output-schemas/finding.schema.json,
+	// which is the contract roles are told to emit. The two are held in step by
+	// TestFindingKeysCoverTheFindingSchema; a finding conforming to the schema
+	// used to be rejected here, silently discarding the whole envelope.
+	findingKeys = map[string]fieldKind{
+		"id": fieldText, "title": fieldText, "severity": fieldText,
+		"status": fieldText, "summary": fieldText, "recommendation": fieldText,
+		"evidence": fieldTextList, "affected_assets": fieldTextList,
+		"control_mappings": fieldTextList,
+		"owner":            fieldNullableText, "due_date": fieldNullableText,
+		"exception_reference": fieldNullableText,
 	}
-	knowledgeHandoffKeys = map[string]bool{
-		"title": true, "summary": true, "evidence": true, "origin": true,
-		"proposed_classification": true, "source_scope": true, "sensitivity_notes": true,
-		"conflicts_or_staleness": true, "untrusted_instruction_risk": true,
-		"recommended_action": true,
+	knowledgeHandoffKeys = map[string]fieldKind{
+		"title": fieldText, "summary": fieldText, "evidence": fieldTextList,
+		"origin": fieldText, "proposed_classification": fieldText,
+		"source_scope": fieldText, "sensitivity_notes": fieldText,
+		"conflicts_or_staleness": fieldText, "untrusted_instruction_risk": fieldText,
+		"recommended_action": fieldText,
 	}
 )
 
@@ -304,7 +313,19 @@ func validateHandoffBody(value any) (map[string]any, error) {
 	return checked, nil
 }
 
-func validateKeyedList(value any, field string, allowed map[string]bool, entryName string) ([]map[string]any, error) {
+// fieldKind says how one field of a keyed-list entry is validated. A schema
+// property that is nullable needs fieldNullableText: a coverage finding, which
+// reports that no role's remit covered a defect, carries a null owner because
+// there is no role to name.
+type fieldKind int
+
+const (
+	fieldText fieldKind = iota
+	fieldTextList
+	fieldNullableText
+)
+
+func validateKeyedList(value any, field string, allowed map[string]fieldKind, entryName string) ([]map[string]any, error) {
 	list, ok := value.([]any)
 	if !ok || len(list) > MaxHandoffListItems {
 		return nil, fmt.Errorf("%s must be a bounded list", field)
@@ -317,15 +338,20 @@ func validateKeyedList(value any, field string, allowed map[string]bool, entryNa
 		}
 		checked := map[string]any{}
 		for key, item := range entry {
-			if !allowed[key] {
+			kind, known := allowed[key]
+			if !known {
 				return nil, fmt.Errorf("%s entries must use the structured %s fields only", field, entryName)
 			}
-			if key == "evidence" {
-				list, err := shortTextList(item, entryName+".evidence", 16)
+			if kind == fieldTextList {
+				list, err := shortTextList(item, entryName+"."+key, 16)
 				if err != nil {
 					return nil, err
 				}
 				checked[key] = list
+				continue
+			}
+			if kind == fieldNullableText && item == nil {
+				checked[key] = nil
 				continue
 			}
 			text, err := shortText(item, entryName+"."+key)

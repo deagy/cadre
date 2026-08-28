@@ -15,7 +15,7 @@
     "evidence": { "type": "array", "minItems": 1, "items": { "type": "string" } },
     "recommendation": { "type": "string", "minLength": 1 },
     "control_mappings": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
-    "owner": { "type": "string", "minLength": 1 },
+    "owner": { "type": ["string", "null"], "minLength": 1 },
     "due_date": { "type": ["string", "null"], "format": "date" },
     "exception_reference": { "type": ["string", "null"] }
   }
