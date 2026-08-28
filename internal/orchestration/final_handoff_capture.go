@@ -58,9 +58,17 @@ var (
 	artifactKeys = map[string]bool{
 		"id": true, "kind": true, "revision": true, "digest": true, "uri": true,
 	}
+	// A superset of the consolidated run record's disposition vocabulary in
+	// .agents/skills/run-agent-orchestration/references/dispatch-contract.md,
+	// held that way by TestEnvelopeDispositionsCoverTheRunRecord. The two are
+	// separate artifacts, but an agent that has read the orchestration skill
+	// and is then asked for a final handoff will reach for the vocabulary it
+	// was given, and a value this map rejects discards the envelope silently.
+	// "complete" is envelope-only: it reports one agent's work finished, which
+	// is not something a whole run says about itself.
 	handoffDispositions = map[string]bool{
 		"complete": true, "approve": true, "request-changes": true,
-		"needs-information": true, "blocked": true,
+		"needs-information": true, "blocked": true, "plan-only": true,
 	}
 	// Mirrors every property of roster/shared/output-schemas/finding.schema.json,
 	// which is the contract roles are told to emit. The two are held in step by

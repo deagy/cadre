@@ -282,6 +282,14 @@ disposition: <approve|request-changes|needs-information|blocked|plan-only>
 next_safe_action: <action>
 ```
 
+This `disposition` describes the run, and is not the same field as the
+`disposition` inside a `cadre-final-handoff` envelope, which describes one
+agent's returned work. The envelope accepts every value listed here plus
+`complete`, so a value valid in a run record is never rejected at capture; the
+reverse does not hold, because a run does not report itself `complete`. The
+kernel's gate decisions are a third vocabulary again -- `approved`,
+`rejected`, `request-changes` -- and share none of this field's spellings.
+
 A `validation` entry that claims regression coverage carries the falsification
 evidence with it — the breaking change and the observed failing output, not just
 the passing run. A run record showing only green results cannot distinguish a
