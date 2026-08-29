@@ -11,6 +11,7 @@ import (
 
 	"github.com/deagy/cadre/cli/internal/engine/agents"
 	"github.com/deagy/cadre/cli/internal/engine/executor"
+	"github.com/deagy/cadre/cli/internal/engine/kernelfixture"
 	"github.com/deagy/cadre/cli/internal/engine/runtime"
 )
 
@@ -20,7 +21,7 @@ func testServer(t *testing.T) (http.Handler, string) {
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	kernelRoot := filepath.Dir(filepath.Dir(filepath.Dir(working)))
+	kernelRoot := kernelfixture.Root(t, filepath.Dir(filepath.Dir(filepath.Dir(working))))
 
 	// One store for the whole test, so a resume finds what a create left.
 	store := executor.NewMemoryCheckpointer()
@@ -179,7 +180,7 @@ func TestMissingTasksAndFieldsAreReported(t *testing.T) {
 // question would spend model calls and change what the next answer is.
 func TestStatusDoesNotStartAPlannedTask(t *testing.T) {
 	working, _ := os.Getwd()
-	kernelRoot := filepath.Dir(filepath.Dir(filepath.Dir(working)))
+	kernelRoot := kernelfixture.Root(t, filepath.Dir(filepath.Dir(filepath.Dir(working))))
 	root := t.TempDir()
 	store := executor.NewMemoryCheckpointer()
 

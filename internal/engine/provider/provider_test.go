@@ -1,9 +1,9 @@
 package provider
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -17,8 +17,7 @@ func repoRoot(t *testing.T) string {
 	return filepath.Dir(filepath.Dir(filepath.Dir(working)))
 }
 
-// The kernel version this engine checks providers against must be the kernel's
-// actual version.
+// KernelVersion must satisfy this repository's own provider bundle.
 //
 // It is a hand-kept constant because the engine may not link the kernel:
 // roster-side packages ask, they do not import. That arrangement drifted twice
@@ -28,21 +27,48 @@ func repoRoot(t *testing.T) string {
 // "incompatible with kernel 0.13.0". The provider was fine; the mirror was
 // stale.
 //
-// Reading the kernel's source as text is not importing it: no link, no
-// dependency, and the boundary test stays satisfied.
-func TestKernelVersionMatchesTheKernel(t *testing.T) {
-	source, err := os.ReadFile(filepath.Join(repoRoot(t), "internal", "kernel", "provider.go"))
+// That test read the kernel's source, which worked while the kernel lived in
+// this repository. It does not any more, and reading whatever kernel happens
+// to be installed would be worse: an older binary on one machine is an
+// environment fact, not a defect in this repository.
+//
+// So the constant is now a pin rather than a mirror -- this repository
+// declares which kernel it targets -- and the check is the one that actually
+// bit: a pin outside our own provider's compatibility window means the engine
+// refuses the bundle this repository ships. That needs no kernel present to
+// catch, which makes it stricter than what it replaces, not weaker.
+//
+// Whether the pinned version is a kernel that was ever released is a different
+// question, and belongs to whatever consumes the kernel's release feed.
+func TestTheKernelVersionPinSatisfiesOurOwnProvider(t *testing.T) {
+	manifestPath := filepath.Join(repoRoot(t), "provider", "provider.json")
+	raw, err := os.ReadFile(manifestPath)
 	if err != nil {
-		t.Fatalf("reading the kernel's source: %v", err)
+		t.Fatalf("reading %s: %v", manifestPath, err)
 	}
-	match := regexp.MustCompile(`(?m)^const Version = "([^"]+)"`).FindSubmatch(source)
-	if match == nil {
-		t.Fatal("could not find the kernel's Version constant; this guard read nothing")
+	var manifest struct {
+		KernelCompatibility struct {
+			Minimum          string `json:"minimum"`
+			MaximumExclusive string `json:"maximum_exclusive"`
+		} `json:"kernel_compatibility"`
 	}
-	if actual := string(match[1]); actual != KernelVersion {
-		t.Errorf("KernelVersion is %q but the kernel is %q.\n"+
-			"A provider whose kernel_compatibility excludes the stale value is refused, "+
-			"and the message blames the provider.", KernelVersion, actual)
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("parsing %s: %v", manifestPath, err)
+	}
+	if manifest.KernelCompatibility.Minimum == "" {
+		t.Fatalf("%s declares no kernel_compatibility window; this guard read nothing", manifestPath)
+	}
+
+	satisfied, err := VersionSatisfies(KernelVersion,
+		manifest.KernelCompatibility.Minimum, manifest.KernelCompatibility.MaximumExclusive)
+	if err != nil {
+		t.Fatalf("comparing the pin against %s: %v", manifestPath, err)
+	}
+	if !satisfied {
+		t.Errorf("KernelVersion is %q and %s declares [%s, %s) -- the engine would refuse "+
+			"the provider bundle this repository ships.",
+			KernelVersion, manifestPath,
+			manifest.KernelCompatibility.Minimum, manifest.KernelCompatibility.MaximumExclusive)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/deagy/cadre/cli/internal/engine/agents"
 	"github.com/deagy/cadre/cli/internal/engine/executor"
+	"github.com/deagy/cadre/cli/internal/engine/kernelfixture"
 )
 
 func kernelRoot(t *testing.T) string {
@@ -16,7 +17,7 @@ func kernelRoot(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	return filepath.Dir(filepath.Dir(filepath.Dir(working)))
+	return kernelfixture.Root(t, filepath.Dir(filepath.Dir(filepath.Dir(working))))
 }
 
 func planRequest(t *testing.T, root, taskID, text string) PlanRequest {

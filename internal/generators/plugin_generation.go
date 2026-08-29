@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/deagy/cadre/cli/internal/engine/provider"
 	"github.com/deagy/cadre/cli/internal/version"
 )
 
@@ -46,30 +47,29 @@ func readCLIVersion(repoRoot string) (string, error) {
 	return version.Resolve(repoRoot)
 }
 
-// readKernelVersion asks the kernel binary what version it is.
+// readKernelVersion reports the kernel release this repository targets.
 //
-// Shelled out rather than read from internal/kernel's constant: generators is
-// a roster-side package and may not link the kernel
-// (TestNoRosterSidePackageImportsTheKernel), and shelling out to the kernel
-// CLI is one of the two couplings that boundary permits. Parsing the constant
-// out of the source instead would be a second reader free to drift from what
-// the binary reports -- the shape of two separate release bugs.
+// It used to shell out to ./cmd/agentic-sdlc --version, on the reasoning that
+// parsing a constant instead would be a second reader free to drift from what
+// the binary reports. That reasoning held while the kernel was built here.
+// It is not, any more, and there is no in-tree binary left to drift from.
 //
-// The version is embedded in each lifecycle plugin's kernel shim, which
+// So the value is a pin rather than an observation: provider.KernelVersion
+// declares which kernel this repository targets, and
+// TestTheKernelVersionPinSatisfiesOurOwnProvider holds it inside the window
+// provider/provider.json declares. Reading it is not a boundary crossing --
+// engine/provider is roster-side, like generators.
+//
+// The version is embedded in each lifecycle plugin'"'"'s kernel shim, which
 // downloads exactly that release, so a wrong value here is a plugin that
-// fetches a kernel nobody published.
-func readKernelVersion(repoRoot string) (string, error) {
-	command := exec.Command("go", "run", "./cmd/agentic-sdlc", "--version")
-	command.Dir = repoRoot
-	out, err := command.Output()
-	if err != nil {
-		return "", fmt.Errorf("cannot ask the kernel its version (is this a checkout?): %w", err)
+// fetches a kernel nobody published. That risk moved rather than went away:
+// it used to be a stale binary, and it is now a pin naming an unreleased
+// version.
+func readKernelVersion(string) (string, error) {
+	if provider.KernelVersion == "" {
+		return "", fmt.Errorf("no kernel version is pinned")
 	}
-	reported := strings.TrimSpace(string(out))
-	if reported == "" {
-		return "", fmt.Errorf("the kernel reported no version")
-	}
-	return reported, nil
+	return provider.KernelVersion, nil
 }
 
 // providerBundle is the set of provider/ members copied verbatim into the
