@@ -39,7 +39,7 @@ func kernelContractsSource(t *testing.T) (string, bool) {
 	}
 	repo := filepath.Dir(root)
 	for _, candidate := range []string{
-		filepath.Join(filepath.Dir(repo), "cadre-lifecycle", "kernel", "contracts"),
+		filepath.Join(filepath.Dir(repo), "cadre-kernel", "kernel", "contracts"),
 		filepath.Join(repo, "kernel", "contracts"),
 	} {
 		if info, err := os.Stat(candidate); err == nil && info.IsDir() {

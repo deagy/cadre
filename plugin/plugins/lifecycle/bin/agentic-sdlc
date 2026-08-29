@@ -53,7 +53,7 @@ else
   ARCHIVE="agentic-sdlc-v$AGENTIC_SDLC_VERSION-$GOOS-$GOARCH.tar.gz"
   MEMBER="agentic-sdlc"
 fi
-BASE="https://github.com/deagy/cadre/releases/download/kernel-v$AGENTIC_SDLC_VERSION"
+BASE="https://github.com/deagy/cadre-kernel/releases/download/v$AGENTIC_SDLC_VERSION"
 
 TEMP_DIR=$(mktemp -d) || exit 1
 trap 'rm -rf "$TEMP_DIR"' EXIT

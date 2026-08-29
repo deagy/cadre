@@ -201,6 +201,15 @@ const sharedOverrideNote = "The shared policy content above is this package's gl
 // kernel that no longer exists here. The shim fetches the Go kernel from its
 // own release instead.
 //
+// That release moved. The kernel left this repository, so the shim points at
+// deagy/cadre-kernel's v* tags rather than this repository's kernel-v ones,
+// which will never be published again. The archive names are unchanged, since
+// the shim resolves them by name. This repository's kernel-v tags remain
+// resolvable for anything already pinned to one, and are snapshots of a kernel
+// that is no longer built here -- the same trap the paragraph above describes,
+// which is why the pin in provider.KernelVersion should track a version
+// cadre-kernel has actually released.
+//
 // Downloading rather than shipping the binary, unlike the workspace guard.
 // The guard fails OPEN, so a failed fetch removes protection silently and
 // shipping it was the only safe answer. A missing kernel fails LOUD -- every
@@ -271,7 +280,7 @@ func agenticSDLCShim(kernelVersion string) string {
 		`  ARCHIVE="agentic-sdlc-v$AGENTIC_SDLC_VERSION-$GOOS-$GOARCH.tar.gz"`,
 		`  MEMBER="agentic-sdlc"`,
 		"fi",
-		`BASE="https://github.com/deagy/cadre/releases/download/kernel-v$AGENTIC_SDLC_VERSION"`,
+		`BASE="https://github.com/deagy/cadre-kernel/releases/download/v$AGENTIC_SDLC_VERSION"`,
 		"",
 		`TEMP_DIR=$(mktemp -d) || exit 1`,
 		`trap 'rm -rf "$TEMP_DIR"' EXIT`,
