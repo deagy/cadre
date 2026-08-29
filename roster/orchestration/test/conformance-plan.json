@@ -1,0 +1,277 @@
+{
+  "_comment": "A complete, schema-valid dispatch plan, frozen as the conformance oracle for any producer claiming to emit this contract. select_golden.json pins plan SHAPE and deliberately strips dispatch_fingerprint and generated_at, which are two of selection.schema.json's required fields -- so a producer can match every golden case and still emit plans this schema rejects. This file closes that gap. Regenerate with `cadre select` and re-strip task_id and provenance, which carry machine-local identity.",
+  "plan": {
+    "agents": {
+      "primary": [
+        "backend-engineer",
+        "go-service-implementer"
+      ],
+      "reviewers": [
+        "test-engineer",
+        "code-reviewer"
+      ],
+      "support": []
+    },
+    "context_packs": [],
+    "dispatch_disposition": {
+      "reason": "A primary and/or reviewer role was selected and can be dispatched as an accountable executor or independent reviewer.",
+      "status": "staffed"
+    },
+    "dispatch_fingerprint": "sha256:91d3754e57fc0929a3ff0da6832006da8df0a9aa0efc10cf3afa05eba321b840",
+    "generated_at": "2026-08-29T20:44:01.976Z",
+    "human_gates": [],
+    "ignored_quality_gates": [],
+    "inputs": {
+      "base": null,
+      "changed_file_source": "explicit",
+      "changed_files": [
+        "internal/api/handler.go"
+      ],
+      "classification": "internal",
+      "repository_root": "/home/deagy/sdk/cadre",
+      "source_filter": [
+        "deagy/cadre",
+        "proposed-knowledge"
+      ],
+      "task": "add a new HTTP handler to the go service"
+    },
+    "knowledge_context": {
+      "classification": "internal",
+      "requests": [
+        {
+          "agent": "backend-engineer",
+          "invocation": {
+            "args": [
+              "/home/deagy/sdk/cadre/bin/cadre",
+              "knowledge",
+              "search",
+              "--agent",
+              "backend-engineer",
+              "--task-id",
+              "local-89cfb0eff99c",
+              "--classification",
+              "internal",
+              "--top",
+              "5",
+              "--json",
+              "--source",
+              "deagy/cadre",
+              "--source",
+              "proposed-knowledge",
+              "Task: add a new HTTP handler to the go service. Retrieve backend service patterns, datastore decisions, schemas, migrations, APIs, operational lessons, and approved Go or PostgreSQL conventions."
+            ],
+            "launcher": {
+              "minimum_version": "0.5.0",
+              "resolution": "platform-anchored",
+              "runtime": "cadre"
+            }
+          },
+          "query": "Task: add a new HTTP handler to the go service. Retrieve backend service patterns, datastore decisions, schemas, migrations, APIs, operational lessons, and approved Go or PostgreSQL conventions."
+        },
+        {
+          "agent": "go-service-implementer",
+          "invocation": {
+            "args": [
+              "/home/deagy/sdk/cadre/bin/cadre",
+              "knowledge",
+              "search",
+              "--agent",
+              "go-service-implementer",
+              "--task-id",
+              "local-89cfb0eff99c",
+              "--classification",
+              "internal",
+              "--top",
+              "5",
+              "--json",
+              "--source",
+              "deagy/cadre",
+              "--source",
+              "proposed-knowledge",
+              "Task: add a new HTTP handler to the go service. Retrieve Go service patterns, safe concurrency, interfaces, tests, and approved library conventions."
+            ],
+            "launcher": {
+              "minimum_version": "0.5.0",
+              "resolution": "platform-anchored",
+              "runtime": "cadre"
+            }
+          },
+          "query": "Task: add a new HTTP handler to the go service. Retrieve Go service patterns, safe concurrency, interfaces, tests, and approved library conventions."
+        },
+        {
+          "agent": "test-engineer",
+          "invocation": {
+            "args": [
+              "/home/deagy/sdk/cadre/bin/cadre",
+              "knowledge",
+              "search",
+              "--agent",
+              "test-engineer",
+              "--task-id",
+              "local-89cfb0eff99c",
+              "--classification",
+              "internal",
+              "--top",
+              "5",
+              "--json",
+              "--source",
+              "deagy/cadre",
+              "--source",
+              "proposed-knowledge",
+              "Task: add a new HTTP handler to the go service. Retrieve Gherkin scenarios, regressions, failure cases, and quality history."
+            ],
+            "launcher": {
+              "minimum_version": "0.5.0",
+              "resolution": "platform-anchored",
+              "runtime": "cadre"
+            }
+          },
+          "query": "Task: add a new HTTP handler to the go service. Retrieve Gherkin scenarios, regressions, failure cases, and quality history."
+        },
+        {
+          "agent": "code-reviewer",
+          "invocation": {
+            "args": [
+              "/home/deagy/sdk/cadre/bin/cadre",
+              "knowledge",
+              "search",
+              "--agent",
+              "code-reviewer",
+              "--task-id",
+              "local-89cfb0eff99c",
+              "--classification",
+              "internal",
+              "--top",
+              "5",
+              "--json",
+              "--source",
+              "deagy/cadre",
+              "--source",
+              "proposed-knowledge",
+              "Task: add a new HTTP handler to the go service. Retrieve prior defects, coding conventions, exceptions, and relevant findings."
+            ],
+            "launcher": {
+              "minimum_version": "0.5.0",
+              "resolution": "platform-anchored",
+              "runtime": "cadre"
+            }
+          },
+          "query": "Task: add a new HTTP handler to the go service. Retrieve prior defects, coding conventions, exceptions, and relevant findings."
+        }
+      ],
+      "source_filter": [
+        "deagy/cadre",
+        "proposed-knowledge"
+      ],
+      "status": "planned"
+    },
+    "lifecycle_tracking": {
+      "status": "integrated"
+    },
+    "matched_risks": [],
+    "matched_routes": [
+      {
+        "id": "backend",
+        "reasons": {
+          "keyword_groups": [],
+          "keywords": [],
+          "paths": [
+            {
+              "file": "internal/api/handler.go",
+              "pattern": "**/*.go"
+            }
+          ]
+        }
+      },
+      {
+        "id": "go-service-execution",
+        "reasons": {
+          "keyword_groups": [
+            [
+              "go service"
+            ],
+            [
+              "add"
+            ]
+          ],
+          "keywords": [],
+          "paths": [
+            {
+              "file": "internal/api/handler.go",
+              "pattern": "**/*.go"
+            }
+          ]
+        }
+      }
+    ],
+    "required_quality_gates": [
+      {
+        "contributing_routes": [
+          "lifecycle-sequence"
+        ],
+        "id": "G1",
+        "reason": "Required by the standalone lifecycle gate sequence.",
+        "required": true
+      },
+      {
+        "contributing_routes": [
+          "lifecycle-sequence"
+        ],
+        "id": "G2",
+        "reason": "Required by the standalone lifecycle gate sequence.",
+        "required": true
+      },
+      {
+        "contributing_routes": [
+          "backend",
+          "go-service-execution"
+        ],
+        "id": "G3",
+        "reason": "Architecture lifecycle gate (architecture phase).",
+        "required": true
+      },
+      {
+        "contributing_routes": [
+          "backend",
+          "go-service-execution"
+        ],
+        "id": "G4",
+        "reason": "Governance and Data lifecycle gate (governance-data phase).",
+        "required": true
+      },
+      {
+        "contributing_routes": [
+          "backend",
+          "go-service-execution"
+        ],
+        "id": "G5",
+        "reason": "Security and Crypto lifecycle gate (security-crypto phase).",
+        "required": true
+      },
+      {
+        "contributing_routes": [
+          "backend",
+          "go-service-execution"
+        ],
+        "id": "G6",
+        "reason": "Verification and Test lifecycle gate (verify phase).",
+        "required": true
+      },
+      {
+        "contributing_routes": [
+          "backend",
+          "go-service-execution"
+        ],
+        "id": "G7",
+        "reason": "Evidence lifecycle gate (evidence phase).",
+        "required": true
+      }
+    ],
+    "schema_version": 8,
+    "status": "ready",
+    "task_id": "conformance-fixture",
+    "teams": [],
+    "workflow": "new-service"
+  },
+  "schema_version_at_capture": 8
+}
