@@ -150,7 +150,7 @@ func sortedFields(from map[string]any) []string {
 // calls it something else is wrong in a way nothing else here would notice.
 func TestGateNamesAndPhasesMatchTheContract(t *testing.T) {
 	gates, err := contracts.LoadLifecycleGates(
-		filepath.Join(repoRoot(t), "kernel", "contracts", "lifecycle-gates.json"))
+		filepath.Join(repoRoot(t), "kernel-contracts", "lifecycle-gates.json"))
 	if err != nil {
 		t.Fatalf("loading the lifecycle contract: %v", err)
 	}

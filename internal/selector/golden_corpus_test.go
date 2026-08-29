@@ -357,7 +357,7 @@ func TestEveryCorpusFixtureNamesWhatItPins(t *testing.T) {
 
 func loadLifecycleContract(t *testing.T) *LifecycleContract {
 	t.Helper()
-	path := filepath.Join(selectorRepoRoot(t), "kernel", "contracts", "lifecycle-gates.json")
+	path := filepath.Join(selectorRepoRoot(t), "kernel-contracts", "lifecycle-gates.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("reading the lifecycle contract: %v", err)

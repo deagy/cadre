@@ -162,7 +162,7 @@ func TestEveryMappedKernelGateStillExistsInTheContract(t *testing.T) {
 	// The contract is read as data, which is one of exactly two couplings the
 	// kernel boundary permits; importing internal/kernel here would be the
 	// other kind.
-	raw, err := os.ReadFile(filepath.Join(selectorRepoRoot(t), "kernel", "contracts",
+	raw, err := os.ReadFile(filepath.Join(selectorRepoRoot(t), "kernel-contracts",
 		"mutation-gates.json"))
 	if err != nil {
 		t.Fatalf("reading the mutation-gates contract: %v", err)

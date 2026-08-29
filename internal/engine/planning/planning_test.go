@@ -18,7 +18,7 @@ func fixtures(t *testing.T) ([]contracts.Gate, []contracts.Route) {
 	}
 	root := filepath.Dir(filepath.Dir(filepath.Dir(working)))
 
-	gates, err := contracts.LoadLifecycleGates(filepath.Join(root, "kernel", "contracts", "lifecycle-gates.json"))
+	gates, err := contracts.LoadLifecycleGates(filepath.Join(root, "kernel-contracts", "lifecycle-gates.json"))
 	if err != nil {
 		t.Fatalf("lifecycle gates: %v", err)
 	}

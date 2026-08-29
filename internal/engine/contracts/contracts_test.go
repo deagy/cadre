@@ -27,7 +27,7 @@ func repoRoot(t *testing.T) string {
 func TestTheRealContractsLoad(t *testing.T) {
 	root := repoRoot(t)
 
-	gates, err := LoadLifecycleGates(filepath.Join(root, "kernel", "contracts", "lifecycle-gates.json"))
+	gates, err := LoadLifecycleGates(filepath.Join(root, "kernel-contracts", "lifecycle-gates.json"))
 	if err != nil {
 		t.Fatalf("lifecycle gates: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestTheRealContractsLoad(t *testing.T) {
 // empty dispatch rather than an error.
 func TestTheGenericProfileBindsEveryGateItClaimsTo(t *testing.T) {
 	root := repoRoot(t)
-	gates, err := LoadLifecycleGates(filepath.Join(root, "kernel", "contracts", "lifecycle-gates.json"))
+	gates, err := LoadLifecycleGates(filepath.Join(root, "kernel-contracts", "lifecycle-gates.json"))
 	if err != nil {
 		t.Fatalf("lifecycle gates: %v", err)
 	}
@@ -261,7 +261,7 @@ func TestShippedMutationPhrasesAreLowercase(t *testing.T) {
 // consumes the field was ported.
 func TestGateModelsEveryKeyTheContractUses(t *testing.T) {
 	root := repoRoot(t)
-	contents, err := os.ReadFile(filepath.Join(root, "kernel", "contracts", "lifecycle-gates.json"))
+	contents, err := os.ReadFile(filepath.Join(root, "kernel-contracts", "lifecycle-gates.json"))
 	if err != nil {
 		t.Fatalf("reading the lifecycle contract: %v", err)
 	}

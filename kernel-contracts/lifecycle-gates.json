@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "gates": [
+    {"id": "G1", "name": "Intent", "phase": "intent", "prerequisites": [], "required_contributions": ["intent"], "authority_requirements": ["product_owner"]},
+    {"id": "G2", "name": "Requirements Baseline", "phase": "requirements", "prerequisites": ["G1"], "required_contributions": ["requirements"], "authority_requirements": ["product_owner", "engineering_lead"]},
+    {"id": "G3", "name": "Architecture", "phase": "architecture", "prerequisites": ["G2"], "required_contributions": ["architecture-design"], "authority_requirements": ["system_architect"]},
+    {"id": "G4", "name": "Governance and Data", "phase": "governance-data", "prerequisites": ["G3"], "required_contributions": ["governance-data"], "authority_requirements": ["governance_lead", "data_control_owner"]},
+    {"id": "G5", "name": "Security and Crypto", "phase": "security-crypto", "prerequisites": ["G4"], "required_contributions": ["security-crypto"], "authority_requirements": ["security_lead", "human_key_owner"]},
+    {"id": "G6", "name": "Verification and Test", "phase": "verify", "prerequisites": ["G5"], "required_contributions": ["verification"], "authority_requirements": ["engineering_lead", "uat_product_owner"]},
+    {"id": "G7", "name": "Evidence", "phase": "evidence", "prerequisites": ["G6"], "required_contributions": ["evidence"], "authority_requirements": ["release_owner"]},
+    {"id": "G8", "name": "Release Readiness", "phase": "release-readiness", "prerequisites": ["G7"], "required_contributions": ["release-readiness"], "authority_requirements": ["release_owner"]},
+    {"id": "G9", "name": "Deployment Authorization", "phase": "deployment-authorization", "prerequisites": ["G8"], "required_contributions": ["deployment-authorization"], "authority_requirements": ["release_authority"], "human_only": true},
+    {"id": "G10", "name": "Runtime Conformance", "phase": "runtime-conformance", "prerequisites": ["G9"], "required_contributions": ["runtime-conformance"], "authority_requirements": ["service_owner", "implicated_security_lead", "implicated_governance_lead"]}
+  ],
+  "rules": {
+    "approval_default": "pending",
+    "unknown_blocks": true,
+    "author_cannot_review_or_approve_same_revision": true,
+    "material_change_invalidates_downstream": true
+  }
+}
