@@ -23,7 +23,7 @@ import (
 // must not be skipped. A drift guard that silently checks nothing is worse
 // than no guard: it reports green while the copies diverge, which is the exact
 // failure the vendoring introduces.
-var vendoredContracts = []string{"lifecycle-gates.json", "mutation-gates.json"}
+var vendoredContracts = []string{"lifecycle-gates.json", "mutation-gates.json", "run-record.schema.json"}
 
 // kernelContractsSource resolves the kernel's own copy. KERNEL_CONTRACTS_DIR
 // overrides; otherwise a sibling cadre-lifecycle checkout is tried, then this

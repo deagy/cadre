@@ -17,7 +17,7 @@ func schemaPath(t *testing.T) string {
 		t.Fatalf("getwd: %v", err)
 	}
 	root := filepath.Dir(filepath.Dir(filepath.Dir(working)))
-	return filepath.Join(root, "kernel", "contracts", "run-record.schema.json")
+	return filepath.Join(root, "kernel-contracts", "run-record.schema.json")
 }
 
 func gateSchema(t *testing.T) (properties map[string]any, required []string) {

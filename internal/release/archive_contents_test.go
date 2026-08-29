@@ -54,16 +54,6 @@ func TestReleaseWorkflowArchivesTheContractExecutableName(t *testing.T) {
 	}
 }
 
-// The kernel's own archive step is checked the same way, so the program that
-// was already correct cannot quietly stop being correct.
-func TestKernelWorkflowArchivesTheContractExecutableName(t *testing.T) {
-	workflow := readWorkflow(t)
-	name := ExecutableNameFor(ProgramKernel, "linux")
-	if !strings.Contains(workflow, `binary="`+ProgramKernel+`$suffix"`) {
-		t.Errorf("the kernel leg no longer builds to %q; ExecutableNameFor says its archive contains that", name)
-	}
-}
-
 func readWorkflow(t *testing.T) string {
 	t.Helper()
 	// internal/release -> repo root

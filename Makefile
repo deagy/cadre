@@ -16,25 +16,19 @@
 
 build:
 	go build -tags sqlite_fts5 -o dist/cadre ./cmd/cadre
-	go build -o dist/agentic-sdlc ./cmd/agentic-sdlc
 
-# agentic-sdlc is built here too. It used to be deliberately absent, on the
-# reasoning that it "implements one subcommand so far (show-contract)" and
-# publishing a kernel answering a tenth of the CLI would be worse than
-# publishing none. That comment named its own expiry -- "it joins the release
-# matrix when the port is complete" -- and the port is: the Go kernel
-# dispatches about thirty subcommands and Phase 5 is marked complete.
+# The lifecycle kernel is no longer built here. It moved to its own
+# repository, which owns kernel.Version, ships its own release matrix, and
+# needs no cgo -- two dependencies, none of them a C library.
 #
-# Leaving it unpublished had a consequence beyond tidiness. An installed
-# lifecycle plugin can only reach a kernel through $AGENTIC_SDLC_BIN, a venv
-# bootstrap_sdlc.py created, or PATH -- so with no published Go binary it
-# installs the pre-#317 *Python* kernel from an old tag, which is a kernel
-# this repository deleted. See REMAINING_PYTHON_SCOPE.md.
+# Consumers reach it the way they always could: $AGENTIC_SDLC_BIN, or a kernel
+# on PATH, or the download shim internal/generators/plugin_generation.go
+# emits. Nothing about that resolution changed when the source left; it only
+# stopped being a thing this repository could also satisfy by accident.
 #
-# Separately archived rather than added to the CLI's archive: the kernel is
-# separately versioned (kernel.Version, what providers declare compatibility
-# against), and one archive carrying both would force the two version lines
-# back together.
+# The engine's targets stay. cmd/agentic-sdlc-engine drives a task through
+# G1-G10 and is classed roster-side by design; whether it follows the kernel
+# is a separate decision.
 
 # Race requires cgo; CI and local dev are expected to have a C toolchain
 # available. If not, fall back to `go test ./...` (no -race) rather than
@@ -120,11 +114,6 @@ cross-build:
 	CGO_ENABLED=1 GOOS=linux   GOARCH=amd64 go build -o dist/agentic-sdlc-engine-linux-amd64       ./cmd/agentic-sdlc-engine
 	CGO_ENABLED=1 GOOS=darwin  GOARCH=arm64 go build -o dist/agentic-sdlc-engine-darwin-arm64      ./cmd/agentic-sdlc-engine
 	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o dist/agentic-sdlc-engine-windows-amd64.exe ./cmd/agentic-sdlc-engine
-	CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -o dist/agentic-sdlc-linux-amd64       ./cmd/agentic-sdlc
-	CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -o dist/agentic-sdlc-linux-arm64       ./cmd/agentic-sdlc
-	CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -o dist/agentic-sdlc-darwin-amd64      ./cmd/agentic-sdlc
-	CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -o dist/agentic-sdlc-darwin-arm64      ./cmd/agentic-sdlc
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o dist/agentic-sdlc-windows-amd64.exe ./cmd/agentic-sdlc
 
 # --- pip/pipx distribution -------------------------------------------------
 #

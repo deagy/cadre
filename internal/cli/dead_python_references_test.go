@@ -57,7 +57,6 @@ var operationalDocs = []string{
 	"docs/terminology.md",
 	"docs/which-runner-am-i-in.md",
 	"internal/knowledge/README.md",
-	"kernel/README.md",
 	"roster/RUNBOOK.md",
 	"roster/catalog.yaml",
 	"roster/context-store/README.md",

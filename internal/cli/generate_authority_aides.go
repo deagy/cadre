@@ -56,7 +56,7 @@ func GenerateAuthorityAides(args []string) int {
 		fmt.Fprintf(os.Stderr, "cadre: %v\n", err)
 		return 1
 	}
-	contractPath := filepath.Join(repoRoot, "kernel", "contracts", "lifecycle-gates.json")
+	contractPath := filepath.Join(repoRoot, "kernel-contracts", "lifecycle-gates.json")
 	if err := generators.ValidateAideGatesAgainstContract(aides, contractPath); err != nil {
 		fmt.Fprintf(os.Stderr, "cadre: %s: %v\n", aidesPath, err)
 		return 1

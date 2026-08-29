@@ -318,22 +318,6 @@ func TestCrossBuildCoversEveryPublishedProgramOnEveryPlatform(t *testing.T) {
 	}
 }
 
-func TestTheKernelBuildsWithoutCgo(t *testing.T) {
-	// The CLI legs force CGO_ENABLED=1 because the knowledge store needs it.
-	// The kernel does not, and forcing it there would make the kernel
-	// unbuildable on any machine without a cross toolchain -- including the
-	// one that would otherwise be able to produce every kernel asset locally.
-	for _, line := range strings.Split(crossBuildRecipe(t), "\n") {
-		if !buildsProgram(line, ProgramKernel) {
-			continue
-		}
-		if !strings.Contains(line, "CGO_ENABLED=0") {
-			t.Errorf("a kernel cross-build leg does not set CGO_ENABLED=0:\n  %s",
-				strings.TrimSpace(line))
-		}
-	}
-}
-
 // The release workflow has to publish what the contract says it publishes,
 // and its wiring has to resolve.
 //
@@ -507,18 +491,6 @@ func currentVersionOf(t *testing.T, root, program string) (string, bool) {
 			return "", false
 		}
 		return strings.TrimSpace(string(contents)), true
-	case ProgramKernel:
-		// Asked of the binary, matching the workflow. Building it is slower
-		// than parsing the constant and is the point: a guard that read the
-		// source could pass while the binary reported something else.
-		command := exec.Command("go", "run", "./cmd/agentic-sdlc", "--version")
-		command.Dir = root
-		out, err := command.Output()
-		if err != nil {
-			t.Logf("cannot ask the kernel its version: %v", err)
-			return "", false
-		}
-		return strings.TrimSpace(string(out)), true
 	}
 	t.Errorf("no way to read %s's version; add one when adding a program", program)
 	return "", false
@@ -581,23 +553,28 @@ func buildsProgram(line, program string) bool {
 // "./cmd/agentic-sdlc" is a prefix of "./cmd/agentic-sdlc-engine", so a
 // substring match read every engine build line as a kernel line -- and applied
 // the kernel's no-cgo rule to a program that fails at runtime without cgo.
-// Found by adding the engine; kept because the next program to be added may
-// extend a name too.
+// Found by adding the engine.
+//
+// Kept after the kernel left this repository, with its own name as a literal
+// rather than a constant. The bug was never about the kernel: it is what a
+// substring match does to any two programs where one name extends the other,
+// and the next such pair will not announce itself.
 func TestBuildsProgramDoesNotMatchAPrefix(t *testing.T) {
+	const departed = "agentic-sdlc" // the kernel's name, kept as the worked example
 	engineLine := "\tCGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o dist/x ./cmd/agentic-sdlc-engine"
-	kernelLine := "\tCGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/y ./cmd/agentic-sdlc"
+	extendedLine := "\tCGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/y ./cmd/" + departed
 
-	if buildsProgram(engineLine, ProgramKernel) {
-		t.Error("an engine build line was read as a kernel line")
+	if buildsProgram(engineLine, departed) {
+		t.Error("a line building the longer name was read as building the shorter one")
 	}
 	if !buildsProgram(engineLine, ProgramEngine) {
 		t.Error("an engine build line was not recognised as one")
 	}
-	if !buildsProgram(kernelLine, ProgramKernel) {
-		t.Error("a kernel build line was not recognised as one")
+	if !buildsProgram(extendedLine, departed) {
+		t.Error("a line building the shorter name was not recognised as one")
 	}
-	if buildsProgram(kernelLine, ProgramEngine) {
-		t.Error("a kernel build line was read as an engine line")
+	if buildsProgram(extendedLine, ProgramEngine) {
+		t.Error("a line building the shorter name was read as building the longer one")
 	}
 }
 

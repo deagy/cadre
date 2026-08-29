@@ -59,14 +59,13 @@ func ExecutableName(goos string) string {
 
 // Programs are the binaries this repository publishes per platform.
 //
-// The kernel is a separate program, not a second executable inside the CLI's
-// archive, because it is separately versioned: providers declare a
-// kernel_compatibility window against kernel.Version, which moves
-// independently of the CLI's own version. One archive carrying both would
-// force the two version lines back together.
+// The lifecycle kernel used to be here as a third program, published under its
+// own tag line because it versions independently. It now lives in its own
+// repository and releases from there, so this repository neither builds nor
+// publishes it, and a consumer resolves it through $AGENTIC_SDLC_BIN, PATH, or
+// the download shim internal/generators/plugin_generation.go emits.
 const (
-	ProgramCLI    = "cadre"
-	ProgramKernel = "agentic-sdlc"
+	ProgramCLI = "cadre"
 	// ProgramEngine drives a task through the lifecycle gates. It ships in
 	// the CLI's release rather than its own: it links the same sqlite
 	// checkpointer, so it needs cgo and a native host per platform, which is
@@ -75,7 +74,7 @@ const (
 )
 
 // Programs is every published program, in the order a release builds them.
-var Programs = []string{ProgramCLI, ProgramKernel, ProgramEngine}
+var Programs = []string{ProgramCLI, ProgramEngine}
 
 // TagPrefix is the release-tag namespace each program publishes under.
 //
@@ -84,8 +83,7 @@ var Programs = []string{ProgramCLI, ProgramKernel, ProgramEngine}
 // under plugin-v, and both come out of the same repository. Recorded here so
 // the workflow and the guards read one list rather than two.
 var TagPrefix = map[string]string{
-	ProgramCLI:    "cli-v",
-	ProgramKernel: "kernel-v",
+	ProgramCLI: "cli-v",
 	// The engine shares the CLI's tag because it ships in the same release:
 	// one archive set, one version, one thing to install.
 	ProgramEngine: "cli-v",

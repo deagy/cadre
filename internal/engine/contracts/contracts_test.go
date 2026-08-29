@@ -43,7 +43,7 @@ func TestTheRealContractsLoad(t *testing.T) {
 		}
 	}
 
-	mutation, err := LoadMutationGates(filepath.Join(root, "kernel", "contracts", "mutation-gates.json"))
+	mutation, err := LoadMutationGates(filepath.Join(root, "kernel-contracts", "mutation-gates.json"))
 	if err != nil {
 		t.Fatalf("mutation gates: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestMutationGateGuardMatchesAnUppercasePhrase(t *testing.T) {
 // future reader is not relying on the fix above without knowing it.
 func TestShippedMutationPhrasesAreLowercase(t *testing.T) {
 	root := repoRoot(t)
-	gates, err := LoadMutationGates(filepath.Join(root, "kernel", "contracts", "mutation-gates.json"))
+	gates, err := LoadMutationGates(filepath.Join(root, "kernel-contracts", "mutation-gates.json"))
 	if err != nil {
 		t.Fatalf("mutation gates: %v", err)
 	}

@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -40,17 +39,6 @@ import (
 // disappearing counts as a change.
 const unreadableMarker = "<unreadable>"
 
-// kernelVersionFile declares kernel.Version, the version providers declare
-// compatibility against. It moves independently of the CLI's own version, so
-// the kernel is a separate releasable component rather than riding the CLI's.
-const kernelVersionFile = "internal/kernel/provider.go"
-
-// kernelVersionLiteral reads that constant. A literal in Go source rather than
-// a marker file is unusual to watch, but the alternative -- deriving the
-// version at runtime -- was rejected deliberately, so the source is where it
-// lives and this is where the release gate has to look.
-var kernelVersionLiteral = regexp.MustCompile(`(?m)^const Version = "([^"]+)"`)
-
 // releaseComponent is one independently-versioned, independently-published
 // thing, and the paths whose version decides whether it ships.
 type releaseComponent struct {
@@ -79,11 +67,11 @@ func releaseComponents(repoRoot string) []releaseComponent {
 	return []releaseComponent{
 		{name: "plugin", paths: manifests},
 		{name: "cli", paths: version.VersionMarkerNames, anyOf: true},
-		// The kernel's version is a Go constant rather than a marker file,
-		// because reading it at runtime would make it depend on a checkout
-		// being present. So this watches the file that declares it and lets
-		// the literal-extracting reader below pull the value out.
-		{name: "kernel", paths: []string{kernelVersionFile}},
+		// The lifecycle kernel used to be a third component here, watched
+		// through the Go constant that declares its version. It releases from
+		// its own repository now, so this repository has nothing to watch: a
+		// component whose paths do not exist reads as unchanged at both ends
+		// of a comparison and would never be released.
 	}
 }
 
@@ -98,14 +86,6 @@ func markerVersionAt(repoRoot, ref, path string) *string {
 	output, err := command.Output()
 	if err != nil {
 		return nil // not present at that ref
-	}
-	if path == kernelVersionFile {
-		if found := kernelVersionLiteral.FindSubmatch(output); found != nil {
-			value := string(found[1])
-			return &value
-		}
-		unreadable := unreadableMarker
-		return &unreadable
 	}
 	if strings.HasSuffix(path, ".json") {
 		var manifest struct {

@@ -55,7 +55,7 @@ func runRecordSchema(t *testing.T) *jsonschema.Schema {
 		t.Fatalf("getwd: %v", err)
 	}
 	root := filepath.Dir(filepath.Dir(filepath.Dir(working)))
-	schema, err := jsonschema.Compile(filepath.Join(root, "kernel", "contracts", "run-record.schema.json"))
+	schema, err := jsonschema.Compile(filepath.Join(root, "kernel-contracts", "run-record.schema.json"))
 	if err != nil {
 		t.Fatalf("compiling the run-record schema: %v", err)
 	}

@@ -141,7 +141,7 @@ func TestTheShippedAidesAgreeWithTheShippedContract(t *testing.T) {
 		t.Fatal("no aide cites a gate; this test would prove nothing")
 	}
 
-	contract := filepath.Join(root, "kernel", "contracts", "lifecycle-gates.json")
+	contract := filepath.Join(root, "kernel-contracts", "lifecycle-gates.json")
 	if _, err := os.Stat(contract); err != nil {
 		t.Skipf("no in-tree lifecycle contract: %v", err)
 	}
