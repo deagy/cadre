@@ -1,0 +1,81 @@
+{
+  "_comment": "Frozen agreement between the selector's and the kernel's dispatch fingerprint. Both plans must produce expected_fingerprint on every implementation that claims compatibility. Regenerate only where both implementations are importable together.",
+  "generated_from": "cadre internal/selector + internal/kernel",
+  "plan": {
+    "agents": {
+      "primary": [
+        "backend-engineer"
+      ],
+      "reviewers": [
+        "code-reviewer"
+      ]
+    },
+    "counts": {
+      "agents": 2,
+      "gates": 1
+    },
+    "dispatch_fingerprint": "sha256:stale",
+    "escaping": "a \u003cb\u003e \u0026 cé 🚀",
+    "generated_at": "2026-08-15T09:00:00+00:00",
+    "inputs": {
+      "changed_files": [
+        "a.go",
+        "b.tsx"
+      ],
+      "classification": "internal",
+      "task": "add an endpoint"
+    },
+    "provenance": {
+      "changed_files": [
+        "internal/kernel/validate.go",
+        "roster/catalog.yaml"
+      ],
+      "working_tree": "dirty"
+    },
+    "required_quality_gates": [
+      {
+        "id": "G1",
+        "name": "Intent"
+      }
+    ],
+    "schema_version": 1,
+    "task_id": "TASK-42"
+  },
+  "plan_with_excluded_keys_changed": {
+    "agents": {
+      "primary": [
+        "backend-engineer"
+      ],
+      "reviewers": [
+        "code-reviewer"
+      ]
+    },
+    "counts": {
+      "agents": 2,
+      "gates": 1
+    },
+    "dispatch_fingerprint": "sha256:something-else",
+    "escaping": "a \u003cb\u003e \u0026 cé 🚀",
+    "generated_at": "2027-01-01T00:00:00+00:00",
+    "inputs": {
+      "changed_files": [
+        "a.go",
+        "b.tsx"
+      ],
+      "classification": "internal",
+      "task": "add an endpoint"
+    },
+    "provenance": {
+      "working_tree": "clean"
+    },
+    "required_quality_gates": [
+      {
+        "id": "G1",
+        "name": "Intent"
+      }
+    ],
+    "schema_version": 1,
+    "task_id": "TASK-42"
+  },
+  "expected_fingerprint": "sha256:924ca52daf6ca36e23b7b9fd6345361b517baae02883a7ea5c0d16d103ef7f6f"
+}
