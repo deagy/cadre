@@ -113,6 +113,23 @@ func TestOurProviderBundleAcceptsTheKernelWeDependOn(t *testing.T) {
 
 	minimum := semver(t, manifest.KernelCompatibility.Minimum)
 	maximum := semver(t, manifest.KernelCompatibility.MaximumExclusive)
+	// Say which binary answered, and at what version.
+	//
+	// A verifier found this test passing while checking the wrong artifact: with
+	// AGENTIC_SDLC_BIN unset it resolved a pipx-installed legacy CLI on PATH
+	// reporting 0.13.2, not a build of the kernel this repository pins at 0.14.2.
+	// It passed only because 0.13.2 sits exactly on the window's inclusive
+	// minimum, so a green run said nothing about the kernel the repository
+	// actually depends on.
+	//
+	// The check is still the right one -- "would a consumer's installed kernel
+	// accept this bundle" is a question about what is installed. What was wrong
+	// is that a passing run was illegible. Logging the path and version makes a
+	// pass state what it checked, so a stale binary shadowing the name on PATH
+	// is visible rather than silent. The pin itself is covered separately and
+	// without a binary, by TestTheKernelVersionPinSatisfiesOurOwnProvider.
+	t.Logf("asked %s, which reports %s", binary, strings.TrimSpace(string(output)))
+
 	if lessThan(kernelVersion, minimum) || !lessThan(kernelVersion, maximum) {
 		t.Errorf("provider/provider.json declares [%s, %s) and %s reports %s — "+
 			"the kernel would refuse this repository's own bundle.",
