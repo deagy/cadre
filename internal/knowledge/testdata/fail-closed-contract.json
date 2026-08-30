@@ -1,0 +1,60 @@
+{
+  "_comment": [
+    "The retrieval contract cadre's store enforces, as cases rather than prose.",
+    "Extracted while Store.Search still exists, because the contract lives only",
+    "inside it: after the engine moves to recall there is no way to re-derive",
+    "these from anything but memory. Any implementation claiming to be a",
+    "governed retrieval interface must refuse every case here.",
+    "",
+    "recall's own Search takes filters a caller may omit and spans all",
+    "namespaces by default. That is not a defect in recall -- it is a library",
+    "for retrieval, not for governed retrieval. This file is the difference."
+  ],
+  "cases": [
+    {
+      "name": "no query",
+      "why": "A retrieval with no question is not a retrieval; refusing it early keeps the audit row meaningful.",
+      "query": "", "classification": "internal", "provider": true,
+      "all_sources": true, "source_filters": [],
+      "expect_refusal": "query is required"
+    },
+    {
+      "name": "no classification",
+      "why": "Classification is the access decision. Without it the store cannot know what the caller may see, and a default would be a policy nobody wrote.",
+      "query": "anything", "classification": "", "provider": true,
+      "all_sources": true, "source_filters": [],
+      "expect_refusal": "classification is required"
+    },
+    {
+      "name": "no embedding provider",
+      "why": "Refused rather than defaulted: the provider and model are recorded in the audit row, so a silent default would make retrievals unattributable.",
+      "query": "anything", "classification": "internal", "provider": false,
+      "all_sources": true, "source_filters": [],
+      "expect_refusal": "embedding provider is required"
+    },
+    {
+      "name": "no source scope decision",
+      "why": "The central refusal. A caller must choose between naming sources and deliberately spanning all of them; silence would default to reading every project's corpus.",
+      "query": "anything", "classification": "internal", "provider": true,
+      "all_sources": false, "source_filters": [],
+      "expect_refusal": "source scope is required"
+    },
+    {
+      "name": "both all-sources and filters",
+      "why": "Ambiguous rather than resolvable. Picking either interpretation would silently widen or narrow what the caller sees.",
+      "query": "anything", "classification": "internal", "provider": true,
+      "all_sources": true, "source_filters": ["a"],
+      "expect_refusal": "source scope is ambiguous"
+    },
+    {
+      "name": "blank source filter entry",
+      "why": "A blank entry is a scope nobody chose. Treating it as a wildcard or dropping it would both be guesses.",
+      "query": "anything", "classification": "internal", "provider": true,
+      "all_sources": false, "source_filters": ["a", "  "],
+      "expect_refusal": "must be non-empty"
+    }
+  ],
+  "also_required": [
+    "Every completed retrieval is recorded with the embedding provider, model and result count, plus the retrieving agent and task id from SearchOptions."
+  ]
+}
