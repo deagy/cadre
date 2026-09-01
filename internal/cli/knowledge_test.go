@@ -153,25 +153,23 @@ func TestKnowledgeSearchMissingClassification(t *testing.T) {
 	}
 }
 
-func TestKnowledgeDeleteNoMode(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	// delete without deletion mode should fail
-	code := knowledgeDelete(dbPath, []string{})
-	if code != 2 {
-		t.Errorf("Expected exit code 2 for no deletion mode, got %d", code)
-	}
-}
-
-func TestKnowledgeDeleteMultipleModes(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	// delete with multiple modes should fail
-	code := knowledgeDelete(dbPath, []string{"--expired", "--source", "test"})
-	if code != 2 {
-		t.Errorf("Expected exit code 2 for multiple deletion modes, got %d", code)
+// TestDeleteIsRetiredRatherThanBroken. delete inherited the same configured
+// store path the governed verbs use, so against a recall store -- the only
+// kind this migration creates -- cadre's engine could not open it and the
+// verb failed with `no such column: embedding_provider`. A verb advertised
+// beside `search` with no caveat, failing with a SQL error. It is retired by
+// name like the other twenty-two, and the capability gap is stated rather
+// than approximated.
+func TestDeleteIsRetiredRatherThanBroken(t *testing.T) {
+	stderr := captureStderr(t, func() {
+		if code := KnowledgeCmd([]string{"delete", "--expired"}); code != 2 {
+			t.Errorf("exit %d, want 2", code)
+		}
+	})
+	for _, want := range []string{"retired", "recall", "no equivalent"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("the refusal does not mention %q: %s", want, stderr)
+		}
 	}
 }
 

@@ -97,22 +97,6 @@ store — query id (not the query text), classification, scope, agent, task,
 result count, and the embedder and model that produced the vectors searched. A
 retrieval that cannot be recorded is refused rather than served unrecorded.
 
-### `cadre knowledge delete`
-
-Deletes messages or runs retention policies. Still operates on cadre's own
-store: recall deletes by chunk id or document id only, with no
-metadata-scoped or retention-based deletion, so the four modes below have no
-equivalent to route to yet.
-
-```
---expired                Delete messages past their retention_until date
---classification <cls>   Delete all messages with a given classification
---source <src>           Delete all messages from a given source
---age <days>             Delete messages older than N days
---authorized-by <who>    Authorizing actor (default cli-user)
---json                   Machine-readable output
-```
-
 ### `cadre knowledge config [show]`
 
 Prints the configuration a governed retrieval resolves: config tier, store
@@ -179,6 +163,25 @@ replacement and exits 2.
 | `fault-tolerance`, `replication`, `maintenance` | retired with the engine |
 | `check-integrity`, `repair`, `rebuild-indexes`, `defragment` | retired with the engine; recall's index has its own lifecycle |
 | `batch-delete`, `batch-update` | retired with the engine |
+| `delete` | `recall` deletes by document or chunk id — see "Deletion" below |
+
+## Deletion
+
+`cadre knowledge delete` is retired. It removed messages from cadre's own
+engine, and against a recall store it could not even open the database — it
+failed with `no such column: embedding_provider`, because it inherited the
+same configured store path the governed verbs use.
+
+Removing content is `recall`'s, by document or chunk id.
+
+**Deletion by retention window, classification, source or age has no
+equivalent.** recall deletes by id and cannot enumerate what matches a
+metadata scope, so the four modes cadre offered cannot be rebuilt over it
+without deleting whatever a capped query happened to return. This is a
+capability gap in the migration, recorded as one. Note that
+`roster/knowledge-store/SECURITY.md` describes a `delete-ingested` verb with
+deletion evidence that the Go CLI never shipped — the policy was already ahead
+of the implementation, and this widens that distance rather than creating it.
 
 ## Proposal workflow
 

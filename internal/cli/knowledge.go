@@ -26,6 +26,10 @@ import (
 // recall actually ships, checked against its command tree rather than
 // remembered.
 var retiredVerbs = map[string]string{
+	"delete": "remove content with `recall`, by document or chunk id." +
+		"\n  Deletion by retention window, classification, source or age has " +
+		"no equivalent: recall deletes by id and cannot enumerate what matches a metadata scope.\n  " +
+		"That is a capability gap, recorded as one rather than approximated",
 	"stats":           "run `recall store info` against the same store",
 	"ingest":          "run `recall upload <path>...`",
 	"hybrid-search":   "run `recall hybrid-search <query>`",
@@ -63,7 +67,6 @@ retrieval is recorded.
 Subcommands:
   init                 Verify the configured store is reachable
   search               Governed retrieval over the configured store
-  delete               Delete messages or run retention policies
   config               Show the configuration a governed retrieval resolves
 
 Proposal workflow (separate from retrieval, routed before this command):
@@ -121,8 +124,6 @@ Options:
 		return knowledgeInit(env, subArgs)
 	case "search":
 		return knowledgeSearch(env, subArgs)
-	case "delete":
-		return knowledgeDelete(cfg.Database, subArgs)
 	case "config":
 		return knowledgeConfig(env, subArgs)
 	default:
@@ -496,120 +497,6 @@ Options:
 		Agent:          request.Agent,
 		TaskID:         request.TaskID,
 	}, "vector", retrieval.ResultsFrom(results)), *jsonOutput)
-	return 0
-}
-
-// knowledgeDelete deletes messages or runs retention policies.
-//
-// The one verb still on cadre's own engine, and deliberately not migrated
-// here. recall's store deletes by chunk id or document id only -- it has no
-// metadata-scoped or retention-based deletion and no way to enumerate what
-// would match one -- so the four modes below (expired, by classification, by
-// source, by age) have no equivalent to route to. Inventing one over TopK
-// searches would delete what a query happened to return, which is not what
-// any of these modes mean.
-//
-// Recorded rather than papered over: this blocks deleting the engine, and the
-// disposition that kept `delete` was written from the verb list rather than
-// from recall's interface.
-func knowledgeDelete(dbPath string, args []string) int {
-	fs := flag.NewFlagSet("cadre knowledge delete", flag.ContinueOnError)
-	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge delete [options]
-
-Deletes messages or runs retention policies.
-
-Deletion modes:
-  --expired               Delete messages past their retention_until date
-  --classification <cls>  Delete all messages with given classification
-  --source <src>          Delete all messages from given source
-  --age <days>            Delete messages older than N days
-
-Options:
-`)
-		fs.PrintDefaults()
-	}
-
-	deleteExpired := fs.Bool("expired", false, "Delete expired messages")
-	classification := fs.String("classification", "", "Delete by classification")
-	source := fs.String("source", "", "Delete by source")
-	ageDays := fs.Int("age", 0, "Delete by age (days)")
-	authorizedBy := fs.String("authorized-by", "cli-user", "Authorization user")
-	jsonOutput := fs.Bool("json", false, "Output stats as JSON")
-
-	if err := fs.Parse(args); err != nil {
-		return parseExitCode(err)
-	}
-
-	// Validate that exactly one deletion mode is specified
-	modeCount := 0
-	if *deleteExpired {
-		modeCount++
-	}
-	if *classification != "" {
-		modeCount++
-	}
-	if *source != "" {
-		modeCount++
-	}
-	if *ageDays > 0 {
-		modeCount++
-	}
-
-	if modeCount != 1 {
-		fmt.Fprintf(os.Stderr, "cadre knowledge delete: must specify exactly one deletion mode\n")
-		return 2
-	}
-
-	// Open store
-	store, err := knowledge.Open(dbPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "cadre knowledge delete: cannot open store: %v\n", err)
-		return 1
-	}
-	defer func() { _ = store.Close() }()
-
-	var deleted int64
-
-	switch {
-	case *deleteExpired:
-		deleted, err = store.DeleteExpired(*authorizedBy)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "cadre knowledge delete: cannot delete expired: %v\n", err)
-			return 1
-		}
-	case *classification != "":
-		deleted, err = store.DeleteByClassification(*classification, "CLI deletion", *authorizedBy)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "cadre knowledge delete: cannot delete by classification: %v\n", err)
-			return 1
-		}
-	case *source != "":
-		deleted, err = store.DeleteBySource(*source, "CLI deletion", *authorizedBy)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "cadre knowledge delete: cannot delete by source: %v\n", err)
-			return 1
-		}
-	case *ageDays > 0:
-		deleted, err = store.DeleteByAge(*ageDays, nil, "CLI deletion", *authorizedBy)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "cadre knowledge delete: cannot delete by age: %v\n", err)
-			return 1
-		}
-	}
-
-	if *jsonOutput {
-		data := map[string]interface{}{
-			"deleted":       deleted,
-			"authorized_by": *authorizedBy,
-		}
-		encoder := json.NewEncoder(os.Stdout)
-		encoder.SetIndent("", "  ")
-		_ = encoder.Encode(data)
-	} else {
-		fmt.Printf("Deleted %d messages\n", deleted)
-	}
-
 	return 0
 }
 

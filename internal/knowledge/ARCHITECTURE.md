@@ -473,11 +473,15 @@ go build ./cmd/cadre
 **Monitoring:**
 ```bash
 # Check store health
-cadre knowledge stats
+recall store info
 
-# Verify retention policies
-cadre knowledge delete --expired --json
+# Verify what a governed retrieval resolves
+cadre knowledge config show
 ```
+
+`cadre knowledge stats` and `cadre knowledge delete` retired with the
+retrieval engine; retention-scoped deletion has no equivalent in recall. See
+`README_CLI.md` § Deletion.
 
 ## See Also
 
