@@ -48,6 +48,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/deagy/cadre/cli/internal/retrieval"
 	"github.com/deagy/cadre/cli/internal/textutil"
 )
 
@@ -59,14 +60,6 @@ const StagedIngestSource = "proposed-knowledge"
 
 // StagedIngestRole marks ingested staged records in the corpus.
 const StagedIngestRole = "knowledge-record"
-
-// stagedIngestChunking mirrors the Python knowledge-store config defaults
-// (chunking.max_characters / overlap_characters).
-var stagedIngestChunking = textutil.ChunkConfig{MaxCharacters: 2400, OverlapCharacters: 240}
-
-// stagedIngestEmbeddingDimensions matches every other ingest path in this CLI,
-// so accepted findings are searchable by the same query embeddings.
-const stagedIngestEmbeddingDimensions = 128
 
 // StagedIngestOutcome is one record's result: ingested, skipped, or refused.
 type StagedIngestOutcome struct {
@@ -88,13 +81,43 @@ type StagedIngestReport struct {
 	DryRun      bool                  `json:"dry_run"`
 }
 
-// StagedRecordAlreadyIngested reports whether a record is in the corpus.
-// Derived, not stored: the corpus is the only place that knows.
+// Corpus is where an accepted record becomes retrievable.
+//
+// An interface rather than a concrete store because the destination is no
+// longer cadre's: retrieval lives in recall, reached through
+// internal/retrieval, and this package has no business knowing how. What it
+// owns is the decision to send a record there and the evidence that it did.
+type Corpus interface {
+	// Ingest writes one record and reports how many chunks it became.
+	Ingest(record CorpusRecord) (int, error)
+	// Destination names the store written to, for the ingestion evidence.
+	Destination() string
+}
+
+// CorpusRecord is one accepted staged record on its way to being retrievable.
+//
+// An alias rather than a second struct with the same fields: two declarations
+// of one shape is the defect class this consolidation keeps finding, and an
+// alias cannot drift from the destination's.
+//
+// SourceURI is deliberately absent from it rather than optional: it may reveal
+// a local path, and the knowledge-use policy's redact-by-default rule applies
+// to a staged record's provenance exactly as it does to a citation's.
+type CorpusRecord = retrieval.Record
+
+// StagedRecordAlreadyIngested reports whether a record was made retrievable.
+//
+// Read from cadre's own ingestion evidence rather than from the corpus. It
+// used to query the corpus directly, which was possible only while cadre
+// owned it; recall can be asked for a chunk by id but cannot be asked what
+// matches a metadata scope. Keeping the record here is also the better answer
+// for governance: "a steward made this retrievable, at this time, into this
+// store" is cadre's fact to keep, and it survives the corpus being rebuilt.
 func (s *Store) StagedRecordAlreadyIngested(recordID string) (bool, error) {
 	var found int
 	err := s.db.QueryRow(
-		"SELECT 1 FROM messages WHERE source = ? AND conversation_id = ? LIMIT 1",
-		StagedIngestSource, recordID).Scan(&found)
+		"SELECT 1 FROM staged_record_ingestions WHERE record_id = ? LIMIT 1",
+		recordID).Scan(&found)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -102,6 +125,21 @@ func (s *Store) StagedRecordAlreadyIngested(recordID string) (bool, error) {
 		return false, fmt.Errorf("cannot check whether %q is already ingested: %w", recordID, err)
 	}
 	return true, nil
+}
+
+// recordStagedIngestion writes the evidence that a record became retrievable.
+func (s *Store) recordStagedIngestion(
+	recordID, documentID, corpus, classification string, chunks int,
+) error {
+	_, err := s.db.Exec(`
+INSERT OR REPLACE INTO staged_record_ingestions
+  (record_id, document_id, corpus, classification, chunk_count, ingested_at)
+VALUES (?, ?, ?, ?, ?, ?)`,
+		recordID, documentID, corpus, classification, chunks, nowISO())
+	if err != nil {
+		return fmt.Errorf("cannot record the ingestion of %q: %w", recordID, err)
+	}
+	return nil
 }
 
 // stagedIngestClassification resolves the classification to ingest at. The
@@ -129,6 +167,10 @@ type IngestAcceptedOptions struct {
 	RecordIDs []string
 	// DryRun reports what would be ingested and refused, without writing.
 	DryRun bool
+	// Corpus is where accepted records become retrievable. Required unless
+	// DryRun: making a record retrievable with nowhere to put it is not a
+	// thing this can do quietly.
+	Corpus Corpus
 }
 
 // IngestAcceptedStagedRecords ingests every accepted staged record that is not
@@ -151,7 +193,10 @@ func (s *Store) IngestAcceptedStagedRecords(options IngestAcceptedOptions) (*Sta
 		NotAccepted: []string{},
 		DryRun:      options.DryRun,
 	}
-	embedder := NewLocalHashingEmbedder(stagedIngestEmbeddingDimensions)
+	if !options.DryRun && options.Corpus == nil {
+		return nil, fmt.Errorf(
+			"cannot ingest accepted records: no corpus to make them retrievable in")
+	}
 
 	for _, summary := range accepted {
 		recordID := summary.ID
@@ -196,7 +241,7 @@ func (s *Store) IngestAcceptedStagedRecords(options IngestAcceptedOptions) (*Sta
 			continue
 		}
 
-		outcome, err := s.ingestOneStagedRecord(recordID, frontmatter, body, classification, embedder)
+		outcome, err := s.ingestOneStagedRecord(recordID, frontmatter, body, classification, options.Corpus)
 		if err != nil {
 			return nil, err
 		}
@@ -259,7 +304,7 @@ func stagedIngestRefusal(frontmatter map[string]any) string {
 // Reason on the returned outcome means the record was refused during
 // screening, not that an error occurred.
 func (s *Store) ingestOneStagedRecord(
-	recordID string, frontmatter map[string]any, body, classification string, embedder EmbeddingProvider,
+	recordID string, frontmatter map[string]any, body, classification string, corpus Corpus,
 ) (StagedIngestOutcome, error) {
 	title := StagedString(frontmatter, "title")
 	if title == "" {
@@ -301,29 +346,32 @@ func (s *Store) ingestOneStagedRecord(
 		return StagedIngestOutcome{}, fmt.Errorf("cannot encode metadata for %q: %w", recordID, err)
 	}
 
-	conversationTitle := title
-	// source_uri is deliberately omitted: it may reveal a local path, and the
-	// knowledge-use policy's redact-by-default rule applies to a staged
-	// record's provenance exactly as it does to a citation's.
-	messageID, err := s.SaveMessage(
-		StagedIngestSource, nil, recordID, &conversationTitle, recordID, StagedIngestRole,
-		protected.Content, nil, classification, false, string(redactionsJSON), string(metadataJSON), nil)
+	documentID := StagedIngestSource + ":" + recordID
+	chunks, err := corpus.Ingest(CorpusRecord{
+		DocumentID:     documentID,
+		Source:         StagedIngestSource,
+		Title:          title,
+		Classification: classification,
+		Role:           StagedIngestRole,
+		Content:        protected.Content,
+		ContentHash:    StagedString(frontmatter, "content_digest"),
+		Metadata: map[string]string{
+			"staged_record_id":   recordID,
+			"recommended_action": StagedString(frontmatter, "recommended_action"),
+			"source_scope":       StagedString(frontmatter, "source_scope"),
+			"decided_by":         StagedDecidedBy(frontmatter),
+			"redactions":         string(redactionsJSON),
+			"metadata":           string(metadataJSON),
+		},
+	})
 	if err != nil {
+		return StagedIngestOutcome{}, fmt.Errorf("cannot make %q retrievable: %w", recordID, err)
+	}
+
+	if err := s.recordStagedIngestion(
+		recordID, documentID, corpus.Destination(), classification, chunks); err != nil {
 		return StagedIngestOutcome{}, err
 	}
 
-	chunks := textutil.ChunkText(protected.Content, stagedIngestChunking)
-	vectors, err := embedder.Embed(chunks)
-	if err != nil {
-		return StagedIngestOutcome{}, fmt.Errorf("cannot embed %q: %w", recordID, err)
-	}
-	for ordinal, chunk := range chunks {
-		if ordinal >= len(vectors) {
-			break
-		}
-		if err := s.SaveChunk(messageID, ordinal, chunk, embedder.Name(), embedder.Model(), vectors[ordinal]); err != nil {
-			return StagedIngestOutcome{}, err
-		}
-	}
-	return StagedIngestOutcome{ID: recordID, Classification: classification, Chunks: len(chunks)}, nil
+	return StagedIngestOutcome{ID: recordID, Classification: classification, Chunks: chunks}, nil
 }

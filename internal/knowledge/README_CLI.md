@@ -16,8 +16,10 @@ keyword search — is done with the `recall` CLI directly.
 go build -o bin/cadre ./cmd/cadre
 ```
 
-The governed retrieval path is pure Go: recall uses `modernc.org/sqlite`, so
-none of the commands below need `CGO_ENABLED=1`.
+Every command below is pure Go: retrieval is recall's (`modernc.org/sqlite`)
+and the staged store uses the same driver. A `CGO_ENABLED=0` build used to
+link cleanly and then fail at the first knowledge query with `go-sqlite3
+requires cgo to work. This is a stub`; that is gone.
 
 ## Quick start
 
@@ -186,9 +188,25 @@ of the implementation, and this widens that distance rather than creating it.
 ## Proposal workflow
 
 `propose`, `show-staged`, `import-staged`, `disposition-staged`,
-`ingest-accepted` and `delete-staged` are a separate concern from retrieval —
-separation of duties over proposed knowledge — and are unaffected by the
-migration. They are file-based and never touched the retrieval engine.
+`ingest-accepted` and `delete-staged` are a separate concern from retrieval:
+separation of duties over proposed knowledge.
+
+Their store is **`staged-records.db`**, beside the database the config names —
+its own file, since that path is a recall store now. Records staged before the
+separation are copied across once, on first open, and the originals are left
+in place.
+
+`ingest-accepted` is the step that makes a steward-accepted record
+retrievable. It uploads to the same recall store `search` reads, through the
+same governed view — so a record cannot be written with vectors the store's
+other content will never be comparable against. Screening runs first: secret
+redaction and injection detection, with a record flagged
+`untrusted_instruction_risk` refused rather than handed over.
+
+If the store does not exist yet, `ingest-accepted` creates it and records the
+embedder identity, because the vectors it is about to write are its own. A
+store that already holds content with no recorded identity is refused —
+claiming it would assert exactly the thing nobody can check.
 
 ## Exit codes
 

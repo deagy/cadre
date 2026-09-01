@@ -43,15 +43,11 @@ func testStagedFrontmatter(recordID string) map[string]any {
 // staged-record schema installed.
 func testStagedStore(t *testing.T) *Store {
 	t.Helper()
-	requireSQLite(t)
-	store, err := Open(filepath.Join(t.TempDir(), "knowledge.db"))
+	store, err := OpenStaged(filepath.Join(t.TempDir(), StagedDatabaseFile))
 	if err != nil {
 		t.Fatalf("cannot open store: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	if err := store.InstallStagedSchema(); err != nil {
-		t.Fatalf("cannot install staged schema: %v", err)
-	}
 	return store
 }
 

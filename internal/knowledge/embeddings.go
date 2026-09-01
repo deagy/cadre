@@ -7,6 +7,24 @@ import (
 	"math"
 )
 
+// EmbeddingProvider turns text into vectors, and says what produced them.
+//
+// Name, Model and Dimensions are not decoration: a retrieval is only
+// reproducible against the model that produced the vectors it searched, and
+// every audit row carries the pair. Declared here with the providers rather
+// than with a store, because no store owns it -- internal/retrieval takes any
+// provider satisfying this.
+type EmbeddingProvider interface {
+	// Name returns the provider identifier (e.g. "local-hashing").
+	Name() string
+	// Model returns the model identifier (e.g. "text-embedding-3-small").
+	Model() string
+	// Dimensions returns the vector dimension size.
+	Dimensions() int
+	// Embed computes embeddings for the given texts, in parallel order.
+	Embed(texts []string) ([][]float64, error)
+}
+
 // LocalHashingEmbedder implements EmbeddingProvider using deterministic feature hashing.
 // This is a lightweight, offline embedding suitable for local retrieval. It provides
 // deterministic embeddings for development/testing and is compatible with the Python

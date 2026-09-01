@@ -2,10 +2,13 @@ package retrieval
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/deagy/recall/core"
 	"github.com/deagy/recall/embedder"
 	"github.com/deagy/recall/govern"
 	"github.com/deagy/recall/store"
@@ -57,8 +60,12 @@ type Governed struct {
 
 	Audit    *AuditLog
 	Identity StoreIdentity
+	database string
 	store    *store.SQLiteStore
 }
+
+// Destination names the store this view reads and writes.
+func (g *Governed) Destination() string { return g.database }
 
 // Close releases the underlying store.
 func (g *Governed) Close() error {
@@ -127,6 +134,7 @@ func Open(opts Options, provider Provider) (*Governed, error) {
 		Store:    governed,
 		Audit:    audit,
 		Identity: identityFor(name, model, opts.Dimensions),
+		database: opts.Database,
 		store:    recallStore,
 	}, nil
 }
@@ -211,4 +219,93 @@ var _ embedder.Embedder = (*ProviderAdapter)(nil)
 // store cadre reads, so they embed with the identity cadre records.
 func NewProviderAdapter(provider Provider, dimensions int) *ProviderAdapter {
 	return &ProviderAdapter{provider: provider, dimensions: dimensions}
+}
+
+// Ingest writes one record into the store and reports how many chunks it
+// became.
+//
+// The write side of the same governed view. It goes through `Open`, so it
+// carries the same embedder-identity check the read side does -- a record
+// ingested with vectors the store's other content cannot be compared against
+// would be retrievable in name only, scoring 0 against every query.
+//
+// Chunking is recall's. cadre used to chunk before storing, which meant two
+// chunkers with different sizes over one corpus; whatever recall's chunker
+// does to this content is what a later query will be scored against.
+func (g *Governed) Ingest(record Record) (int, error) {
+	doc := core.NewDocument(record.DocumentID, record.Title, record.Source)
+	doc.Metadata[MetaSource] = core.String{Value: record.Source}
+	doc.Metadata[MetaClassification] = core.String{Value: record.Classification}
+	doc.Metadata[MetaRole] = core.String{Value: record.Role}
+	doc.Metadata[MetaConversationID] = core.String{Value: record.DocumentID}
+	doc.Metadata[MetaMessageID] = core.String{Value: record.DocumentID}
+	doc.Metadata[MetaContentHash] = core.String{Value: record.ContentHash}
+	doc.Metadata[MetaConversation] = core.String{Value: record.Title}
+	for key, value := range record.Metadata {
+		if value == "" {
+			continue
+		}
+		doc.Metadata[key] = core.String{Value: value}
+	}
+
+	if err := g.store.Upload(context.Background(), doc, record.Content); err != nil {
+		return 0, fmt.Errorf("retrieval: cannot ingest %q: %w", record.DocumentID, err)
+	}
+	if doc.ChunkCount == 0 {
+		return 0, fmt.Errorf(
+			"retrieval: %q produced no chunks -- recall's chunker drops content below its "+
+				"minimum size, so a record this short would be accepted and never retrievable",
+			record.DocumentID)
+	}
+	return doc.ChunkCount, nil
+}
+
+// Record is one document on its way into the store.
+type Record struct {
+	DocumentID     string
+	Source         string
+	Title          string
+	Classification string
+	Role           string
+	Content        string
+	ContentHash    string
+	Metadata       map[string]string
+}
+
+// OpenForIngest opens the governed view for writing, claiming the store's
+// embedder identity when cadre is the one creating it.
+//
+// The read path requires the identity to have been stated already, because a
+// reader cannot know what produced vectors it did not write. A writer can:
+// the vectors it is about to store are its own. So a store that does not
+// exist yet is claimed here rather than sending the operator to `init` for a
+// store nothing has created.
+//
+// A store that already exists without a recorded identity is still refused.
+// Content is in it that cadre did not put there, and claiming it would assert
+// exactly the thing nobody can check.
+func OpenForIngest(opts Options, provider Provider) (*Governed, error) {
+	_, err := ReadIdentity(opts.Database)
+	claiming := errors.Is(err, ErrNoRecordedIdentity)
+	if claiming {
+		if _, statErr := os.Stat(opts.Database); statErr == nil {
+			return nil, fmt.Errorf(
+				"%w: %s already holds content, and what embedded it is not recorded. Run "+
+					"`cadre knowledge init` to state it; ingesting would claim vectors cadre "+
+					"may not have written", ErrNoRecordedIdentity, opts.Database)
+		}
+		opts.SkipIdentityCheck = true
+	}
+
+	governed, err := Open(opts, provider)
+	if err != nil {
+		return nil, err
+	}
+	if claiming {
+		if err := WriteIdentity(opts.Database, governed.Identity); err != nil {
+			_ = governed.Close()
+			return nil, err
+		}
+	}
+	return governed, nil
 }

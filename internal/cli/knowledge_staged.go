@@ -28,9 +28,8 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
-
 	"github.com/deagy/cadre/cli/internal/knowledge"
+	"github.com/deagy/cadre/cli/internal/retrieval"
 )
 
 // knowledgeStagedSubcommands are the verbs this file owns. The dispatcher
@@ -107,13 +106,13 @@ Options:
 	subcommand := fs.Arg(0)
 	subArgs := fs.Args()[1:]
 
-	dbPath, err := knowledgeStagedDatabasePath(*configFlag)
+	cfg, err := knowledgeStagedConfig(*configFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "cadre knowledge %s: %v\n", subcommand, err)
 		return 1
 	}
 
-	result, err := runKnowledgeStaged(dbPath, subcommand, subArgs)
+	result, err := runKnowledgeStaged(cfg, subcommand, subArgs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return 1
@@ -152,36 +151,61 @@ Options:
 // Enforced here rather than left to --source discipline because SECURITY.md is
 // explicit that caller flags are not authentication: a convention that nothing
 // checks is the failure mode the contract was written to avoid.
-func knowledgeStagedDatabasePath(configFlag string) (string, error) {
+func knowledgeStagedConfig(configFlag string) (*knowledge.Config, error) {
 	cfg, tier, err := knowledge.LoadConfig(configFlag)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if tier == knowledge.TierGlobalFallback {
-		return "", fmt.Errorf(
+		return nil, fmt.Errorf(
 			"staged knowledge records are per project, so they cannot be written to the "+
 				"shared global knowledge store (%s). Create .agents/knowledge-store/config.json "+
 				"in this project (an empty {} is enough to claim a project-local partition), "+
 				"or pass --config pointing at the store this project owns", cfg.Database)
 	}
-	return cfg.Database, nil
+	return cfg, nil
 }
 
-// runKnowledgeStaged opens the store, installs the staged-record schema, and
-// dispatches. Schema installation happens here rather than inside Open: the
-// staging tables are a staged-record concern, and database.go should not
-// depend on the file that implements the record contract. It is idempotent, so
-// calling it per command is cheap and keeps an existing store working with no
-// migration step.
-func runKnowledgeStaged(dbPath, subcommand string, args []string) (any, error) {
-	store, err := knowledge.Open(dbPath)
+// openStagedStore opens the staged store, migrating records out of a legacy
+// combined store the first time.
+//
+// Staged records used to live in the same database as the corpus. That
+// database is recall's now, and cadre no longer opens it with its own schema
+// -- so records staged before this change would be stranded in a file only an
+// older cadre could read. Copied once, on first open, leaving the legacy file
+// untouched: a migration that deletes its source cannot be re-run after
+// someone notices it went wrong.
+func openStagedStore(cfg *knowledge.Config) (*knowledge.Store, error) {
+	stagedPath := knowledge.StagedDatabasePath(cfg)
+	_, statErr := os.Stat(stagedPath)
+	migrating := os.IsNotExist(statErr)
+
+	if migrating {
+		copied, err := knowledge.MigrateStagedRecords(cfg.Database, stagedPath)
+		switch {
+		case err == nil && copied > 0:
+			fmt.Fprintf(os.Stderr,
+				"cadre knowledge: moved %d staged row(s) from %s into %s. The originals are "+
+					"left in place.\n", copied, cfg.Database, stagedPath)
+		case err != nil && !errors.Is(err, knowledge.ErrNoLegacyStagedRecords):
+			return nil, err
+		}
+	}
+	return knowledge.OpenStaged(stagedPath)
+}
+
+// runKnowledgeStaged opens the staged store and dispatches.
+//
+// The schema is installed by OpenStaged now. It used to be installed here,
+// because the staged tables were added over a retrieval engine's schema and
+// that engine had no business knowing about them. There is no engine to keep
+// out of it any more: this store holds staged records and nothing else.
+func runKnowledgeStaged(cfg *knowledge.Config, subcommand string, args []string) (any, error) {
+	store, err := openStagedStore(cfg)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = store.Close() }()
-	if err := store.InstallStagedSchema(); err != nil {
-		return nil, err
-	}
 
 	switch subcommand {
 	case "propose":
@@ -193,7 +217,7 @@ func runKnowledgeStaged(dbPath, subcommand string, args []string) (any, error) {
 	case "disposition-staged":
 		return knowledgeStagedDisposition(store, args)
 	case "ingest-accepted":
-		return knowledgeStagedIngestAccepted(store, args)
+		return knowledgeStagedIngestAccepted(store, cfg, args)
 	case "delete-staged":
 		return knowledgeStagedDelete(store, args)
 	default:
@@ -714,7 +738,9 @@ func (l *stagedIDList) Set(v string) error { *l = append(*l, v); return nil }
 // and was removed -- do not reintroduce it. The refusals this command does
 // apply (see knowledge.stagedIngestRefusal) exist to stop executing a decision
 // that was never validly taken, which is a different thing.
-func knowledgeStagedIngestAccepted(store *knowledge.Store, args []string) (any, error) {
+func knowledgeStagedIngestAccepted(
+	store *knowledge.Store, cfg *knowledge.Config, args []string,
+) (any, error) {
 	fs := flag.NewFlagSet("cadre knowledge ingest-accepted", flag.ContinueOnError)
 	var ids stagedIDList
 	fs.Var(&ids, "id", "ingest only this record; repeatable. Omit to ingest every accepted record.")
@@ -722,10 +748,34 @@ func knowledgeStagedIngestAccepted(store *knowledge.Store, args []string) (any, 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
-	return store.IngestAcceptedStagedRecords(knowledge.IngestAcceptedOptions{
-		RecordIDs: ids,
-		DryRun:    *dryRun,
-	})
+
+	options := knowledge.IngestAcceptedOptions{RecordIDs: ids, DryRun: *dryRun}
+	if !*dryRun {
+		// The corpus is opened through the same governed view the read path
+		// uses, so a record cannot be written with vectors the store's other
+		// content will never be comparable against.
+		corpus, err := openGovernedCorpus(cfg)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = corpus.Close() }()
+		options.Corpus = corpus
+	}
+	return store.IngestAcceptedStagedRecords(options)
+}
+
+// openGovernedCorpus opens the recall store an accepted record is written to.
+func openGovernedCorpus(cfg *knowledge.Config) (*retrieval.Governed, error) {
+	provider, code := resolveEmbedder(knowledgeEnv{cfg: cfg}, cfg.Embedding.Provider, "ingest-accepted")
+	if code != 0 {
+		return nil, fmt.Errorf("cannot resolve the embedding provider")
+	}
+	return retrieval.OpenForIngest(retrieval.Options{
+		Database:     cfg.Database,
+		EmbedderName: cfg.Embedding.Provider,
+		Model:        cfg.Embedding.Model,
+		Dimensions:   cfg.Embedding.Dimensions,
+	}, provider)
 }
 
 // ---------------------------------------------------------------------------

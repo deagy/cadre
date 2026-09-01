@@ -52,10 +52,18 @@ func testDisposition(decidedBy string) map[string]any {
 	}
 }
 
-func testStagedDB(t *testing.T) string {
+// testStagedConfig resolves a project-tier knowledge config in a temp
+// directory. The staged store lives beside the configured database, so the
+// helper hands back the config the CLI itself resolves rather than a path.
+func testStagedConfig(t *testing.T) *knowledge.Config {
 	t.Helper()
-	requireSQLite(t)
-	return filepath.Join(t.TempDir(), "knowledge.db")
+	dir := t.TempDir()
+	cfgPath := writeStoreConfig(t, filepath.Join(dir, "store.db"), nil)
+	cfg, _, err := knowledge.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	return cfg
 }
 
 func writeRecordFile(t *testing.T, directory string, frontmatter map[string]any) string {
@@ -73,16 +81,13 @@ func writeRecordFile(t *testing.T, directory string, frontmatter map[string]any)
 
 // listStaged reads the staging table directly rather than through a CLI verb,
 // so "nothing was written" is asserted against the store itself.
-func listStaged(t *testing.T, dbPath string) []knowledge.StagedSummary {
+func listStaged(t *testing.T, cfg *knowledge.Config) []knowledge.StagedSummary {
 	t.Helper()
-	store, err := knowledge.Open(dbPath)
+	store, err := openStagedStore(cfg)
 	if err != nil {
 		t.Fatalf("cannot open store: %v", err)
 	}
 	defer func() { _ = store.Close() }()
-	if err := store.InstallStagedSchema(); err != nil {
-		t.Fatalf("cannot install staged schema: %v", err)
-	}
 	records, err := store.ListStagedRecords("")
 	if err != nil {
 		t.Fatalf("cannot list staged records: %v", err)
@@ -124,11 +129,11 @@ func TestKnowledgeStagedRouteRecognisesTheStagedVerbs(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestProposeStagesAWellFormedRecord(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	path := writeRecordFile(t, directory, testFrontmatter("KS-20260101-ok"))
 
-	result, err := runKnowledgeStaged(dbPath, "propose", []string{"--input", path})
+	result, err := runKnowledgeStaged(cfg, "propose", []string{"--input", path})
 	if err != nil {
 		t.Fatalf("a well-formed proposal was refused: %v", err)
 	}
@@ -136,27 +141,27 @@ func TestProposeStagesAWellFormedRecord(t *testing.T) {
 	if !strings.Contains(string(encoded), `"status":"staged"`) {
 		t.Fatalf("unexpected propose result: %s", encoded)
 	}
-	if records := listStaged(t, dbPath); len(records) != 1 {
+	if records := listStaged(t, cfg); len(records) != 1 {
 		t.Fatalf("expected one staged record, got %d", len(records))
 	}
 }
 
 func TestProposeRefusesARecordThatArrivesAlreadyAccepted(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	frontmatter := testFrontmatter("KS-20260101-pre-accepted")
 	frontmatter["status"] = "accepted"
 	frontmatter["disposition"] = testDisposition(testSteward)
 	path := writeRecordFile(t, directory, frontmatter)
 
-	_, err := runKnowledgeStaged(dbPath, "propose", []string{"--input", path})
+	_, err := runKnowledgeStaged(cfg, "propose", []string{"--input", path})
 	if err == nil {
 		t.Fatal("expected a pre-dispositioned proposal to be refused")
 	}
 	if !strings.Contains(err.Error(), "propose refuses a record whose status is") {
 		t.Fatalf("refusal does not name the rule: %v", err)
 	}
-	if records := listStaged(t, dbPath); len(records) != 0 {
+	if records := listStaged(t, cfg); len(records) != 0 {
 		t.Fatalf("a refused proposal was staged anyway: %+v", records)
 	}
 }
@@ -165,47 +170,47 @@ func TestProposeRefusesARecordThatArrivesAlreadyAccepted(t *testing.T) {
 // the check rejects the shape of a decided record, not just an inconsistent
 // status. This is the name-independent half of the guard.
 func TestProposeRefusesADispositionBlockEvenOnAProposedRecord(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	frontmatter := testFrontmatter("KS-20260101-sneaky")
 	frontmatter["disposition"] = testDisposition(testSteward)
 	path := writeRecordFile(t, directory, frontmatter)
 
-	_, err := runKnowledgeStaged(dbPath, "propose", []string{"--input", path})
+	_, err := runKnowledgeStaged(cfg, "propose", []string{"--input", path})
 	if err == nil {
 		t.Fatal("expected a disposition block on a proposal to be refused")
 	}
 	if !strings.Contains(err.Error(), "propose refuses a record carrying a `disposition` block") {
 		t.Fatalf("refusal does not name the rule: %v", err)
 	}
-	if records := listStaged(t, dbPath); len(records) != 0 {
+	if records := listStaged(t, cfg); len(records) != 0 {
 		t.Fatalf("a refused proposal was staged anyway: %+v", records)
 	}
 }
 
 func TestRenderOnlyRefusesAPreDispositionedRecordToo(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	frontmatter := testFrontmatter("KS-20260101-render-refused")
 	frontmatter["status"] = "accepted"
 	frontmatter["disposition"] = testDisposition(testSteward)
 	path := writeRecordFile(t, directory, frontmatter)
 
-	_, err := runKnowledgeStaged(dbPath, "propose", []string{"--input", path, "--render-only"})
+	_, err := runKnowledgeStaged(cfg, "propose", []string{"--input", path, "--render-only"})
 	if err == nil {
 		t.Fatal("expected --render-only to apply the same refusal")
 	}
-	if records := listStaged(t, dbPath); len(records) != 0 {
+	if records := listStaged(t, cfg); len(records) != 0 {
 		t.Fatalf("--render-only staged a record: %+v", records)
 	}
 }
 
 func TestRenderOnlyDoesNotStage(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	path := writeRecordFile(t, directory, testFrontmatter("KS-20260101-render"))
 
-	result, err := runKnowledgeStaged(dbPath, "propose", []string{"--input", path, "--render-only"})
+	result, err := runKnowledgeStaged(cfg, "propose", []string{"--input", path, "--render-only"})
 	if err != nil {
 		t.Fatalf("--render-only refused a valid record: %v", err)
 	}
@@ -213,13 +218,13 @@ func TestRenderOnlyDoesNotStage(t *testing.T) {
 	if !ok || rendered["status"] != "rendered" {
 		t.Fatalf("unexpected render result: %#v", result)
 	}
-	if records := listStaged(t, dbPath); len(records) != 0 {
+	if records := listStaged(t, cfg); len(records) != 0 {
 		t.Fatalf("--render-only staged a record: %+v", records)
 	}
 }
 
 func TestProposeFromFindingGeneratesTheCeremonyFields(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	finding := map[string]any{
 		"summary":                    testBody,
@@ -243,7 +248,7 @@ func TestProposeFromFindingGeneratesTheCeremonyFields(t *testing.T) {
 		t.Fatalf("cannot write finding: %v", err)
 	}
 
-	result, err := runKnowledgeStaged(dbPath, "propose", []string{"--from-finding", path})
+	result, err := runKnowledgeStaged(cfg, "propose", []string{"--from-finding", path})
 	if err != nil {
 		t.Fatalf("--from-finding was refused: %v", err)
 	}
@@ -260,12 +265,12 @@ func TestProposeFromFindingGeneratesTheCeremonyFields(t *testing.T) {
 }
 
 func TestProposeRefusesBothOrNeitherInput(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	for name, args := range map[string][]string{
 		"neither": {},
 		"both":    {"--input", "a.md", "--from-finding", "b.json"},
 	} {
-		if _, err := runKnowledgeStaged(dbPath, "propose", args); err == nil {
+		if _, err := runKnowledgeStaged(cfg, "propose", args); err == nil {
 			t.Errorf("%s: expected propose to require exactly one input", name)
 		}
 	}
@@ -276,32 +281,32 @@ func TestProposeRefusesBothOrNeitherInput(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestADispositionedBatchIsRefusedWithoutAuthorization(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	frontmatter := testFrontmatter("KS-20260101-decided")
 	frontmatter["status"] = "accepted"
 	frontmatter["disposition"] = testDisposition(testSteward)
 	writeRecordFile(t, directory, frontmatter)
 
-	_, err := runKnowledgeStaged(dbPath, "import-staged", []string{"--directory", directory})
+	_, err := runKnowledgeStaged(cfg, "import-staged", []string{"--directory", directory})
 	if err == nil {
 		t.Fatal("expected a dispositioned batch to require --authorized-by")
 	}
 	if !strings.Contains(err.Error(), "requires --authorized-by") {
 		t.Fatalf("refusal does not name the gate: %v", err)
 	}
-	if records := listStaged(t, dbPath); len(records) != 0 {
+	if records := listStaged(t, cfg); len(records) != 0 {
 		t.Fatalf("a refused batch was imported anyway: %+v", records)
 	}
 }
 
 func TestAProposedOnlyBatchNeedsNoAuthorization(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	writeRecordFile(t, directory, testFrontmatter("KS-20260101-plain-a"))
 	writeRecordFile(t, directory, testFrontmatter("KS-20260101-plain-b"))
 
-	result, err := runKnowledgeStaged(dbPath, "import-staged", []string{"--directory", directory})
+	result, err := runKnowledgeStaged(cfg, "import-staged", []string{"--directory", directory})
 	if err != nil {
 		t.Fatalf("a proposed-only batch was refused: %v", err)
 	}
@@ -317,7 +322,7 @@ func TestAProposedOnlyBatchNeedsNoAuthorization(t *testing.T) {
 // One dispositioned record gates the whole batch: a partial import is the
 // wrong outcome for a migration.
 func TestOneDispositionedRecordGatesTheWholeBatch(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	writeRecordFile(t, directory, testFrontmatter("KS-20260101-plain"))
 	decided := testFrontmatter("KS-20260101-mixed-decided")
@@ -325,34 +330,34 @@ func TestOneDispositionedRecordGatesTheWholeBatch(t *testing.T) {
 	decided["disposition"] = testDisposition(testSteward)
 	writeRecordFile(t, directory, decided)
 
-	if _, err := runKnowledgeStaged(dbPath, "import-staged", []string{"--directory", directory}); err == nil {
+	if _, err := runKnowledgeStaged(cfg, "import-staged", []string{"--directory", directory}); err == nil {
 		t.Fatal("expected the whole batch to be gated")
 	}
-	if records := listStaged(t, dbPath); len(records) != 0 {
+	if records := listStaged(t, cfg); len(records) != 0 {
 		t.Fatalf("a gated batch imported %d record(s)", len(records))
 	}
 }
 
 func TestWhitespaceIsNotAnAuthorization(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	frontmatter := testFrontmatter("KS-20260101-blank-authorizer")
 	frontmatter["status"] = "accepted"
 	frontmatter["disposition"] = testDisposition(testSteward)
 	writeRecordFile(t, directory, frontmatter)
 
-	_, err := runKnowledgeStaged(dbPath, "import-staged",
+	_, err := runKnowledgeStaged(cfg, "import-staged",
 		[]string{"--directory", directory, "--authorized-by", "   "})
 	if err == nil {
 		t.Fatal("expected whitespace to fail the authorization gate")
 	}
-	if records := listStaged(t, dbPath); len(records) != 0 {
+	if records := listStaged(t, cfg); len(records) != 0 {
 		t.Fatalf("a refused batch was imported anyway: %+v", records)
 	}
 }
 
 func TestTheAuthorizationIsPersistedNotOnlyEchoed(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	recordID := "KS-20260101-admitted"
 	frontmatter := testFrontmatter(recordID)
@@ -360,12 +365,12 @@ func TestTheAuthorizationIsPersistedNotOnlyEchoed(t *testing.T) {
 	frontmatter["disposition"] = testDisposition(testSteward)
 	writeRecordFile(t, directory, frontmatter)
 
-	if _, err := runKnowledgeStaged(dbPath, "import-staged",
+	if _, err := runKnowledgeStaged(cfg, "import-staged",
 		[]string{"--directory", directory, "--authorized-by", "  " + testAuthorizer + "  "}); err != nil {
 		t.Fatalf("an authorized import was refused: %v", err)
 	}
 
-	store, err := knowledge.Open(dbPath)
+	store, err := openStagedStore(cfg)
 	if err != nil {
 		t.Fatalf("cannot open store: %v", err)
 	}
@@ -389,14 +394,14 @@ func TestTheAuthorizationIsPersistedNotOnlyEchoed(t *testing.T) {
 // decider are the same actor is not a decision, so there is nothing to
 // authorize. Refused with --authorized-by present and correct.
 func TestAuthorizationCannotLaunderASelfApproval(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	frontmatter := testFrontmatter("KS-20260101-laundered")
 	frontmatter["status"] = "accepted"
 	frontmatter["disposition"] = testDisposition(testProposer)
 	writeRecordFile(t, directory, frontmatter)
 
-	_, err := runKnowledgeStaged(dbPath, "import-staged",
+	_, err := runKnowledgeStaged(cfg, "import-staged",
 		[]string{"--directory", directory, "--authorized-by", testAuthorizer})
 	if err == nil {
 		t.Fatal("expected a self-approved record to be refused regardless of authorization")
@@ -407,7 +412,7 @@ func TestAuthorizationCannotLaunderASelfApproval(t *testing.T) {
 	if !strings.Contains(err.Error(), "self-approval") {
 		t.Fatalf("refusal does not name the rule: %v", err)
 	}
-	if records := listStaged(t, dbPath); len(records) != 0 {
+	if records := listStaged(t, cfg); len(records) != 0 {
 		t.Fatalf("a self-approved record was imported: %+v", records)
 	}
 }
@@ -415,7 +420,7 @@ func TestAuthorizationCannotLaunderASelfApproval(t *testing.T) {
 // An earlier self-decision hidden behind a legitimate latest one is the same
 // laundering with an extra step.
 func TestASidecarCannotLaunderASelfApproval(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	recordID := "KS-20260101-sidecar-laundered"
 	frontmatter := testFrontmatter(recordID)
@@ -443,7 +448,7 @@ func TestASidecarCannotLaunderASelfApproval(t *testing.T) {
 		t.Fatalf("cannot write sidecar: %v", err)
 	}
 
-	_, err = runKnowledgeStaged(dbPath, "import-staged",
+	_, err = runKnowledgeStaged(cfg, "import-staged",
 		[]string{"--directory", directory, "--authorized-by", testAuthorizer})
 	if err == nil {
 		t.Fatal("expected a self-approval in the history sidecar to be refused")
@@ -451,13 +456,13 @@ func TestASidecarCannotLaunderASelfApproval(t *testing.T) {
 	if !strings.Contains(err.Error(), "launder a self-approval through a history sidecar") {
 		t.Fatalf("refusal does not name the rule: %v", err)
 	}
-	if records := listStaged(t, dbPath); len(records) != 0 {
+	if records := listStaged(t, cfg); len(records) != 0 {
 		t.Fatalf("a laundered batch was imported: %+v", records)
 	}
 }
 
 func TestAValidSidecarRestoresTheDispositionHistory(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	recordID := "KS-20260101-with-history"
 	frontmatter := testFrontmatter(recordID)
@@ -478,7 +483,7 @@ func TestAValidSidecarRestoresTheDispositionHistory(t *testing.T) {
 		t.Fatalf("cannot write sidecar: %v", err)
 	}
 
-	result, err := runKnowledgeStaged(dbPath, "import-staged",
+	result, err := runKnowledgeStaged(cfg, "import-staged",
 		[]string{"--directory", directory, "--authorized-by", testAuthorizer})
 	if err != nil {
 		t.Fatalf("a valid sidecar import was refused: %v", err)
@@ -490,7 +495,7 @@ func TestAValidSidecarRestoresTheDispositionHistory(t *testing.T) {
 }
 
 func TestImportRejectsADirectoryWithNoRecords(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	if err := os.WriteFile(filepath.Join(directory, "README.md"), []byte("# not a record\n"), 0o600); err != nil {
 		t.Fatalf("cannot write README: %v", err)
@@ -498,24 +503,24 @@ func TestImportRejectsADirectoryWithNoRecords(t *testing.T) {
 	// README.md is skipped by name, so a directory holding only one is empty
 	// as far as the importer is concerned -- and says so rather than failing
 	// on the README's missing frontmatter.
-	_, err := runKnowledgeStaged(dbPath, "import-staged", []string{"--directory", directory})
+	_, err := runKnowledgeStaged(cfg, "import-staged", []string{"--directory", directory})
 	if err == nil || !strings.Contains(err.Error(), "no .md staged-record files found") {
 		t.Fatalf("expected an empty-directory refusal, got %v", err)
 	}
 }
 
 func TestAnUnparseableFileOtherThanReadmeFailsLoudly(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	directory := t.TempDir()
 	writeRecordFile(t, directory, testFrontmatter("KS-20260101-good"))
 	if err := os.WriteFile(filepath.Join(directory, "notes.md"), []byte("no frontmatter here\n"), 0o600); err != nil {
 		t.Fatalf("cannot write stray file: %v", err)
 	}
 
-	if _, err := runKnowledgeStaged(dbPath, "import-staged", []string{"--directory", directory}); err == nil {
+	if _, err := runKnowledgeStaged(cfg, "import-staged", []string{"--directory", directory}); err == nil {
 		t.Fatal("expected an unparseable file to fail the batch")
 	}
-	if records := listStaged(t, dbPath); len(records) != 0 {
+	if records := listStaged(t, cfg); len(records) != 0 {
 		t.Fatalf("a failed batch imported %d record(s)", len(records))
 	}
 }
@@ -524,21 +529,21 @@ func TestAnUnparseableFileOtherThanReadmeFailsLoudly(t *testing.T) {
 // disposition-staged, delete-staged, show-staged, ingest-accepted
 // ---------------------------------------------------------------------------
 
-func stageThroughCLI(t *testing.T, dbPath, recordID string) {
+func stageThroughCLI(t *testing.T, cfg *knowledge.Config, recordID string) {
 	t.Helper()
 	directory := t.TempDir()
 	path := writeRecordFile(t, directory, testFrontmatter(recordID))
-	if _, err := runKnowledgeStaged(dbPath, "propose", []string{"--input", path}); err != nil {
+	if _, err := runKnowledgeStaged(cfg, "propose", []string{"--input", path}); err != nil {
 		t.Fatalf("cannot stage %s: %v", recordID, err)
 	}
 }
 
 func TestDispositionStagedRefusesTheProposerThroughTheCLI(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	recordID := "KS-20260101-cli-self"
-	stageThroughCLI(t, dbPath, recordID)
+	stageThroughCLI(t, cfg, recordID)
 
-	_, err := runKnowledgeStaged(dbPath, "disposition-staged", []string{
+	_, err := runKnowledgeStaged(cfg, "disposition-staged", []string{
 		"--id", recordID, "--action", "accepted", "--reason", "self approval",
 		"--classification-used", "internal", "--decided-by", testProposer,
 	})
@@ -548,14 +553,14 @@ func TestDispositionStagedRefusesTheProposerThroughTheCLI(t *testing.T) {
 }
 
 func TestDispositionStagedRequiresEveryIdentityField(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	recordID := "KS-20260101-cli-missing"
-	stageThroughCLI(t, dbPath, recordID)
+	stageThroughCLI(t, cfg, recordID)
 
 	// Missing --decided-by is the case that matters: without it there is no
 	// identity to compare against staged_by, and the separation check would
 	// have nothing to refuse on.
-	_, err := runKnowledgeStaged(dbPath, "disposition-staged", []string{
+	_, err := runKnowledgeStaged(cfg, "disposition-staged", []string{
 		"--id", recordID, "--action", "accepted", "--reason", "r", "--classification-used", "internal",
 	})
 	if err == nil || !strings.Contains(err.Error(), "--decided-by") {
@@ -564,17 +569,17 @@ func TestDispositionStagedRequiresEveryIdentityField(t *testing.T) {
 }
 
 func TestShowStagedReturnsTheFullRecordAndItsHistory(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	recordID := "KS-20260101-cli-show"
-	stageThroughCLI(t, dbPath, recordID)
-	if _, err := runKnowledgeStaged(dbPath, "disposition-staged", []string{
+	stageThroughCLI(t, cfg, recordID)
+	if _, err := runKnowledgeStaged(cfg, "disposition-staged", []string{
 		"--id", recordID, "--action", "accepted", "--reason", "reviewed",
 		"--classification-used", "internal", "--decided-by", testSteward,
 	}); err != nil {
 		t.Fatalf("cannot disposition: %v", err)
 	}
 
-	result, err := runKnowledgeStaged(dbPath, "show-staged", []string{"--id", recordID})
+	result, err := runKnowledgeStaged(cfg, "show-staged", []string{"--id", recordID})
 	if err != nil {
 		t.Fatalf("show-staged failed: %v", err)
 	}
@@ -592,32 +597,32 @@ func TestShowStagedReturnsTheFullRecordAndItsHistory(t *testing.T) {
 }
 
 func TestShowStagedNamesAnUnknownIDRatherThanReturningEmpty(t *testing.T) {
-	dbPath := testStagedDB(t)
-	_, err := runKnowledgeStaged(dbPath, "show-staged", []string{"--id", "KS-20260101-nope"})
+	cfg := testStagedConfig(t)
+	_, err := runKnowledgeStaged(cfg, "show-staged", []string{"--id", "KS-20260101-nope"})
 	if err == nil || !strings.Contains(err.Error(), "KS-20260101-nope") {
 		t.Fatalf("expected an unknown id to be named, got %v", err)
 	}
 }
 
 func TestDeleteStagedRefusesTheProposerOnADecidedRecordThroughTheCLI(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	recordID := "KS-20260101-cli-delete"
-	stageThroughCLI(t, dbPath, recordID)
-	if _, err := runKnowledgeStaged(dbPath, "disposition-staged", []string{
+	stageThroughCLI(t, cfg, recordID)
+	if _, err := runKnowledgeStaged(cfg, "disposition-staged", []string{
 		"--id", recordID, "--action", "rejected", "--reason", "not reproducible",
 		"--classification-used", "internal", "--decided-by", testSteward,
 	}); err != nil {
 		t.Fatalf("cannot disposition: %v", err)
 	}
 
-	_, err := runKnowledgeStaged(dbPath, "delete-staged", []string{
+	_, err := runKnowledgeStaged(cfg, "delete-staged", []string{
 		"--id", recordID, "--reason", "trying to erase the outcome",
 		"--deleted-by", testProposer, "--authorized-by", testAuthorizer,
 	})
 	if err == nil || !strings.Contains(err.Error(), "already carries a disposition") {
 		t.Fatalf("expected the CLI to refuse the proposer's deletion, got %v", err)
 	}
-	if records := listStaged(t, dbPath); len(records) != 1 {
+	if records := listStaged(t, cfg); len(records) != 1 {
 		t.Fatalf("a refused deletion removed the record: %+v", records)
 	}
 }
@@ -627,17 +632,17 @@ func TestDeleteStagedRefusesTheProposerOnADecidedRecordThroughTheCLI(t *testing.
 // a human-approval gate cannot be reintroduced here without failing a test
 // that says why it was removed.
 func TestIngestAcceptedTakesNoApprovalFlags(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	recordID := "KS-20260101-cli-ingest"
-	stageThroughCLI(t, dbPath, recordID)
-	if _, err := runKnowledgeStaged(dbPath, "disposition-staged", []string{
+	stageThroughCLI(t, cfg, recordID)
+	if _, err := runKnowledgeStaged(cfg, "disposition-staged", []string{
 		"--id", recordID, "--action", "accepted", "--reason", "reviewed",
 		"--classification-used", "internal", "--decided-by", testSteward,
 	}); err != nil {
 		t.Fatalf("cannot disposition: %v", err)
 	}
 
-	result, err := runKnowledgeStaged(dbPath, "ingest-accepted", nil)
+	result, err := runKnowledgeStaged(cfg, "ingest-accepted", nil)
 	if err != nil {
 		t.Fatalf("ingest-accepted failed: %v", err)
 	}
@@ -647,24 +652,24 @@ func TestIngestAcceptedTakesNoApprovalFlags(t *testing.T) {
 	}
 
 	for _, flag := range []string{"--authorized-by", "--decided-by"} {
-		if _, err := runKnowledgeStaged(dbPath, "ingest-accepted", []string{flag, "someone"}); err == nil {
+		if _, err := runKnowledgeStaged(cfg, "ingest-accepted", []string{flag, "someone"}); err == nil {
 			t.Fatalf("ingest-accepted accepted %s: it takes no decision and must take no approval flag", flag)
 		}
 	}
 }
 
 func TestIngestAcceptedDryRunWritesNothing(t *testing.T) {
-	dbPath := testStagedDB(t)
+	cfg := testStagedConfig(t)
 	recordID := "KS-20260101-cli-dry"
-	stageThroughCLI(t, dbPath, recordID)
-	if _, err := runKnowledgeStaged(dbPath, "disposition-staged", []string{
+	stageThroughCLI(t, cfg, recordID)
+	if _, err := runKnowledgeStaged(cfg, "disposition-staged", []string{
 		"--id", recordID, "--action", "accepted", "--reason", "reviewed",
 		"--classification-used", "internal", "--decided-by", testSteward,
 	}); err != nil {
 		t.Fatalf("cannot disposition: %v", err)
 	}
 
-	result, err := runKnowledgeStaged(dbPath, "ingest-accepted", []string{"--dry-run"})
+	result, err := runKnowledgeStaged(cfg, "ingest-accepted", []string{"--dry-run"})
 	if err != nil {
 		t.Fatalf("dry-run failed: %v", err)
 	}
@@ -673,7 +678,7 @@ func TestIngestAcceptedDryRunWritesNothing(t *testing.T) {
 		t.Fatalf("unexpected dry-run report: %#v", result)
 	}
 
-	store, err := knowledge.Open(dbPath)
+	store, err := openStagedStore(cfg)
 	if err != nil {
 		t.Fatalf("cannot open store: %v", err)
 	}
@@ -688,8 +693,8 @@ func TestIngestAcceptedDryRunWritesNothing(t *testing.T) {
 }
 
 func TestUnknownStagedSubcommandIsRefused(t *testing.T) {
-	dbPath := testStagedDB(t)
-	if _, err := runKnowledgeStaged(dbPath, "not-a-verb", nil); err == nil {
+	cfg := testStagedConfig(t)
+	if _, err := runKnowledgeStaged(cfg, "not-a-verb", nil); err == nil {
 		t.Fatal("expected an unknown staged subcommand to be refused")
 	}
 }
@@ -705,14 +710,13 @@ func TestUnknownStagedSubcommandIsRefused(t *testing.T) {
 // so the project-local case has to keep working.
 
 func TestStagingIsRefusedAgainstTheSharedGlobalStore(t *testing.T) {
-	requireSQLite(t)
 	// A directory with no .agents/knowledge-store/config.json and no .git
 	// boundary above it resolves to the global fallback tier.
 	dir := t.TempDir()
 	t.Setenv("KNOWLEDGE_STORE_HOME", filepath.Join(dir, "global"))
 	t.Chdir(dir)
 
-	_, err := knowledgeStagedDatabasePath("")
+	_, err := knowledgeStagedConfig("")
 	if err == nil {
 		t.Fatal("expected staging into the shared global store to be refused")
 	}
@@ -726,7 +730,6 @@ func TestStagingIsRefusedAgainstTheSharedGlobalStore(t *testing.T) {
 }
 
 func TestStagingIsAllowedAgainstAProjectLocalStore(t *testing.T) {
-	requireSQLite(t)
 	dir := t.TempDir()
 	storeDir := filepath.Join(dir, ".agents", "knowledge-store")
 	if err := os.MkdirAll(storeDir, 0o755); err != nil {
@@ -739,11 +742,12 @@ func TestStagingIsAllowedAgainstAProjectLocalStore(t *testing.T) {
 	t.Setenv("KNOWLEDGE_STORE_HOME", filepath.Join(dir, "global"))
 	t.Chdir(dir)
 
-	dbPath, err := knowledgeStagedDatabasePath("")
+	cfg, err := knowledgeStagedConfig("")
 	if err != nil {
 		t.Fatalf("project-local staging should be allowed: %v", err)
 	}
-	if !strings.HasPrefix(dbPath, dir) {
-		t.Errorf("resolved store %q should live under the project at %q", dbPath, dir)
+	stagedPath := knowledge.StagedDatabasePath(cfg)
+	if !strings.HasPrefix(stagedPath, dir) {
+		t.Errorf("resolved store %q should live under the project at %q", stagedPath, dir)
 	}
 }

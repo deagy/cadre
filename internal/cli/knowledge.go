@@ -10,8 +10,6 @@ import (
 	"sort"
 	"strings"
 
-	_ "github.com/mattn/go-sqlite3"
-
 	"github.com/deagy/cadre/cli/internal/knowledge"
 	"github.com/deagy/cadre/cli/internal/retrieval"
 )

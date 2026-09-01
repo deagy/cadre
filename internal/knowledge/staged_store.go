@@ -82,6 +82,23 @@ CREATE TABLE IF NOT EXISTS staged_record_deletions (
   deleted_at TEXT NOT NULL,
   PRIMARY KEY (record_id, deleted_at)
 );
+
+-- What a steward made retrievable, and where.
+--
+-- Kept here rather than derived from the corpus. The corpus is recall's now,
+-- and recall can be asked for a chunk by id but not for what matches a
+-- metadata scope -- so "has this record been ingested?" has no answer over
+-- there. It is also the better home: the fact that a steward's acceptance was
+-- carried out is governance evidence, and it should outlive any particular
+-- store being rebuilt.
+CREATE TABLE IF NOT EXISTS staged_record_ingestions (
+  record_id TEXT PRIMARY KEY,
+  document_id TEXT NOT NULL,
+  corpus TEXT NOT NULL,
+  classification TEXT NOT NULL,
+  chunk_count INTEGER NOT NULL,
+  ingested_at TEXT NOT NULL
+);
 `
 
 // StagedRecordError is a staged record refused, with the contract findings

@@ -45,12 +45,21 @@ func DoctorCmd(args []string) int {
 	// Probe the sqlite driver here rather than inside GatherDoctorReport:
 	// this package already imports both, so orchestration keeps its current
 	// dependency graph. See DoctorReport's field comment.
-	if err := knowledge.DriverAvailable(); err != nil {
+	//
+	// It used to report whether the cgo sqlite3 driver was linked, because a
+	// CGO_ENABLED=0 build of cadre compiled fine and then failed at the first
+	// knowledge query with "go-sqlite3 requires cgo to work. This is a stub" --
+	// a degraded binary an operator had to be able to find out they had. Both
+	// halves of the knowledge path are pure Go now: staged records use
+	// modernc.org/sqlite and retrieval is recall's, which uses the same. The
+	// probe stays because a driver that fails to open is still worth catching
+	// before an operator hits it mid-command.
+	if err := knowledge.StagedDriverAvailable(); err != nil {
 		report.KnowledgeStoreOK = false
 		report.KnowledgeStoreDetail = "unavailable -- " + err.Error()
 	} else {
 		report.KnowledgeStoreOK = true
-		report.KnowledgeStoreDetail = "available (cgo sqlite3 driver linked)"
+		report.KnowledgeStoreDetail = "available (pure-Go sqlite driver, no cgo required)"
 	}
 
 	if asJSON {

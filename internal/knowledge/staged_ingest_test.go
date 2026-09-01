@@ -12,6 +12,73 @@ import (
 	"testing"
 )
 
+// TestTheCorpusReceivesTheStewardsDecision asserts what actually crosses the
+// boundary: the record arrives carrying the classification a steward applied,
+// the staging source, and the role that marks it as a knowledge record --
+// because once it is in the corpus, those three are what a governed retrieval
+// filters and cites on.
+func TestTheCorpusReceivesTheStewardsDecision(t *testing.T) {
+	store := testStagedStore(t)
+	recordID := testStageRecord(t, store, "KS-20260101-handoff")
+	acceptStagedRecord(t, store, recordID)
+
+	corpus := &recordingCorpus{}
+	if _, err := store.IngestAcceptedStagedRecords(
+		IngestAcceptedOptions{Corpus: corpus}); err != nil {
+		t.Fatalf("ingest failed: %v", err)
+	}
+	if len(corpus.ingested) != 1 {
+		t.Fatalf("corpus received %d records, want 1", len(corpus.ingested))
+	}
+
+	received := corpus.ingested[0]
+	if received.Classification != "internal" {
+		t.Errorf("classification = %q, want the steward's %q", received.Classification, "internal")
+	}
+	if received.Source != StagedIngestSource {
+		t.Errorf("source = %q, want %q", received.Source, StagedIngestSource)
+	}
+	if received.Role != StagedIngestRole {
+		t.Errorf("role = %q, want %q", received.Role, StagedIngestRole)
+	}
+	if !strings.Contains(received.DocumentID, recordID) {
+		t.Errorf("document id %q does not identify the record", received.DocumentID)
+	}
+	if received.Metadata["source_uri"] != "" {
+		t.Errorf("a source URI reached the corpus: %q", received.Metadata["source_uri"])
+	}
+}
+
+// TestARefusedRecordNeverReachesTheCorpus. The screening refusals are the
+// point of this step; a refusal that still handed the content over would be
+// theatre.
+func TestARefusedRecordNeverReachesTheCorpus(t *testing.T) {
+	store := testStagedStore(t)
+	recordID := testStageRecord(t, store, "KS-20260101-risky")
+	acceptStagedRecord(t, store, recordID)
+	frontmatter, _, err := store.GetStagedRecord(recordID)
+	if err != nil {
+		t.Fatalf("cannot reload record: %v", err)
+	}
+	frontmatter["untrusted_instruction_risk"] = true
+	forceStagedFrontmatter(t, store, recordID, frontmatter)
+
+	corpus := &recordingCorpus{}
+	report, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{Corpus: corpus})
+	if err != nil {
+		t.Fatalf("ingest failed: %v", err)
+	}
+	if len(report.Refused) != 1 {
+		t.Fatalf("expected one refusal, got %+v", report)
+	}
+	if len(corpus.ingested) != 0 {
+		t.Fatalf("a refused record was handed to the corpus: %+v", corpus.ingested)
+	}
+	if ingested, err := store.StagedRecordAlreadyIngested(recordID); err != nil || ingested {
+		t.Errorf("a refused record was recorded as ingested (err=%v)", err)
+	}
+}
+
 // forceStagedFrontmatter writes a record's frontmatter straight into the row,
 // bypassing PutStagedRecord's validator.
 //
@@ -34,6 +101,27 @@ func forceStagedFrontmatter(t *testing.T, store *Store, recordID string, frontma
 	}
 }
 
+// recordingCorpus stands in for the retrievable corpus.
+//
+// The corpus is recall's now, so these tests assert what this package is
+// actually responsible for: which records are sent, at what classification,
+// and which are refused before they get there. What recall does with a
+// document it is handed is recall's own tested behaviour.
+type recordingCorpus struct {
+	ingested []CorpusRecord
+	fail     error
+}
+
+func (c *recordingCorpus) Ingest(record CorpusRecord) (int, error) {
+	if c.fail != nil {
+		return 0, c.fail
+	}
+	c.ingested = append(c.ingested, record)
+	return 1, nil
+}
+
+func (c *recordingCorpus) Destination() string { return "test-corpus" }
+
 func acceptStagedRecord(t *testing.T, store *Store, recordID string) {
 	t.Helper()
 	if _, err := store.DispositionStagedRecord(recordID, DispositionInput{
@@ -51,7 +139,7 @@ func TestAnAcceptedRecordBecomesRetrievable(t *testing.T) {
 	recordID := testStageRecord(t, store, "KS-20260101-accepted-ingest")
 	acceptStagedRecord(t, store, recordID)
 
-	report, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{})
+	report, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{Corpus: &recordingCorpus{}})
 	if err != nil {
 		t.Fatalf("ingest failed: %v", err)
 	}
@@ -71,7 +159,7 @@ func TestAProposedRecordIsNotIngested(t *testing.T) {
 	store := testStagedStore(t)
 	recordID := testStageRecord(t, store, "KS-20260101-still-proposed")
 
-	report, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{})
+	report, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{Corpus: &recordingCorpus{}})
 	if err != nil {
 		t.Fatalf("ingest failed: %v", err)
 	}
@@ -98,7 +186,7 @@ func TestIngestRefusesAnUntrustedInstructionRiskRecord(t *testing.T) {
 	}
 	forceStagedFrontmatter(t, store, recordID, frontmatter)
 
-	report, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{})
+	report, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{Corpus: &recordingCorpus{}})
 	if err != nil {
 		t.Fatalf("ingest failed: %v", err)
 	}
@@ -130,7 +218,7 @@ func TestIngestRefusesASelfApprovedRecord(t *testing.T) {
 	}
 	forceStagedFrontmatter(t, store, recordID, frontmatter)
 
-	report, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{})
+	report, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{Corpus: &recordingCorpus{}})
 	if err != nil {
 		t.Fatalf("ingest failed: %v", err)
 	}
@@ -167,7 +255,7 @@ func TestTheStewardsClassificationWinsOverTheProposers(t *testing.T) {
 		t.Fatalf("cannot disposition record: %v", err)
 	}
 
-	report, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{})
+	report, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{Corpus: &recordingCorpus{}})
 	if err != nil {
 		t.Fatalf("ingest failed: %v", err)
 	}
@@ -181,10 +269,10 @@ func TestASecondRunSkipsRatherThanDuplicating(t *testing.T) {
 	recordID := testStageRecord(t, store, "KS-20260101-idempotent")
 	acceptStagedRecord(t, store, recordID)
 
-	if _, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{}); err != nil {
+	if _, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{Corpus: &recordingCorpus{}}); err != nil {
 		t.Fatalf("first ingest failed: %v", err)
 	}
-	report, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{})
+	report, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{Corpus: &recordingCorpus{}})
 	if err != nil {
 		t.Fatalf("second ingest failed: %v", err)
 	}
@@ -222,6 +310,7 @@ func TestSelectingByIDIgnoresRecordsNotNamedAndReportsUnknownIDs(t *testing.T) {
 	acceptStagedRecord(t, store, second)
 
 	report, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{
+		Corpus:    &recordingCorpus{},
 		RecordIDs: []string{first, "KS-20260101-unknown"},
 	})
 	if err != nil {
@@ -239,14 +328,21 @@ func TestSelectingByIDIgnoresRecordsNotNamedAndReportsUnknownIDs(t *testing.T) {
 	}
 }
 
-// Ingested state is derived from the corpus, never recorded on the staged
-// record -- a second flag could disagree, and then two places would claim to
-// know.
-func TestIngestedStateIsDerivedFromTheCorpus(t *testing.T) {
+// Ingested state never lands on the staged record itself -- a flag there
+// could disagree with the ingestion evidence, and then two places would claim
+// to know.
+//
+// It used to be derived from the corpus, which was possible only while cadre
+// owned one. recall can be asked for a chunk by id but not for what matches a
+// metadata scope, so the fact now lives in cadre's own
+// staged_record_ingestions table. That is also where it belongs: a steward's
+// acceptance having been carried out is governance evidence, and it should
+// outlive any particular store being rebuilt.
+func TestIngestedStateIsNotWrittenOntoTheRecord(t *testing.T) {
 	store := testStagedStore(t)
 	recordID := testStageRecord(t, store, "KS-20260101-derived")
 	acceptStagedRecord(t, store, recordID)
-	if _, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{}); err != nil {
+	if _, err := store.IngestAcceptedStagedRecords(IngestAcceptedOptions{Corpus: &recordingCorpus{}}); err != nil {
 		t.Fatalf("ingest failed: %v", err)
 	}
 
