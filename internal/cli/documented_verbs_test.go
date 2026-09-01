@@ -121,10 +121,25 @@ func scanDocumentedKnowledgeVerbs(t *testing.T, root string) []documentedVerb {
 // "Answerable" is a low bar on purpose: running, naming a replacement, or
 // admitting it was never built all pass. What fails is silence.
 func TestEveryDocumentedKnowledgeVerbIsAnswerable(t *testing.T) {
-	root, err := filepath.Abs(filepath.Join("..", "..", "roster"))
+	repo, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Both hand-authored roots. roster/ is the obvious one; .agents/skills/ is
+	// the one the first version of this guard missed, and it is not an
+	// afterthought -- plugin_generation.go reads it as an input root, and two
+	// of its SKILL.md files instruct an agent to run `cadre knowledge
+	// context`. A guard scoped to roster/ would have reported parity while
+	// live instructions pointed at a dead verb.
+	//
+	// The generated trees (plugin/, cline-plugins/) are deliberately not
+	// scanned: they are outputs of these roots, held current by
+	// `generate-plugin --check`, so a mention there is a copy of one here.
+	roots := []string{
+		filepath.Join(repo, "roster"),
+		filepath.Join(repo, ".agents", "skills"),
+	}
+	root := roots[0]
 	if _, err := os.Stat(root); err != nil {
 		t.Skipf("no roster/ beside this package: %v", err)
 	}
@@ -148,7 +163,13 @@ func TestEveryDocumentedKnowledgeVerbIsAnswerable(t *testing.T) {
 		answerable[extra] = true
 	}
 
-	documented := scanDocumentedKnowledgeVerbs(t, root)
+	var documented []documentedVerb
+	for _, scanRoot := range roots {
+		if _, err := os.Stat(scanRoot); err != nil {
+			continue
+		}
+		documented = append(documented, scanDocumentedKnowledgeVerbs(t, scanRoot)...)
+	}
 	if len(documented) == 0 {
 		t.Fatal("no documented verbs found; this guard would assert nothing")
 	}
@@ -174,7 +195,7 @@ func TestEveryDocumentedKnowledgeVerbIsAnswerable(t *testing.T) {
 	for _, verb := range verbs {
 		report.WriteString("\n  " + verb + "\n")
 		for _, mention := range unanswered[verb] {
-			relative, relErr := filepath.Rel(filepath.Dir(root), mention.file)
+			relative, relErr := filepath.Rel(repo, mention.file)
 			if relErr != nil {
 				relative = mention.file
 			}

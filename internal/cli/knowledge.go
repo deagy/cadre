@@ -60,35 +60,43 @@ var retiredVerbs = map[string]string{
 // tool advertised and refused.
 var liveKnowledgeVerbs = []string{"init", "search", "config"}
 
-// neverShippedVerbs are documented in the roster and were never built in this
-// CLI.
+// pythonEraVerbs shipped in the `cadre` that existed before the Go rewrite,
+// and were never rebuilt.
 //
-// A distinct table from retiredVerbs, because they are a distinct fact and an
-// operator deserves the difference. A retired verb worked here once and the
-// message says where it went. These describe the Python implementation this
-// CLI replaced: the documents were written against it and outlived it, so the
-// honest answer is that this binary never had them, not that they moved.
+// A distinct table from retiredVerbs because they are a distinct fact, and an
+// operator deserves the difference. A retiredVerbs entry names what replaced
+// it *here*; these have no replacement in this binary at all.
 //
-// They answered `unknown subcommand` until now, which told a reader following
-// a governance document nothing at all -- neither that the capability is gone
-// nor that it was ever real.
-var neverShippedVerbs = map[string]string{
-	"context": "the Python CLI's retrieval-with-citations verb. `cadre knowledge search` " +
-		"is this CLI's governed retrieval; note that `cadre context` is a different, " +
-		"live command -- the local agent context store, not knowledge retrieval",
-	"list-staged": "`cadre knowledge show-staged --id <id>` reads one record; this CLI " +
-		"has no listing verb",
-	"export-staged": "`roster/knowledge-store/proposed-knowledge/` holds " +
-		"a snapshot the Python CLI exported; nothing in this binary refreshes it, and " +
-		"`import-staged` reads such a directory without there being a verb that writes one",
-	"retention-report": "Per-message retention windows were a Python-era " +
-		"capability; this CLI records none, so there is nothing to report on. Whether that " +
-		"is restored or declared absent is an open decision",
-	"delete-ingested": "Deleting ingested content, with the evidence the " +
-		"policy describes, is not a capability this binary has; content lives in a recall " +
-		"store, which deletes by document or chunk id",
-	"deletion-evidence": "`delete-staged` writes staged-record deletion " +
-		"evidence, and `show-staged` shows it; there is no verb that reports it in bulk",
+// They answered `unknown subcommand` until recently, which told a reader
+// following a governance document nothing. The first attempt to fix that said
+// "never built in this CLI" -- literally true of the Go binary and false to
+// anyone who used them, because they were real, tested commands in
+// `roster/knowledge-store/src/cli.py`, removed wholesale in b418031e when the
+// Go replacement landed. Someone who remembers running one of these was not
+// imagining it, and a message telling them otherwise is a new false claim
+// replacing an old silence.
+var pythonEraVerbs = map[string]string{
+	"context": "the Python CLI's retrieval-with-citations verb. `cadre knowledge search` is " +
+		"this binary's governed retrieval. (Go briefly declared the name too, in f6edbedd, " +
+		"as a not-yet-implemented stub removed the same day.) Note that `cadre context` is a " +
+		"different, live command -- the local agent context store, not knowledge retrieval",
+	"list-staged": "listing staged records is not absent from the code: " +
+		"`knowledge.ListStagedRecords(status)` is live, tested, filterable by status exactly " +
+		"as the documented `--status` flag describes, and `ingest-accepted` calls it. It is " +
+		"simply not wired to a CLI verb. Use `show-staged --id <id>` for one record",
+	"export-staged": "`roster/knowledge-store/proposed-knowledge/` holds a snapshot the Python " +
+		"CLI exported. Nothing in this binary refreshes it, and `import-staged` reads such a " +
+		"directory without there being a verb that writes one",
+	"retention-report": "per-message retention windows were a Python-era capability; this " +
+		"binary records none, so there is nothing to report on. Whether that is restored or " +
+		"declared absent is an open decision",
+	"delete-ingested": "deleting ingested content, with the evidence the policy describes, is " +
+		"not a capability this binary has. Content lives in a recall store, whose Go API " +
+		"deletes by document or chunk id -- note that `recall`'s own CLI exposes no delete " +
+		"command either, so this is a library call, not something to run",
+	"deletion-evidence": "`delete-staged` writes deletion evidence to `staged_record_deletions`, " +
+		"which outlives the record it describes -- but nothing reads it back. `show-staged` " +
+		"cannot: it resolves a record by id, and after a deletion there is no record to find",
 }
 
 // AnswerableKnowledgeVerbs is every `cadre knowledge <verb>` this CLI answers
@@ -104,7 +112,7 @@ func AnswerableKnowledgeVerbs() map[string]bool {
 	for verb := range retiredVerbs {
 		answerable[verb] = true
 	}
-	for verb := range neverShippedVerbs {
+	for verb := range pythonEraVerbs {
 		answerable[verb] = true
 	}
 	for _, verb := range knowledgeStagedSubcommands {
@@ -165,8 +173,8 @@ Options:
 	if replacement, retired := retiredVerbs[subcommand]; retired {
 		return knowledgeRetired(subcommand, replacement)
 	}
-	if detail, documented := neverShippedVerbs[subcommand]; documented {
-		return knowledgeNeverShipped(subcommand, detail)
+	if detail, documented := pythonEraVerbs[subcommand]; documented {
+		return knowledgePythonEra(subcommand, detail)
 	}
 
 	// Resolve which store this invocation talks to, through the three-tier
@@ -201,17 +209,16 @@ Options:
 // Exit 2 rather than 1: this is a usage error -- the command does not exist
 // any more -- and a caller scripting against cadre can tell it apart from a
 // retrieval that ran and failed.
-// knowledgeNeverShipped answers a verb the roster documents and this CLI
-// never had.
+// knowledgePythonEra answers a verb that worked before the Go rewrite.
 //
 // Exit 2 like a retired verb: both are usage errors, and a caller scripting
 // against cadre needs them to differ from a command that ran and failed. What
-// differs is the sentence, because "it moved" and "it was never here" send a
-// reader to different places.
-func knowledgeNeverShipped(verb, detail string) int {
+// differs is the sentence -- "it moved" and "it went away with the rewrite"
+// send a reader to different places, and only one of them is true here.
+func knowledgePythonEra(verb, detail string) int {
 	fmt.Fprintf(os.Stderr,
-		"cadre knowledge %s: documented in the roster, never built in this CLI.\n  %s\n",
-		verb, detail)
+		"cadre knowledge %s: shipped in the Python CLI, removed in the Go rewrite "+
+			"(b418031e) and never rebuilt.\n  %s\n", verb, detail)
 	return 2
 }
 
