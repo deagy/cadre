@@ -54,10 +54,15 @@ or `--all-sources` for convenience.
 
 ## Allowed operations
 
-Ordinary agents may retrieve curated knowledge with `cadre knowledge context`
+Ordinary agents may retrieve curated knowledge with `cadre knowledge search`
 and may stage a durable proposal with `cadre knowledge propose --from-finding
 -`. They may not ingest, accept, reclassify, correct, retain, or delete
 knowledge.
+
+`search` requires a classification and an explicit source scope — either
+`--source` (repeatable) or `--all-sources`. Naming neither is refused rather
+than defaulted, because an omitted scope in a shared store is a cross-project
+read, not a neutral one.
 
 Ordinary agents may use `cadre context put`, `get`, `list`, and `search` for
 working material. Use the narrowest scope that works: `agent` by default,

@@ -111,24 +111,42 @@ For production-quality semantic retrieval, `openai-compatible` sends chunk text 
 
 ## Commands
 
+What the CLI answers today:
+
 ```text
-init
-ingest --input <file> [--source <name>] [--classification <level>] [--retention-days <n>]
-search --query <text> --classification <level> [--top <n>] [--source <name> ... | --all-sources]
-context --agent <role> --task-id <id> --query <text> --classification <level> [--top <n>] [--source <name> ... | --all-sources]
-stats
-retention-report [--as-of <iso-8601 date or timestamp>]
-delete-ingested --scope {source|conversation|message} --id <id> --reason <text> --deleted-by <actor> --authorized-by <human> --trigger <trigger> [--source <name>] [--dry-run]
+init                       verify the configured store and record its embedder identity
+search <query> --classification <level> (--source <name> ... | --all-sources)
+                           [--agent <role>] [--task-id <id>] [--top <n>] [--json]
+config [show]              print the configuration a governed retrieval resolves
 
 propose (--input <file>|- | --from-finding <file>|-) [--render-only]
-list-staged [--status <status>]
 show-staged --id <id>
 import-staged --directory <dir> [--authorized-by <human>]
-export-staged --output <dir> [--status <status>] [--check]
-disposition-staged --id <id> --action <accepted|rejected|deferred> --reason <text> --classification-used <level> --decided-by <actor> [--diverged-from-proposal]
+disposition-staged --id <id> --action <accepted|rejected|deferred> --reason <text>
+                   --classification-used <level> --decided-by <actor>
+ingest-accepted [--id <id>] [--dry-run]
 delete-staged --id <id> --reason <text> --deleted-by <actor> [--authorized-by <human>]
-deletion-evidence [--source <name> | --all-sources]
 ```
+
+`search` requires a classification and exactly one source scope. Naming neither
+`--source` nor `--all-sources` is refused rather than defaulted: in a shared
+store an omitted scope is a cross-project read, not a neutral one.
+
+### Removed, and where each went
+
+Every one of these was a real command here before the Go rewrite replaced the
+Python implementation (`b418031e`). Running any of them now prints what
+happened to it rather than "unknown subcommand".
+
+| Command | What replaced it |
+|---|---|
+| `ingest` | `recall upload` — the store is recall's |
+| `context` | `cadre knowledge search`. Note `cadre context` is a different, live command: the local agent context store |
+| `stats` | `recall store info` |
+| `list-staged` | nothing. `ListStagedRecords(status)` is live and filterable in the library; it is unwired, not absent |
+| `export-staged` | nothing. `proposed-knowledge/` holds a snapshot the Python CLI wrote; nothing refreshes it |
+| `retention-report`, `delete-ingested`, `deletion-evidence` | nothing — see `DESIGN-NOTES-deletion-and-retention.md` |
+
 
 `import-staged` needs `--authorized-by` only when the batch contains a record that already carries a steward's `disposition`. Importing those admits decisions this store never watched being made — a legitimate migration act, but not a proposal, and the only remaining route by which a decision can enter without `disposition-staged` having recorded it. A batch of purely `proposed` records needs nothing extra. A self-approved record (`disposition.decided_by` equal to `staged_by`) is refused either way: a named human can vouch for a decision the store did not witness, but nobody can vouch for one that was never a decision. The authorization is persisted per admitted record (`staged_record_imports`, shown by `show-staged` as `import_authorizations`), not merely echoed back — "the human accountable" has to still be recorded after the process exits for that phrase to mean anything. A `README.md` in the directory is skipped, matching `export-staged --check`; any other unparseable file fails the whole batch.
 

@@ -163,8 +163,10 @@ target is still required so an incidental CWD never becomes a write target.
   the repository's own source alone, so no dispatched agent ever named the
   other one: a store could hold any number of accepted findings and return
   none of them. **`--source` is now repeatable** on `cadre knowledge search`
-  and `cadre knowledge context` (order-preserving, de-duplicated; still
-  mutually exclusive with `--all-sources`), and a plan now names both sources
+  (order-preserving, de-duplicated; still mutually exclusive with
+  `--all-sources`; it applied to `cadre knowledge context` too, which was
+  removed later in this same unreleased window when the retrieval engine moved
+  to recall), and a plan now names both sources
   — one `--source` argument per entry, never `--all-sources` — **for a
   repository that has its own `.agents/knowledge-store/config.json`.** Without
   one, retrieval resolves to the shared global-fallback store, where the staged

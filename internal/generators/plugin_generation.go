@@ -1715,6 +1715,11 @@ var knowledgeStoreExtras = map[string]bool{
 	// malformed record violated. Packaging the module without it would ship
 	// error messages pointing at a file the reader cannot open.
 	"roster/knowledge-store/proposed-knowledge.schema.json": true,
+	// SECURITY.md cites this note by path for the retention and deletion
+	// design the Python implementation carried, and README.md's removed-verbs
+	// table does too. Same reasoning as the schema above: shipping the
+	// documents without it would ship a pointer the reader cannot follow.
+	"roster/knowledge-store/DESIGN-NOTES-deletion-and-retention.md": true,
 }
 
 var contextStoreExtras = map[string]bool{
