@@ -88,7 +88,7 @@
     },
     "recommended_action": {
       "enum": ["ingest", "update", "reclassify", "defer"],
-      "description": "The action the proposing agent recommends. 'delete' is deliberately absent and is rejected with its own dedicated error, re-decided again when delete-ingested was implemented (issue #184): the knowledge store now has deletion capability, for staged records and ingested content alike, so the reason is act-vs-capability, not capability absence -- proposing a deletion and being authorized to perform one are different acts. A required deletion escalates to knowledge-store-steward and an authorized human rather than being recorded as a staged-record action."
+      "description": "The action the proposing agent recommends. 'delete' is deliberately absent and is rejected with its own dedicated error, The reason is act-vs-capability for staged records, where delete-staged exists: proposing a deletion and being authorized to perform one are different acts. Over ingested content it is capability absence as well -- delete-ingested was removed in b418031e and never rebuilt. A required deletion escalates to knowledge-store-steward and an authorized human rather than being recorded as a staged-record action."
     },
     "untrusted_instruction_risk": {
       "anyOf": [

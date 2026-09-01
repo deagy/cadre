@@ -1,47 +1,52 @@
-# Staged knowledge records — generated snapshot
+# Staged knowledge records — frozen snapshot
 
-**Do not hand-edit the `.md` files here.** They are written by
-`cadre knowledge export-staged`, and anything you type into them is lost the
-next time the snapshot is refreshed.
+**Do not hand-edit the `.md` files here.** They were written by
+`cadre knowledge export-staged`. Nothing validates them and nothing refreshes
+them, so a hand edit will not be caught — and will not be reflected in the
+store either, which is the authoritative copy.
 
 ## What this directory is now
 
 The store is the source of truth. Records are staged with
-`cadre knowledge propose`, listed with `list-staged`, read with `show-staged`,
-and dispositioned with `disposition-staged` — all against this project's
-SQLite partition under `.agents/knowledge-store/`, which is gitignored and
-operator-controlled.
+`cadre knowledge propose`, read with `show-staged`, and dispositioned with
+`disposition-staged` — all against this project's SQLite partition under
+`.agents/knowledge-store/`, which is gitignored and operator-controlled.
+(`list-staged` was the Python CLI's verb for enumerating them. It is not wired
+into the Go CLI; `ListStagedRecords(status)` is live and filterable in the
+library, so this one is unwired rather than absent.)
 
-This directory is the **durability snapshot** of that store: a periodic
-committed export, refreshed deliberately rather than per record. It exists
+This directory was the **durability snapshot** of that store: a periodic
+committed export, refreshed deliberately rather than per record. It existed
 because the store is gitignored, so without it the corpus would have no
 backup, no cross-machine copy, and no visibility to anyone else.
 
-That split is the whole point of the change. Capturing a finding used to cost
-a pull request and a full CI matrix; now capture is a local command and the
-committed copy is a batch you refresh when it is worth refreshing.
+## Refreshing it — not possible
 
-## Refreshing it
-
-```sh
-cadre knowledge export-staged --output roster/knowledge-store/proposed-knowledge
-```
+`cadre knowledge export-staged` was removed in `b418031e` when the Go rewrite
+replaced the Python implementation, and was never rebuilt. **This snapshot is
+frozen at whatever it last held**, and it drifts further from the store with
+every disposition. `import-staged` still reads a directory in this format, so
+the round trip is half present: the snapshot can be restored into a store, but
+no longer produced from one.
 
 Files are named `<record-id>.md`. The id is the durable identity, so the
 filename follows it rather than the other way round — several of these records
 were first written under quite different names.
 
-A record whose disposition has changed more than once also gets an
+A record whose disposition changed more than once also has an
 `<record-id>.history.json` beside it. The frontmatter carries the *current*
 disposition; the earlier ones cannot live there, because the frontmatter
 dialect is deliberately one level deep and holds no list of mappings.
 
 ## What is checked, and what is not
 
-`staged_records.py` validates every file here — in CI, and in the
-`staged-knowledge-records` pre-commit hook. A malformed record cannot land.
+**Nothing checks these files.** `staged_records.py` validated every file here,
+in CI and in a `staged-knowledge-records` pre-commit hook; both went with the
+Python implementation. `internal/knowledge/staged_records.go` carries the
+equivalent parsing logic for records the CLI itself handles, but no job points
+it at this directory. A malformed record here can land.
 
-**Nothing verifies that this snapshot is current.** The store it is exported
-from is gitignored and machine-local, so no CI job can compare them. A stale
-snapshot is therefore possible and will look perfectly valid. Refresh it when
-you have staged or dispositioned anything you would mind losing.
+**Nothing verifies that this snapshot is current** either, and now nothing
+could make it current if it noticed. Treat it as a historical export: useful
+as a record of dispositions made up to the point it was last written, and not
+as a view of the store.

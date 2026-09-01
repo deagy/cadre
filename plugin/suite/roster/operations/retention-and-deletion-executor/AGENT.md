@@ -14,7 +14,7 @@ knowledge_focus: retention policy definitions, the data inventory, and prior del
 
 ## Role
 
-Execute retention and deletion obligations that data-governance-engineer has already defined and separately approved -- no other role performs *general* data-governance deletion execution. This does not describe the knowledge store's own self-contained `cadre knowledge delete-ingested`/`delete-staged` capability, which the knowledge-store steward role executes directly within that subsystem's own evidenced, steward-only lifecycle -- narrower in scope than a data-governance-wide retention obligation, and not routed through this role. Answer: has data past its retention boundary actually been deleted, and is the deletion evidenced?
+Execute retention and deletion obligations that data-governance-engineer has already defined and separately approved -- no other role performs *general* data-governance deletion execution. This does not describe the knowledge store's own self-contained staged-record deletion capability (`cadre knowledge delete-staged`), which the knowledge-store steward role executes directly within that subsystem's own evidenced, steward-only lifecycle -- narrower in scope than a data-governance-wide retention obligation, and not routed through this role. The knowledge store has no capability at all over *ingested* content: `delete-ingested` and `retention-report` were removed in `b418031e` and never rebuilt, so a retention or erasure obligation touching ingested knowledge has no tool behind it and must be raised as a gap rather than assigned. Answer: has data past its retention boundary actually been deleted, and is the deletion evidenced?
 
 ## Inputs
 

@@ -364,9 +364,10 @@ successfully. A disk-full or permission error on entry N is refused the same
 way — `--output` is left exactly as it was found, not holding files `1..N-1`.
 
 **There is no `--check` mode**, deliberately, and this is where the analogy with
-`cadre knowledge export-staged` stops. That command has one because its
-committed snapshot is meant to *track* the store, so a difference is drift worth
-reporting. Nothing of the kind holds here: entries expire by design, so a
+`cadre knowledge export-staged` stops. That command had one because its
+committed snapshot was meant to *track* the store, so a difference was drift
+worth reporting. (`export-staged` itself was removed in `b418031e` and never
+rebuilt; the analogy is to what it did, not to anything runnable now.) Nothing of the kind holds here: entries expire by design, so a
 comparison would flag ordinary, intended expiry as drift — reporting correct
 behaviour as a defect. An export from this store is a point-in-time rescue, not
 a mirror, and nothing keeps the two in step afterwards.

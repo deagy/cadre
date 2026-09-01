@@ -46,13 +46,18 @@ This is no longer only a convention. When (and only when) configuration
 resolves to tier 2 above — no explicit `--config` and no project-local file
 found — the CLI enforces it structurally:
 
-- `search`/`context` reject a call that supplies neither `--source <value>`
-  nor the new `--all-sources` flag, and reject a call that supplies both
-  (ambiguous). `--all-sources` makes today's cross-project retrieval an
-  explicit, visible caller choice rather than an accidental omission; it
-  behaves exactly like an omitted `--source` did before this change.
-- `ingest` rejects a call that omits `--source` instead of silently writing
-  under the generic `chat-export` placeholder identity.
+- `search` rejects a call that supplies neither `--source <value>` nor the
+  `--all-sources` flag, and rejects a call that supplies both (ambiguous).
+  `--all-sources` makes cross-project retrieval an explicit, visible caller
+  choice rather than an accidental omission; it behaves exactly like an
+  omitted `--source` did before this change.
+
+`search` is the only retrieval verb this applies to. The rule was written when
+`context` and `ingest` also existed; both were removed in `b418031e` and never
+rebuilt, so the ingest-side half of it — rejecting an `ingest` that omits
+`--source` rather than writing under the generic `chat-export` placeholder
+identity — enforces nothing here today. Ingestion now goes through recall,
+which this rule does not reach.
 
 Tier 1 (project-local) and an explicit `--config` are unaffected: `--source`
 and `--all-sources` remain fully optional there, exactly as before, because a
@@ -146,11 +151,6 @@ happened to it rather than "unknown subcommand".
 | `list-staged` | nothing. `ListStagedRecords(status)` is live and filterable in the library; it is unwired, not absent |
 | `export-staged` | nothing. `proposed-knowledge/` holds a snapshot the Python CLI wrote; nothing refreshes it |
 | `retention-report`, `delete-ingested`, `deletion-evidence` | nothing — see `DESIGN-NOTES-deletion-and-retention.md` |
-
-
-`import-staged` needs `--authorized-by` only when the batch contains a record that already carries a steward's `disposition`. Importing those admits decisions this store never watched being made — a legitimate migration act, but not a proposal, and the only remaining route by which a decision can enter without `disposition-staged` having recorded it. A batch of purely `proposed` records needs nothing extra. A self-approved record (`disposition.decided_by` equal to `staged_by`) is refused either way: a named human can vouch for a decision the store did not witness, but nobody can vouch for one that was never a decision. The authorization is persisted per admitted record (`staged_record_imports`, shown by `show-staged` as `import_authorizations`), not merely echoed back — "the human accountable" has to still be recorded after the process exits for that phrase to mean anything. A `README.md` in the directory is skipped, matching `export-staged --check`; any other unparseable file fails the whole batch.
-
-`import-staged` also restores each record's `<id>.history.json` sidecar, so the pair with `export-staged` is a real round trip: the sidecar exists because frontmatter holds only the *current* disposition, and importing the `.md` files alone silently dropped every earlier decision (`export-staged --check` reported `history_drift` immediately afterwards). Restoring is append-only — re-importing the same export writes nothing further, and a sidecar contradicting history the store already holds, or contradicting the record it sits beside, refuses the batch instead of overwriting. An absent sidecar is fine; two records in the committed snapshot predate that table.
 
 Without `--config`, configuration is read using the project-local-then-global resolution above; if no config file exists at the resolved location, built-in defaults apply relative to that same directory. An existing config resolves its database path relative to the config directory. A supplied `--config` path must exist and contain a JSON object; otherwise the command fails closed.
 
