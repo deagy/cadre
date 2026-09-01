@@ -1,3 +1,19 @@
+> # SUPERSEDED — this roadmap was not followed to completion
+>
+> This document plans work on the Python-era knowledge store and predates
+> `b418031e`, the commit that replaced it with the Go rewrite. It was never
+> updated afterwards, and the ✅ COMPLETE marks below describe that earlier
+> implementation, not the shipped one.
+>
+> **Phase 4.6 was never built into the current CLI.** `Store.DeleteExpired`,
+> TTL enforcement, cascade delete and the deletion audit log described there
+> have no counterpart today: retention windows are not recorded, nothing ages
+> out, and there is no command that deletes ingested content. Whether that is
+> rebuilt or declared permanently out of scope is an open decision, recorded in
+> `roster/knowledge-store/SECURITY.md` § Storage rules.
+>
+> Kept as a record of what was planned. Read it as history.
+
 # Phase 4: Go CLI Refactoring — Completion Roadmap
 
 ## Executive Summary

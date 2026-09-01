@@ -1,3 +1,29 @@
+> # SUPERSEDED — this document describes a system that was replaced
+>
+> **Nothing below is a description of the shipped CLI.** This file was last
+> touched in `c304990a`, about two hours before `b418031e` replaced the Python
+> knowledge store with the Go rewrite, and it was never updated afterwards. It
+> announces as COMPLETE and production-ready a set of capabilities that the
+> commit two hours later removed.
+>
+> Specifically, and because a reader skimming for a feature list will otherwise
+> find one: **retention enforcement, TTL-based expiry, age-based retention
+> policies, source-based deletion of ingested content, the `cadre knowledge
+> delete` command and its deletion audit trail do not exist.** The commands
+> that implemented them (`ingest`, `retention-report`, `delete-ingested`,
+> `deletion-evidence`, `context`, `list-staged`, `export-staged`) were removed
+> in `b418031e` and none was rebuilt. Ingested content now lives in a recall
+> store, whose CLI exposes no delete command at all. No retention window is
+> recorded for any content and nothing ages out.
+>
+> For what the store actually does today, read
+> `roster/knowledge-store/SECURITY.md` § Storage rules and
+> `roster/knowledge-store/README.md`. For the design these notes describe,
+> preserved deliberately rather than deleted, read
+> `roster/knowledge-store/DESIGN-NOTES-deletion-and-retention.md`.
+>
+> Kept as a record of what was built and withdrawn. Read it as history.
+
 # Release Notes: Phase 4 - Knowledge Store Implementation
 
 **Release Date:** August 2026  
