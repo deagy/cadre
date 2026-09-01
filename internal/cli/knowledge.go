@@ -426,7 +426,12 @@ Options:
 		return parseExitCode(err)
 	}
 
-	if fs.NArg() < 1 {
+	// Trimmed, not merely counted. `search ""` and `search "   "` both supply
+	// an argument, so NArg passes; govern refuses them, but one layer later
+	// and at exit 1 rather than the 2 this CLI documents for a governance
+	// refusal. Refusing here keeps the exit code honest and the refusal in
+	// the place the caller can see.
+	if fs.NArg() < 1 || strings.TrimSpace(fs.Arg(0)) == "" {
 		fmt.Fprintf(os.Stderr, "cadre knowledge search: query is required\n")
 		return 2
 	}

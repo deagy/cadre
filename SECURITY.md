@@ -25,25 +25,47 @@ finished; that package is deleted, and its PyPI name still belongs to
 somebody else, so the warning above is if anything more pointed than before.
 Nothing this project publishes will ever be installed by `pip`.
 
+**The kernel is not in this repository either.** It moved to
+[deagy/cadre-kernel](https://github.com/deagy/cadre-kernel), which publishes
+it as platform binaries under `v*` tags — not the `kernel-v*` scheme this
+document used to name, and not `./bin/agentic-sdlc`, a shim that was deleted
+with the extraction.
+
 ```sh
-# From a checkout of this repository -- builds and runs the Go kernel
-./bin/agentic-sdlc --version
+# Verify a release you downloaded
+gh release download v0.14.2 --repo deagy/cadre-kernel \
+  --pattern "agentic-sdlc-v0.14.2-linux-amd64.tar.gz" --pattern SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS
+tar xzf agentic-sdlc-v0.14.2-linux-amd64.tar.gz
+./agentic-sdlc --version        # prints a bare semver, e.g. 0.14.2
 ```
 
-Past `kernel-v*` releases carry Python wheels and sdists. They are the
-pre-release artifacts of a package that no longer exists; verify them against
-the `SHA256SUMS` published alongside each release if you are inspecting
-history, and do not install them.
+Past `kernel-v*` releases in *this* repository carry Python wheels and sdists.
+They are the pre-release artifacts of a package that no longer exists; verify
+them against their `SHA256SUMS` if you are inspecting history, and do not
+install them.
 
 ### Verifying what you have
 
 ```sh
-agentic-sdlc --version          # this kernel prints a bare semver, e.g. 0.13.0
-pip show agentic-sdlc           # check the Home-page / Project-URL field
+command -v -a agentic-sdlc      # every one on PATH, not just the first
+agentic-sdlc --version          # a bare semver, e.g. 0.14.2
 ```
 
-If `pip show` reports a homepage that is not `github.com/deagy/cadre`,
-you have the wrong package. Uninstall it before continuing.
+**Any `agentic-sdlc` that pip or pipx installed is the wrong one.** The kernel
+is a Go binary and is not published to any Python index, so `pip show
+agentic-sdlc` succeeding at all means you have somebody else's package or a
+stale build of the pre-port Python kernel. Uninstall it before continuing:
+
+```sh
+pipx uninstall agentic-sdlc || pip uninstall agentic-sdlc
+```
+
+This is not hypothetical. A `pipx`-installed `agentic-sdlc 0.13.2` — a build
+of the Python kernel from before the port — was found shadowing the released
+Go binary on a developer machine, and it answered `agentic-sdlc` on `PATH`
+while the real kernel was not installed at all. `command -v -a` is in the
+snippet above for that reason: the first match is not the whole story.
 
 ### Automated installers
 

@@ -200,3 +200,38 @@ func TestTheContractIsCoveredCaseForCase(t *testing.T) {
 		}
 	}
 }
+
+// TestAnExplicitlyEmptyQueryIsRefusedAtTheCLI.
+//
+// The contract's "no query" case omits the argument entirely, so the CLI's
+// own check counted arguments and stopped there. `search ""` and
+// `search "   "` supply one, and reached govern -- which refuses them, but a
+// layer later and at exit 1 rather than the 2 this CLI documents for a
+// governance refusal.
+//
+// The fixture cannot see this: it was captured from an engine that made the
+// same exact comparison, and a case written as "omit the argument" tests
+// omission, not emptiness.
+func TestAnExplicitlyEmptyQueryIsRefusedAtTheCLI(t *testing.T) {
+	for _, query := range []string{"", " ", "   ", "\t"} {
+		dbPath := filepath.Join(t.TempDir(), "store.db")
+		cfgPath := writeStoreConfig(t, dbPath, nil)
+
+		var code int
+		stderr := captureStderr(t, func() {
+			code = KnowledgeCmd([]string{
+				"--config", cfgPath, "search",
+				"--classification", "internal", "--all-sources", query,
+			})
+		})
+		if code != 2 {
+			t.Errorf("search %q: exit %d, want 2", query, code)
+		}
+		if !strings.Contains(stderr, "query is required") {
+			t.Errorf("search %q: %s", query, stderr)
+		}
+		if _, err := os.Stat(dbPath); err == nil {
+			t.Errorf("search %q opened the store before refusing", query)
+		}
+	}
+}
