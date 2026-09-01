@@ -52,6 +52,68 @@ var retiredVerbs = map[string]string{
 	"import":          "retired with the engine; `recall store restore <backup>` restores one",
 }
 
+// liveKnowledgeVerbs are the subcommands KnowledgeCmd dispatches itself.
+//
+// Declared rather than implied by the switch below so that the usage text,
+// the drift check, and the dispatch all read one list. A verb the help
+// advertises and the switch does not answer is the same defect class as a
+// tool advertised and refused.
+var liveKnowledgeVerbs = []string{"init", "search", "config"}
+
+// neverShippedVerbs are documented in the roster and were never built in this
+// CLI.
+//
+// A distinct table from retiredVerbs, because they are a distinct fact and an
+// operator deserves the difference. A retired verb worked here once and the
+// message says where it went. These describe the Python implementation this
+// CLI replaced: the documents were written against it and outlived it, so the
+// honest answer is that this binary never had them, not that they moved.
+//
+// They answered `unknown subcommand` until now, which told a reader following
+// a governance document nothing at all -- neither that the capability is gone
+// nor that it was ever real.
+var neverShippedVerbs = map[string]string{
+	"context": "the Python CLI's retrieval-with-citations verb. `cadre knowledge search` " +
+		"is this CLI's governed retrieval; note that `cadre context` is a different, " +
+		"live command -- the local agent context store, not knowledge retrieval",
+	"list-staged": "`cadre knowledge show-staged --id <id>` reads one record; this CLI " +
+		"has no listing verb",
+	"export-staged": "`roster/knowledge-store/proposed-knowledge/` holds " +
+		"a snapshot the Python CLI exported; nothing in this binary refreshes it, and " +
+		"`import-staged` reads such a directory without there being a verb that writes one",
+	"retention-report": "Per-message retention windows were a Python-era " +
+		"capability; this CLI records none, so there is nothing to report on. Whether that " +
+		"is restored or declared absent is an open decision",
+	"delete-ingested": "Deleting ingested content, with the evidence the " +
+		"policy describes, is not a capability this binary has; content lives in a recall " +
+		"store, which deletes by document or chunk id",
+	"deletion-evidence": "`delete-staged` writes staged-record deletion " +
+		"evidence, and `show-staged` shows it; there is no verb that reports it in bulk",
+}
+
+// AnswerableKnowledgeVerbs is every `cadre knowledge <verb>` this CLI answers
+// by name rather than with a generic unknown-subcommand error.
+//
+// Exported for the drift check that holds the governance documents to it: a
+// document naming a verb absent from this set sends a reader to a dead end.
+func AnswerableKnowledgeVerbs() map[string]bool {
+	answerable := map[string]bool{}
+	for _, verb := range liveKnowledgeVerbs {
+		answerable[verb] = true
+	}
+	for verb := range retiredVerbs {
+		answerable[verb] = true
+	}
+	for verb := range neverShippedVerbs {
+		answerable[verb] = true
+	}
+	for _, verb := range knowledgeStagedSubcommands {
+		answerable[verb] = true
+	}
+	answerable["help"] = true
+	return answerable
+}
+
 // KnowledgeCmd is the `cadre knowledge` subcommand.
 func KnowledgeCmd(args []string) int {
 	fs := flag.NewFlagSet("cadre knowledge", flag.ContinueOnError)
@@ -103,6 +165,9 @@ Options:
 	if replacement, retired := retiredVerbs[subcommand]; retired {
 		return knowledgeRetired(subcommand, replacement)
 	}
+	if detail, documented := neverShippedVerbs[subcommand]; documented {
+		return knowledgeNeverShipped(subcommand, detail)
+	}
 
 	// Resolve which store this invocation talks to, through the three-tier
 	// resolution in internal/knowledge/config.go. --config names a config
@@ -136,6 +201,20 @@ Options:
 // Exit 2 rather than 1: this is a usage error -- the command does not exist
 // any more -- and a caller scripting against cadre can tell it apart from a
 // retrieval that ran and failed.
+// knowledgeNeverShipped answers a verb the roster documents and this CLI
+// never had.
+//
+// Exit 2 like a retired verb: both are usage errors, and a caller scripting
+// against cadre needs them to differ from a command that ran and failed. What
+// differs is the sentence, because "it moved" and "it was never here" send a
+// reader to different places.
+func knowledgeNeverShipped(verb, detail string) int {
+	fmt.Fprintf(os.Stderr,
+		"cadre knowledge %s: documented in the roster, never built in this CLI.\n  %s\n",
+		verb, detail)
+	return 2
+}
+
 func knowledgeRetired(verb, replacement string) int {
 	fmt.Fprintf(os.Stderr,
 		"cadre knowledge %s: retired -- cadre no longer owns a retrieval engine.\n  %s\n",
