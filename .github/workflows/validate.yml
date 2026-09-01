@@ -527,13 +527,12 @@ jobs:
       fail-fast: false
       matrix:
         package: [cline, cline-agents, cline-lifecycle]
-    env:
-      # cline-lifecycle's "real bin/cadre sdlc subprocess calls" tests invoke
-      # the actual kernel binary and assert real output, so they need one on
-      # hand. This pointed at bin/agentic-sdlc in this tree, which P1 deleted
-      # when the kernel was extracted -- so the path had been dead since. It
-      # is checked out and built below, at the same pinned ref every other
-      # job uses.
+    # cline-lifecycle's "real bin/cadre sdlc subprocess calls" tests invoke the
+    # actual kernel binary and assert real output, so they need one on hand.
+    # This was a job-level env pointing at bin/agentic-sdlc in this tree, which
+    # P1 deleted when the kernel was extracted -- so the path had been dead
+    # since. The kernel is checked out and built below instead, at the same
+    # pinned ref every other job uses, and AGENTIC_SDLC_BIN is exported there.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
