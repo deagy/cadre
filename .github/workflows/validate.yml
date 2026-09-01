@@ -14,8 +14,16 @@ name: validate
 #                           it against the committed copy. There is no
 #                           committed copy now, and no pinned revision.
 #
-# The kernel is no longer checked out from another repository either, so
-# AGENTIC_SDLC_BIN points into this tree.
+# The kernel IS checked out from another repository again -- P1 extracted it
+# to deagy/cadre-kernel, which left AGENTIC_SDLC_BIN pointing at a path that
+# no longer exists and two cross-repository guards failing on every push.
+# CADRE_KERNEL_REF below pins what they compare against.
+
+env:
+  # The kernel release this repository's provider bundle claims compatibility
+  # with. Bump deliberately when cadre-kernel releases; the compatibility
+  # guard below is what tells you it needs bumping.
+  CADRE_KERNEL_REF: v0.14.2
 
 on:
   pull_request:
@@ -40,8 +48,6 @@ jobs:
     # binary, so both legs ran the same Go twice. The job that does build and
     # install the wheel is cadre-pip-package; if that floor is worth testing,
     # that is where a matrix belongs.
-    env:
-      AGENTIC_SDLC_BIN: ${{ github.workspace }}/bin/agentic-sdlc
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -133,6 +139,41 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # The kernel lives in its own repository now. Two guards in this
+      # repository hard-fail under CI rather than skipping -- deliberately,
+      # because a guard that silently skips is not a guard -- and both need
+      # the kernel to compare against:
+      #
+      #   TestVendoredKernelContractsMatchTheKernel  needs KERNEL_CONTRACTS_DIR
+      #   TestOurProviderBundleAcceptsTheKernelWeDependOn  needs AGENTIC_SDLC_BIN
+      #
+      # Until this step existed they failed for want of their inputs on every
+      # push since the extraction, while passing locally off a sibling
+      # checkout that exists on a developer machine and never on a runner.
+      # recall had the identical defect in its own contract guard; same fix.
+      #
+      # Pinned rather than floating: CADRE_KERNEL_REF is the kernel this
+      # repository claims compatibility with, and bumping it is a reviewable
+      # change rather than a surprise from another repository's main.
+      - name: Check out the kernel these guards compare against
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: deagy/cadre-kernel
+          ref: ${{ env.CADRE_KERNEL_REF }}
+          path: .cadre-kernel
+          persist-credentials: false
+      - name: Build the kernel and point the guards at it
+        run: |
+          set -euo pipefail
+          contracts="$GITHUB_WORKSPACE/.cadre-kernel/kernel/contracts"
+          if [ ! -d "$contracts" ]; then
+            echo "::error::$contracts is missing; the kernel's layout moved and these"
+            echo "::error::guards cannot run. They must not be skipped under CI."
+            exit 1
+          fi
+          ( cd "$GITHUB_WORKSPACE/.cadre-kernel" && go build -o "$GITHUB_WORKSPACE/.cadre-kernel/agentic-sdlc" ./cmd/agentic-sdlc )
+          echo "KERNEL_CONTRACTS_DIR=$contracts" >> "$GITHUB_ENV"
+          echo "AGENTIC_SDLC_BIN=$GITHUB_WORKSPACE/.cadre-kernel/agentic-sdlc" >> "$GITHUB_ENV"
       - run: go build ./...
       - run: go vet ./...
       # -race needs cgo; ubuntu-latest ships a C toolchain. If that ever
@@ -489,12 +530,10 @@ jobs:
     env:
       # cline-lifecycle's "real bin/cadre sdlc subprocess calls" tests invoke
       # the actual kernel binary and assert real output, so they need one on
-      # hand. The archived cadre-lifecycle repo had to `pip install` it from a
-      # git URL for this job -- it lived in a different repository. Here it is
-      # in the tree, so point at it directly: no network install, no version
-      # pin to keep in sync, and the tests exercise the same kernel the rest
-      # of this workflow does.
-      AGENTIC_SDLC_BIN: ${{ github.workspace }}/bin/agentic-sdlc
+      # hand. This pointed at bin/agentic-sdlc in this tree, which P1 deleted
+      # when the kernel was extracted -- so the path had been dead since. It
+      # is checked out and built below, at the same pinned ref every other
+      # job uses.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -504,6 +543,22 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: cline-plugins/package-lock.json
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check out the kernel these tests subprocess into
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: deagy/cadre-kernel
+          ref: ${{ env.CADRE_KERNEL_REF }}
+          path: .cadre-kernel
+          persist-credentials: false
+      - name: Build the kernel and point the tests at it
+        run: |
+          set -euo pipefail
+          ( cd "$GITHUB_WORKSPACE/.cadre-kernel" && go build -o "$GITHUB_WORKSPACE/.cadre-kernel/agentic-sdlc" ./cmd/agentic-sdlc )
+          echo "AGENTIC_SDLC_BIN=$GITHUB_WORKSPACE/.cadre-kernel/agentic-sdlc" >> "$GITHUB_ENV"
       # cline-plugins/package.json declares npm workspaces (cline,
       # cline-agents, cline-lifecycle) backed by a single lockfile, so `npm ci`
       # runs from cline-plugins/ rather than each package directory.
