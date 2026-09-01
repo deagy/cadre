@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/deagy/cadre/cli/internal/engine/provider"
 )
 
 // This repository ships a provider bundle; the kernel loads it and refuses it
@@ -136,4 +138,80 @@ func TestOurProviderBundleAcceptsTheKernelWeDependOn(t *testing.T) {
 			manifest.KernelCompatibility.Minimum, manifest.KernelCompatibility.MaximumExclusive,
 			binary, strings.TrimSpace(string(output)))
 	}
+}
+
+// TestTheKernelVersionPinSatisfiesOurOwnProvider is the check the test above
+// says is covered "separately and without a binary". It was not: the comment
+// promised it and nothing implemented it, so the only thing standing between
+// this repository and a provider its own kernel would refuse was a guard that
+// needs a kernel binary to run -- and that guard had been failing on CI for
+// want of one.
+//
+// This one needs nothing installed. It reads the pin and the manifest, both
+// of which are in the tree.
+func TestTheKernelVersionPinSatisfiesOurOwnProvider(t *testing.T) {
+	minimum, maximum := providerWindow(t)
+	pin := semver(t, provider.KernelVersion)
+
+	if lessThan(pin, minimum) || !lessThan(pin, maximum) {
+		t.Errorf("internal/engine/provider pins kernel %s, outside the window "+
+			"provider/provider.json declares — this repository would refuse its own bundle",
+			provider.KernelVersion)
+	}
+}
+
+// TestTheCompatibilityFloorIsAKernelThatWasActuallyReleased.
+//
+// A window is not merely a range; its floor is a claim that some kernel at
+// that version exists and works. The floor read 0.14.2's predecessor line for
+// months after the extraction, and deagy/cadre-kernel has released exactly
+// one version -- so every version the window admitted below the pin named a
+// kernel that repository never published.
+//
+// That was not theoretical. A pipx-installed Python `agentic-sdlc 0.13.2`, a
+// build from before the Go port, sat on a developer's PATH and satisfied
+// `cadre select --require-sdlc` because 0.13.2 was exactly the inclusive
+// floor. The mechanism whose job is to refuse an unsuitable kernel accepted
+// it, by one patch version.
+//
+// Tying the floor to the pin is the narrowest rule that closes it: this
+// repository supports the kernel it pins and no earlier one, because no
+// earlier one was ever released from the repository that now owns the kernel.
+func TestTheCompatibilityFloorIsAKernelThatWasActuallyReleased(t *testing.T) {
+	minimum, _ := providerWindow(t)
+	pin := semver(t, provider.KernelVersion)
+
+	if lessThan(minimum, pin) {
+		t.Errorf("provider/provider.json's floor is below the pinned kernel %s. "+
+			"Every version in between names a kernel deagy/cadre-kernel never released, "+
+			"and a pre-port Python build satisfies it", provider.KernelVersion)
+	}
+}
+
+// providerWindow reads the declared compatibility window from the manifest.
+func providerWindow(t *testing.T) ([3]int, [3]int) {
+	t.Helper()
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(filepath.Dir(root), "provider", "provider.json")
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("reading %s: %v", manifestPath, err)
+	}
+	var manifest struct {
+		KernelCompatibility struct {
+			Minimum          string `json:"minimum"`
+			MaximumExclusive string `json:"maximum_exclusive"`
+		} `json:"kernel_compatibility"`
+	}
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("parsing %s: %v", manifestPath, err)
+	}
+	if manifest.KernelCompatibility.Minimum == "" {
+		t.Fatalf("%s declares no kernel_compatibility window", manifestPath)
+	}
+	return semver(t, manifest.KernelCompatibility.Minimum),
+		semver(t, manifest.KernelCompatibility.MaximumExclusive)
 }

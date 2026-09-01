@@ -72,6 +72,11 @@ type DoctorReport struct {
 	// failure nobody checked for.
 	KnowledgeStoreOK     bool   `json:"knowledge_store_ok"`
 	KnowledgeStoreDetail string `json:"knowledge_store_detail,omitempty"`
+
+	// Kernel is which agentic-sdlc this machine would run, and whether
+	// anything else on PATH is holding the same name. Filled in by
+	// internal/cli alongside the store probe, for the same dependency reason.
+	Kernel KernelResolution `json:"kernel"`
 }
 
 // repoMarkersPresent is true when root looks like a Cadre checkout root by
@@ -337,6 +342,12 @@ func RenderDoctorReport(report DoctorReport) string {
 	if report.KnowledgeStoreDetail != "" {
 		b.WriteString("  knowledge store:    " + report.KnowledgeStoreDetail + "\n")
 	}
+	if report.Kernel.Detail != "" {
+		b.WriteString("  lifecycle kernel:   " + report.Kernel.Detail + "\n")
+		if report.Kernel.Path != "" {
+			b.WriteString("                      " + report.Kernel.Path + "\n")
+		}
+	}
 	b.WriteString("  install kind:       " + report.InstallKind + "\n")
 	b.WriteString("  detail:             " + report.InstallDetail + "\n")
 	b.WriteString("  cwd:                " + report.CWD + "\n")
@@ -358,6 +369,24 @@ func RenderDoctorReport(report DoctorReport) string {
 			"driver.\n         `cadre context` and the engine's SQLite executor still need cgo, " +
 			"and\n         bin/cadre falls back to a cgo-less build when no C compiler is on " +
 			"PATH.\n\n")
+	}
+	if report.Kernel.TooOld {
+		b.WriteString("WARNING: the `agentic-sdlc` that answers is " + report.Kernel.Version +
+			"; this checkout pins " + report.Kernel.Expected + ".\n" +
+			"         " + report.Kernel.Path + "\n" +
+			"         A kernel below the pin may still satisfy the provider bundle's\n" +
+			"         compatibility floor and be accepted silently. Install the released\n" +
+			"         kernel from github.com/deagy/cadre-kernel, or set AGENTIC_SDLC_BIN.\n\n")
+	}
+	if len(report.Kernel.Shadowed) > 0 {
+		b.WriteString("WARNING: more than one `agentic-sdlc` is on PATH. " +
+			report.Kernel.Path + " answers;\n")
+		for _, shadowed := range report.Kernel.Shadowed {
+			b.WriteString("         " + shadowed + " is shadowed by it.\n")
+		}
+		b.WriteString("         Which one answers depends on PATH order, which nobody reads.\n" +
+			"         A stale kernel that still satisfies the compatibility floor is accepted\n" +
+			"         silently -- see SECURITY.md.\n\n")
 	}
 	if report.Mismatch {
 		b.WriteString("WARNING: " + report.MismatchDetail + "\n")

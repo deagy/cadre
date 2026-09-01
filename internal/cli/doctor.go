@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 
+	"github.com/deagy/cadre/cli/internal/engine/provider"
 	"github.com/deagy/cadre/cli/internal/knowledge"
 	"github.com/deagy/cadre/cli/internal/orchestration"
 )
@@ -61,6 +63,12 @@ func DoctorCmd(args []string) int {
 		report.KnowledgeStoreOK = true
 		report.KnowledgeStoreDetail = "available (pure-Go sqlite driver, no cgo required)"
 	}
+
+	// Which kernel this machine would actually run. Probed here for the same
+	// reason the store driver is: internal/cli already imports both packages.
+	report.Kernel = orchestration.ResolveKernel(
+		os.Getenv("AGENTIC_SDLC_BIN"), provider.KernelVersion, exec.LookPath,
+		orchestration.LookAllOnPath, orchestration.KernelVersionOf)
 
 	if asJSON {
 		data, err := json.MarshalIndent(report, "", "  ")

@@ -285,7 +285,7 @@ if [ "$command_name" = "sdlc" ]; then
   if [ -z "$sdlc_bin" ]; then
     sdlc_bin=$(CADRE_REPO_ROOT="$SUITE_ROOT" "$BINARY_CACHE" config resolve agentic_sdlc.bin_path) || exit 1
   fi
-  [ -n "$sdlc_bin" ] || { echo "cadre: install Agentic SDLC v0.13.2+ from https://github.com/deagy/cadre-kernel" >&2; exit 1; }
+  [ -n "$sdlc_bin" ] || { echo "cadre: install Agentic SDLC v0.14.2+ from https://github.com/deagy/cadre-kernel" >&2; exit 1; }
   exec "$sdlc_bin" --provider "$PLUGIN_ROOT/provider.json" "$@"
 fi
 
