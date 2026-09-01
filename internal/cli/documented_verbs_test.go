@@ -36,10 +36,31 @@ type documentedVerb struct {
 	line int
 }
 
-// knowledgeVerbPattern matches the verb in a documented invocation, in prose
-// or in a fenced usage block. Backticks are optional because the README's
-// usage block has none.
-var knowledgeVerbPattern = regexp.MustCompile(`cadre knowledge ([a-z][a-z0-9-]*)`)
+var (
+	// knowledgeVerbPattern matches `cadre knowledge <verb>`.
+	knowledgeVerbPattern = regexp.MustCompile(`^cadre knowledge ([a-z][a-z0-9-]*)`)
+	// topLevelVerbPattern matches `cadre <verb>`.
+	topLevelVerbPattern = regexp.MustCompile(`^cadre ([a-z][a-z0-9-]*)`)
+	// codeSpanPattern extracts backtick-delimited spans.
+	codeSpanPattern = regexp.MustCompile("`([^`\n]+)`")
+)
+
+// commandSegments yields the parts of a line where a document is naming a
+// command rather than talking about the tool.
+//
+// Backtick spans and fenced-block lines only. Matching bare prose would flag
+// "the cadre binary" and "a cadre role" as verbs, and a guard that cries wolf
+// on English gets suppressed rather than fixed.
+func commandSegments(line string, inFence bool) []string {
+	if inFence {
+		return []string{strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "$ "))}
+	}
+	var segments []string
+	for _, match := range codeSpanPattern.FindAllStringSubmatch(line, -1) {
+		segments = append(segments, strings.TrimSpace(strings.TrimPrefix(match[1], "$ ")))
+	}
+	return segments
+}
 
 // scanDocumentedKnowledgeVerbs walks the roster for verbs the documents name.
 func scanDocumentedKnowledgeVerbs(t *testing.T, root string) []documentedVerb {
@@ -50,20 +71,41 @@ func scanDocumentedKnowledgeVerbs(t *testing.T, root string) []documentedVerb {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() || !strings.HasSuffix(path, ".md") {
+		// roster/orchestration/runs/ is an archive of past runs: each file
+		// records what was believed and decided on a date. A command named
+		// there was real when it was written, and "correcting" it would
+		// falsify the record rather than fix a document. Excluded on that
+		// principle, not for convenience -- it is the same reasoning that
+		// kept the P4 migration from sweeping 519 prose mentions.
+		if entry.IsDir() {
+			if entry.Name() == "runs" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".md") {
 			return nil
 		}
 		content, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
+		inFence := false
 		for index, text := range strings.Split(string(content), "\n") {
-			for _, match := range knowledgeVerbPattern.FindAllStringSubmatch(text, -1) {
-				found = append(found, documentedVerb{
-					verb: match[1],
-					file: path,
-					line: index + 1,
-				})
+			if strings.HasPrefix(strings.TrimSpace(text), "```") {
+				inFence = !inFence
+				continue
+			}
+			for _, segment := range commandSegments(text, inFence) {
+				if match := knowledgeVerbPattern.FindStringSubmatch(segment); match != nil {
+					found = append(found, documentedVerb{
+						verb: "knowledge " + match[1], file: path, line: index + 1})
+					continue
+				}
+				if match := topLevelVerbPattern.FindStringSubmatch(segment); match != nil {
+					found = append(found, documentedVerb{
+						verb: match[1], file: path, line: index + 1})
+				}
 			}
 		}
 		return nil
@@ -87,7 +129,25 @@ func TestEveryDocumentedKnowledgeVerbIsAnswerable(t *testing.T) {
 		t.Skipf("no roster/ beside this package: %v", err)
 	}
 
-	answerable := AnswerableKnowledgeVerbs()
+	answerable := map[string]bool{}
+	for verb := range AnswerableKnowledgeVerbs() {
+		answerable["knowledge "+verb] = true
+	}
+	// Top-level verbs come from bin/subcommands.tsv, the table `cadre help`
+	// and TestEverySubcommandExitsZeroOnHelp already read, so this guard
+	// cannot disagree with them about what exists.
+	table := filepath.Join(filepath.Dir(root), SubcommandsTableRelativePath)
+	subcommands, err := LoadSubcommands(table)
+	if err != nil {
+		t.Fatalf("loading %s: %v", table, err)
+	}
+	for _, subcommand := range subcommands {
+		answerable[subcommand.Name] = true
+	}
+	for _, extra := range []string{"help", "knowledge", "sdlc"} {
+		answerable[extra] = true
+	}
+
 	documented := scanDocumentedKnowledgeVerbs(t, root)
 	if len(documented) == 0 {
 		t.Fatal("no documented verbs found; this guard would assert nothing")
@@ -110,8 +170,7 @@ func TestEveryDocumentedKnowledgeVerbIsAnswerable(t *testing.T) {
 	sort.Strings(verbs)
 
 	var report strings.Builder
-	report.WriteString("governance documents name verbs this CLI answers with " +
-		"\"unknown subcommand\":\n")
+	report.WriteString("governance documents name `cadre` verbs this CLI does not answer:\n")
 	for _, verb := range verbs {
 		report.WriteString("\n  " + verb + "\n")
 		for _, mention := range unanswered[verb] {

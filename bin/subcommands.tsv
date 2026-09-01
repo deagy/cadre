@@ -1,23 +1,24 @@
-select	Deterministic agent/gate selection
-selection-telemetry	Summarize opt-in, local cadre select telemetry
-context	Agent context store: park working material outside an agent's context window and get it back by handle
-generate-plugin	Regenerate the packaged plugin distribution (requires --output)
-generate-authority-aides	Regenerate roster/authority/*-aide AGENT.md files
-port-cline-agents	Render the packaged plugin's agents and skills into the Cline preset/skill formats
-plugin-version	Read, check, or set the release version shared by all eight plugin manifests
-changelog-entry	Print one version's release notes from the packaged CHANGELOG.md
-changed-components	Report which releasable components had their version bumped
-sbom-check	Refuse an SBOM that inventoried the wrong thing
-generate-role-metadata	Regenerate roster/catalog.yaml and routing.json knowledge_focus from role metadata
 bootstrap-codex	Safely install namespaced Codex role wrappers
-resolve-shared	Resolve effective shared config for the current project
+changed-components	Report which releasable components had their version bumped
+changelog-entry	Print one version's release notes from the packaged CHANGELOG.md
+config	Show resolved operator settings, config file paths, or resolve one setting (`show`/`path`/`resolve`)
+context	Agent context store: park working material outside an agent's context window and get it back by handle
+doctor	Report which cadre binary is running, what kind of install it is, and warn on a cwd/checkout mismatch
+generate-authority-aides	Regenerate roster/authority/*-aide AGENT.md files
+generate-plugin	Regenerate the packaged plugin distribution (requires --output)
+generate-role-metadata	Regenerate roster/catalog.yaml and routing.json knowledge_focus from role metadata
+gitlab-evidence	Non-MCP CLI over the GitLab evidence tools (create-review-subtask/write-wiki-page/write-evidence-comment)
+init	Guide a project through generating .agents/shared/ overlays
 mcp-dispatch-server	Run the MCP dispatch server (stdio)
 mcp-gitlab-server	Run the GitLab evidence MCP server (stdio; three create-only tools)
-init	Guide a project through generating .agents/shared/ overlays
+plugin-version	Read, check, or set the release version shared by all eight plugin manifests
+port-cline-agents	Render the packaged plugin's agents and skills into the Cline preset/skill formats
 profile	Read-only provider/profile drift report against a consuming project's copy
-gitlab-evidence	Non-MCP CLI over the GitLab evidence tools (create-review-subtask/write-wiki-page/write-evidence-comment)
-config	Show resolved operator settings, config file paths, or resolve one setting (`show`/`path`/`resolve`)
-doctor	Report which cadre binary is running, what kind of install it is, and warn on a cwd/checkout mismatch
-role-fidelity	Measure whether role briefs survive a given model: context-budget analysis, or live probes
-upgrade	Check for Cadre updates and upgrade the CLI (--check, --force, --help)
 release-assets	List the archives a program publishes at a version, from the platform contract
+resolve-shared	Resolve effective shared config for the current project
+role-fidelity	Measure whether role briefs survive a given model: context-budget analysis, or live probes
+sbom-check	Refuse an SBOM that inventoried the wrong thing
+schema-validate	Strict JSON Schema validation for roster/catalog.yaml and routing.json
+select	Deterministic agent/gate selection
+selection-telemetry	Summarize opt-in, local cadre select telemetry
+upgrade	Check for Cadre updates and upgrade the CLI (--check, --force, --help)

@@ -577,7 +577,6 @@ var packagedSubcommandExclusions = map[string]bool{
 	"generate-plugin":          true,
 	"generate-authority-aides": true,
 	"generate-role-metadata":   true,
-	"version":                  true,
 }
 
 // capabilityProfile is one entry of runner-capabilities.json's capability_tiers.
