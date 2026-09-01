@@ -13,6 +13,40 @@ import (
 func isolateConfigEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	// Clear every field's environment variable for the duration of the test.
+	//
+	// The environment is tier 1: it wins over both the project file and the
+	// global one, and resolveCore returns before either is read. So a test
+	// asserting something about *file* resolution silently measures the
+	// ambient environment instead whenever the matching variable happens to
+	// be set.
+	//
+	// Not hypothetical. TestEveryGlobalOnlyFieldIsRefusedFromAProjectFile
+	// failed on CI the moment the workflow started exporting
+	// AGENTIC_SDLC_BIN: the project-local value it expected to be refused
+	// was never reached, because the environment answered first. It failed
+	// loudly rather than passing falsely, which is the good direction -- but
+	// a guard whose verdict depends on the machine it runs on is not a guard.
+	//
+	// Unset rather than set-to-empty: an empty value is its own error here
+	// ("%s is set but empty/whitespace-only"), so blanking would swap one
+	// environment-dependent answer for another.
+	for _, field := range FIELDS {
+		name := field.EnvVar
+		if name == "" {
+			continue
+		}
+		previous, wasSet := os.LookupEnv(name)
+		if !wasSet {
+			continue
+		}
+		if err := os.Unsetenv(name); err != nil {
+			t.Fatalf("cannot isolate %s: %v", name, err)
+		}
+		t.Cleanup(func() { _ = os.Setenv(name, previous) })
+	}
+
 	ResetCache()
 	t.Cleanup(ResetCache)
 }

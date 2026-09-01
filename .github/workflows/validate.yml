@@ -61,6 +61,20 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # `./bin/cadre sdlc --version` below execs the kernel. It used to be in
+      # this tree; P1 moved it to its own repository.
+      - name: Check out the kernel `cadre sdlc` execs
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: deagy/cadre-kernel
+          ref: ${{ env.CADRE_KERNEL_REF }}
+          path: .cadre-kernel
+          persist-credentials: false
+      - name: Build the kernel and point cadre at it
+        run: |
+          set -euo pipefail
+          ( cd "$GITHUB_WORKSPACE/.cadre-kernel" && go build -o "$GITHUB_WORKSPACE/.cadre-kernel/agentic-sdlc" ./cmd/agentic-sdlc )
+          echo "AGENTIC_SDLC_BIN=$GITHUB_WORKSPACE/.cadre-kernel/agentic-sdlc" >> "$GITHUB_ENV"
       # The roster/orchestration leg that used to run here is gone with
       # test_repository_health.py, the last test module in that directory.
       # What remains there is fixture data the Go tests read
@@ -542,10 +556,10 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: cline-plugins/package-lock.json
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
+      # No setup-go here on purpose. The runner ships Go, this job built Go
+      # binaries with it long before the kernel moved, and adding the action
+      # made its cache restore collide with the module cache this job already
+      # populates: "tar: Cannot open: File exists", repeated per module.
       - name: Check out the kernel these tests subprocess into
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
