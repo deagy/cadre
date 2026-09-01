@@ -116,6 +116,57 @@ func scanDocumentedKnowledgeVerbs(t *testing.T, root string) []documentedVerb {
 	return found
 }
 
+// scanUnreleasedChangelog reads only the CHANGELOG's [Unreleased] section.
+//
+// The split is the point. A dated release section records what was true when
+// it shipped -- a command named there was real, and rewriting it would
+// falsify the changelog, which is the same reasoning that keeps
+// roster/orchestration/runs/ out of this scan. But [Unreleased] is not
+// history: it is a claim about what the next release contains, read as
+// current. An entry there describing `--source` as repeatable on a verb the
+// binary no longer has is a live claim about a command that is gone.
+//
+// This scan originally skipped the file wholesale as "history". A verifier
+// found the [Unreleased] mention, and checking the heading settled it the
+// other way.
+func scanUnreleasedChangelog(t *testing.T, path string) []documentedVerb {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+
+	var found []documentedVerb
+	inUnreleased, inFence := false, false
+	for index, text := range strings.Split(string(content), "\n") {
+		trimmed := strings.TrimSpace(text)
+		if strings.HasPrefix(trimmed, "## ") {
+			// Any dated release heading ends the live section.
+			inUnreleased = strings.Contains(strings.ToLower(trimmed), "unreleased")
+			continue
+		}
+		if !inUnreleased {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "```") {
+			inFence = !inFence
+			continue
+		}
+		for _, segment := range commandSegments(text, inFence) {
+			if match := knowledgeVerbPattern.FindStringSubmatch(segment); match != nil {
+				found = append(found, documentedVerb{
+					verb: "knowledge " + match[1], file: path, line: index + 1})
+				continue
+			}
+			if match := topLevelVerbPattern.FindStringSubmatch(segment); match != nil {
+				found = append(found, documentedVerb{
+					verb: match[1], file: path, line: index + 1})
+			}
+		}
+	}
+	return found
+}
+
 // TestEveryDocumentedKnowledgeVerbIsAnswerable.
 //
 // "Answerable" is a low bar on purpose: running, naming a replacement, or
@@ -170,6 +221,7 @@ func TestEveryDocumentedKnowledgeVerbIsAnswerable(t *testing.T) {
 		}
 		documented = append(documented, scanDocumentedKnowledgeVerbs(t, scanRoot)...)
 	}
+	documented = append(documented, scanUnreleasedChangelog(t, filepath.Join(repo, "CHANGELOG.md"))...)
 	if len(documented) == 0 {
 		t.Fatal("no documented verbs found; this guard would assert nothing")
 	}
@@ -203,7 +255,7 @@ func TestEveryDocumentedKnowledgeVerbIsAnswerable(t *testing.T) {
 				strconv.Itoa(mention.line) + "\n")
 		}
 	}
-	report.WriteString("\nEither build it, or add it to retiredVerbs / neverShippedVerbs " +
+	report.WriteString("\nEither build it, or add it to retiredVerbs / pythonEraVerbs " +
 		"in internal/cli/knowledge.go so a reader following the document is told " +
 		"what happened. Deleting the mention is also a fix, but only if the " +
 		"capability really is gone rather than merely undocumented.")
