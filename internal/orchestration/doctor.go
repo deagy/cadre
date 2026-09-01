@@ -60,10 +60,12 @@ type DoctorReport struct {
 	// the verdict either way.
 	//
 	// GatherDoctorReport does not fill these in: probing the driver means
-	// importing it, and this package has no sqlite dependency today -- adding
-	// one for a diagnostic line would pull cgo into every consumer of
-	// orchestration. internal/cli owns the wiring instead (it already imports
-	// both packages) and calls knowledge.DriverAvailable.
+	// importing it, and this package has no sqlite dependency today. That
+	// used to mean pulling cgo into every consumer of orchestration; the
+	// knowledge path is pure Go now, so it would only mean a dependency this
+	// package does not otherwise want. internal/cli owns the wiring instead
+	// (it already imports both packages) and calls
+	// knowledge.StagedDriverAvailable.
 	//
 	// An empty KnowledgeStoreDetail therefore means "not probed", not
 	// "unavailable", and the renderer stays silent rather than reporting a
@@ -349,11 +351,13 @@ func RenderDoctorReport(report DoctorReport) string {
 			report.GoMinVersion + "+); some subcommands may behave in ways unrelated to your change.\n\n")
 	}
 	if report.KnowledgeStoreDetail != "" && !report.KnowledgeStoreOK {
-		b.WriteString("WARNING: this binary was built without cgo, so every `cadre knowledge` " +
-			"command will fail at runtime.\n" +
-			"         bin/cadre prefers a cgo build and falls back to a cgo-less one when no C\n" +
-			"         compiler is on PATH. Install a C toolchain (e.g. build-essential, Xcode\n" +
-			"         command line tools, or mingw-w64) and delete .cadre-build-cache/ to rebuild.\n\n")
+		b.WriteString("WARNING: the knowledge store's sqlite driver did not open, so `cadre " +
+			"knowledge`\n         commands will fail at runtime. The detail above carries the " +
+			"driver's own\n         explanation.\n\n" +
+			"         This is no longer a cgo problem: the knowledge path uses a pure-Go " +
+			"driver.\n         `cadre context` and the engine's SQLite executor still need cgo, " +
+			"and\n         bin/cadre falls back to a cgo-less build when no C compiler is on " +
+			"PATH.\n\n")
 	}
 	if report.Mismatch {
 		b.WriteString("WARNING: " + report.MismatchDetail + "\n")

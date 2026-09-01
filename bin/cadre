@@ -57,17 +57,23 @@ if [ "$NEEDS_BUILD" = 1 ]; then
   BUILD_LOG="$BUILD_CACHE/build.log"
   # cgo first, then a cgo-less retry.
   #
-  # `cadre knowledge` needs the cgo-backed sqlite3 driver (mattn/go-sqlite3).
-  # A CGO_ENABLED=0 binary still builds and links cleanly -- the driver ships
-  # a cgo-less stub -- but every `cadre knowledge` call then fails at runtime
-  # with "Binary was compiled with 'CGO_ENABLED=0'". Nothing warns at build
-  # time. `go env CGO_ENABLED` is 0 on plenty of machines, so this wrapper
-  # was silently producing knowledge-broken binaries.
+  # `cadre context` and the engine's SQLite executor need the cgo-backed
+  # sqlite3 driver (mattn/go-sqlite3). A CGO_ENABLED=0 binary still builds and
+  # links cleanly -- the driver ships a cgo-less stub -- but those calls then
+  # fail at runtime with "Binary was compiled with 'CGO_ENABLED=0'". Nothing
+  # warns at build time. `go env CGO_ENABLED` is 0 on plenty of machines, so
+  # this wrapper was silently producing partly-broken binaries.
+  #
+  # This used to say `cadre knowledge`, and that was the reason the fallback
+  # exists. It is no longer true: retrieval moved to recall and the staged
+  # store to modernc.org/sqlite, both pure Go, so the whole knowledge path
+  # works in a cgo-less build. The fallback still earns its place for the
+  # remaining two.
   #
   # Forcing CGO_ENABLED=1 unconditionally is *not* the fix: without a C
   # toolchain that fails the entire build ("cgo: C compiler not found"),
   # which would leave `cadre` completely unusable on a machine where today
-  # only `knowledge` is. So prefer the full binary, fall back to the degraded
+  # only part of it is. So prefer the full binary, fall back to the degraded
   # one, and let `cadre doctor` report which one you ended up with.
   #
   # Neither path writes to stderr on success -- both are buffered for the

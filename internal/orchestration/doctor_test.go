@@ -226,12 +226,12 @@ func TestRenderDoctorReportKnowledgeStore(t *testing.T) {
 
 	available := base
 	available.KnowledgeStoreOK = true
-	available.KnowledgeStoreDetail = "available (cgo sqlite3 driver linked)"
+	available.KnowledgeStoreDetail = "available (pure-Go sqlite driver, no cgo required)"
 	out := RenderDoctorReport(available)
 	if !contains(out, "knowledge store:    available") {
 		t.Fatalf("expected the available line:\n%s", out)
 	}
-	if contains(out, "built without cgo") {
+	if contains(out, "will fail at runtime") {
 		t.Fatalf("must not warn when the driver is available:\n%s", out)
 	}
 
@@ -242,8 +242,13 @@ func TestRenderDoctorReportKnowledgeStore(t *testing.T) {
 	if !contains(out, "knowledge store:    unavailable -- stub driver") {
 		t.Fatalf("expected the unavailable line:\n%s", out)
 	}
-	if !contains(out, "built without cgo") {
-		t.Fatalf("expected the cgo warning when the driver is unavailable:\n%s", out)
+	if !contains(out, "will fail at runtime") {
+		t.Fatalf("expected the driver warning when it is unavailable:\n%s", out)
+	}
+	// The warning must not blame cgo. The knowledge path is pure Go, so a
+	// caller sent to install a C toolchain would be chasing the wrong thing.
+	if contains(out, "built without cgo") {
+		t.Fatalf("the warning still blames cgo for a pure-Go driver:\n%s", out)
 	}
 }
 

@@ -151,8 +151,9 @@ The kernel publishes all five platforms:
 
 It reaches the two the CLI cannot because
 it does not link cgo and cross-compiles to every platform from one runner. The
-CLI does link cgo (the knowledge store's sqlite), so each platform needs a
-native host, and GitHub retired the free Intel macOS runner. `cadre
+CLI does link cgo (the context store's sqlite, and the engine's SQLite
+executor -- the knowledge store stopped needing it when retrieval moved to
+recall), so each platform needs a native host, and GitHub retired the free Intel macOS runner. `cadre
 release-assets --program <name> --version <x.y.z>` prints either list.
 
 **Intel macOS is not covered by `darwin/arm64`.** Rosetta translates x86_64
