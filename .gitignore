@@ -52,6 +52,11 @@ evidence/
 .agents/knowledge-store/store.db
 .agents/knowledge-store/store.db-wal
 .agents/knowledge-store/store.db-shm
+.agents/knowledge-store/staged-records.db
+.agents/knowledge-store/staged-records.db-wal
+.agents/knowledge-store/staged-records.db-shm
+.agents/knowledge-store/retrievals.jsonl
+.agents/knowledge-store/embedder-identity.json
 
 # Same for the sibling context store. Its entries are agent-written working
 # material with no steward gate in front of them, so a committed database

@@ -94,6 +94,14 @@ func Open(opts Options, provider Provider) (*Governed, error) {
 		return nil, err
 	}
 
+	// Both checks happen before recall's store initializer is allowed near
+	// the file, for the same reason the refusals do: one that runs after
+	// opening has already done whatever opening does. In the legacy case that
+	// is not merely disclosure -- opening corrupts the file.
+	if err := RefuseLegacyStore(opts.Database); err != nil {
+		return nil, err
+	}
+
 	// Checked before the store is opened, for the same reason the refusals
 	// are: a mismatch discovered after connecting has already searched.
 	if !opts.SkipIdentityCheck {
@@ -285,6 +293,14 @@ type Record struct {
 // Content is in it that cadre did not put there, and claiming it would assert
 // exactly the thing nobody can check.
 func OpenForIngest(opts Options, provider Provider) (*Governed, error) {
+	// Before the identity question, because a pre-migration store has no
+	// recorded identity either -- and "run `cadre knowledge init` to state
+	// it" would send an operator to a command that then refuses for the real
+	// reason. One accurate message beats two hops.
+	if err := RefuseLegacyStore(opts.Database); err != nil {
+		return nil, err
+	}
+
 	_, err := ReadIdentity(opts.Database)
 	claiming := errors.Is(err, ErrNoRecordedIdentity)
 	if claiming {

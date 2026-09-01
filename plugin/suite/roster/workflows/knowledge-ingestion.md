@@ -14,7 +14,7 @@ Security/Compliance reviewers and the Knowledge Store Steward's own
 operator authority (`roster/knowledge-store/AGENT.md`), not a numbered
 `G1`-`G10` human gate.
 
-1. Knowledge store steward records source ownership, processing authority, intended use, classification, retention, residency, deletion, tenant, and audience constraints. As of issue #184, retention stops being a paper record kept only here: `cadre knowledge ingest` records a per-message retention window in the store itself (`--retention-days`, or the classification default from config), so step 1's retention decision has a concrete, queryable destination rather than only a steward note.
+1. Knowledge store steward records source ownership, processing authority, intended use, classification, retention, residency, deletion, tenant, and audience constraints. **Retention is a paper record again.** Issue #184 gave it a queryable destination -- `cadre knowledge ingest --retention-days` wrote a per-message window into cadre's own store -- and that store is recall's now: `ingest` retired with the retrieval engine, and recall records no retention window. Until something replaces it, a retention decision made here lives only in the steward's note, and nothing ages out on its own.
 2. Security and compliance reviewers assess sensitive-data handling and external embedding-provider restrictions before real content leaves the staging boundary.
 3. Store steward normalizes recognized export fields and samples results against the source. The generic parser does not validate or preserve every canonical-schema field; add a source-specific adapter when fidelity matters.
 4. Run redaction and prompt-injection detection. Human-review representative samples and every unexpected sensitive-data category.

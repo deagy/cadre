@@ -208,6 +208,18 @@ embedder identity, because the vectors it is about to write are its own. A
 store that already holds content with no recorded identity is refused —
 claiming it would assert exactly the thing nobody can check.
 
+**Ingested records land under one fixed source: `proposed-knowledge`.** Not
+the `source_scope` declared on the record — that travels as metadata. So the
+scope to search them with is:
+
+```sh
+cadre knowledge search --classification internal --source proposed-knowledge "<query>"
+```
+
+Searching the `source_scope` you declared returns nothing, with no error,
+because it is not a source anything was written under. Worth knowing before
+you go looking for a finding you know you ingested.
+
 ## Exit codes
 
 | Code | Meaning |
