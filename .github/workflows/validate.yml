@@ -247,7 +247,7 @@ jobs:
       # Python it fed, and these are build-only tools rather than a runtime
       # or test dependency of anything here.
       - run: pip install --no-cache-dir build==1.5.0 wheel==0.46.3
-      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: false
