@@ -206,8 +206,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # The shim a checkout actually runs: builds cmd/agentic-sdlc and execs
       # it. Checked here because this is the job that sets up Go.
-      - run: ./bin/agentic-sdlc --version
-      - run: ./bin/agentic-sdlc show-contract lifecycle-gates > /dev/null
+      # Was ./bin/agentic-sdlc, a shim P1 deleted with the kernel. These now
+      # exercise the kernel checked out above -- the same binary the guards
+      # compare against, so a smoke test and a guard cannot disagree about
+      # which kernel they meant.
+      - run: |
+          "$AGENTIC_SDLC_BIN" --version
+          "$AGENTIC_SDLC_BIN" show-contract lifecycle-gates > /dev/null
       - name: gofmt (fails on any formatting diff)
         run: |
           set -eu
@@ -556,22 +561,6 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: cline-plugins/package-lock.json
-      # No setup-go here on purpose. The runner ships Go, this job built Go
-      # binaries with it long before the kernel moved, and adding the action
-      # made its cache restore collide with the module cache this job already
-      # populates: "tar: Cannot open: File exists", repeated per module.
-      - name: Check out the kernel these tests subprocess into
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: deagy/cadre-kernel
-          ref: ${{ env.CADRE_KERNEL_REF }}
-          path: .cadre-kernel
-          persist-credentials: false
-      - name: Build the kernel and point the tests at it
-        run: |
-          set -euo pipefail
-          ( cd "$GITHUB_WORKSPACE/.cadre-kernel" && go build -o "$GITHUB_WORKSPACE/.cadre-kernel/agentic-sdlc" ./cmd/agentic-sdlc )
-          echo "AGENTIC_SDLC_BIN=$GITHUB_WORKSPACE/.cadre-kernel/agentic-sdlc" >> "$GITHUB_ENV"
       # cline-plugins/package.json declares npm workspaces (cline,
       # cline-agents, cline-lifecycle) backed by a single lockfile, so `npm ci`
       # runs from cline-plugins/ rather than each package directory.
@@ -599,14 +588,29 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # After setup-go, not before. Building anything Go beforehand populates
+      # ~/go/pkg/mod, and setup-go's cache restore then untars into a
+      # non-empty module cache: "tar: Cannot open: File exists", once per
+      # module, and the job fails before it runs a test.
+      - name: Check out the kernel these tests subprocess into
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: deagy/cadre-kernel
+          ref: ${{ env.CADRE_KERNEL_REF }}
+          path: .cadre-kernel
+          persist-credentials: false
+      - name: Build the kernel and point the tests at it
+        run: |
+          set -euo pipefail
+          ( cd "$GITHUB_WORKSPACE/.cadre-kernel" && go build -o "$GITHUB_WORKSPACE/.cadre-kernel/agentic-sdlc" ./cmd/agentic-sdlc )
+          echo "AGENTIC_SDLC_BIN=$GITHUB_WORKSPACE/.cadre-kernel/agentic-sdlc" >> "$GITHUB_ENV"
       - name: Pre-build the Go binaries so neither compiles inside a timed test
-        # Both of them: `bin/agentic-sdlc` builds and execs the Go kernel too
-        # since the kernel port, and AGENTIC_SDLC_BIN above points these tests
-        # straight at it. Leaving it cold reproduced the exact wall of
-        # timeouts described above, one binary later.
+        # `bin/cadre` is built here so it is a cache hit inside the timed
+        # tests. The kernel is already built above; warming it was what
+        # `./bin/agentic-sdlc --version` did before P1 deleted that shim.
         run: |
           ./bin/cadre help >/dev/null
-          ./bin/agentic-sdlc --version >/dev/null
+          "$AGENTIC_SDLC_BIN" --version >/dev/null
       - run: npm test
         working-directory: cline-plugins/${{ matrix.package }}
       - run: npm run typecheck
