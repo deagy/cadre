@@ -18,6 +18,7 @@ func TestGenerateRoleMetadata(t *testing.T) {
 
 	if generated == nil {
 		t.Fatalf("generated is nil")
+		return
 	}
 
 	// Check catalog.yaml

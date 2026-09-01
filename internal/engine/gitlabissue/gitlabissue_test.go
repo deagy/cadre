@@ -35,6 +35,7 @@ func TestParseIssueURI(t *testing.T) {
 	reference := ParseIssueURI("gitlab-issue:group/project:issues/42")
 	if reference == nil {
 		t.Fatal("a well-formed URI did not parse")
+		return
 	}
 	if reference.ProjectPath != "group/project" || reference.IID != "42" {
 		t.Errorf("parsed %+v, want group/project and 42", reference)

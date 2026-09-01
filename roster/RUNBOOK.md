@@ -741,31 +741,32 @@ Follow `workflows/knowledge-ingestion.md` and read `knowledge-store/SECURITY.md`
 ```sh
 mkdir -p ~/.agents/knowledge-store
 cp roster/knowledge-store/config.example.json ~/.agents/knowledge-store/config.json
-go test ./internal/knowledge/
-cadre knowledge init
+go test ./internal/retrieval/
+cadre knowledge init   # verifies the store; it does not create one
 ```
 
 ### Ingest an authorized export
 
 ```sh
-cadre knowledge ingest \
-  --input /staging/authorized-chat-export.json \
-  --source legacy-model-export \
-  --classification confidential
+recall upload /staging/authorized-chat-export.json
 ```
+
+Ingestion is recall's: cadre retired its own `ingest` with the retrieval
+engine. Classification and source travel as chunk metadata, and cadre's
+governed retrieval reads them back as the access decision and the scope.
 
 Before broad ingestion, use a small sanitized sample to verify field mapping, message order, roles, timestamps, redaction, and conversation identifiers. Add a source-specific parser adapter when the generic parser loses information. Pass `--config <path>` instead to keep a project's data out of the shared store entirely.
 
 ### Retrieve with citations
 
 ```sh
-cadre knowledge context \
+cadre knowledge search \
   --agent cloud-architect \
   --task-id ARCH-42 \
-  --query "Why was private service connectivity selected?" \
   --classification confidential \
   --source legacy-model-export \
-  --top 5
+  --top 5 \
+  "Why was private service connectivity selected?"
 ```
 
 No particular working directory is required — commands run by absolute path. Agent context requires explicit agent, task, classification values; missing explicit configuration (when `--config` is passed) must fail closed. Classification filtering is exact-match, not hierarchical. In production, derive authorization and scope from authenticated claims rather than allowing the caller to self-assert them.

@@ -440,6 +440,7 @@ func TestResolveRetentionUntilHonoursAConfiguredWindow(t *testing.T) {
 	}
 	if until == nil {
 		t.Fatal("a configured window resolved to indefinite")
+		return
 	}
 	if *until <= nowISO() {
 		t.Errorf("retention_until %q is not in the future", *until)

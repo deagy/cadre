@@ -23,6 +23,7 @@ func TestDumpGatesForParityProbe(t *testing.T) {
 	}
 	if contract == nil {
 		t.Skip("no lifecycle contract available")
+		return
 	}
 	gates := contract.Gates
 	order := GateOrder(gates)

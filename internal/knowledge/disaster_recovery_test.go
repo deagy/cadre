@@ -46,6 +46,7 @@ func TestDisasterRecoveryCreation(t *testing.T) {
 	dr := NewDisasterRecovery("/backups")
 	if dr == nil {
 		t.Fatal("Failed to create disaster recovery manager")
+		return
 	}
 
 	if dr.backupLocation != "/backups" {

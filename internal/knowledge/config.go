@@ -384,6 +384,17 @@ func LoadConfig(configPath string) (*Config, string, error) {
 
 	embeddingRaw := raw["embedding"].(map[string]any)
 	provider := canonicalEmbeddingProvider(embeddingRaw["provider"])
+	// An empty provider is answered separately from an unrecognised one. It
+	// is the contract's "no embedding provider" case, and it is refused for
+	// the reason that case records: the provider and model are written into
+	// every retrieval audit row, so a silent default would make retrievals
+	// unattributable.
+	if strings.TrimSpace(provider) == "" {
+		return nil, "", configErrorf(
+			"embedding provider is required: set \"embedding.provider\" to one of: %s. "+
+				"It is recorded on every retrieval, so it cannot be defaulted.",
+			strings.Join(SupportedEmbeddingProviders, ", "))
+	}
 	if !stringInList(provider, SupportedEmbeddingProviders) {
 		return nil, "", configErrorf("unsupported embedding provider: %q. Expected one of: %s.",
 			provider, strings.Join(SupportedEmbeddingProviders, ", "))

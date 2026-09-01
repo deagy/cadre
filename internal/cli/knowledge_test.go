@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/deagy/cadre/cli/internal/knowledge"
@@ -53,31 +54,60 @@ func TestKnowledgeInitFlagError(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Test with invalid flag
-	code := knowledgeInit(dbPath, []string{"--invalid-flag"})
+	code := knowledgeInit(testEnv(t, dbPath), []string{"--invalid-flag"})
 	if code != 2 {
 		t.Errorf("Expected exit code 2 for flag error, got %d", code)
 	}
 }
 
-func TestKnowledgeInitUnexpectedArg(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
+// TestKnowledgeInitRefusesToCreateAStore pins the change of ownership: init
+// used to create a store when the configured path did not exist, which is how
+// a mistyped path became an empty store that searched clean. cadre does not
+// own store creation any more, so a missing store is an error naming the tool
+// that does.
+func TestKnowledgeInitRefusesToCreateAStore(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "absent.db")
 
-	// Test with unexpected argument
-	code := knowledgeInit(dbPath, []string{"unexpected-arg"})
-	if code != 2 {
-		t.Errorf("Expected exit code 2 for unexpected arg, got %d", code)
+	code := knowledgeInit(testEnv(t, dbPath), nil)
+	if code == 0 {
+		t.Fatal("init reported success for a store that does not exist")
+	}
+	if _, err := os.Stat(dbPath); err == nil {
+		t.Fatalf("init created %s; cadre no longer creates stores", dbPath)
 	}
 }
 
-func TestKnowledgeStatsVerifyError(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "nonexistent.db")
+// TestRetiredVerbsNameTheirReplacement checks every retired verb answers by
+// name rather than falling through to "unknown subcommand". An operator who
+// had a working command yesterday gets told where it went.
+func TestRetiredVerbsNameTheirReplacement(t *testing.T) {
+	for _, verb := range knowledgeRetiredList() {
+		stderr := captureStderr(t, func() {
+			if code := KnowledgeCmd([]string{verb}); code != 2 {
+				t.Errorf("%s: exit %d, want 2", verb, code)
+			}
+		})
+		if !strings.Contains(stderr, verb) {
+			t.Errorf("%s: message does not name the verb: %s", verb, stderr)
+		}
+		if !strings.Contains(stderr, "retired") {
+			t.Errorf("%s: message does not say it is retired: %s", verb, stderr)
+		}
+	}
+}
 
-	// Test stats on non-existent store should fail
-	code := knowledgeStats(dbPath, []string{})
-	if code == 0 {
-		t.Error("Expected non-zero exit code for non-existent store")
+// TestRetiredVerbsAnswerBeforeConfigResolution: a retired verb is answered
+// without resolving a config, so an operator on a machine with no knowledge
+// config still learns where the command went instead of being told their
+// config is missing.
+func TestRetiredVerbsAnswerBeforeConfigResolution(t *testing.T) {
+	stderr := captureStderr(t, func() {
+		if code := KnowledgeCmd([]string{"--config", "/nonexistent/config.json", "hybrid-search"}); code != 2 {
+			t.Errorf("exit %d, want 2", code)
+		}
+	})
+	if !strings.Contains(stderr, "recall hybrid-search") {
+		t.Errorf("expected the replacement verb, got: %s", stderr)
 	}
 }
 
@@ -98,17 +128,6 @@ func TestKnowledgeCmdUnknown(t *testing.T) {
 	code := KnowledgeCmd([]string{"--config", cfgPath, "unknown-command"})
 	if code == 0 {
 		t.Error("Expected non-zero exit code for unknown command")
-	}
-}
-
-func TestKnowledgeIngestMissingSource(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	// ingest without --source should fail
-	code := knowledgeIngest(testEnv(t, dbPath), []string{})
-	if code != 2 {
-		t.Errorf("Expected exit code 2 for missing source, got %d", code)
 	}
 }
 

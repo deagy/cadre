@@ -84,10 +84,13 @@ cp roster/knowledge-store/config.example.json ~/.agents/knowledge-store/config.j
 ```
 
 ```sh
-python3 -m unittest discover -s roster/knowledge-store/test -p "test_*.py"
+go test ./internal/retrieval/ ./internal/cli/
+
+# The store is recall's; cadre reads it through a governed view.
+recall upload roster/knowledge-store/examples/chat-export.json
 cadre knowledge init
-cadre knowledge ingest --input roster/knowledge-store/examples/chat-export.json --source legacy-model-export
-cadre knowledge context --agent release-engineer --task-id REL-42 --query "How are production releases approved?" --classification internal --top 5
+cadre knowledge search --classification internal --source legacy-model-export \
+  --agent release-engineer --task-id REL-42 "How are production releases approved?"
 ```
 
 The default `hashing` provider is deterministic, offline, and suitable for testing the pipeline. It approximates lexical similarity rather than full semantic similarity.

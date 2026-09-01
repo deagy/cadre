@@ -1,436 +1,196 @@
 # Cadre Knowledge Store CLI Guide
 
-The `cadre knowledge` command provides access to the knowledge store for ingesting, searching, and managing messages and embeddings.
+`cadre knowledge` is a **governed retrieval interface**, not a store. The store
+is [recall](https://github.com/deagy/recall); cadre reads it through
+`recall/govern`, which refuses a request that has not decided its scope, has
+not declared a classification, or cannot be recorded — and refuses before the
+store is opened, because an interface that only refuses after connecting has
+already revealed that the caller asked.
+
+Storage-side work — creating a store, uploading content, backups, restores,
+keyword search — is done with the `recall` CLI directly.
 
 ## Installation
 
-The knowledge store is built into the `cadre` CLI. No additional installation required.
+```sh
+go build -o bin/cadre ./cmd/cadre
+```
 
-## Quick Start
+The governed retrieval path is pure Go: recall uses `modernc.org/sqlite`, so
+none of the commands below need `CGO_ENABLED=1`.
 
-### Initialize the Store
+## Quick start
 
-```bash
-# Create or verify knowledge store at default location (.agents/knowledge-store/store.db)
+```sh
+mkdir -p ~/.agents/knowledge-store
+cp roster/knowledge-store/config.example.json ~/.agents/knowledge-store/config.json
+
+# recall owns the store: create and populate it. Its embedder must be the one
+# cadre's config names -- see "Embedders must match" below.
+recall upload /path/to/authorized-export.json
+
+# cadre verifies the store and records which embedder produced its vectors.
 cadre knowledge init
 
-# Verify existing store
-cadre knowledge init --verify
+# Retrieval states its classification and its source scope, or is refused.
+cadre knowledge search \
+  --classification internal \
+  --source legacy-model-export \
+  --agent release-engineer \
+  --task-id REL-42 \
+  "How are production releases approved?"
 ```
 
-### Ingest Messages
-
-```bash
-# Pipe JSON messages from stdin
-cat messages.jsonl | cadre knowledge ingest --source my-app --classification technical
-
-# Example JSON format:
-# {"message_id": "msg-1", "conversation_id": "conv-1", "role": "user", "content": "Hello"}
-```
-
-### Search
-
-```bash
-# Vector similarity search (semantic)
-cadre knowledge search --classification technical "machine learning"
-
-# Text content search
-cadre knowledge search --classification technical --mode content "neural"
-
-# Search with JSON output (for scripting)
-cadre knowledge search --classification technical --json "query"
-
-# Filter by source
-cadre knowledge search --classification technical --sources my-app,other-app "query"
-
-# Limit results
-cadre knowledge search --classification technical --top 5 "query"
-```
-
-### Delete
-
-```bash
-# Delete expired messages (past retention_until date)
-cadre knowledge delete --expired
-
-# Delete by classification (security level purge)
-cadre knowledge delete --classification secret
-
-# Delete by source (cleanup after testing)
-cadre knowledge delete --source test-app
-
-# Delete by age (older than N days)
-cadre knowledge delete --age 30
-```
-
-### Statistics
-
-```bash
-# Display store statistics
-cadre knowledge stats
-
-# JSON output
-cadre knowledge stats --json
-```
-
-## Command Reference
+## Command reference
 
 ### `cadre knowledge init`
 
-Initialize or verify the knowledge store.
+Verifies that the configured store exists and that a governed view can be
+constructed over it, then **records which embedder produced the store's
+vectors** in `embedder-identity.json` beside the store.
 
-**Options:**
-- `--verify` - Only verify existing store, don't create
+**Creates no store.** A missing store is an error naming `recall upload`,
+because a command that quietly created an empty database when a path was wrong
+is how an operator ends up searching a store nobody ingested into.
 
-**Examples:**
-```bash
-cadre knowledge init                 # Create or open store
-cadre knowledge init --verify        # Check existing store is valid
+```
+--reclaim   Replace a previously recorded identity with this config's
+--json      Machine-readable output
 ```
 
-### `cadre knowledge stats`
+The identity matters because **recall's schema records nothing about what
+embedded a store**. Vectors from a different provider, model or width do not
+compare, and the search does not fail. Measured: recall's cosine similarity
+returns 0 for vectors of different widths, so the query comes back with every
+chunk in scope at score 0, in index order — a full, ordinary-looking result
+set with no relevance in it, and an audit row naming an embedder that did not
+produce those vectors. `init` makes the operator state the fact, and every
+search checks it, so a mismatch is a refusal instead of that.
 
-Display statistics about the store.
+Like classification and source scope, the recorded identity is asserted and
+authenticated by nobody. What it buys is that it cannot be skipped by
+omission.
 
-**Options:**
-- `--json` - Output as JSON for parsing
+### `cadre knowledge search <query>`
 
-**Examples:**
-```bash
-cadre knowledge stats                # Human-readable format
-cadre knowledge stats --json | jq    # Parse with jq
+Governed retrieval. Exactly one source scope is required: `--source`
+(repeatable, or comma-separated) or `--all-sources`.
+
+```
+--classification <cls>   Required. Recorded on the retrieval.
+--source <src>           Source scope; repeatable
+--all-sources            Deliberately span every source in the store
+--agent <name>           Retrieving agent, recorded in the audit row
+--task-id <id>           Task this retrieval is for, recorded in the audit row
+--top <n>                Results to return (default 10)
+--mode vector            The only mode cadre serves
+--json                   Emit the retrieval bundle as JSON
 ```
 
-### `cadre knowledge ingest`
+Results come back inside the untrusted-data envelope: a trust label, the
+handling requirements, and a per-result citation. The bundle never carries
+`source_uri`, which a store may hold but which can expose a local filesystem
+path from the machine that performed the ingestion.
 
-Ingest messages from JSON stream into the store.
-
-**Options:**
-- `--source <src>` (required) - Source identifier for all messages
-- `--source-uri <uri>` - Source URI (optional)
-- `--classification <cls>` - Classification level (default: general)
-- `--embedding <model>` - Embedding model: `local-hashing` (default) or `openai-compatible`
-
-**Input Format:**
-JSON lines, one message per line. Each object should have:
-- `message_id` (required) - Unique identifier
-- `conversation_id` (required) - Conversation grouping
-- `role` (required) - user, assistant, system, etc.
-- `content` (required) - Message text
-- `conversation_title` (optional) - Conversation name
-- Other fields are preserved as-is
-
-**Examples:**
-```bash
-# Simple ingest
-echo '{"message_id":"1","conversation_id":"c1","role":"user","content":"Hello"}' | \
-  cadre knowledge ingest --source cli-test
-
-# Bulk ingest from file
-cat messages.jsonl | cadre knowledge ingest --source my-app --classification technical
-
-# With remote embeddings (requires environment variables)
-EMBEDDINGS_BASE_URL=https://api.openai.com/v1 \
-EMBEDDINGS_API_KEY=sk-... \
-EMBEDDINGS_MODEL=text-embedding-3-small \
-cat messages.jsonl | cadre knowledge ingest --source my-app --embedding openai-compatible
-```
-
-**Environment Variables (for remote embeddings):**
-- `EMBEDDINGS_BASE_URL` - API endpoint (e.g., https://api.openai.com/v1)
-- `EMBEDDINGS_API_KEY` - API authentication key
-- `EMBEDDINGS_MODEL` - Model name (e.g., text-embedding-3-small)
-- `EMBEDDINGS_TIMEOUT_SECONDS` - Request timeout (default: 30)
-
-### `cadre knowledge search`
-
-Search the knowledge store using vector similarity or text content.
-
-**Options:**
-- `--classification <cls>` (required) - Classification to search in
-- `--sources <src1,src2,...>` - Filter by source(s) (optional)
-- `--mode <mode>` - Search mode: `vector` (default) or `content`
-- `--top <n>` - Number of results (default: 10)
-- `--json` - Output as JSON
-- `--embedding <model>` - Embedding model: `local-hashing` (default) or `openai-compatible`
-
-**Vector Search (Default):**
-Uses semantic similarity to find conceptually related messages.
-
-```bash
-cadre knowledge search --classification technical "machine learning"
-cadre knowledge search --classification general --top 5 "how do I..."
-```
-
-**Content Search:**
-Uses substring matching to find text within messages.
-
-```bash
-cadre knowledge search --classification technical --mode content "TensorFlow"
-cadre knowledge search --classification general --mode content "database"
-```
-
-**JSON Output:**
-```bash
-cadre knowledge search --classification technical --json "query" | jq '.results[0].message.content'
-```
-
-**Examples:**
-```bash
-# Basic search
-cadre knowledge search --classification technical "neural networks"
-
-# Filter by source
-cadre knowledge search --classification technical --sources my-app "machine learning"
-
-# Multiple sources
-cadre knowledge search --classification technical --sources app1,app2 "data"
-
-# Custom result limit
-cadre knowledge search --classification technical --top 20 "algorithm"
-
-# Text search
-cadre knowledge search --classification technical --mode content "Python"
-
-# JSON output for scripting
-cadre knowledge search --classification technical --json "query" | jq '.count'
-```
+**Every completed retrieval is recorded** to `retrievals.jsonl` beside the
+store — query id (not the query text), classification, scope, agent, task,
+result count, and the embedder and model that produced the vectors searched. A
+retrieval that cannot be recorded is refused rather than served unrecorded.
 
 ### `cadre knowledge delete`
 
-Delete messages from the store using various strategies. Specify exactly one deletion mode.
+Deletes messages or runs retention policies. Still operates on cadre's own
+store: recall deletes by chunk id or document id only, with no
+metadata-scoped or retention-based deletion, so the four modes below have no
+equivalent to route to yet.
 
-**Options:**
-- `--expired` - Delete messages past retention_until date
-- `--classification <cls>` - Delete all messages with classification
-- `--source <src>` - Delete all messages from source
-- `--age <days>` - Delete messages older than N days
-- `--authorized-by <user>` - Authorization user (default: cli-user)
-- `--json` - Output deletion summary as JSON
-
-**Examples:**
-```bash
-# Delete expired data
-cadre knowledge delete --expired
-
-# Purge security classification
-cadre knowledge delete --classification secret --authorized-by admin
-
-# Remove test data
-cadre knowledge delete --source test-app
-
-# Cleanup old data
-cadre knowledge delete --age 90 --authorized-by cleanup-script
-
-# JSON output
-cadre knowledge delete --source old-source --json
+```
+--expired                Delete messages past their retention_until date
+--classification <cls>   Delete all messages with a given classification
+--source <src>           Delete all messages from a given source
+--age <days>             Delete messages older than N days
+--authorized-by <who>    Authorizing actor (default cli-user)
+--json                   Machine-readable output
 ```
 
-## Data Classification Levels
+### `cadre knowledge config [show]`
 
-The `--classification` parameter controls access and retention policies:
+Prints the configuration a governed retrieval resolves: config tier, store
+path, audit log path, and the embedder identity recorded on every retrieval.
+Edit the config file itself to change it.
 
-- `public` - Unrestricted, retained indefinitely
-- `general` - Internal use, standard retention
-- `technical` - Technical details, restricted distribution
-- `confidential` - Sensitive information, limited access
-- `secret` - Highly restricted, encrypted storage
-- Custom values allowed for organization-specific levels
+`config get`, `config set` and `config list` retired with the engine. Their
+keys configured the SQLite engine cadre no longer owns, and `set` wrote to a
+map that was discarded at exit.
 
-## Source Organization
-
-The `--source` parameter identifies where messages come from:
-
-- `claude-code` - From Claude Code integration
-- `slack-bot` - From Slack integration
-- `api` - From API clients
-- `import-<date>` - From bulk imports
-- Custom identifiers for your applications
-
-## JSON Output Formats
-
-### Search Results
+## Configuration
 
 ```json
 {
-  "query": "machine learning",
-  "mode": "vector",
-  "count": 3,
-  "results": [
-    {
-      "message": {
-        "id": "hash...",
-        "source": "my-app",
-        "conversation_id": "conv-1",
-        "role": "user",
-        "content": "...",
-        "classification": "technical",
-        "ingested_at": "2026-08-14T12:00:00.000Z"
-      },
-      "chunk": {
-        "ordinal": 0,
-        "content": "..."
-      },
-      "cosine_similarity": 0.8234
-    }
-  ]
+  "database": "~/.agents/knowledge-store/store.db",
+  "embedding": {
+    "provider": "local-hashing",
+    "model": "",
+    "dimensions": 128
+  }
 }
 ```
 
-### Delete Results
+`--config <path>` names a config **file**, not a database. A named-but-missing
+config is an error.
 
-```json
-{
-  "deleted": 42,
-  "authorized_by": "admin"
-}
-```
+The embedder identity is required, not defaulted: the provider and model are
+written into every audit row, so a silent default would make retrievals
+unattributable. `local-hashing` has no model name of its own, so its width is
+its identity and is recorded as `hashing-<n>d`. Every other provider must name
+its model.
 
-### Statistics
+## Embedders must match
 
-```json
-{
-  "total_messages": 1000,
-  "total_chunks": 3000,
-  "ingestion_runs": 5,
-  "retrieval_runs": 128,
-  "database_size_bytes": 2097152,
-  "sources": 3,
-  "classifications": 4,
-  "embedding_models": 1
-}
-```
+A query is only comparable to the vectors it searches when both came from the
+same provider, model and width. cadre records that identity on every retrieval
+and checks it against the store's before searching, but **it cannot verify
+it** — recall stores chunks and embeddings and nothing about what produced
+them, so the check is on a fact the operator states, not one anybody proved.
 
-## Performance Tips
+The practical consequence: `recall upload` embeds with **recall's** configured
+embedder (`mock`, `openai`, `cohere`, `ollama`, `onnx`), and cadre's
+`local-hashing` is not among them. A store uploaded by recall under cadre's
+default config is a store cadre cannot usefully search. Either configure both
+sides to the same real embedder, or seed the store with cadre's own provider.
 
-### Ingestion
-- Use `--embedding local-hashing` for bulk ingestion (faster, no API calls)
-- Process large files in batches using shell pipelines
-- Monitor database size with `cadre knowledge stats`
+This is a gap in the migration rather than a property of it, and it is
+recorded as one.
 
-### Searching
-- Always specify `--classification` to reduce search space
-- Use `--sources` filter when searching multi-tenant data
-- Default `--top 10` provides good balance of speed and coverage
+## Retired commands
 
-### Deletion
-- Use `--expired` for automated retention policy enforcement
-- Use `--age` with `--classification` for selective pruning
-- Monitor `stats` to verify retention policies
+The retrieval engine moved to recall. Running any of these names its
+replacement and exits 2.
 
-## Troubleshooting
+| Retired | Instead |
+|---|---|
+| `stats`, `health-check`, `diagnostics`, `metrics` | `recall store info` |
+| `ingest`, `batch-import` | `recall upload <path>...` |
+| `hybrid-search` | `recall hybrid-search <query>` |
+| `backup` | `recall store backup <destination>` — cadre's copied nothing and said so; recall's is real |
+| `export` | `recall store backup <destination>` |
+| `import` | `recall store restore <backup>` |
+| `fts5-index`, `fts5-search`, `hybrid-stats` | retired with the engine; `recall hybrid-search` is the keyword-weighted path |
+| `fault-tolerance`, `replication`, `maintenance` | retired with the engine |
+| `check-integrity`, `repair`, `rebuild-indexes`, `defragment` | retired with the engine; recall's index has its own lifecycle |
+| `batch-delete`, `batch-update` | retired with the engine |
 
-### "store not found" Error
-```bash
-cadre knowledge init  # Create the store first
-```
+## Proposal workflow
 
-### "classification is required" Error
-```bash
-# Always specify --classification for search/delete
-cadre knowledge search --classification general "query"
-```
+`propose`, `show-staged`, `import-staged`, `disposition-staged`,
+`ingest-accepted` and `delete-staged` are a separate concern from retrieval —
+separation of duties over proposed knowledge — and are unaffected by the
+migration. They are file-based and never touched the retrieval engine.
 
-### "source is required" Error
-```bash
-# Always specify --source for ingest
-cat messages.jsonl | cadre knowledge ingest --source my-app
-```
+## Exit codes
 
-### Slow Search Performance
-- Limit results with `--top` (default is 10)
-- Filter by `--sources` to reduce search space
-- Use `--mode content` for text search instead of vector search
-- Check store size with `stats` - very large stores may need archiving
-
-### Remote Embeddings Not Working
-Verify environment variables:
-```bash
-echo $EMBEDDINGS_BASE_URL      # Should be set
-echo $EMBEDDINGS_API_KEY       # Should not be empty
-echo $EMBEDDINGS_MODEL         # Should be model name
-```
-
-## Production Usage
-
-### Automation
-```bash
-#!/bin/bash
-# Ingest script
-cadre knowledge ingest \
-  --source "$APP_NAME" \
-  --classification "$CLASSIFICATION" \
-  < "$MESSAGE_FILE"
-```
-
-### Monitoring
-```bash
-# Check store health
-cadre knowledge stats --json | jq '.total_messages'
-
-# Find retention violations
-cadre knowledge delete --expired --json | jq '.deleted'
-```
-
-### Retention Policy
-```bash
-# Daily cleanup of old data
-cadre knowledge delete --age 365 --authorized-by retention-policy
-
-# Quarterly security purge
-cadre knowledge delete --classification confidential --authorized-by security-team
-```
-
-## API Integration
-
-For programmatic access, use JSON pipelines:
-
-```bash
-# Python example
-python3 << 'EOF'
-import json
-import subprocess
-
-# Generate messages
-messages = [
-    {"message_id": f"msg-{i}", "conversation_id": "python-conv", 
-     "role": "user", "content": f"Message {i}"}
-    for i in range(100)
-]
-
-# Ingest
-proc = subprocess.Popen(
-    ["cadre", "knowledge", "ingest", "--source", "python-app"],
-    stdin=subprocess.PIPE, text=True
-)
-for msg in messages:
-    proc.stdin.write(json.dumps(msg) + "\n")
-proc.stdin.close()
-proc.wait()
-
-# Search
-result = subprocess.run(
-    ["cadre", "knowledge", "search", "--classification", "general", "--json", "query"],
-    capture_output=True, text=True
-)
-data = json.loads(result.stdout)
-print(f"Found {data['count']} results")
-EOF
-```
-
-## Command-Line Help
-
-Get help for any command:
-
-```bash
-cadre knowledge help              # All subcommands
-cadre knowledge init --help       # Init options
-cadre knowledge search --help     # Search options
-# etc.
-```
-
-## See Also
-
-- `cadre knowledge` - Main command help
-- `/home/deagy/sdk/cadre/internal/knowledge/SCHEMA.md` - Database schema documentation
-- `/home/deagy/sdk/cadre/internal/knowledge/ARCHITECTURE.md` - Architecture details
+| Code | Meaning |
+|---|---|
+| 0 | Success |
+| 1 | Runtime error (store unreachable, retrieval failed) |
+| 2 | Usage error, including every governance refusal and every retired verb |
