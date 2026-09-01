@@ -155,65 +155,55 @@ happened to it rather than "unknown subcommand".
 Without `--config`, configuration is read using the project-local-then-global resolution above; if no config file exists at the resolved location, built-in defaults apply relative to that same directory. An existing config resolves its database path relative to the config directory. A supplied `--config` path must exist and contain a JSON object; otherwise the command fails closed.
 
 At the global-fallback tier only (see "Enforced scope at the global-fallback
-tier" above), `search`/`context`/`deletion-evidence` require at least one
-`--source` or else `--all-sources`, never both. **`proposed-knowledge` is
-refused entirely at that tier**, on read and on write alike -- `search`,
-`context`, `ingest`, `delete-ingested`, and `deletion-evidence`, the
-destructive verb included: staged records
-cannot be written to the shared store (`propose` refuses outright), so
-anything under that name there belongs to another project. Claim a project-local partition -- an
-empty `{}` in `.agents/knowledge-store/config.json` is enough -- to have
-staged findings at all. `--all-sources` still reaches it, deliberately: that
-flag already means "explicitly opt into cross-project retrieval", and what is
-refused is naming the source while believing the query is project-scoped. `--source` is repeatable on
-`search`/`context` (each entry is a separate source to search, order-preserving
-and de-duplicated); it stays single-valued on `ingest`, `delete-ingested`, and
-`deletion-evidence`, which each act on exactly one source. `ingest`/`delete-ingested`
-require an explicit `--source`. Project-local and explicit-`--config` invocations impose no such
-requirement. `deletion-evidence` is scoped for the same reason retrieval is:
-an evidence row is not content, but it carries the deleting project's
-identifier, its steward's free-text reason, and asserted actor identities, so
-reading every project's rows out of a shared store is a cross-project read and
-has to say so. A source-scoped read returns ingested-content evidence only --
-staged-record deletions carry no source to filter by and cannot exist in the
-shared store at all.
+tier" above), `search` requires at least one `--source` or else
+`--all-sources`, never both. **`proposed-knowledge` is refused entirely at that
+tier**, on read and on write alike: staged records cannot be written to the
+shared store (`propose` refuses outright), so anything under that name there
+belongs to another project. Claim a project-local partition — an empty `{}` in
+`.agents/knowledge-store/config.json` is enough — to have staged findings at
+all. `--all-sources` still reaches it, deliberately: that flag already means
+"explicitly opt into cross-project retrieval", and what is refused is naming a
+source while believing the query is project-scoped. `--source` is repeatable on
+`search`, each entry a separate source, order-preserving and de-duplicated.
+Project-local and explicit-`--config` invocations impose no such requirement.
 
-`retention-report --as-of` takes an ISO-8601 date or timestamp and is compared
-as an instant, not as text: a date alone means midnight UTC starting that day
-(pass a full timestamp to include that day's expiries), a value without an
-offset is read as UTC, and anything unparseable is refused rather than
-silently sorted against stored values.
+`import-staged` needs `--authorized-by` only when the batch contains a record
+that already carries a steward's `disposition`. Importing those admits
+decisions this store never watched being made — a legitimate migration act, but
+not a proposal, and the only remaining route by which a decision can enter
+without `disposition-staged` having recorded it. A batch of purely `proposed`
+records needs nothing extra. A self-approved record (`disposition.decided_by`
+equal to `staged_by`) is refused either way: a named human can vouch for a
+decision the store did not witness, but nobody can vouch for one that was
+never a decision. The authorization is persisted per admitted record
+(`staged_record_imports`, shown by `show-staged` as `import_authorizations`)
+rather than merely echoed back — "the human accountable" has to still be
+recorded after the process exits for that phrase to mean anything.
 
-`context` is the agent-facing command. It returns a schema-versioned bundle containing trust requirements, citations, and retrieved passages. `search` is a lower-level diagnostic command. Both require an explicit classification and apply exact-match classification and optional source filtering before ranking. `--top` must be an integer from 1 through 20, enforcing the orchestration policy limit.
+`import-staged` also restores each record's `<id>.history.json` sidecar, so a
+record's earlier dispositions survive the round trip. Restoring is append-only:
+re-importing the same export writes nothing further, and a sidecar
+contradicting history the store already holds, or contradicting the record it
+sits beside, refuses the batch instead of overwriting. An absent sidecar is
+fine. **The other half of that round trip is gone** — `export-staged` wrote
+those directories and was removed in `b418031e`, so this reads an export
+nothing here can now produce.
 
-`context` records `query_hash`, `task_id`, `agent`, `classification`, `source_filter`, embedding provider/model, requested top, result count, and creation time. `source_filter` holds a JSON array of the sources the call named (NULL for `--all-sources`); **rows written before `--source` became repeatable hold a bare source string instead**, and this append-only log is never rewritten, so a reader must accept both encodings. It does not record an authenticated subject, tenant/project/environment scope, authorization decision or policy version, nor returned chunk/citation identifiers. Production auditing must add those fields and derive access from authenticated claims.
+> ### What this section used to say
+>
+> Roughly sixty lines here described the scoping, `--source` cardinality,
+> `--as-of` parsing, and evidence-read rules for `context`, `ingest`,
+> `retention-report`, `delete-ingested` and `deletion-evidence`. Every one of
+> those commands was removed in `b418031e` when the Go rewrite replaced the
+> Python implementation, and the rules went with them — a scoping rule for a
+> command that does not exist is not a weaker rule, it is not a rule.
+>
+> The reasoning worth keeping is preserved in
+> `DESIGN-NOTES-deletion-and-retention.md`, including why evidence reads were
+> scoped at the shared tier and how `--as-of` parsed an instant rather than
+> text. A replacement would want both.
 
-Read-only retrieval means agents cannot mutate stored content or lifecycle state. Opening any command, including `context`, can nevertheless create the database directory, SQLite file, schema, and WAL files; `context` also writes retrieval metadata. Grant that operational write access separately from content-steward authority. Citations use `source`, `conversation_id`, `message_id`, `chunk_id`, `content_hash`, `created_at`, and `classification`. The database retains `source_uri` for steward provenance, but retrieval output omits it by default because it may expose a local path. `content_hash` covers stored redacted content, not the original source.
-
-Citations are point-in-time references, not immutable or permanently stable identifiers: re-ingestion can update content under the same source/conversation/message identity. Preserve each retrieved bundle plus its integrity hash for review/compliance evidence until the store provides versioned or append-only content and audits returned result snapshots.
-
-The demo now has retention and deletion commands, added by issue #184. This corrects an
-earlier statement here that was already false once #181 shipped `delete-staged`, `deletion-evidence`,
-and the rest of the staged-record lifecycle commands listed above -- and it is now false in a second,
-larger way: `ingest` records a per-message retention window (`retention_until`, config's `retention`
-block). Every shipped default is indefinite -- no window is recorded for `internal`,
-`confidential`, or `public` unless a caller passes `--retention-days` or a project configures
-one -- and `restricted` is refused outright unless `--retention-days` is passed explicitly.
-Indefinite is a deliberate placeholder, not a judgement that content should be kept forever:
-concrete windows are an open Product Owner / Engineering Lead decision recorded in
-`roster/shared/team-profile.yaml`, and shipping working day-counts ahead of it would let them
-become policy by default inertia. Until windows are configured, nothing ages out on its own and
-`retention-report` has nothing to report; deletion is entirely steward-initiated. `retention-report`
-lists expired content read-only, without deleting anything; and `delete-ingested` is the
-steward-only, evidenced capability that actually removes ingested messages and their chunks by
-`--scope {source|conversation|message}`, always requiring `--reason`, `--deleted-by`,
-`--authorized-by`, and `--trigger`. See `SECURITY.md` for the full contract (including the
-`delete_status` field that distinguishes a confirmed-removed deletion from a merely-attempted or
-failed one), honest limits, and the distinction
-from `delete-staged` (which never touches ingested content at all). Its ingestion response
-additionally reports the resolved `retention_until`; redaction and embedding summaries still
-require supplemental steward records until implemented.
 
 ## Compatibility
 
-The Python implementation retains the existing SQLite tables, indexes, identifiers, SHA-256 hashes, JSON vector encoding, hashing-vector algorithm, and provider/model selection. Existing databases are opened in place: a store created before `retention_until` existed gains that nullable column additively on next open (`database._migrate_additive_columns`), with pre-existing rows reading back as "no window recorded" rather than failing to open. Rows whose stored embedding dimension does not match the configured dimension are excluded rather than scored; re-ingest after changing provider, model, or dimensions. Back up the database before any runtime migration, before running `delete-ingested` (deletion is intentionally irreversible -- the evidence table records that a deletion happened and what its content hashed to, not the content itself, so a backup is the only way to recover the actual data), and never mix implementations against one database concurrently.
+The store's SQLite layout, identifiers, SHA-256 hashes and vector encoding are unchanged from the Python implementation, and existing databases open in place. Rows whose stored embedding dimension does not match the configured dimension are excluded rather than scored — re-ingest after changing provider, model, or dimensions, and note that cadre now refuses a store whose recorded embedder identity differs from the configured one rather than returning every chunk at score 0. Back up the database before any runtime migration, and never mix implementations against one database concurrently. The warning that used to stand here about backing up before `delete-ingested` — deletion being irreversible, with the evidence table recording only what content hashed to — applies to a command that no longer exists; it is preserved with the rest of that design in `DESIGN-NOTES-deletion-and-retention.md`.

@@ -13,6 +13,8 @@ convertedFrom: agents/knowledge-store-steward.md
 
 Operate the agent-facing vectorized knowledge store: authorize and normalize imports, protect sensitive content, maintain provenance, evaluate retrieval quality, serve cited context, and fulfill scoped deletion or retention actions — for staged records (`delete-staged`) and, as of issue #184, for ingested content itself (`retention-report`, `delete-ingested`). Also manage the runtime context store (`cadre context promote`, `cadre context get`), which holds transient working material and bulk evidence parked to reduce context-window load; context entries are subject to identical access-control and untrusted-input policies as knowledge records, and context-store stewardship follows the same disposition workflow as knowledge-store curation.
 
+**Two duties in that list cannot currently be performed.** Retention and deletion of ingested content have no command here: `retention-report`, `delete-ingested` and `deletion-evidence` were removed with the Python CLI in `b418031e` and never rebuilt. A steward holding this role can authorize, normalize, classify, disposition and delete *staged records* — and cannot enforce a retention window or remove ingested content, by any means this suite provides. See `DESIGN-NOTES-deletion-and-retention.md`.
+
 ## Inputs
 
 - Authorized source export and documented ownership
@@ -47,6 +49,8 @@ May operate the store and source-specific parsers within approved datasets and a
 ## Escalate when
 
 Ownership or authorization is unclear; secrets or unexpected regulated data appear; tenant separation cannot be enforced; provenance is missing; deletion/retention requirements conflict; retrieved content conflicts with current approved policy; a handoff item carries `untrusted_instruction_risk: true` (automatic defer, not discretionary approval); deletion of an accepted staged record, or of any ingested content, is requested (the lifecycle capability now exists via `delete-staged --authorized-by` and `delete-ingested --authorized-by` -- the reason to escalate is no longer that no capability exists, it is that neither command may be invoked without first securing the named authorized human `--authorized-by` requires; the steward's own authority does not extend to supplying that authorization itself, and evidence custodian coordination still applies; see this project's evidence-curator role definition).
+
+Note that a deletion or retention requirement is now *always* an escalation rather than sometimes a task: there is no tool here to satisfy one with.
 
 ## Completion criteria
 

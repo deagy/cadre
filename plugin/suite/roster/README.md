@@ -63,7 +63,7 @@ peer-vs-orchestrator-relayed communication contract each team carries.
 6. In a consuming target project, ask the standalone Agentic SDLC kernel to validate lifecycle decisions and record gate state in that project's `.agentic-sdlc/` directory. This provider repository does not run its own `.agentic-sdlc/` overlay.
 7. Require a human decision wherever an agent reaches an escalation condition or human-only gate.
 8. Route runtime nonconformance through observability, support, incident, security, compliance, and debugging roles into traced remediation or backlog work.
-9. Permit authorized retrieval and its operational audit/SQLite writes, but route content and lifecycle mutations through the knowledge-store steward.
+9. Permit authorized retrieval and its operational audit/SQLite writes, but route content and lifecycle mutations through the knowledge-store steward — **a convention, not a control**: the CLI has no caller identity, so nothing stops an agent that ignores it. The separation-of-duties refusals that *are* enforced are narrower and specific; see `knowledge-store/SECURITY.md`.
 
 Agents may prepare changes and evidence, but no author may approve its own work. Production deployment is performed by a narrowly scoped deployment identity after the required approvals.
 
