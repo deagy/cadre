@@ -103,16 +103,21 @@ func TestTheCrossBuildMatrixIsExactlyTheContractedOne(t *testing.T) {
 }
 
 func TestEveryCliCrossBuildLegForcesCgo(t *testing.T) {
-	// The knowledge store (github.com/mattn/go-sqlite3) needs cgo. A leg
-	// without CGO_ENABLED=1 builds fine and produces a binary whose `cadre
-	// knowledge` subcommand is a non-functional stub -- verified against a
-	// real build, not inferred.
+	// The context store and the engine's SQLite executor
+	// (github.com/mattn/go-sqlite3) need cgo. A leg without CGO_ENABLED=1
+	// builds fine and produces a binary whose SQLite-backed subcommands are
+	// non-functional stubs -- verified against a real build, not inferred.
 	//
-	// Scoped to the CLI rather than every leg. That reason is about the
-	// knowledge store, which only the CLI links; requiring cgo on the kernel's
-	// legs too would make it unbuildable without a cross toolchain for a
-	// dependency it does not have. TestTheKernelBuildsWithoutCgo holds the
-	// other half, so neither program can drift into the wrong setting.
+	// This used to say "the knowledge store", which was true until the
+	// retrieval engine moved to recall and the staged store moved to
+	// modernc.org/sqlite. `cadre knowledge` is pure Go now; the reason the CLI
+	// still needs cgo is internal/contextstore and internal/engine/executor.
+	//
+	// Scoped to the CLI rather than every leg: only the CLI links those
+	// packages, and requiring cgo on the kernel's legs would make it
+	// unbuildable without a cross toolchain for a dependency it does not have.
+	// TestTheKernelBuildsWithoutCgo holds the other half, so neither program
+	// can drift into the wrong setting.
 	for _, line := range strings.Split(crossBuildRecipe(t), "\n") {
 		if !buildsProgram(line, ProgramCLI) {
 			continue
