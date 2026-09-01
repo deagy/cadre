@@ -159,7 +159,7 @@ func TestSDLCInstallMessage_ReadsKernelCompatibility(t *testing.T) {
 	}
 
 	got := SDLCInstallMessage(repoRoot)
-	want := "cadre: Agentic SDLC v0.13.3 or newer (below v1.0.0) is required; install it from https://github.com/deagy/cadre"
+	want := "cadre: Agentic SDLC v0.13.3 or newer (below v1.0.0) is required; install it from https://github.com/deagy/cadre-kernel"
 	if got != want {
 		t.Errorf("SDLCInstallMessage() = %q, want %q", got, want)
 	}
@@ -168,7 +168,7 @@ func TestSDLCInstallMessage_ReadsKernelCompatibility(t *testing.T) {
 func TestSDLCInstallMessage_FallsBackWhenManifestMissing(t *testing.T) {
 	repoRoot := t.TempDir()
 	got := SDLCInstallMessage(repoRoot)
-	want := "cadre: Agentic SDLC a compatible version is required; install it from https://github.com/deagy/cadre"
+	want := "cadre: Agentic SDLC a compatible version is required; install it from https://github.com/deagy/cadre-kernel"
 	if got != want {
 		t.Errorf("SDLCInstallMessage() = %q, want %q", got, want)
 	}

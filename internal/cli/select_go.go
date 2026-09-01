@@ -333,7 +333,7 @@ func selectInstallMessage(suiteRoot string) string {
 			compatibility.Minimum, compatibility.MaximumExclusive)
 	}
 	return fmt.Sprintf(
-		"Agentic SDLC %s is required; set AGENTIC_SDLC_BIN or install https://github.com/deagy/cadre",
+		"Agentic SDLC %s is required; set AGENTIC_SDLC_BIN or install https://github.com/deagy/cadre-kernel",
 		requirement)
 }
 

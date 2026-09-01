@@ -84,7 +84,7 @@ func DispatchSDLC(ctx context.Context, repoRoot string, rest []string, interacti
 	}
 
 	if sdlcBin == "" {
-		message := "a compatible version of Agentic SDLC is required; install it from https://github.com/deagy/cadre"
+		message := "a compatible version of Agentic SDLC is required; install it from https://github.com/deagy/cadre-kernel"
 		if deps.InstallMessage != nil {
 			message = deps.InstallMessage()
 		}
@@ -151,7 +151,7 @@ func SDLCInstallMessage(repoRoot string) string {
 		requirement = fmt.Sprintf("v%s or newer (below v%s)", compat.Minimum, compat.MaximumExclusive)
 	}
 	return fmt.Sprintf(
-		"cadre: Agentic SDLC %s is required; install it from https://github.com/deagy/cadre",
+		"cadre: Agentic SDLC %s is required; install it from https://github.com/deagy/cadre-kernel",
 		requirement,
 	)
 }

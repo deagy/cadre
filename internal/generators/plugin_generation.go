@@ -2395,7 +2395,7 @@ func (g *pluginGenerator) sdlcShellDispatch() []string {
 		`  if [ -z "$sdlc_bin" ]; then`,
 		`    sdlc_bin=$(CADRE_REPO_ROOT="$SUITE_ROOT" "$BINARY_CACHE" config resolve agentic_sdlc.bin_path) || exit 1`,
 		"  fi",
-		fmt.Sprintf(`  [ -n "$sdlc_bin" ] || { echo "cadre: install Agentic SDLC %s from https://github.com/deagy/cadre" >&2; exit 1; }`,
+		fmt.Sprintf(`  [ -n "$sdlc_bin" ] || { echo "cadre: install Agentic SDLC %s from https://github.com/deagy/cadre-kernel" >&2; exit 1; }`,
 			g.kernelRequirementText()),
 		`  exec "$sdlc_bin" --provider "$PLUGIN_ROOT/provider.json" "$@"`,
 		"fi",
