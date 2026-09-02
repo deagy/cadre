@@ -15,6 +15,25 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.24.2](https://github.com/deagy/cadre/releases/tag/plugin-v0.24.2) - 2026-09-02
+
+### Fixed
+
+- **The launcher named platforms the CLI does not publish.** Its
+  could-not-obtain-a-binary diagnostic listed `linux/amd64, linux/arm64,
+  darwin/amd64, darwin/arm64 and windows/amd64` -- the repository's general
+  matrix, typed by hand. Two of those, `linux/arm64` and `darwin/amd64`, were
+  precisely the platforms the CLI excluded, so the message sent exactly the
+  people it could not help looking for a network fault. It is now rendered
+  from the platform contract.
+
+### Added
+
+- **`linux/arm64` binaries.** The CLI and the engine publish for arm64 Linux
+  again, built natively rather than cross-compiled with a toolchain that had
+  to be installed. The plugin resolves them by the same name as every other
+  platform.
+
 ## [0.24.1](https://github.com/deagy/cadre/releases/tag/plugin-v0.24.1) - 2026-09-02
 
 ### Fixed

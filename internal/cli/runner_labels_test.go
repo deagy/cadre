@@ -33,6 +33,10 @@ var (
 		"ubuntu-latest":  "standard Linux runner",
 		"macos-latest":   "current macOS Arm64 (macOS 26 arm64 as of 2026-08)",
 		"windows-latest": "standard Windows runner",
+		"ubuntu-24.04-arm": "GitHub-hosted arm64 Linux, free for public repositories. " +
+			"Pinned to a version rather than `ubuntu-latest-arm` on purpose: this leg " +
+			"builds cgo against the runner's glibc, and the wheel it produces claims " +
+			"manylinux_2_17 -- a floating label would move that floor without saying so",
 	}
 
 	retiredLabels = map[string]string{

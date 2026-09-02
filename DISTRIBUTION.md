@@ -105,25 +105,30 @@ Rendered against the four platforms the CLI publishes (placeholder version
 `<version>`):
 
 - `cadre-v<version>-linux-amd64.tar.gz`
+- `cadre-v<version>-linux-arm64.tar.gz`
 - `cadre-v<version>-darwin-arm64.tar.gz`
 - `cadre-v<version>-windows-amd64.zip`
 
 The engine ships in the same release, under the same tag:
 
 - `agentic-sdlc-engine-v<version>-linux-amd64.tar.gz`
+- `agentic-sdlc-engine-v<version>-linux-arm64.tar.gz`
 - `agentic-sdlc-engine-v<version>-darwin-arm64.tar.gz`
 - `agentic-sdlc-engine-v<version>-windows-amd64.zip`
 
-Both are also excluded from `linux/arm64`. They need cgo, so that platform
-needs either a native arm64 runner or a cross toolchain installed with `apt`,
-and the apt route failed four consecutive releases -- `apt-get` hung or errored
-against the Ubuntu mirror every time, burning the job budget before the build
-started and skipping the publish with every other platform already built.
-Dropped rather than left as the release's most fragile dependency. arm64 Linux
-users build from source.
+`linux/arm64` was excluded for four releases and is now published again. Both
+programs need cgo there, which on a cross build meant an aarch64 toolchain
+installed with `apt`, and `apt-get` hung or errored against the Ubuntu mirror
+every time -- burning the job budget before the build started and skipping the
+publish with every other platform already built. The exclusion recorded that
+reason, and named "either a native arm64 runner or a cross toolchain" as what
+it would take. The native runner now exists, so the leg being added is not the
+leg that kept failing.
 
-The kernel still publishes `linux/arm64`: it does not link cgo, so it
-cross-compiles from one runner with no toolchain to install.
+It matters more than a platform count: the machine this suite is developed and
+run on daily is aarch64 Linux, where a clean install produced a `cadre` that
+could not obtain a binary at all and a diagnostic that named `linux/arm64`
+among the platforms it covers.
 
 It is excluded from `darwin/amd64` for the same reason the CLI is: it links
 the same cgo sqlite checkpointer, and a cgo-less build compiles and then fails

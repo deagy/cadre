@@ -227,6 +227,22 @@ target is still required so an incidental CWD never becomes a write target.
   unlisted -- a message that reads as a broken release rather than as a
   producer and its only consumer disagreeing about a format.
 
+- **`linux/arm64` is published again, for the CLI and the engine.** It was
+  excluded for four releases because a cgo build for arm64 meant an aarch64
+  toolchain installed with `apt`, and `apt-get` stalled against the mirror
+  every time, skipping the publish with every other platform already built.
+  The exclusion carried that reason and named what would end it -- "either a
+  native arm64 runner or a cross toolchain" -- and the native runner now
+  exists, so the leg being added is not the leg that kept failing.
+
+  Not a corner platform: a clean install on aarch64 Linux produced a `cadre`
+  that could not obtain a binary at all, and a diagnostic that listed
+  `linux/arm64` among the platforms it covers. That message is now rendered
+  from the platform contract rather than typed, so it names what the CLI
+  actually publishes -- it had been naming the two platforms it deliberately
+  does not, sending exactly the people it could not help looking for a network
+  fault.
+
 - **`bin/cadre` falls back to the packaged launcher when there is no Go
   toolchain.** `install.sh` links `~/.local/bin/cadre` at this script and
   states its own requirements as git and Python; without Go, every subcommand

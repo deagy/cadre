@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/deagy/cadre/cli/internal/engine/provider"
+	"github.com/deagy/cadre/cli/internal/release"
 	"github.com/deagy/cadre/cli/internal/version"
 )
 
@@ -223,6 +224,25 @@ const sharedOverrideNote = "The shared policy content above is this package's gl
 // The PATH search deliberately removes this script's own directory first --
 // this shim *is* `agentic-sdlc` on the PATH while the plugin is enabled, so a
 // plain `command -v agentic-sdlc` finds itself and re-execs forever.
+// publishedCLIPlatforms renders what the CLI actually publishes, for the
+// launcher's diagnostic. PlatformsFor, not SupportedPlatforms: the repository
+// contracts for a wider matrix than this one program reaches, and the gap is
+// the whole point of the message.
+func publishedCLIPlatforms() string {
+	platforms := release.PlatformsFor(release.ProgramCLI)
+	names := make([]string, 0, len(platforms))
+	for _, platform := range platforms {
+		names = append(names, platform.String())
+	}
+	switch len(names) {
+	case 0:
+		return "no platform"
+	case 1:
+		return names[0]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
 func agenticSDLCShim(kernelVersion string) string {
 	return strings.Join([]string{
 		"#!/bin/sh",
@@ -1633,8 +1653,12 @@ func (g *pluginGenerator) generateBinWrapper(pluginRoot string) (string, error) 
 		`    echo "Fix one of:" >&2`,
 		`    echo "  * set CADRE_BINARY to a cadre binary you already have" >&2`,
 		`    echo "  * network access to github.com/deagy/cadre releases on first run" >&2`,
-		`    echo "  * an unsupported platform -- released binaries cover linux/amd64," >&2`,
-		`    echo "    linux/arm64, darwin/amd64, darwin/arm64 and windows/amd64" >&2`,
+		// Read out of the platform contract, not typed here. The typed
+		// version named linux/arm64 and darwin/amd64 -- the two platforms
+		// the CLI deliberately does not publish -- so the message sent
+		// exactly the people it could not help looking for a network fault.
+		fmt.Sprintf(`    echo "  * an unsupported platform -- released binaries cover %s" >&2`,
+			publishedCLIPlatforms()),
 		`    echo "  * a prepopulated cache: place the binary at the path above" >&2`,
 		`    exit 1`,
 		"  fi",

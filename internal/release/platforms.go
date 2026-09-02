@@ -114,6 +114,16 @@ func ExecutableNameFor(program, goos string) string {
 // documentation are all checked against one list. An entry here is a
 // deliberate reduction of what a program publishes, so it carries its reason
 // with it.
+//
+// An entry leaves when its reason expires, and linux/arm64 is the worked
+// example. It was excluded because a cgo build for arm64 meant a cross
+// toolchain installed with apt, and apt stalled against the mirror on four
+// releases running; the entry said so, naming "either a native arm64 runner or
+// a cross toolchain". The native runner now exists, so the leg being added is
+// not the leg that kept failing. Without the reason stored beside the
+// exclusion there would have been nothing to notice had expired -- which is
+// the argument for writing it down, and the reason a bare list of unsupported
+// platforms outlives its own justification.
 var unpublishable = map[string]map[Platform]string{
 	ProgramCLI: {
 		{GOOS: "darwin", GOARCH: "amd64"}: "the CLI needs cgo, so darwin/amd64 needs a " +
@@ -122,19 +132,8 @@ var unpublishable = map[string]map[Platform]string{
 			"Dropped deliberately: Apple Silicon Macs are served by darwin/arm64, and an " +
 			"Intel Mac cannot run that binary under Rosetta -- Rosetta translates x86_64 " +
 			"for Apple Silicon, not the reverse. Intel macOS users must build from source",
-		{GOOS: "linux", GOARCH: "arm64"}: "the CLI needs cgo, so linux/arm64 needs either a native " +
-			"arm64 runner or a cross toolchain installed with apt. The apt route failed four " +
-			"releases running -- `apt-get` hung or errored against the Ubuntu mirror every time, " +
-			"burning the job budget before the build started and skipping the publish with every " +
-			"other platform already built. Dropped deliberately rather than made the release's " +
-			"most fragile dependency. The kernel still publishes linux/arm64: it does not link " +
-			"cgo and cross-compiles from a single runner with no toolchain to install. arm64 " +
-			"Linux users build from source, or install the pip wheel if one is published for " +
-			"their platform",
 	},
 	ProgramEngine: {
-		{GOOS: "linux", GOARCH: "arm64"}: "excluded with the CLI, for the same reason and on the " +
-			"same leg: it is built beside the CLI on that runner and shares its toolchain",
 		{GOOS: "darwin", GOARCH: "amd64"}: "the engine links the same cgo sqlite checkpointer as the " +
 			"CLI, so it is excluded from darwin/amd64 for the same reason. The evidence is direct: " +
 			"built with CGO_ENABLED=0 it compiles and then fails at runtime, reporting that " +

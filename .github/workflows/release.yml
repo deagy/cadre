@@ -304,10 +304,25 @@ jobs:
             # PEP 425 platform tags. pip matches these against the installing
             # interpreter, so a wrong one serves the wrong architecture's
             # binary. manylinux_2_17 is the glibc floor these are built
-            # against. linux/arm64 is not published for the CLI (see
-            # internal/release.unpublishable): it needed a cross toolchain
-            # installed with apt, which failed four releases running.
+            # against.
             platform-tag: manylinux_2_17_x86_64
+          # Linux ARM64: native, on GitHub's arm64 runner.
+          #
+          # This leg existed once and was removed: the CLI links sqlite and so
+          # needs CGO_ENABLED=1, which on a cross build meant an aarch64
+          # toolchain installed with apt, and apt stalled against the mirror on
+          # four releases running. The exclusion was recorded with that reason
+          # and the reason has expired -- a native arm64 runner installs no
+          # toolchain, so the leg that kept failing is not the leg being added.
+          #
+          # It is not a corner platform here. The machine this suite is
+          # developed and run on daily is aarch64 Linux, where the install
+          # produced a `cadre` that could not obtain a binary at all.
+          - os: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+            cc: gcc
+            platform-tag: manylinux_2_17_aarch64
           # macOS ARM64: native on macos-latest (currently arm64)
           - os: macos-latest
             goos: darwin
