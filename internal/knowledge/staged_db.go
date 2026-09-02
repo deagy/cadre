@@ -189,13 +189,41 @@ func MigrateStagedRecords(legacyPath, stagedPath string) (int, error) {
 	}
 	defer func() { _, _ = store.db.Exec(`DETACH DATABASE legacy`) }()
 
+	// Columns named explicitly, never `SELECT *`.
+	//
+	// `SELECT *` copies whatever shape the legacy table happens to have into
+	// whatever shape the current one has, and works only while those agree.
+	// They stopped agreeing the moment observed_actor was added: the copy
+	// failed with "8 columns but 7 values", and because the failed attempt
+	// had already created the destination file, the caller's
+	// migrate-only-if-absent guard skipped the migration on every later run.
+	// The legacy records became unreachable with no error at all -- a
+	// silently stranded store, from a column addition.
+	//
+	// Naming the columns makes the copy explicit about the shape it depends
+	// on: a legacy table missing observed_actor copies fine, because the
+	// destination's DEFAULT '' fills it, and a legacy table missing anything
+	// this list names fails loudly instead of silently.
 	copied := 0
-	for _, table := range []string{
-		"staged_records", "staged_record_dispositions",
-		"staged_record_imports", "staged_record_deletions",
+	for _, migration := range []struct {
+		table   string
+		columns string
+	}{
+		{"staged_records",
+			"id, status, frontmatter_json, body, content_digest, created_at, updated_at"},
+		{"staged_record_dispositions",
+			"record_id, sequence, action, reason, classification_used, " +
+				"diverged_from_proposal, decided_by, decided_at"},
+		{"staged_record_imports",
+			"record_id, content_digest, status_at_import, authorized_by, directory, imported_at"},
+		{"staged_record_deletions",
+			"record_id, title, content_digest, status_at_deletion, reason, deleted_by, " +
+				"authorized_by, deleted_at"},
 	} {
+		table := migration.table
 		result, err := store.db.Exec(fmt.Sprintf(
-			`INSERT OR IGNORE INTO main.%s SELECT * FROM legacy.%s`, table, table))
+			`INSERT OR IGNORE INTO main.%s (%s) SELECT %s FROM legacy.%s`,
+			table, migration.columns, migration.columns, table))
 		if err != nil {
 			return copied, fmt.Errorf("cannot copy %s: %w", table, err)
 		}

@@ -488,3 +488,97 @@ CREATE TABLE staged_record_deletions (
 		t.Fatalf("deletion-evidence-staged path failed on a migrated store: %v", err)
 	}
 }
+
+// A legacy combined store migrates even though its schema is older.
+//
+// MigrateStagedRecords used `SELECT *`, which copies whatever shape the
+// legacy table has into whatever shape the current one has, and works only
+// while those agree. Adding observed_actor ended that: the copy failed with
+// "8 columns but 7 values", and because the failed attempt had already
+// created the destination file, the caller's migrate-only-if-absent guard
+// skipped the migration on every subsequent run. One loud error, then
+// silence, and a store full of records nothing could reach.
+//
+// The fixture below is written out in full rather than built from
+// stagedSchema. That is the whole point: the existing legacy-migration test
+// derives its "old" store from the current constant, so it can never
+// disagree with the code, and it passed throughout. A migration test whose
+// old world is defined by the new world is testing nothing.
+func TestALegacyStoreWithAnOlderSchemaStillMigrates(t *testing.T) {
+	directory := t.TempDir()
+	legacyPath := filepath.Join(directory, "knowledge.db")
+	stagedPath := filepath.Join(directory, "staged-records.db")
+
+	legacy, err := sql.Open("sqlite", dsn(legacyPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := legacy.Exec(`
+CREATE TABLE staged_records (
+  id TEXT PRIMARY KEY, status TEXT NOT NULL, frontmatter_json TEXT NOT NULL,
+  body TEXT NOT NULL, content_digest TEXT NOT NULL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE staged_record_dispositions (
+  record_id TEXT NOT NULL, sequence INTEGER NOT NULL, action TEXT NOT NULL,
+  reason TEXT NOT NULL, classification_used TEXT NOT NULL,
+  diverged_from_proposal INTEGER NOT NULL, decided_by TEXT NOT NULL,
+  decided_at TEXT NOT NULL, PRIMARY KEY (record_id, sequence)
+);
+CREATE TABLE staged_record_imports (
+  record_id TEXT NOT NULL, content_digest TEXT NOT NULL,
+  status_at_import TEXT NOT NULL, authorized_by TEXT NOT NULL,
+  directory TEXT NOT NULL, imported_at TEXT NOT NULL,
+  PRIMARY KEY (record_id, imported_at)
+);
+CREATE TABLE staged_record_deletions (
+  record_id TEXT NOT NULL, title TEXT NOT NULL, content_digest TEXT NOT NULL,
+  status_at_deletion TEXT NOT NULL, reason TEXT NOT NULL,
+  deleted_by TEXT NOT NULL, authorized_by TEXT, deleted_at TEXT NOT NULL,
+  PRIMARY KEY (record_id, deleted_at)
+);
+INSERT INTO staged_records VALUES
+  ('KS-20260101-legacy','proposed','{"id":"KS-20260101-legacy"}','body','digest','t0','t0');
+INSERT INTO staged_record_dispositions VALUES
+  ('KS-20260101-legacy',1,'accepted','because','internal',0,'a-steward','t0');
+`); err != nil {
+		t.Fatalf("writing the legacy store: %v", err)
+	}
+	if err := legacy.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	copied, err := MigrateStagedRecords(legacyPath, stagedPath)
+	if err != nil {
+		t.Fatalf("migrating a legacy store with an older schema: %v", err)
+	}
+	if copied != 2 {
+		t.Fatalf("copied %d rows, want 2 (one record, one disposition)", copied)
+	}
+
+	store, err := OpenStaged(stagedPath)
+	if err != nil {
+		t.Fatalf("opening the migrated store: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	records, err := store.ListStagedRecords("")
+	if err != nil {
+		t.Fatalf("listing migrated records: %v", err)
+	}
+	if len(records) != 1 || records[0].ID != "KS-20260101-legacy" {
+		t.Fatalf("the legacy record did not survive the migration: %+v", records)
+	}
+	// The column the legacy store never had is empty rather than absent:
+	// nothing observed that staging, because it happened before observation
+	// existed, and inventing a value would be the dishonesty the column was
+	// added to remove.
+	observed, err := store.StagedObservedActor("KS-20260101-legacy")
+	if err != nil {
+		t.Fatalf("reading the migrated record's observation: %v", err)
+	}
+	if observed != "" {
+		t.Fatalf("a record migrated from before observation carries %q; it should carry nothing",
+			observed)
+	}
+}
