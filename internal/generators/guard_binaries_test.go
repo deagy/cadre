@@ -71,6 +71,13 @@ func TestTheCommittedGuardBinaryMatchesTheSource(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not available")
 	}
+	// This builds the guard from source below, so it needs the Go toolchain
+	// as much as it needs git. Guarding one and not the other made the test
+	// fail rather than skip on a machine with no Go installed -- a property
+	// of the machine, not a defect in the guard.
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("the Go toolchain is not available")
+	}
 	root := repositoryRoot(t)
 	suffix := ""
 	if runtime.GOOS == "windows" {

@@ -29,6 +29,11 @@ var (
 
 func buildStandaloneCadre(t *testing.T) string {
 	t.Helper()
+	// Checked before the sync.Once, so every caller skips rather than the
+	// first one recording an error the rest report as a build failure.
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("this test builds the CLI and needs a Go toolchain")
+	}
 	standaloneOnce.Do(func() {
 		dir, err := os.MkdirTemp("", "cadre-standalone-")
 		if err != nil {

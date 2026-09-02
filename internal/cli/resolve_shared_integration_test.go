@@ -22,6 +22,9 @@ var (
 // resolveSharedBinary builds the CLI binary for subprocess tests.
 func resolveSharedBinary(t *testing.T) string {
 	t.Helper()
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("this test builds the CLI and needs a Go toolchain")
+	}
 	builtResolveCliOnce.Do(func() {
 		dir, err := os.MkdirTemp("", "cadre-resolve-test")
 		if err != nil {
