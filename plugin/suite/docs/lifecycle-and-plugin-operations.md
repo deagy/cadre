@@ -27,14 +27,31 @@ follow.
 ## Initialize a target project (direct CLI)
 
 Install the reviewed release and make its executable available as
-`agentic-sdlc` or through `AGENTIC_SDLC_BIN` — see
-[`kernel/README.md`](https://github.com/deagy/cadre/tree/main/kernel/README.md)
-for the exact `pipx install` command and current `kernel-v*` tag:
+`agentic-sdlc` or through `AGENTIC_SDLC_BIN`. The kernel lives in
+[deagy/cadre-kernel](https://github.com/deagy/cadre-kernel) and is released
+there; this repository does not publish it:
 
 ```sh
-pipx install "git+https://github.com/deagy/cadre.git@kernel-v<version>#subdirectory=kernel"
+./install.sh --with-lifecycle        # installs the kernel alongside cadre
 cadre sdlc init --root /path/to/target --profile secure-cloud
 ```
+
+To install a specific version by hand, take the archive for your platform from
+a `cadre-kernel` release and verify it against that release's `SHA256SUMS`:
+
+```sh
+version=0.14.4; os=linux; arch=arm64
+base="https://github.com/deagy/cadre-kernel/releases/download/v$version"
+curl -fsSLO "$base/agentic-sdlc-v$version-$os-$arch.tar.gz"
+curl -fsSL "$base/SHA256SUMS" | sha256sum --check --ignore-missing
+```
+
+**`pipx install` is not how you get the kernel, and no longer works.** The
+kernel was a Python distribution installed from a `kernel/` subdirectory of
+this repository; it is a Go binary in its own repository now, that subdirectory
+was deleted at `11eefd47`, and the `kernel-v*` releases it was fetched from
+have been retired so the kernel has one release home. `pip install
+agentic-sdlc` installs unrelated third-party software and always did.
 
 The target project owns its `.agentic-sdlc/` records and consequential
 decisions. Initialization detects candidate technology values but does not

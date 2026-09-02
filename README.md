@@ -132,17 +132,20 @@ The selector emits a plan only. It does not run agents, retrieve knowledge, depl
 ## Agentic SDLC quick start
 
 Install the reusable G1-G10 lifecycle kernel, then use this suite's
-compatibility command to inject the Cadre provider. The kernel's source lives
-in this same repository, under [`kernel/`](kernel/), but it is still released
-independently — pin to a reviewed `kernel-v*` tag in automation, since `main`
-is fine for exploration but not an immutable dependency. Check
-[this repository's releases](https://github.com/deagy/cadre/releases)
-(filter for `kernel-v*`) for the current tag rather than hardcoding one here,
-since this section goes stale otherwise.
+compatibility command to inject the Cadre provider. **The kernel is not in this
+repository.** Its source and its releases both live in
+[deagy/cadre-kernel](https://github.com/deagy/cadre-kernel), which tags them
+`v*` — pin a reviewed tag in automation, since `main` is fine for exploration
+but not an immutable dependency. Check
+[that repository's releases](https://github.com/deagy/cadre-kernel/releases)
+for the current tag rather than hardcoding one here, since this section goes
+stale otherwise.
 
-The kernel is a Go binary. It was a pip/pipx-installable Python package
-until the port finished; see [`kernel/README.md`](kernel/README.md) for what
-the kernel is and what it owns.
+The kernel is a Go binary. It was a pip/pipx-installable Python package in a
+`kernel/` subdirectory of this repository until the port finished; that
+subdirectory was deleted at `11eefd47`, and the `kernel-v*` releases it was
+published under have been retired so the kernel has one release home. The
+`kernel-v*` tags remain as history and are not added to.
 
 From a checkout, `bin/agentic-sdlc` builds it on first use and execs it —
 no separate clone and no install step:
@@ -364,7 +367,7 @@ component-prefixed tags:
 | Component | Version source | Tag |
 | --- | --- | --- |
 | Plugin distribution | `plugin/**/plugin.json` (all 8 manifests) | `plugin-v*` |
-| Lifecycle kernel | `internal/kernel/provider.go` (`Version`) | `kernel-v*` |
+| Lifecycle kernel *(pin only — released from [deagy/cadre-kernel](https://github.com/deagy/cadre-kernel) under `v*`)* | `internal/kernel/provider.go` (`Version`) | none cut here; `kernel-v*` is history |
 | Cadre CLI | `VERSION` | `cli-v*` |
 
 The prefixes are load-bearing. This repository inherited 25 bare `v*` tags

@@ -222,9 +222,13 @@ walks through it.
 install cleanly and look plausible. The name `cadre` on PyPI is likewise a
 placeholder uploaded by someone else in 2022.
 
-Install only from this repository — a checkout, the marketplace, the install
-script, or a wheel attached to a `kernel-v*` release (verify it against the
-release's `SHA256SUMS`). See [SECURITY.md](https://github.com/deagy/cadre/blob/main/SECURITY.md).
+Install only from these repositories — a checkout, the marketplace, or the
+install script for `cadre`; a release archive from
+[deagy/cadre-kernel](https://github.com/deagy/cadre-kernel/releases) for the
+kernel, verified against that release's `SHA256SUMS`. This repository no
+longer publishes the kernel: the `kernel-v*` releases were retired so the
+kernel has one release home. See
+[SECURITY.md](https://github.com/deagy/cadre/blob/main/SECURITY.md).
 
 ## Verifying
 

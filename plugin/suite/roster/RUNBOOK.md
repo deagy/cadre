@@ -844,11 +844,13 @@ lifecycle kernel from target-project state:
 provider/plugin -> consuming target-project `.agentic-sdlc/` overlay and run record
 ```
 
-Install it with `pipx` (puts `agentic-sdlc` directly on `PATH` — see
-`kernel/README.md` for the exact install command and current release tag),
-or run `pipx install ./kernel` from this checkout, or expose
-`bin/agentic-sdlc` on `PATH` or through `AGENTIC_SDLC_BIN` for development
-against an unreleased change. Either way, initialize through this
+Install it with `./install.sh --with-lifecycle`, or take the archive for
+your platform from a [deagy/cadre-kernel](https://github.com/deagy/cadre-kernel/releases)
+release and verify it against that release's `SHA256SUMS`, or expose your own
+build through `AGENTIC_SDLC_BIN` for development against an unreleased change.
+`pipx install` is not how the kernel is obtained: it was a Python package in
+this repository's `kernel/` subdirectory, deleted at `11eefd47`, and it is a Go
+binary in its own repository now. Either way, initialize through this
 repository's compatibility launcher:
 
 ```sh

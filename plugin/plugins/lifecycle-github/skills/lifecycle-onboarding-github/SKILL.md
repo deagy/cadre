@@ -32,12 +32,17 @@ lifecycle/gate tracking, not just a to-do list. If they want something much
 lighter (a plain checklist, GitHub Issues), say so and stop — this skill is
 specifically for G1-G10 gate tracking.
 
-Check whether `agentic-sdlc` is reachable (`AGENTIC_SDLC_BIN` env var, or
-`agentic-sdlc` on `PATH`, or this repository's own in-tree `kernel/`). If
-not, tell the human in plain terms that a one-time install step is needed,
-offer to do it (`pipx install ./kernel` from this checkout, or `pipx
-install` a pinned `kernel-v*` release per `kernel/README.md`), and proceed
-once it is available.
+Check whether `agentic-sdlc` is reachable (`AGENTIC_SDLC_BIN` env var,
+`agentic-sdlc` on `PATH`, or the shim packaged with this plugin at
+`plugins/lifecycle/bin/agentic-sdlc`). If not, tell the human in plain terms
+that a one-time install step is needed, offer to do it (`./install.sh
+--with-lifecycle`, or an archive from a
+[deagy/cadre-kernel](https://github.com/deagy/cadre-kernel/releases) release
+verified against its `SHA256SUMS`), and proceed once it is available.
+
+`pipx install` is not how the kernel is obtained. It was a Python package in
+this repository's `kernel/` subdirectory, which was deleted at `11eefd47`; it
+is a Go binary in its own repository now.
 
 Prefer running through this suite's compatibility launcher,
 `./bin/cadre sdlc <subcommand>`, rather than the bare `agentic-sdlc`
