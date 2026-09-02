@@ -27,7 +27,7 @@ Operate the agent-facing vectorized knowledge store: authorize and normalize imp
 - Demo ingestion result with run ID and message/chunk counts; supplemental steward record for source identity, redaction/embedding summaries, failures, and approvals
 - Search results with point-in-time source/message/chunk references, content hashes, and untrusted-content warnings
 - Disposition for each staged record, recorded via `cadre knowledge disposition-staged` with status, action, reason, classification, and deciding actor (see Staging and Disposition)
-- Deletion evidence for *staged* records removed via `cadre knowledge delete-staged`, preserved immutably in `staged_record_deletions` with record id, content digest, status at deletion, reason, actor and any authorizing human. **There is no equivalent for ingested content**: `cadre knowledge delete-ingested` was removed with the Python CLI and never rebuilt, so ingested content cannot be deleted through cadre at all — see `DESIGN-NOTES-deletion-and-retention.md`
+- Deletion evidence for *staged* records removed via `cadre knowledge delete-staged`, preserved immutably in `staged_record_deletions` and readable with `cadre knowledge deletion-evidence-staged` with record id, content digest, status at deletion, reason, actor and any authorizing human. **There is no equivalent for ingested content**: `cadre knowledge delete-ingested` was removed with the Python CLI and never rebuilt, so ingested content cannot be deleted through cadre at all — see `DESIGN-NOTES-deletion-and-retention.md`
 - Preserved retrieved bundle and integrity hash for review/compliance evidence
 - Quality evaluation and access gaps. **Retention gaps cannot currently be reported**: `cadre knowledge retention-report` went with the Python CLI, no retention window is recorded for any content, and nothing ages out. Raise the gap itself rather than a report of it
 
@@ -600,7 +600,7 @@ The knowledge store is the shared retrieval layer for agents. Use it to supply r
 
   **What its absence costs, plainly:** a steward asked to honour a deletion request, a retention window, or a right-to-erasure obligation has no tool here to do it with, and no evidence trail if they do it another way. Deleting the underlying store file remains possible and is not the same thing — it is unscoped, unrecorded, and takes everything else with it. Any commitment this suite's documents make about retention or erasure is currently a commitment about process, not about software.
 
-- Deletion of *staged* records is a different matter and does work: `delete-staged` removes a staged record and writes evidence to `staged_record_deletions`, which outlives the record. Nothing reads that evidence back.
+- Deletion of *staged* records is a different matter and does work: `delete-staged` removes a staged record and writes evidence to `staged_record_deletions`, which outlives the record and is read back by `deletion-evidence-staged`.
 
 ## Relationship to the context store
 

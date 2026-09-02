@@ -80,10 +80,6 @@ var pythonEraVerbs = map[string]string{
 		"this binary's governed retrieval. (Go briefly declared the name too, in f6edbedd, " +
 		"as a not-yet-implemented stub removed the same day.) Note that `cadre context` is a " +
 		"different, live command -- the local agent context store, not knowledge retrieval",
-	"list-staged": "listing staged records is not absent from the code: " +
-		"`knowledge.ListStagedRecords(status)` is live, tested, filterable by status exactly " +
-		"as the documented `--status` flag describes, and `ingest-accepted` calls it. It is " +
-		"simply not wired to a CLI verb. Use `show-staged --id <id>` for one record",
 	"export-staged": "`roster/knowledge-store/proposed-knowledge/` holds a snapshot the Python " +
 		"CLI exported. Nothing in this binary refreshes it, and `import-staged` reads such a " +
 		"directory without there being a verb that writes one",
@@ -94,9 +90,11 @@ var pythonEraVerbs = map[string]string{
 		"not a capability this binary has. Content lives in a recall store, whose Go API " +
 		"deletes by document or chunk id -- note that `recall`'s own CLI exposes no delete " +
 		"command either, so this is a library call, not something to run",
-	"deletion-evidence": "`delete-staged` writes deletion evidence to `staged_record_deletions`, " +
-		"which outlives the record it describes -- but nothing reads it back. `show-staged` " +
-		"cannot: it resolves a record by id, and after a deletion there is no record to find",
+	"deletion-evidence": "the Python CLI's verb covered evidence for staged records and for " +
+		"ingested content. Half of it exists here: `deletion-evidence-staged` reads back what " +
+		"`delete-staged` wrote to `staged_record_deletions`. The ingested half does not, and " +
+		"cannot -- no command here deletes ingested content, so there is no evidence of it to " +
+		"read",
 }
 
 // AnswerableKnowledgeVerbs is every `cadre knowledge <verb>` this CLI answers
@@ -138,8 +136,8 @@ Subcommands:
   config               Show the configuration a governed retrieval resolves
 
 Proposal workflow (separate from retrieval, routed before this command):
-  propose, show-staged, import-staged, disposition-staged, ingest-accepted,
-  delete-staged
+  propose, show-staged, list-staged, import-staged, disposition-staged,
+  ingest-accepted, delete-staged, deletion-evidence-staged
 
 The retrieval engine moved to recall (https://github.com/deagy/recall).
 Verbs that maintained cadre's own engine are retired; running one names the

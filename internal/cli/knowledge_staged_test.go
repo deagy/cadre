@@ -751,3 +751,161 @@ func TestStagingIsAllowedAgainstAProjectLocalStore(t *testing.T) {
 		t.Errorf("resolved store %q should live under the project at %q", stagedPath, dir)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// list-staged and deletion-evidence-staged
+// ---------------------------------------------------------------------------
+
+// resultMap runs a staged verb and returns its result as a map.
+func resultMap(t *testing.T, cfg *knowledge.Config, verb string, args ...string) map[string]any {
+	t.Helper()
+	result, err := runKnowledgeStaged(cfg, verb, args)
+	if err != nil {
+		t.Fatalf("%s: %v", verb, err)
+	}
+	fields, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("%s returned %T, not a map", verb, result)
+	}
+	return fields
+}
+
+func TestListStagedReturnsWhatTheLibraryAlreadyHeld(t *testing.T) {
+	cfg := testStagedConfig(t)
+	directory := t.TempDir()
+	writeRecordFile(t, directory, testFrontmatter("KS-20260101-first"))
+	writeRecordFile(t, directory, testFrontmatter("KS-20260101-second"))
+	if _, err := runKnowledgeStaged(cfg, "import-staged", []string{"--directory", directory}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	fields := resultMap(t, cfg, "list-staged")
+	records, ok := fields["records"].([]knowledge.StagedSummary)
+	if !ok {
+		t.Fatalf("records is %T, not a summary slice", fields["records"])
+	}
+	if len(records) != 2 || fields["count"] != 2 {
+		t.Fatalf("expected 2 records, got count=%v records=%+v", fields["count"], records)
+	}
+	// The verb must agree with the library it wraps, or it is a second
+	// answer to the same question.
+	direct := listStaged(t, cfg)
+	if len(direct) != len(records) {
+		t.Fatalf("verb returned %d records, the library %d", len(records), len(direct))
+	}
+	for index := range direct {
+		if direct[index].ID != records[index].ID {
+			t.Fatalf("order or content differs at %d: %q vs %q",
+				index, direct[index].ID, records[index].ID)
+		}
+	}
+}
+
+func TestListStagedFiltersByStatus(t *testing.T) {
+	cfg := testStagedConfig(t)
+	directory := t.TempDir()
+	accepted := testFrontmatter("KS-20260101-accepted")
+	accepted["status"] = "accepted"
+	accepted["disposition"] = testDisposition(testSteward)
+	writeRecordFile(t, directory, accepted)
+	writeRecordFile(t, directory, testFrontmatter("KS-20260101-proposed"))
+	if _, err := runKnowledgeStaged(cfg, "import-staged",
+		[]string{"--directory", directory, "--authorized-by", testAuthorizer}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	fields := resultMap(t, cfg, "list-staged", "--status", "accepted")
+	if fields["count"] != 1 {
+		t.Fatalf("expected 1 accepted record, got %v", fields["count"])
+	}
+	if empty := resultMap(t, cfg, "list-staged", "--status", "rejected"); empty["count"] != 0 {
+		t.Fatalf("expected no rejected records, got %v", empty["count"])
+	}
+}
+
+// An unknown status must be refused rather than filtered on. Passing it
+// through to SQL returns an empty list, which reads as "no such records"
+// when it means "no such status" -- and those are worth telling apart
+// precisely when the answer is empty.
+func TestListStagedRefusesAnUnknownStatus(t *testing.T) {
+	cfg := testStagedConfig(t)
+	_, err := runKnowledgeStaged(cfg, "list-staged", []string{"--status", "pending"})
+	if err == nil {
+		t.Fatal("expected an unknown status to be refused, not silently filtered on")
+	}
+	if !strings.Contains(err.Error(), "pending") {
+		t.Fatalf("refusal does not name the bad status: %v", err)
+	}
+	for _, valid := range knowledge.StagedStatusValues {
+		if !strings.Contains(err.Error(), valid) {
+			t.Fatalf("refusal does not offer %q as a valid status: %v", valid, err)
+		}
+	}
+}
+
+// The property the whole table exists for: evidence outlives its subject.
+// Before this verb, `delete-staged` reported `evidence_retained: true` and
+// no CLI could check the claim.
+func TestDeletionEvidenceOutlivesTheRecordItDescribes(t *testing.T) {
+	cfg := testStagedConfig(t)
+	directory := t.TempDir()
+	writeRecordFile(t, directory, testFrontmatter("KS-20260101-doomed"))
+	if _, err := runKnowledgeStaged(cfg, "import-staged", []string{"--directory", directory}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if _, err := runKnowledgeStaged(cfg, "delete-staged", []string{
+		"--id", "KS-20260101-doomed", "--reason", "superseded", "--deleted-by", testProposer,
+	}); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	if records := listStaged(t, cfg); len(records) != 0 {
+		t.Fatalf("the record survived deletion: %+v", records)
+	}
+	fields := resultMap(t, cfg, "deletion-evidence-staged")
+	if fields["count"] != 1 {
+		t.Fatalf("expected one evidence row after a deletion, got %v", fields["count"])
+	}
+	rows, ok := fields["evidence"].([]knowledge.StagedDeletionEvidence)
+	if !ok {
+		t.Fatalf("evidence is %T, not an evidence slice", fields["evidence"])
+	}
+	if rows[0].RecordID != "KS-20260101-doomed" {
+		t.Fatalf("evidence names the wrong record: %q", rows[0].RecordID)
+	}
+	if rows[0].Reason != "superseded" || rows[0].DeletedBy != testProposer {
+		t.Fatalf("evidence lost the reason or actor: %+v", rows[0])
+	}
+	if rows[0].StatusAtDeletion != "proposed" {
+		t.Fatalf("evidence lost the status at deletion: %q", rows[0].StatusAtDeletion)
+	}
+}
+
+func TestDeletionEvidenceFiltersByRecordID(t *testing.T) {
+	cfg := testStagedConfig(t)
+	directory := t.TempDir()
+	for _, id := range []string{"KS-20260101-one", "KS-20260101-two"} {
+		writeRecordFile(t, directory, testFrontmatter(id))
+	}
+	if _, err := runKnowledgeStaged(cfg, "import-staged", []string{"--directory", directory}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	for _, id := range []string{"KS-20260101-one", "KS-20260101-two"} {
+		if _, err := runKnowledgeStaged(cfg, "delete-staged", []string{
+			"--id", id, "--reason", "cleanup", "--deleted-by", testProposer,
+		}); err != nil {
+			t.Fatalf("delete %s: %v", id, err)
+		}
+	}
+
+	if all := resultMap(t, cfg, "deletion-evidence-staged"); all["count"] != 2 {
+		t.Fatalf("expected 2 evidence rows, got %v", all["count"])
+	}
+	one := resultMap(t, cfg, "deletion-evidence-staged", "--id", "KS-20260101-one")
+	if one["count"] != 1 {
+		t.Fatalf("expected 1 row for the named record, got %v", one["count"])
+	}
+	if absent := resultMap(t, cfg, "deletion-evidence-staged", "--id", "KS-20260101-nope"); absent["count"] != 0 {
+		t.Fatalf("expected no rows for an unknown id, got %v", absent["count"])
+	}
+}

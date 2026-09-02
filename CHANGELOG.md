@@ -33,6 +33,29 @@ target is still required so an incidental CWD never becomes a write target.
 
 ### Added
 
+- **`cadre knowledge list-staged` and `cadre knowledge deletion-evidence-staged`.**
+  Two capabilities the governance documents already described, and that the
+  library already implemented, now have CLI verbs. Neither is new
+  functionality: `ListStagedRecords(status)` was live, filterable and called
+  by `ingest-accepted` the whole time this CLI answered `list-staged` with
+  "not wired to a CLI verb", and `StagedDeletionEvidenceRows()` read
+  `staged_record_deletions` back with only tests calling it. The gap was
+  dispatch.
+
+  `list-staged` takes an optional `--status`, validated against the record
+  contract's own status set rather than passed to SQL -- an unknown status is
+  refused instead of returning an empty list, because "no such records" and
+  "no such status" are worth telling apart precisely when the answer is empty.
+
+  `deletion-evidence-staged` takes an optional `--id`. It is named for staged
+  records deliberately: `deletion-evidence` was the Python CLI's verb covering
+  ingested content as well, and that half does not exist here, so the bare
+  name would have implied a capability that has not returned. It exists as a
+  separate verb because `show-staged` cannot serve it -- that resolves a
+  record by id, and a deletion is precisely what removes the record. Until
+  now `delete-staged` reported `evidence_retained: true` and nothing in the
+  CLI could check the claim.
+
 - **The Cline lifecycle plugin now reaches full parity with the Claude Code /
   Codex lifecycle skill surface, at the flag level and not just the subcommand
   level.** `cline-plugins/cline-lifecycle` mirrored every kernel subcommand the

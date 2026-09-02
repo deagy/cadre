@@ -91,7 +91,9 @@ store never saw made, which is why it names an accountable human.
 
 **`staged_record_deletions`** — deletion evidence that outlives the record it
 describes. No foreign key, on purpose: evidence with a cascade is evidence
-that disappears with its subject.
+that disappears with its subject. Read back with `cadre knowledge
+deletion-evidence-staged`; `show-staged` cannot, because it resolves a record
+by id and the record is what the deletion removed.
 
 **`staged_record_ingestions`** — what a steward made retrievable, and where.
 Read rather than derived: the corpus is recall's, and recall can be asked for

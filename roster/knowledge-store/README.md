@@ -124,11 +124,13 @@ config [show]              print the configuration a governed retrieval resolves
 
 propose (--input <file>|- | --from-finding <file>|-) [--render-only]
 show-staged --id <id>
+list-staged [--status <proposed|accepted|rejected|deferred>]
 import-staged --directory <dir> [--authorized-by <human>]
 disposition-staged --id <id> --action <accepted|rejected|deferred> --reason <text>
                    --classification-used <level> --decided-by <actor>
 ingest-accepted [--id <id>] [--dry-run]
 delete-staged --id <id> --reason <text> --deleted-by <actor> [--authorized-by <human>]
+deletion-evidence-staged [--id <id>]
 ```
 
 `search` requires a classification and exactly one source scope. Naming neither
@@ -146,9 +148,10 @@ happened to it rather than "unknown subcommand".
 | `ingest` | `recall upload` — the store is recall's |
 | `context` | `cadre knowledge search`. Note `cadre context` is a different, live command: the local agent context store |
 | `stats` | `recall store info` |
-| `list-staged` | nothing. `ListStagedRecords(status)` is live and filterable in the library; it is unwired, not absent |
+| `list-staged` | **rebuilt.** The library call was live and filterable the whole time; only dispatch was missing. `--status` filters, and an unknown status is refused rather than returning an empty list |
 | `export-staged` | nothing. `proposed-knowledge/` holds a snapshot the Python CLI wrote; nothing refreshes it |
-| `retention-report`, `delete-ingested`, `deletion-evidence` | nothing — see `DESIGN-NOTES-deletion-and-retention.md` |
+| `retention-report`, `delete-ingested` | nothing — see `DESIGN-NOTES-deletion-and-retention.md` |
+| `deletion-evidence` | half of it: `deletion-evidence-staged` reads back what `delete-staged` wrote. There is no ingested-content half, because no command here deletes ingested content |
 
 Without `--config`, configuration is read using the project-local-then-global resolution above; if no config file exists at the resolved location, built-in defaults apply relative to that same directory. An existing config resolves its database path relative to the config directory. A supplied `--config` path must exist and contain a JSON object; otherwise the command fails closed.
 

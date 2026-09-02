@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -37,6 +38,8 @@ import (
 var knowledgeStagedSubcommands = []string{
 	"propose",
 	"show-staged",
+	"list-staged",
+	"deletion-evidence-staged",
 	"import-staged",
 	"disposition-staged",
 	"ingest-accepted",
@@ -212,6 +215,10 @@ func runKnowledgeStaged(cfg *knowledge.Config, subcommand string, args []string)
 		return knowledgeStagedPropose(store, args, os.Stdin)
 	case "show-staged":
 		return knowledgeStagedShow(store, args)
+	case "list-staged":
+		return knowledgeStagedList(store, args)
+	case "deletion-evidence-staged":
+		return knowledgeStagedDeletionEvidence(store, args)
 	case "import-staged":
 		return knowledgeStagedImport(store, args)
 	case "disposition-staged":
@@ -414,6 +421,92 @@ func knowledgeStagedShow(store *knowledge.Store, args []string) (any, error) {
 		"text":                  text,
 		"disposition_history":   history,
 		"import_authorizations": authorizations,
+	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// list-staged
+// ---------------------------------------------------------------------------
+
+// knowledgeStagedList lists staged records, optionally filtered by status.
+//
+// The library call behind this was live, tested and filterable for the whole
+// time the CLI answered `list-staged` with "not wired to a CLI verb":
+// `ingest-accepted` had been calling it all along. The gap was dispatch, and
+// nothing else -- which is why this handler is four lines of real work.
+//
+// --status is validated against the same status set the record contract uses
+// rather than passed through to SQL. An unrecognised status would otherwise
+// return an empty list, which reads as "no such records" when it means "no
+// such status" -- the two are worth telling apart when the answer is empty.
+func knowledgeStagedList(store *knowledge.Store, args []string) (any, error) {
+	fs := flag.NewFlagSet("cadre knowledge list-staged", flag.ContinueOnError)
+	status := fs.String("status", "",
+		"only records with this status (proposed, accepted, rejected, deferred). Omit for all")
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+	if *status != "" && !slices.Contains(knowledge.StagedStatusValues, *status) {
+		return nil, fmt.Errorf(
+			"unknown --status %q. Valid statuses are %s. Omit --status to list every record",
+			*status, strings.Join(knowledge.StagedStatusValues, ", "))
+	}
+
+	records, err := store.ListStagedRecords(*status)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"status_filter": *status,
+		"count":         len(records),
+		"records":       records,
+	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// deletion-evidence-staged
+// ---------------------------------------------------------------------------
+
+// knowledgeStagedDeletionEvidence reads back the evidence `delete-staged`
+// wrote.
+//
+// `staged_record_deletions` deliberately has no foreign key to the record it
+// describes, because evidence must outlive its subject. That is also why
+// `show-staged` cannot serve this: it resolves a record by id, and after a
+// deletion there is no record to resolve. Until this verb existed the table
+// was written and never read outside a test -- evidence retained where
+// nobody could see it, which satisfies the letter of an evidence
+// requirement and none of its purpose.
+//
+// Deliberately named for *staged* records. `deletion-evidence` was the
+// Python CLI's verb covering ingested content as well, and that half does
+// not exist here: no command deletes ingested content, so there is no
+// evidence of it to read. Reusing the bare name would have implied the
+// whole capability came back.
+func knowledgeStagedDeletionEvidence(store *knowledge.Store, args []string) (any, error) {
+	fs := flag.NewFlagSet("cadre knowledge deletion-evidence-staged", flag.ContinueOnError)
+	recordID := fs.String("id", "", "only evidence for this record id. Omit for all")
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+
+	evidence, err := store.StagedDeletionEvidenceRows()
+	if err != nil {
+		return nil, err
+	}
+	if *recordID != "" {
+		filtered := []knowledge.StagedDeletionEvidence{}
+		for _, row := range evidence {
+			if row.RecordID == *recordID {
+				filtered = append(filtered, row)
+			}
+		}
+		evidence = filtered
+	}
+	return map[string]any{
+		"id_filter": *recordID,
+		"count":     len(evidence),
+		"evidence":  evidence,
 	}, nil
 }
 

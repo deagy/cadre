@@ -11,10 +11,16 @@
 > policies, source-based deletion of ingested content, the `cadre knowledge
 > delete` command and its deletion audit trail do not exist.** The commands
 > that implemented them (`ingest`, `retention-report`, `delete-ingested`,
-> `deletion-evidence`, `context`, `list-staged`, `export-staged`) were removed
-> in `b418031e` and none was rebuilt. Ingested content now lives in a recall
-> store, whose CLI exposes no delete command at all. No retention window is
-> recorded for any content and nothing ages out.
+> `deletion-evidence`, `context`, `export-staged`) were removed in `b418031e`.
+> Ingested content now lives in a recall store, whose CLI exposes no delete
+> command at all. No retention window is recorded for any content and nothing
+> ages out.
+>
+> Two things this document describes have since been rebuilt, and are named
+> here so the list above is not read as covering them: `list-staged` is live
+> again, and `deletion-evidence-staged` reads back the evidence
+> `delete-staged` writes. Both cover *staged records* only — never ingested
+> content, which is what the retention and deletion claims below are about.
 >
 > For what the store actually does today, read
 > `roster/knowledge-store/SECURITY.md` § Storage rules and

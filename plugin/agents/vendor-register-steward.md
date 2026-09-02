@@ -579,7 +579,7 @@ The knowledge store is the shared retrieval layer for agents. Use it to supply r
 
   **What its absence costs, plainly:** a steward asked to honour a deletion request, a retention window, or a right-to-erasure obligation has no tool here to do it with, and no evidence trail if they do it another way. Deleting the underlying store file remains possible and is not the same thing — it is unscoped, unrecorded, and takes everything else with it. Any commitment this suite's documents make about retention or erasure is currently a commitment about process, not about software.
 
-- Deletion of *staged* records is a different matter and does work: `delete-staged` removes a staged record and writes evidence to `staged_record_deletions`, which outlives the record. Nothing reads that evidence back.
+- Deletion of *staged* records is a different matter and does work: `delete-staged` removes a staged record and writes evidence to `staged_record_deletions`, which outlives the record and is read back by `deletion-evidence-staged`.
 
 ## Relationship to the context store
 

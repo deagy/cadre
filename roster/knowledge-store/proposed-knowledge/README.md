@@ -11,9 +11,7 @@ The store is the source of truth. Records are staged with
 `cadre knowledge propose`, read with `show-staged`, and dispositioned with
 `disposition-staged` — all against this project's SQLite partition under
 `.agents/knowledge-store/`, which is gitignored and operator-controlled.
-(`list-staged` was the Python CLI's verb for enumerating them. It is not wired
-into the Go CLI; `ListStagedRecords(status)` is live and filterable in the
-library, so this one is unwired rather than absent.)
+and enumerated with `list-staged`, which filters by `--status`.
 
 This directory was the **durability snapshot** of that store: a periodic
 committed export, refreshed deliberately rather than per record. It existed
