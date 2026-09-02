@@ -33,6 +33,26 @@ target is still required so an incidental CWD never becomes a write target.
 
 ### Added
 
+- **Every staged-knowledge record now carries an observed actor beside the
+  asserted one.** `--staged-by`, `--decided-by`, `--deleted-by` and
+  `--authorized-by` still take what the caller types, and that value is still
+  what the record says; alongside it the store writes an `observed_actor`
+  derived from the process itself -- the OS user from the process credentials
+  (`user.Current()`, not `$USER`, which the caller can set) and the git
+  identity from `git config --get user.email`. It renders as
+  `os:<user> git:<email>` so it cannot be misread as a bare name.
+
+  The point is not authentication. With one operator there is nobody to
+  impersonate; what an unverified actor field breaks is the evidence trail,
+  because a deletion record naming an actor nobody checked is a record of a
+  string. Both values are kept rather than one replacing the other: the
+  asserted value is who the caller says is accountable, and the observed value
+  is what the machine could see, and they answer different questions.
+
+  Existing stores are migrated additively on open (`ALTER TABLE ... ADD
+  COLUMN`), not recreated. A store written before this release keeps every row
+  and gains an empty `observed_actor` on the old ones.
+
 - **`cadre knowledge list-staged` and `cadre knowledge deletion-evidence-staged`.**
   Two capabilities the governance documents already described, and that the
   library already implemented, now have CLI verbs. Neither is new
@@ -179,6 +199,28 @@ target is still required so an incidental CWD never becomes a write target.
 
 ### Changed
 
+- **`--retention-days`, `--trigger` and `--as-of` are now refused by name.**
+  These were flags of the Python CLI's retention and deletion capability,
+  removed in `b418031e` and never rebuilt. The verbs that carried them already
+  refused by name; the flags did not, so `cadre knowledge search
+  --retention-days 30` answered `flag provided but not defined` -- a parser
+  fact, delivered at the moment someone is trying to honour a retention
+  obligation.
+
+  They now refuse before flag parsing, on both dispatch routes -- the
+  `cadre knowledge` verbs and the staged ones beneath them -- naming what was
+  removed, the commit that removed it, that nothing rebuilt it, where the
+  content lives now, and that whether to rebuild it is an open decision.
+  Exit status 2.
+
+  The refusal reads flag positions only. A refused name appearing as a *value*
+  -- `delete-staged --reason "--retention-days was never implemented"` -- is a
+  reason, not a request, and the command runs.
+
+- **The kernel the packaged plugin downloads is pinned to 0.14.3**, the first
+  kernel release whose archives carry the licence text. Every archive through
+  v0.14.2 held exactly one file.
+
 - **A dispatched agent never saw steward-accepted knowledge.** `cadre knowledge
   ingest-accepted` writes accepted findings to a dedicated source,
   `proposed-knowledge`, deliberately separate so they are reached by name
@@ -290,6 +332,13 @@ target is still required so an incidental CWD never becomes a write target.
 - **The `lifecycle-onboarding` skill resolves authorities at the gate that needs them** rather than interviewing for all 13 up front. It asks for `product_owner` and `engineering_lead` — enough to clear G1 and G2 — carries the gate/authority table from `kernel/contracts/lifecycle-gates.json`, and defers the rest. Unresolved roles are `blockers`, not `errors`: the project stays `valid`, tasks can be planned, and only the gate belonging to an unresolved role is held. The skill also now prefers `--set` over authoring an answer file, and documents that a run record captures authority applicability at creation time — so a role must be assigned before planning the task that needs its gate.
 
 ### Fixed
+
+- **Path resolution walked out of the home directory and kept going**
+  ([#249](https://github.com/deagy/cadre/issues/249)). The search for a
+  repository marker climbed parent directories with only a depth bound, so
+  from a directory under `$HOME` with no marker it carried on through `$HOME`
+  itself and above it, and could resolve against a marker belonging to an
+  unrelated tree. The walk now stops at `$HOME` or any of its ancestors.
 
 - **A downloaded `cadre` binary could not run at all, including
   `cadre --version`.** The dispatcher resolved a repository root before

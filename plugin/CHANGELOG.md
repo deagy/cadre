@@ -15,6 +15,18 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.24.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.24.0) - 2026-09-02
+
+### Changed
+
+- **The generated kernel shim now downloads Agentic SDLC kernel 0.14.3.** The
+  pin moved off 0.14.2 because of what that release contained rather than
+  because of a feature: every kernel archive up to and including v0.14.2 held
+  exactly one file, the binary. `deagy/cadre-kernel` carries Apache-2.0, and
+  the archive an install actually unpacks carried no licence text at all.
+  v0.14.3 is the first release whose archives carry `LICENSE`, and its own
+  release workflow now fails if one does not.
+
 ## [0.23.3](https://github.com/deagy/cadre/releases/tag/plugin-v0.23.3) - 2026-08-13
 
 ### Fixed
