@@ -2,6 +2,28 @@
 
 Pick the row that describes you. Everything else on this page is detail.
 
+**Before any of them**, on a machine that is not already a development box:
+
+| You need | For | Check |
+| --- | --- | --- |
+| `curl` | fetching the install script at all | `curl --version` |
+| `git` | the shallow checkout the installer makes | `git --version` |
+| Python 3.10+ | the installer itself | `python3 --version` |
+| Network egress to `github.com` | the script, the checkout, and every release download | |
+| `~/.local/bin` on your `PATH` | reaching `cadre` after it installs | `echo $PATH` |
+
+A bare container image has none of the first three. `apt-get install -y curl git python3`
+first, or the documented `curl … | sh` line below cannot be typed.
+
+**Add the `PATH` entry before you install, not after.** The installer prints a
+note about it when it finishes, and a reader who skips that line gets
+`command not found` on the very next step:
+
+```sh
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.profile   # bash/zsh
+fish_add_path ~/.local/bin                                   # fish
+```
+
 | You are | Do this |
 | --- | --- |
 | A Claude Code user | `/plugin marketplace add deagy/cadre` then `/plugin install cadre@cadre-team` |
@@ -229,6 +251,34 @@ kernel, verified against that release's `SHA256SUMS`. This repository no
 longer publishes the kernel: the `kernel-v*` releases were retired so the
 kernel has one release home. See
 [SECURITY.md](https://github.com/deagy/cadre/blob/main/SECURITY.md).
+
+## Authenticating your runner
+
+**Installing Cadre does not sign you in, and nothing Cadre does can.** The
+runner — Claude Code, Codex, Cline — holds its own credentials. Until it has
+them, the suite installs cleanly, `/plugin details` works, and the first task
+that actually dispatches a role fails.
+
+For Claude Code, three paths, and `claude auth status` reports which is in
+effect:
+
+| Situation | Do this |
+| --- | --- |
+| You have an Anthropic API key | `export ANTHROPIC_API_KEY=sk-ant-…` |
+| You have a Claude subscription and want a long-lived token | `claude setup-token` |
+| You are at an interactive terminal | `claude auth login` |
+
+In `--simple` mode Claude Code reads *only* `ANTHROPIC_API_KEY` or an
+`apiKeyHelper` supplied through `--settings`; OAuth and the keychain are never
+consulted. That is the path for CI, a container, or any machine with no browser.
+
+**An invalid or expired key does not produce an error.** It hangs — no output,
+for well over a minute, then exits `0`. If a first task produces silence rather
+than a refusal, check the key rather than the installation:
+
+```sh
+claude auth status
+```
 
 ## Verifying
 

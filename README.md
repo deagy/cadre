@@ -30,6 +30,7 @@ The suite selects, coordinates, tests, reviews, documents, supports, and escalat
 
 | Goal | Start here |
 | --- | --- |
+| **Install it** | **[Installing Cadre](docs/INSTALL.md)** — prerequisites, every runner, and authenticating the one you use |
 | Understand the suite | [IDENTITY.md](IDENTITY.md), then [documentation index](docs/README.md) |
 | Adopt this suite in a new project, start to finish | [Adopt-Cadre quickstart](docs/adopt-cadre-quickstart.md) |
 | Use the suite from a checkout | [Getting started](docs/getting-started.md) |
