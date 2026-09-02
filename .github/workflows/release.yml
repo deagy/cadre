@@ -2,12 +2,18 @@ name: Release
 
 # Tags and publishes a GitHub Release whenever a version bump lands on main.
 #
-# This repository carries three independent version lines, and that is
+# This repository carries two independent version lines, and that is
 # deliberate -- provider/provider.json's kernel_compatibility window is only
-# meaningful if the kernel can move separately from the role catalog, and
-# internal/kernel/kernel_boundary_test.go asserts the kernel keeps
-# its own distribution name and console script. So there are two release
-# jobs, each with its own component-prefixed tag namespace:
+# meaningful if the kernel can move separately from the role catalog.
+#
+# The kernel itself is no longer released from here. It lives in
+# deagy/cadre-kernel and publishes on its own tag line there; the generated
+# plugin shim downloads it from that repository's releases by version. The
+# `kernel-v*` tags in this repository's history are the releases that predate
+# the split, kept as history and not added to.
+#
+# So there are two release jobs, each with its own component-prefixed tag
+# namespace:
 #
 #   plugin-v<version>   the packaged plugin distribution (plugin/**/plugin.json,
 #                       all 8 manifests, see internal/cli/release_metadata.go)
@@ -52,11 +58,6 @@ on:
       - "plugin/plugins/lifecycle-gitlab/.claude-plugin/plugin.json"
       - "plugin/plugins/lifecycle-gitlab/.codex-plugin/plugin.json"
       - "VERSION"
-      # The kernel's version is a Go constant, not a marker file. Without this
-      # a kernel bump changed nothing the trigger watches, so the workflow
-      # never started -- the `changed` job would have reported kernel=true and
-      # kernel-publish would have run, if either had ever been reached.
-      - "internal/kernel/provider.go"
   workflow_dispatch:
 
 permissions:
@@ -72,7 +73,6 @@ jobs:
     outputs:
       plugin: ${{ steps.detect.outputs.plugin }}
       cli: ${{ steps.detect.outputs.cli }}
-      kernel: ${{ steps.detect.outputs.kernel }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -561,11 +561,9 @@ jobs:
         # The expected asset list comes from internal/release, not from a set
         # retyped here. It used to be an inline Python block whose comment
         # read "Five platforms"; that comment was the only statement of the
-        # contract in this job, and a comment cannot fail. The CLI now
-        # publishes four -- darwin/amd64 is excluded, with its reason, in
-        # internal/release's `unpublishable` -- while the kernel still
-        # publishes five, so any single list written here is wrong for one of
-        # the two jobs.
+        # contract in this job, and a comment cannot fail. The CLI publishes
+        # four -- darwin/amd64 is excluded, with its reason, in
+        # internal/release's `unpublishable`.
         if: steps.tag.outputs.skip == 'false'
         run: |
           set -eu
@@ -759,14 +757,3 @@ jobs:
             --notes "Go-based Cadre CLI v${{ steps.version.outputs.value }} for Linux, macOS, and Windows. Verify downloads against SHA256SUMS." \
             --latest=false \
             flat-dist/*
-
-  # The kernel publishes on its own tag line because it versions on its own.
-  # Providers declare kernel_compatibility against kernel.Version, which moves
-  # independently of the CLI's version, so an asset named for the CLI's version
-  # would not tell a consumer which kernel they were getting.
-  #
-  # One job rather than the cli/cli-publish pair, because there is nothing to
-  # fan in: the kernel links no cgo, so every platform cross-compiles on this
-  # runner. TestTheKernelBuildsWithoutCgo pins the property that makes that
-  # valid -- if the kernel ever needs cgo, that test fails and this job has to
-  # become a matrix.
