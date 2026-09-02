@@ -35,6 +35,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/deagy/cadre/cli/internal/platform"
 )
 
 // stagedSchema is additive and idempotent, matching database.go's own
@@ -79,6 +81,11 @@ CREATE TABLE IF NOT EXISTS staged_record_deletions (
   reason TEXT NOT NULL,
   deleted_by TEXT NOT NULL,
   authorized_by TEXT,
+  -- What the process saw, beside what the caller said. deleted_by and
+  -- authorized_by are caller-asserted strings; this is not, and no flag
+  -- sets it. The two are stored separately so a reader can tell an
+  -- assertion from an observation -- see platform.ObservedActor.
+  observed_actor TEXT NOT NULL DEFAULT '',
   deleted_at TEXT NOT NULL,
   PRIMARY KEY (record_id, deleted_at)
 );
@@ -160,7 +167,14 @@ type StagedDeletionEvidence struct {
 	Reason           string  `json:"reason"`
 	DeletedBy        string  `json:"deleted_by"`
 	AuthorizedBy     *string `json:"authorized_by"`
-	DeletedAt        string  `json:"deleted_at"`
+
+	// ObservedActor is what the process saw, as distinct from what the
+	// caller said. DeletedBy and AuthorizedBy above are caller-asserted
+	// strings; this is not, and no flag sets it. Rendered with its source
+	// prefixed ("os:deagy git:a@b.c") so it cannot be read as a name.
+	ObservedActor string `json:"observed_actor"`
+
+	DeletedAt string `json:"deleted_at"`
 }
 
 func stagedNow() string {
@@ -367,7 +381,8 @@ func (s *Store) StagedImportAuthorizations(recordID string) ([]StagedImportAutho
 func (s *Store) StagedDeletionEvidenceRows() ([]StagedDeletionEvidence, error) {
 	rows, err := s.db.Query(
 		"SELECT record_id, title, content_digest, status_at_deletion, reason, deleted_by, " +
-			"authorized_by, deleted_at FROM staged_record_deletions ORDER BY deleted_at, record_id")
+			"authorized_by, observed_actor, deleted_at FROM staged_record_deletions " +
+			"ORDER BY deleted_at, record_id")
 	if err != nil {
 		return nil, fmt.Errorf("cannot read staged deletion evidence: %w", err)
 	}
@@ -378,7 +393,8 @@ func (s *Store) StagedDeletionEvidenceRows() ([]StagedDeletionEvidence, error) {
 		var row StagedDeletionEvidence
 		var authorizedBy sql.NullString
 		if err := rows.Scan(&row.RecordID, &row.Title, &row.ContentDigest, &row.StatusAtDeletion,
-			&row.Reason, &row.DeletedBy, &authorizedBy, &row.DeletedAt); err != nil {
+			&row.Reason, &row.DeletedBy, &authorizedBy, &row.ObservedActor,
+			&row.DeletedAt); err != nil {
 			return nil, fmt.Errorf("cannot read staged deletion evidence row: %w", err)
 		}
 		if authorizedBy.Valid {
@@ -723,9 +739,11 @@ func (s *Store) DeleteStagedRecord(recordID string, input DeleteStagedInput) (*D
 	// ON DELETE CASCADE; this row is what survives.
 	if _, err := tx.Exec(
 		"INSERT INTO staged_record_deletions (record_id, title, content_digest, status_at_deletion, "+
-			"reason, deleted_by, authorized_by, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			"reason, deleted_by, authorized_by, observed_actor, deleted_at) "+
+			"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		recordID, StagedString(frontmatter, "title"), StagedString(frontmatter, "content_digest"),
-		status, input.Reason, input.DeletedBy, authorizedBy, stagedNow()); err != nil {
+		status, input.Reason, input.DeletedBy, authorizedBy,
+		platform.ObserveActor().String(), stagedNow()); err != nil {
 		return nil, fmt.Errorf("cannot record staged deletion evidence for %q: %w", recordID, err)
 	}
 	if _, err := tx.Exec("DELETE FROM staged_records WHERE id = ?", recordID); err != nil {

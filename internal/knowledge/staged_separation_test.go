@@ -312,3 +312,50 @@ func TestDeletingAnUnknownRecordNamesIt(t *testing.T) {
 		t.Fatalf("error does not name the record: %v", err)
 	}
 }
+
+// An asserted actor sits beside the observation; it never replaces it.
+//
+// This is the property AC-4 turns on, and the one way this change could be
+// made worthless. If `--deleted-by alice` overwrote what the process saw,
+// the record would be exactly as unverified as before and would now look
+// authoritative -- worse than the string it replaced, because a reader would
+// have no way to tell.
+func TestAnAssertedActorDoesNotReplaceTheObservedOne(t *testing.T) {
+	store := testStagedStore(t)
+	recordID := testStageRecord(t, store, "KS-20260101-observed")
+
+	if _, err := store.DeleteStagedRecord(recordID, DeleteStagedInput{
+		Reason:    "checking the observation survives an assertion",
+		DeletedBy: "a-name-nobody-verified",
+	}); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	rows, err := store.StagedDeletionEvidenceRows()
+	if err != nil {
+		t.Fatalf("reading evidence: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected one evidence row, got %d", len(rows))
+	}
+	row := rows[0]
+
+	if row.DeletedBy != "a-name-nobody-verified" {
+		t.Fatalf("the asserted actor was lost: %q", row.DeletedBy)
+	}
+	if row.ObservedActor == "" {
+		t.Fatal("no observation was recorded beside the assertion.\n" +
+			"  The row then names an actor nobody verified and says nothing about what\n" +
+			"  the process actually saw, which is the state this column exists to end.")
+	}
+	if row.ObservedActor == row.DeletedBy {
+		t.Fatalf("the observation equals the assertion (%q).\n"+
+			"  A flag must not be able to set what the process claims to have seen.",
+			row.ObservedActor)
+	}
+	// The observation carries its source, so it cannot be misread as a name.
+	if !strings.Contains(row.ObservedActor, ":") {
+		t.Fatalf("observed actor %q reads as a bare name; it must name its source",
+			row.ObservedActor)
+	}
+}
