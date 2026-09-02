@@ -71,7 +71,7 @@ Technology preferences live in `shared/team-profile.yaml`, `shared/technology-st
 
 ## Portable adoption
 
-This repository is the source implementation for the Cadre agent suite. The lifecycle kernel, schemas, command interface, gate transitions, approvals, and lifecycle skills are maintained in this same repository's `kernel/`, but as a separately versioned, separately released component — not owned by `roster/` (see `CLAUDE.md`'s kernel ownership boundary). This suite contributes its catalog, `secure-cloud` profile, routing, and provider extensions through `provider/provider.json`.
+This repository is the source implementation for the Cadre agent suite. The lifecycle kernel, schemas, command interface, gate transitions, approvals, and lifecycle skills are maintained at [deagy/cadre-kernel](https://github.com/deagy/cadre-kernel), a separate repository, separately versioned and released — not owned by `roster/` (see `CLAUDE.md`'s kernel ownership boundary). This suite contributes its catalog, `secure-cloud` profile, routing, and provider extensions through `provider/provider.json`.
 
 Initialize a consuming target project from the repository checkout with:
 
@@ -79,7 +79,7 @@ Initialize a consuming target project from the repository checkout with:
 cadre sdlc init --root /path/to/target
 ```
 
-The portable initializer proposes detectable values and leaves consequential unknowns unresolved. Human authority, compliance applicability, environment persistence/production status, risk acceptance, and platform applicability must be assigned or decided by accountable humans. It writes lifecycle state into the target project's own `.agentic-sdlc/` directory — separate from and carrying no authority over any other project's overlay. This provider checkout does not run its own `.agentic-sdlc/` overlay (see `docs/lifecycle-and-plugin-operations.md`). See `kernel/README.md` for installation and upgrades.
+The portable initializer proposes detectable values and leaves consequential unknowns unresolved. Human authority, compliance applicability, environment persistence/production status, risk acceptance, and platform applicability must be assigned or decided by accountable humans. It writes lifecycle state into the target project's own `.agentic-sdlc/` directory — separate from and carrying no authority over any other project's overlay. This provider checkout does not run its own `.agentic-sdlc/` overlay (see `docs/lifecycle-and-plugin-operations.md`). See [the kernel's README](https://github.com/deagy/cadre-kernel#readme) for installation and upgrades.
 
 For GitHub-backed human gates, see [Lifecycle and plugin
 operations](../docs/lifecycle-and-plugin-operations.md)'s "GitHub-backed

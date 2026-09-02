@@ -13,10 +13,11 @@ operations guide](lifecycle-and-plugin-operations.md).
 - Python 3.10 or newer.
 - A checkout of this repository.
 
-The lifecycle kernel is in-tree, under
-[`kernel/`](https://github.com/deagy/cadre/tree/main/kernel) — `cadre sdlc`
-and the lifecycle-contract tests need no separate install and no
-`AGENTIC_SDLC_BIN`. Set that env var only to point at a *different* kernel
+The lifecycle kernel is **not in this repository** — it lives at
+[deagy/cadre-kernel](https://github.com/deagy/cadre-kernel) and installs
+separately. `cadre sdlc` finds it on `PATH`, through `AGENTIC_SDLC_BIN`, or
+from the shim the lifecycle plugin packages; `./install.sh --with-lifecycle`
+sets this up. Set `AGENTIC_SDLC_BIN` to pin a *particular* kernel
 deliberately; see the [lifecycle guide](lifecycle-and-plugin-operations.md)
 for that case.
 

@@ -37,8 +37,8 @@ contracts live under `roster/`. The packaged plugin ([`plugin/`](https://github.
 a self-contained distribution and may contain generated copies. Edit canonical
 source files, then regenerate the package when the change requires it.
 
-The portable lifecycle kernel is maintained in this same repository, under
-[`kernel/`](https://github.com/deagy/cadre/tree/main/kernel), but as a
-permanently separate, independently versioned and released component. This
+The portable lifecycle kernel is **not in this repository**. It lives at
+[deagy/cadre-kernel](https://github.com/deagy/cadre-kernel), independently
+versioned and released there. This
 repository's `roster/` provides Secure Cloud roles and a provider profile; it
 does not own the portable lifecycle state machine.

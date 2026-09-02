@@ -43,9 +43,9 @@ go test ./internal/generators/   # the repo-health guards, formerly roster/orche
 go test ./internal/generators/ -v
 go test ./internal/generators/ -run TestNameHere -v
 
-# The kernel is in-tree, so `cadre sdlc` and the lifecycle-contract tests
-# need no install and no AGENTIC_SDLC_BIN. Set it only to point at a
-# different kernel deliberately.
+# The kernel is a separate repository (deagy/cadre-kernel). `cadre sdlc` and
+# the lifecycle-contract tests resolve it from AGENTIC_SDLC_BIN, PATH, or the
+# packaged plugin shim; without one they run in standalone mode.
 go test ./internal/kernel/                                        # kernel
 cd engine && uv sync && uv run python -m pytest                   # LangGraph engine
 

@@ -1,10 +1,9 @@
 # Lifecycle and plugin operations
 
 This repository supplies the Secure Cloud role suite and provider profile. The
-portable Agentic SDLC kernel, lifecycle schemas, gate transitions, and lifecycle
-skills are maintained in this same repository's
-[`kernel/`](https://github.com/deagy/cadre/tree/main/kernel), but as a
-permanently separate, independently versioned and released component —
+portable Agentic SDLC kernel, lifecycle schemas and gate transitions are **not in
+this repository**. They live at [deagy/cadre-kernel](https://github.com/deagy/cadre-kernel),
+independently versioned and released there —
 `roster/` never takes over that ownership, and that boundary applies to every
 consuming project, including this one (see `CLAUDE.md`'s kernel ownership
 boundary). This repository does not run its own `.agentic-sdlc/`

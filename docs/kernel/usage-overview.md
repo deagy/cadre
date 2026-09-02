@@ -28,7 +28,7 @@ stay put.
 ## The actual usage flow
 
 1. **Install** — build the kernel from a checkout (`./bin/agentic-sdlc`
-   builds and execs the Go binary; see the [kernel guide](../../kernel/README.md#install)),
+   builds and execs the Go binary; see the [kernel's README](https://github.com/deagy/cadre-kernel#install)),
    and separately set up the
    LangGraph engine if you want real orchestration (`uv sync` in
    `engine/`, or install it too).

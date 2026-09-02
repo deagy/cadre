@@ -54,7 +54,7 @@ Key areas:
 - [roster/knowledge-store/](roster/knowledge-store/) contains the retrieval layer for approved historical context.
 - [roster/testing/](roster/testing/) and [roster/support/](roster/support/) define black-box testing, end-user testing, support triage, and escalation roles.
 - [.agents/skills/](.agents/skills/) contains this repository's skills, packaged for Codex CLI directly and pointed to from `.claude/skills/` for Claude Code.
-- [`kernel/`](kernel/) owns the portable lifecycle kernel, initializer, validator, and lifecycle skills — a separately versioned, separately released pip distribution (see "Releasing" below), even though its source now lives in this repository. It was `deagy/agentic-sdlc` before the monorepo merge.
+- The portable lifecycle kernel is **not in this repository**. It lives at [deagy/cadre-kernel](https://github.com/deagy/cadre-kernel), released there under `v*` tags; the `kernel/` directory here was deleted at `11eefd47`.
 - [`plugin/`](plugin/) packages this suite, its 159 roles and 20 non-authoring context packs, and the `secure-cloud` provider profile as installable Claude Code / Codex plugins, alongside the optional Agentic SDLC lifecycle-governance plugins. It was `deagy/cadre-lifecycle` before the monorepo merge.
 - [`cline-plugins/`](cline-plugins/) holds the three Cline CLI plugins and the single npm workspace that backs them — the only Node code in this repository. It is deliberately *not* inside `plugin/`: an npm workspace root there made installing the Claude Code plugin run `npm install` and write 263 MB of Cline SDK dependencies into every user's plugin cache.
 
@@ -69,7 +69,7 @@ repository does not run its own `.agentic-sdlc/` overlay.
 
 ## Supported runners
 
-Every role definition and orchestration tool is runner-neutral text and data. Lifecycle contracts and runner adapters are versioned by the Agentic SDLC kernel, released independently from [`kernel/`](kernel/) (see "Releasing" below).
+Every role definition and orchestration tool is runner-neutral text and data. Lifecycle contracts and runner adapters are versioned by the Agentic SDLC kernel, released independently from [deagy/cadre-kernel](https://github.com/deagy/cadre-kernel) (see "Releasing" below).
 
 | Runner | Support | Notes |
 | --- | --- | --- |
@@ -110,9 +110,9 @@ go test ./internal/generators/
 go test ./...   # the CLI, kernel, knowledge and context stores, generators
 ```
 
-The kernel is in-tree, so `cadre sdlc` and the kernel's own tests above need
-no separate install and no `AGENTIC_SDLC_BIN`. The orchestration tests also
-run with neither, but resolve the lifecycle contract by looking for an
+The kernel is a separate repository, so `cadre sdlc` needs it installed —
+from `AGENTIC_SDLC_BIN`, `PATH`, or the shim the lifecycle plugin packages.
+The orchestration tests run without one, but resolve the lifecycle contract by looking for an
 `agentic-sdlc` executable on `PATH`, so without one they run in *standalone*
 mode; CI sets `AGENTIC_SDLC_BIN` to this repository's own `bin/agentic-sdlc`
 to exercise the integrated paths, and you can too. Point the variable
@@ -173,7 +173,7 @@ A project with a different stack should stay on `quick`/`generic`/`web-service` 
 
 Initialization detects candidate technologies and validation commands, but deliberately leaves human authorities, compliance applicability, persistent/production environment classification, and other consequential decisions unresolved. The target project owns those decisions and its lifecycle records under `.agentic-sdlc/`.
 
-See [`kernel/README.md`](kernel/README.md) for commands and upgrades.
+See [the kernel's README](https://github.com/deagy/cadre-kernel#readme) for commands and upgrades.
 
 ### No A2A surface today
 

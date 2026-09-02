@@ -875,7 +875,7 @@ Before team adoption:
 
 On upgrade, reinstall the plugin, inspect lifecycle/schema changes, validate existing records, migrate incompatible records explicitly, and update the project version lock only with the reviewed overlay change. For an incomplete or stale initialization, use `cadre sdlc repair --root /path/to/target` first to inspect its read-only repair plan, then add `--apply` only for its safe missing-artifact/lock repairs. Plugin upgrades never grant approval or rewrite project decisions automatically.
 
-See `kernel/README.md` for lifecycle command and upgrade documentation.
+See [the kernel's README](https://github.com/deagy/cadre-kernel#readme) for lifecycle command and upgrade documentation.
 
 ### 16.1. Check for provider/profile drift with `cadre profile diff`
 
