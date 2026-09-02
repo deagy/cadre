@@ -95,6 +95,14 @@ func initStagedSchema(db *sql.DB) error {
 	if err := execWithBusyRetry(db, stagedSchema); err != nil {
 		return fmt.Errorf("cannot initialize schema: %w", err)
 	}
+	// CREATE TABLE IF NOT EXISTS does nothing to a table that already
+	// exists, so a column added to stagedSchema never reaches a store
+	// written before it. This is the open path -- every command comes
+	// through here -- and the migration has to run on it, not only on
+	// InstallStagedSchema, which nothing on this path calls.
+	if err := migrateAdditiveStagedColumns(db); err != nil {
+		return err
+	}
 	return nil
 }
 

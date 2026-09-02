@@ -12,7 +12,9 @@ package knowledge
 // fails a test whose name says what was removed.
 
 import (
+	"database/sql"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -411,5 +413,78 @@ func TestStagingAndDispositionRecordWhatWasObserved(t *testing.T) {
 	}
 	if !strings.Contains(entry.ObservedActor, ":") {
 		t.Fatalf("observed actor %q reads as a bare name", entry.ObservedActor)
+	}
+}
+
+// A store written before observed_actor existed must still open and work.
+//
+// This is the test whose absence let a schema regression through a green CI.
+// `CREATE TABLE IF NOT EXISTS` does nothing to a table that already exists,
+// so adding a column to the schema constant reaches new stores and no
+// existing one -- and the `DEFAULT ”` on the definition does not help,
+// because the definition is never applied to the old table.
+//
+// Every test in this package builds a fresh store, so every test saw the new
+// schema and passed, while a real store written yesterday failed on every
+// verb with "no such column: observed_actor". The suite was not wrong about
+// what it checked; it had no case for the thing that broke.
+func TestAStoreFromBeforeTheObservedColumnStillOpens(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "staged.db")
+
+	// The schema exactly as it stood before observed_actor, written straight
+	// to the file so the constant cannot quietly keep this current.
+	old, err := sql.Open("sqlite", dsn(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.Exec(`
+CREATE TABLE staged_records (
+  id TEXT PRIMARY KEY, status TEXT NOT NULL, frontmatter_json TEXT NOT NULL,
+  body TEXT NOT NULL, content_digest TEXT NOT NULL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE staged_record_dispositions (
+  record_id TEXT NOT NULL, sequence INTEGER NOT NULL, action TEXT NOT NULL,
+  reason TEXT NOT NULL, classification_used TEXT NOT NULL,
+  diverged_from_proposal INTEGER NOT NULL, decided_by TEXT NOT NULL,
+  decided_at TEXT NOT NULL, PRIMARY KEY (record_id, sequence)
+);
+CREATE TABLE staged_record_deletions (
+  record_id TEXT NOT NULL, title TEXT NOT NULL, content_digest TEXT NOT NULL,
+  status_at_deletion TEXT NOT NULL, reason TEXT NOT NULL,
+  deleted_by TEXT NOT NULL, authorized_by TEXT, deleted_at TEXT NOT NULL,
+  PRIMARY KEY (record_id, deleted_at)
+);`); err != nil {
+		t.Fatalf("writing the pre-change schema: %v", err)
+	}
+	if err := old.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := OpenStaged(path)
+	if err != nil {
+		t.Fatalf("a store written before the column would not open: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	// Every verb reads or writes one of the three migrated tables.
+	recordID := testStageRecord(t, store, "KS-20260101-legacy-store")
+	if _, _, err := store.GetStagedRecord(recordID); err != nil {
+		t.Fatalf("show-staged path failed on a migrated store: %v", err)
+	}
+	if _, err := store.StagedObservedActor(recordID); err != nil {
+		t.Fatalf("reading the migrated column failed: %v", err)
+	}
+	if _, err := store.ListStagedRecords(""); err != nil {
+		t.Fatalf("list-staged path failed on a migrated store: %v", err)
+	}
+	if _, err := store.DeleteStagedRecord(recordID, DeleteStagedInput{
+		Reason: "exercising the migrated deletions table", DeletedBy: testStagedProposer,
+	}); err != nil {
+		t.Fatalf("delete-staged path failed on a migrated store: %v", err)
+	}
+	if _, err := store.StagedDeletionEvidenceRows(); err != nil {
+		t.Fatalf("deletion-evidence-staged path failed on a migrated store: %v", err)
 	}
 }

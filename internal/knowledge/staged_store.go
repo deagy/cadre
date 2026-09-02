@@ -81,6 +81,10 @@ CREATE TABLE IF NOT EXISTS staged_record_imports (
   content_digest TEXT NOT NULL,
   status_at_import TEXT NOT NULL,
   authorized_by TEXT NOT NULL,
+  -- Beside authorized_by, which names a human who is not at the keyboard
+  -- and is asserted by construction. This is what the process running the
+  -- import could see for itself.
+  observed_actor TEXT NOT NULL DEFAULT '',
   directory TEXT NOT NULL,
   imported_at TEXT NOT NULL,
   PRIMARY KEY (record_id, imported_at)
@@ -173,8 +177,14 @@ type StagedImportAuthorization struct {
 	ContentDigest  string `json:"content_digest"`
 	StatusAtImport string `json:"status_at_import"`
 	AuthorizedBy   string `json:"authorized_by"`
-	Directory      string `json:"directory"`
-	ImportedAt     string `json:"imported_at"`
+
+	// ObservedActor is what the process running the import saw. AuthorizedBy
+	// above names the human accountable for admitting these decisions, who
+	// is by construction not the one at the keyboard.
+	ObservedActor string `json:"observed_actor"`
+
+	Directory  string `json:"directory"`
+	ImportedAt string `json:"imported_at"`
 }
 
 // StagedDeletionEvidence outlives the record it describes.
@@ -207,7 +217,44 @@ func (s *Store) InstallStagedSchema() error {
 	if _, err := s.db.Exec(stagedSchema); err != nil {
 		return fmt.Errorf("cannot install staged-record schema: %w", err)
 	}
+	return migrateAdditiveStagedColumns(s.db)
+}
+
+// migrateAdditiveStagedColumns adds columns to tables that already exist.
+//
+// `CREATE TABLE IF NOT EXISTS` does nothing to a table that is already
+// there, so a column added to stagedSchema reaches new stores and no
+// existing one -- and a `DEFAULT ”` on the column definition does not help,
+// because the definition is never applied. A store written before the column
+// existed then fails every verb with "no such column", which is how
+// observed_actor shipped: the schema was correct for a fresh store, the
+// suite only ever builds fresh stores, and CI was green.
+//
+// Attempted unconditionally rather than checked first, following
+// internal/contextstore's migrateAdditiveColumns and for its reason: two
+// processes opening the same store both read a column as missing, both
+// ALTER, and the loser's open fails. The end state either wanted is that the
+// column exists, which is what "duplicate column name" reports.
+func migrateAdditiveStagedColumns(db *sql.DB) error {
+	for _, statement := range []string{
+		"ALTER TABLE staged_records ADD COLUMN observed_actor TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE staged_record_dispositions ADD COLUMN observed_actor TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE staged_record_deletions ADD COLUMN observed_actor TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE staged_record_imports ADD COLUMN observed_actor TEXT NOT NULL DEFAULT ''",
+	} {
+		if _, err := db.Exec(statement); err != nil && !isDuplicateStagedColumnError(err) {
+			return fmt.Errorf("cannot migrate staged-record schema: %w", err)
+		}
+	}
 	return nil
+}
+
+// isDuplicateStagedColumnError reports whether err is SQLite refusing to add
+// a column that already exists. Matched on the message because the driver
+// reports a generic error with no distinct code, so this stays narrow: any
+// other schema failure still fails the open.
+func isDuplicateStagedColumnError(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "duplicate column name")
 }
 
 // ---------------------------------------------------------------------------
@@ -382,8 +429,8 @@ func (s *Store) StagedHistory(recordID string) ([]DispositionEntry, error) {
 // is where the question is actually asked: this decision was made elsewhere --
 // who let it in here?
 func (s *Store) StagedImportAuthorizations(recordID string) ([]StagedImportAuthorization, error) {
-	query := "SELECT record_id, content_digest, status_at_import, authorized_by, directory, imported_at " +
-		"FROM staged_record_imports"
+	query := "SELECT record_id, content_digest, status_at_import, authorized_by, observed_actor, " +
+		"directory, imported_at FROM staged_record_imports"
 	args := []any{}
 	if recordID != "" {
 		query += " WHERE record_id = ?"
@@ -401,7 +448,7 @@ func (s *Store) StagedImportAuthorizations(recordID string) ([]StagedImportAutho
 	for rows.Next() {
 		var row StagedImportAuthorization
 		if err := rows.Scan(&row.RecordID, &row.ContentDigest, &row.StatusAtImport,
-			&row.AuthorizedBy, &row.Directory, &row.ImportedAt); err != nil {
+			&row.AuthorizedBy, &row.ObservedActor, &row.Directory, &row.ImportedAt); err != nil {
 			return nil, fmt.Errorf("cannot read import authorization row: %w", err)
 		}
 		authorizations = append(authorizations, row)
@@ -689,8 +736,9 @@ func (s *Store) RecordStagedImportAuthorization(recordID, contentDigest, statusA
 	// genuinely separate imports get two rows.
 	_, err := s.db.Exec(
 		"INSERT OR REPLACE INTO staged_record_imports (record_id, content_digest, status_at_import, "+
-			"authorized_by, directory, imported_at) VALUES (?, ?, ?, ?, ?, ?)",
-		recordID, contentDigest, statusAtImport, authorizedBy, directory, stagedNow())
+			"authorized_by, observed_actor, directory, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		recordID, contentDigest, statusAtImport, authorizedBy,
+		platform.ObserveActor().String(), directory, stagedNow())
 	if err != nil {
 		return fmt.Errorf("cannot record import authorization for %q: %w", recordID, err)
 	}
