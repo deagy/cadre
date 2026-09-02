@@ -226,3 +226,110 @@ func TestThePackagedPluginCarriesTheSelectorAndEveryBinary(t *testing.T) {
 		t.Errorf("the packaged hook still runs an interpreter:\n%s", text)
 	}
 }
+
+// TestTheGeneratedLauncherFallsBackToTheLifecycleShim.
+//
+// The packaged launcher handles `sdlc` itself and never reaches the Go
+// resolver, so it is a fourth implementation of "where is the kernel" and had
+// to be fixed separately. Two earlier fixes in this phase landed in one place
+// and not its sibling; this asserts the launcher carries the fallback so the
+// next reader does not have to find that out from a container.
+func TestTheGeneratedLauncherFallsBackToTheLifecycleShim(t *testing.T) {
+	launcher, err := os.ReadFile(filepath.Join("..", "..", "plugin", "bin", "cadre"))
+	if err != nil {
+		t.Fatalf("reading the generated launcher: %v", err)
+	}
+	body := string(launcher)
+
+	const fallback = `[ -x "$PLUGIN_ROOT/plugins/lifecycle/bin/agentic-sdlc" ]`
+	if !strings.Contains(body, fallback) {
+		t.Errorf("the generated launcher does not fall back to the lifecycle shim; "+
+			"an install.sh --with-lifecycle install fetches the kernel through that "+
+			"shim, puts nothing on PATH and sets no override, so every `cadre sdlc` "+
+			"answers \"install Agentic SDLC\"\nlooked for: %s", fallback)
+	}
+
+	// Order matters as much as presence. An override the operator set must win,
+	// or this silently replaces their kernel with a downloaded one.
+	overridePos := strings.Index(body, `sdlc_bin="${AGENTIC_SDLC_BIN:-}"`)
+	fallbackPos := strings.Index(body, fallback)
+	if overridePos < 0 {
+		t.Fatal("the launcher no longer reads AGENTIC_SDLC_BIN at all")
+	}
+	if fallbackPos >= 0 && fallbackPos < overridePos {
+		t.Error("the shim fallback is checked before AGENTIC_SDLC_BIN, so it would " +
+			"override a kernel the operator chose")
+	}
+}
+
+// TestTheLauncherActuallyExecsTheLifecycleShim.
+//
+// The test above reads the launcher's text. This one runs it.
+//
+// The distinction is the whole finding: the Go-side fallback was tested as a
+// function with a hand-supplied repoRoot, passed, and was unreachable on the
+// path a toolchain-less install takes -- because the launcher passes
+// CADRE_REPO_ROOT="$SUITE_ROOT" and handles `sdlc` in shell before any Go code
+// runs. A guard that never executes the shell cannot see that.
+func TestTheLauncherActuallyExecsTheLifecycleShim(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the launcher is POSIX sh")
+	}
+	launcher, err := os.ReadFile(filepath.Join("..", "..", "plugin", "bin", "cadre"))
+	if err != nil {
+		t.Fatalf("reading the generated launcher: %v", err)
+	}
+
+	pkg := t.TempDir()
+	shimDir := filepath.Join(pkg, "plugins", "lifecycle", "bin")
+	for _, dir := range []string{filepath.Join(pkg, "bin"), filepath.Join(pkg, "suite"), shimDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(pkg, "bin", "cadre"), launcher, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg, "provider.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(pkg, ".claude-plugin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg, ".claude-plugin", "plugin.json"),
+		[]byte(`{"version": "0.0.0"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The shim stands in for the downloading one. It reports what it was given,
+	// so a pass means this binary ran and not something else answering the name.
+	if err := os.WriteFile(filepath.Join(shimDir, "agentic-sdlc"),
+		[]byte("#!/bin/sh\necho \"lifecycle-shim ran: $*\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Stands in for the downloaded CLI. `config resolve agentic_sdlc.bin_path`
+	// finds nothing, which is the state a machine with no kernel on PATH is in.
+	stub := filepath.Join(pkg, "cadre-stub")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	command := exec.Command("sh", filepath.Join(pkg, "bin", "cadre"), "sdlc", "--version")
+	command.Env = append(os.Environ(),
+		"CADRE_BINARY="+stub,
+		"AGENTIC_SDLC_BIN=",
+		"PATH=/usr/bin:/bin",
+	)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("the launcher failed on a package that carries its own kernel shim: %v\n%s",
+			err, output)
+	}
+	// The launcher inserts --provider before the forwarded arguments, so this
+	// asserts the shim ran and received the subcommand, not an exact argv.
+	if !strings.Contains(string(output), "lifecycle-shim ran:") ||
+		!strings.Contains(string(output), "--version") {
+		t.Errorf("the launcher did not exec the packaged lifecycle shim.\n"+
+			"This is the toolchain-less install path, where the kernel is already "+
+			"downloaded and cached and nothing is on PATH.\ngot: %s", output)
+	}
+}

@@ -165,3 +165,28 @@ func TestNoShimAndNoPathStillReportsNothing(t *testing.T) {
 		t.Error("no detail explaining why nothing resolved")
 	}
 }
+
+// TestThePackagedSuiteLayoutResolvesToo.
+//
+// CADRE_REPO_ROOT is the checkout root when bin/cadre starts the process and
+// `<package>/suite` when the packaged launcher does. Checking only the first
+// found nothing in exactly the install this fallback exists for.
+func TestThePackagedSuiteLayoutResolvesToo(t *testing.T) {
+	pkg := t.TempDir()
+	suite := filepath.Join(pkg, "suite")
+	shimDir := filepath.Join(pkg, "plugins", "lifecycle", "bin")
+	for _, dir := range []string{suite, shimDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shim := filepath.Join(shimDir, "agentic-sdlc")
+	if err := os.WriteFile(shim, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	resolved, ok := PackagedKernelShim(suite)
+	if !ok || resolved != shim {
+		t.Errorf("PackagedKernelShim(%q) = %q, %v; want %q, true", suite, resolved, ok, shim)
+	}
+}

@@ -90,12 +90,20 @@ func PackagedKernelShim(repoRoot string) (string, bool) {
 	if repoRoot == "" {
 		return "", false
 	}
-	shim := filepath.Join(repoRoot, "plugin", "plugins", "lifecycle", "bin", "agentic-sdlc")
-	info, err := os.Stat(shim)
-	if err != nil || info.IsDir() {
-		return "", false
+	// Two layouts, because CADRE_REPO_ROOT means different directories
+	// depending on which launcher started the process: the checkout root from
+	// bin/cadre, and <package>/suite from the packaged plugin's own launcher.
+	// Checking only the first found nothing in exactly the install this
+	// fallback exists for.
+	for _, candidate := range []string{
+		filepath.Join(repoRoot, "plugin", "plugins", "lifecycle", "bin", "agentic-sdlc"),
+		filepath.Join(filepath.Dir(repoRoot), "plugins", "lifecycle", "bin", "agentic-sdlc"),
+	} {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, true
+		}
 	}
-	return shim, true
+	return "", false
 }
 
 // ResolveKernel answers the question `cadre sdlc` and `cadre select` answer

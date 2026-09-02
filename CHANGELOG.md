@@ -243,7 +243,10 @@ target is still required so an incidental CWD never becomes a write target.
   does not, sending exactly the people it could not help looking for a network
   fault.
 
-- **`cadre sdlc` finds the kernel a plugin install actually produces.** The
+- **`cadre sdlc` finds the kernel a plugin install actually produces**, through
+  all four resolvers: `DispatchSDLC`, `ResolveKernel` behind `cadre doctor` and
+  `cadre select`, and the packaged launcher's own `sdlc` branch, which handles
+  that subcommand itself and never reaches the Go code. The
   last resort below `AGENTIC_SDLC_BIN` and `PATH` read
   `<repoRoot>/bin/agentic-sdlc`, which was true while the kernel shipped in
   this repository and has not existed since it was extracted. `install.sh`

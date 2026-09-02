@@ -15,6 +15,18 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.24.4](https://github.com/deagy/cadre/releases/tag/plugin-v0.24.4) - 2026-09-02
+
+### Fixed
+
+- **The launcher's own `sdlc` branch could not find the kernel either.** 0.24.3
+  taught the Go resolvers to fall back to the lifecycle shim, and this launcher
+  handles `sdlc` itself and never reaches them -- a fourth implementation of
+  "where is the kernel", found by running the install again rather than by
+  reading. It now falls back to `plugins/lifecycle/bin/agentic-sdlc` inside its
+  own package, after `AGENTIC_SDLC_BIN` and a configured `bin_path`, so an
+  override the operator set still wins.
+
 ## [0.24.3](https://github.com/deagy/cadre/releases/tag/plugin-v0.24.3) - 2026-09-02
 
 ### Fixed
