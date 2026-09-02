@@ -15,6 +15,23 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.24.1](https://github.com/deagy/cadre/releases/tag/plugin-v0.24.1) - 2026-09-02
+
+### Fixed
+
+- **The kernel shim could not install a kernel.** It downloads the archive and
+  its `SHA256SUMS`, then resolves the expected hash with
+  `grep " $ARCHIVE$"`. Every kernel release wrote that file with a `./` before
+  each name, so no line ever matched and the shim reported the archive as
+  unlisted. Kernel v0.14.4 writes bare names and asserts, before publishing,
+  that each line matches the shim's own pattern; the pin here moves to it.
+
+- **A `cadre` installed by `install.sh` needed a Go toolchain.** The launcher
+  it links builds the CLI from source, and `install.sh` names git and Python
+  as its requirements. Without Go every subcommand refused. It now falls back
+  to the packaged launcher, which is the download-and-verify path this package
+  already ships.
+
 ## [0.24.0](https://github.com/deagy/cadre/releases/tag/plugin-v0.24.0) - 2026-09-02
 
 ### Changed

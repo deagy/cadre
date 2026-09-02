@@ -1,5 +1,5 @@
 {
   "_comment": "Generated from provider.json's kernel_compatibility by cadre generate-plugin. Do not hand-edit; edit provider/provider.json and regenerate.",
-  "minimum": "0.14.3",
+  "minimum": "0.14.4",
   "maximum_exclusive": "1.0.0"
 }

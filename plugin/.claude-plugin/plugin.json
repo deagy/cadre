@@ -1,7 +1,7 @@
 {
   "name": "cadre",
   "displayName": "Cadre",
-  "version": "0.24.0",
+  "version": "0.24.1",
   "description": "Secure cloud agent suite (159 specialist roles) with deterministic role selection and dispatch, reachable from any project once installed at global scope. Lifecycle governance (Agentic SDLC G1–G10 gates) is a separate, optional plugin — see cadre-lifecycle-core.",
   "author": {
     "name": "Cadre maintainers",

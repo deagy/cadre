@@ -5,7 +5,7 @@ BIN_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 # Pinned at generation time, like the CLI shim's CADRE_CLI_VERSION: a
 # version resolved at run time would make which kernel you get depend on
 # when you ran it.
-AGENTIC_SDLC_VERSION="0.14.3"
+AGENTIC_SDLC_VERSION="0.14.4"
 
 if [ -n "${AGENTIC_SDLC_BIN:-}" ]; then
   exec "$AGENTIC_SDLC_BIN" "$@"

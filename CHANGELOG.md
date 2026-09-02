@@ -217,9 +217,23 @@ target is still required so an incidental CWD never becomes a write target.
   -- `delete-staged --reason "--retention-days was never implemented"` -- is a
   reason, not a request, and the command runs.
 
-- **The kernel the packaged plugin downloads is pinned to 0.14.3**, the first
-  kernel release whose archives carry the licence text. Every archive through
-  v0.14.2 held exactly one file.
+- **The kernel the packaged plugin downloads is pinned to 0.14.4.** Two
+  defects in the kernel's own release, both invisible from a machine that
+  already had a kernel: through v0.14.2 the archives held exactly one file,
+  so the repository carried Apache-2.0 and the download carried no licence
+  text; and through v0.14.3 the release wrote `SHA256SUMS` with a `./` before
+  each name, which the shim's `grep " $ARCHIVE$"` cannot match, so
+  `cadre sdlc` could not install a kernel at all. It reported the archive as
+  unlisted -- a message that reads as a broken release rather than as a
+  producer and its only consumer disagreeing about a format.
+
+- **`bin/cadre` falls back to the packaged launcher when there is no Go
+  toolchain.** `install.sh` links `~/.local/bin/cadre` at this script and
+  states its own requirements as git and Python; without Go, every subcommand
+  died asking for a toolchain the install instructions never mentioned. The
+  checkout already carries `plugin/bin/cadre`, which downloads a released
+  binary and verifies it, so the fallback is to run that rather than refuse.
+  With Go present nothing changes.
 
 - **A dispatched agent never saw steward-accepted knowledge.** `cadre knowledge
   ingest-accepted` writes accepted findings to a dedicated source,

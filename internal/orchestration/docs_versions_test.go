@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/deagy/cadre/cli/internal/engine/provider"
 )
 
 // Hand-maintained version coordinates rot.
@@ -289,3 +291,48 @@ func TestTheScansWouldNoticeAPinnedCoordinate(t *testing.T) {
 		}
 	}
 }
+
+// TestTheWorkflowKernelPinMatchesTheProviderPin.
+//
+// validate.yml checks out deagy/cadre-kernel at CADRE_KERNEL_REF and builds
+// the binary the compatibility guards run against. Its own comment says to
+// "bump deliberately when cadre-kernel releases; the compatibility guard
+// below is what tells you it needs bumping" -- and that guard tells you by
+// failing on a runner, which is after the release job on the same push has
+// already published.
+//
+// That is exactly what happened when the pin moved to 0.14.3: both component
+// releases published from a commit whose validate run was red, because the
+// workflow still built the previous kernel and the provider window no longer
+// admitted it. Two of the five places that had to move were found by a local
+// test and three by a red runner, one of them after publishing.
+//
+// This one is local, so it fails before the push rather than after it.
+func TestTheWorkflowKernelPinMatchesTheProviderPin(t *testing.T) {
+	packageParent, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatalf("resolving the repository root: %v", err)
+	}
+	path := filepath.Join(filepath.Dir(packageParent), ".github", "workflows", "validate.yml")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading %s: %v", path, err)
+	}
+
+	match := workflowKernelRef.FindSubmatch(content)
+	if match == nil {
+		t.Fatalf("no CADRE_KERNEL_REF in %s. If the workflow stopped pinning a "+
+			"kernel, this guard is stale; if it renamed the variable, the guard "+
+			"now passes over a pin nothing checks", path)
+	}
+	found := string(match[1])
+	want := "v" + provider.KernelVersion
+	if found != want {
+		t.Errorf("validate.yml pins CADRE_KERNEL_REF=%s, but this repository pins "+
+			"kernel %s. The workflow would build a kernel the provider window "+
+			"refuses, and the release job on the same push publishes anyway",
+			found, provider.KernelVersion)
+	}
+}
+
+var workflowKernelRef = regexp.MustCompile(`(?m)^\s*CADRE_KERNEL_REF:\s*(v[0-9]+\.[0-9]+\.[0-9]+)\s*$`)

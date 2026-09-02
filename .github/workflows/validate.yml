@@ -23,7 +23,7 @@ env:
   # The kernel release this repository's provider bundle claims compatibility
   # with. Bump deliberately when cadre-kernel releases; the compatibility
   # guard below is what tells you it needs bumping.
-  CADRE_KERNEL_REF: v0.14.2
+  CADRE_KERNEL_REF: v0.14.4
 
 on:
   pull_request:

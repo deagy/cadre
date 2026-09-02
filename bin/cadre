@@ -44,7 +44,24 @@ if [ "$NEEDS_BUILD" = 1 ]; then
   # PATH -- which is how callers make some *other* dependency unresolvable
   # for a test (cline-plugins/cline/index.test.mts hides `agentic-sdlc` this
   # way and was hiding `go` as collateral damage).
-  command -v go >/dev/null 2>&1 || { echo "cadre: Go is required to build this checkout's CLI (checked PATH for 'go')" >&2; exit 1; }
+  if ! command -v go >/dev/null 2>&1; then
+    # No toolchain, so build from source is not available -- but this
+    # checkout also carries the packaged launcher, which downloads a
+    # released binary for the platform and verifies it. Prefer that over
+    # refusing.
+    #
+    # install.sh links ~/.local/bin/cadre at *this* script, and its own
+    # stated requirements are git and Python. So on the machine the install
+    # instructions describe, every `cadre` subcommand died here asking for
+    # a toolchain the instructions never mentioned. Found by installing in
+    # a container with nothing on it.
+    if [ -x "$REPO_ROOT/plugin/bin/cadre" ]; then
+      exec "$REPO_ROOT/plugin/bin/cadre" "$@"
+    fi
+    echo "cadre: Go is required to build this checkout's CLI (checked PATH for 'go')" >&2
+    echo "  and $REPO_ROOT/plugin/bin/cadre, which downloads a released binary instead, is not present." >&2
+    exit 1
+  fi
   mkdir -p "$BUILD_CACHE"
   # Silent on success, verbatim on failure. `go build` writes progress to
   # stderr on a cold module cache ("go: downloading ..."), and that is
