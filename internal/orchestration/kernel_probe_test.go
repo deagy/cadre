@@ -190,3 +190,45 @@ func TestThePackagedSuiteLayoutResolvesToo(t *testing.T) {
 		t.Errorf("PackagedKernelShim(%q) = %q, %v; want %q, true", suite, resolved, ok, shim)
 	}
 }
+
+// TestDoctorAndSdlcResolveTheSameKernel.
+//
+// `cadre doctor` exists because a stale kernel answering the name is not
+// hypothetical -- a pre-port Python build sat on PATH and satisfied the
+// compatibility floor by one patch version. A doctor that reports a different
+// kernel from the one `cadre sdlc` runs is worse than one that says nothing,
+// and it did: on a clean install it printed "no packaged lifecycle shim was
+// found" while `cadre sdlc --version` answered from that very shim, because it
+// resolved its root with RepoRoot (an upward walk for `.git`) and a packaged
+// install has none.
+//
+// This holds the two resolvers to the same answer for the same root.
+func TestDoctorAndSdlcResolveTheSameKernel(t *testing.T) {
+	pkg := t.TempDir()
+	suite := filepath.Join(pkg, "suite")
+	shimDir := filepath.Join(pkg, "plugins", "lifecycle", "bin")
+	for _, dir := range []string{suite, shimDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shim := filepath.Join(shimDir, "agentic-sdlc")
+	if err := os.WriteFile(shim, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// What DispatchSDLC's last resort would pick.
+	dispatched, ok := PackagedKernelShim(suite)
+	if !ok {
+		t.Fatal("PackagedKernelShim found nothing for the packaged layout")
+	}
+	// What doctor reports, through the same root.
+	missing := func(string) (string, error) { return "", errors.New("not found") }
+	reported := ResolveKernel("", "0.14.4", missing, noneOnPath, stubRun("0.14.4"), suite)
+
+	if reported.Path != dispatched {
+		t.Errorf("doctor reports %q and `cadre sdlc` would run %q; a doctor that "+
+			"disagrees with the command it diagnoses is worse than one that says nothing",
+			reported.Path, dispatched)
+	}
+}

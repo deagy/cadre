@@ -1,7 +1,7 @@
 {
   "name": "cadre-lifecycle-core",
   "displayName": "Cadre Lifecycle (Core)",
-  "version": "0.24.4",
+  "version": "0.24.5",
   "description": "Forge-agnostic Agentic SDLC lifecycle governance (G1-G10 gates) for the Cadre role suite: conversational onboarding and generic gate-decision skills, plus a kernel bootstrap script. Optional companion to the cadre plugin. For GitHub- or GitLab-flavored gate approvals, also install cadre-lifecycle-github / cadre-lifecycle-gitlab.",
   "author": {
     "name": "Cadre maintainers",

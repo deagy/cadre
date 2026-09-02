@@ -67,10 +67,14 @@ func DoctorCmd(args []string) int {
 
 	// Which kernel this machine would actually run. Probed here for the same
 	// reason the store driver is: internal/cli already imports both packages.
-	// repoRoot is passed so this reports the same kernel `cadre sdlc` would
-	// run. Best-effort: outside a checkout there is no packaged shim to find,
-	// and an empty root simply skips that last resort.
-	kernelRoot, rootErr := platform.RepoRoot()
+	// FindInstallationRoot, not RepoRoot: this must report the same kernel
+	// `cadre sdlc` would run, and RepoRoot walks up from the working directory
+	// looking for a `.git`. A packaged install has none and is usually invoked
+	// from somewhere else entirely, so doctor reported "no packaged lifecycle
+	// shim was found" on a machine where `cadre sdlc --version` answered 0.14.4
+	// from that very shim. A doctor that disagrees with the command it is
+	// diagnosing is worse than one that says nothing.
+	kernelRoot, rootErr := platform.FindInstallationRoot()
 	if rootErr != nil {
 		kernelRoot = ""
 	}

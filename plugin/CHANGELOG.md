@@ -15,6 +15,18 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.24.5](https://github.com/deagy/cadre/releases/tag/plugin-v0.24.5) - 2026-09-02
+
+### Fixed
+
+- **`cadre doctor` reported no kernel on a machine where `cadre sdlc` ran one.**
+  It resolved its root with an upward walk for `.git`, which a packaged install
+  does not have and is usually invoked from somewhere else anyway, so it printed
+  "no packaged lifecycle shim was found" while `cadre sdlc --version` answered
+  `0.14.4` from that very shim. It now uses the same installation-root
+  resolution the rest of the CLI does. A doctor that disagrees with the command
+  it is diagnosing is worse than one that says nothing.
+
 ## [0.24.4](https://github.com/deagy/cadre/releases/tag/plugin-v0.24.4) - 2026-09-02
 
 ### Fixed

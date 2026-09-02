@@ -246,7 +246,13 @@ target is still required so an incidental CWD never becomes a write target.
 - **`cadre sdlc` finds the kernel a plugin install actually produces**, through
   all four resolvers: `DispatchSDLC`, `ResolveKernel` behind `cadre doctor` and
   `cadre select`, and the packaged launcher's own `sdlc` branch, which handles
-  that subcommand itself and never reaches the Go code. The
+  that subcommand itself and never reaches the Go code.
+
+  `cadre doctor` also resolves its root the way the rest of the CLI does rather
+  than by walking up for a `.git`. It had reported "no packaged lifecycle shim
+  was found" on a machine where `cadre sdlc --version` answered from that very
+  shim -- and a doctor that disagrees with the command it is diagnosing is worse
+  than one that says nothing. The
   last resort below `AGENTIC_SDLC_BIN` and `PATH` read
   `<repoRoot>/bin/agentic-sdlc`, which was true while the kernel shipped in
   this repository and has not existed since it was extracted. `install.sh`
