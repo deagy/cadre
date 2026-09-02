@@ -122,6 +122,13 @@ func AnswerableKnowledgeVerbs() map[string]bool {
 
 // KnowledgeCmd is the `cadre knowledge` subcommand.
 func KnowledgeCmd(args []string) int {
+	// Before the parser sees them: a retention or erasure flag reaches a live
+	// command from a steward reaching for a capability that was removed, and
+	// "flag provided but not defined" tells them nothing about why.
+	if refuseAbsentKnowledgeCapability(args) {
+		return 2
+	}
+
 	fs := flag.NewFlagSet("cadre knowledge", flag.ContinueOnError)
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, `Usage: cadre knowledge <subcommand> [options]

@@ -82,6 +82,13 @@ func KnowledgeStagedRoute(args []string) bool {
 // KnowledgeCmd's `-config` handling so the two halves of `cadre knowledge`
 // resolve the same store.
 func KnowledgeStagedCmd(args []string) int {
+	// The staged verbs route separately from KnowledgeCmd, so the refusal has
+	// to stand on this path too -- `delete-staged --purge` is exactly the
+	// shape a steward reaches for.
+	if refuseAbsentKnowledgeCapability(args) {
+		return 2
+	}
+
 	fs := flag.NewFlagSet("cadre knowledge", flag.ContinueOnError)
 	fs.Usage = func() {
 		fmt.Fprint(os.Stderr, `Usage: cadre knowledge <subcommand> [options]
