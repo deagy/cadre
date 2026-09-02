@@ -1,8 +1,13 @@
 # dispatch_core Python-to-Go Migration Roadmap
 
-## Overview
+> **This migration is finished.** `dispatch_core.py` no longer exists and the
+> repository tracks no Python at all. The phases and week estimates below are
+> the plan as written on 2026-08-14, kept for the reasoning; they are not
+> outstanding work.
 
-This document outlines the complete migration of `roster/orchestration/mcp/dispatch_core.py` (3,107 lines) from Python to Go as part of the CLI Python elimination initiative. The migration is divided into 4 phases, targeting completion within 6-8 weeks.
+## What this migration covered
+
+Moving `roster/orchestration/mcp/dispatch_core.py` (3,107 lines) from Python to Go, as part of eliminating Python from the CLI. The plan divided it into four phases over an estimated six to eight weeks.
 
 **Current Status**: Phase 2 Complete (1,637 lines); Phase 3-4 planned
 
@@ -10,15 +15,15 @@ This document outlines the complete migration of `roster/orchestration/mcp/dispa
 
 | Phase | Component | Lines | Status | Est. Days |
 |-------|-----------|-------|--------|-----------|
-| 1 | Role resolution (Codex .toml + Claude Code .md), sandbox computation, child spawning foundation | 762 | ✅ Complete | 10-14 |
-| 2 | Main dispatch function, async job stores, team coordination | 875 | ✅ Complete | 10-14 |
+| 1 | Role resolution (Codex .toml + Claude Code .md), sandbox computation, child spawning foundation | 762 | Complete | 10-14 |
+| 2 | Main dispatch function, async job stores, team coordination | 875 | Complete | 10-14 |
 | 3 | State persistence, real spawning, interactive confirmation, integration tests | 1,200-1,500 | 📋 Planned | 20-28 |
 | 4 | MCP server, Python elimination, backward compat, full integration | 1,000-1,200 | 📋 Planned | 14-21 |
 | **Total** | **dispatch_core.py replacement** | **4,000-4,500** | **1,637 done** | **54-77** |
 
 ---
 
-## Phase 1: Foundation (COMPLETE ✅)
+## Phase 1: Foundation (COMPLETE )
 
 **Goal**: Establish tier-based role resolution, sandbox management, and child process spawning infrastructure.
 
@@ -46,7 +51,7 @@ This document outlines the complete migration of `roster/orchestration/mcp/dispa
 
 ---
 
-## Phase 2: Main Dispatch Engine (COMPLETE ✅)
+## Phase 2: Main Dispatch Engine (COMPLETE )
 
 **Goal**: Implement core dispatch functions, async job stores, and team coordination.
 
@@ -312,26 +317,26 @@ Phase 4.5 (tests + docs) ← depends on 4.1-4.4
 ## Success Criteria
 
 ### By End of Phase 2 (Current)
-- ✅ 1,637 lines of Go implementation + tests
-- ✅ Core dispatch infrastructure (validation, confirmation gating, async job stores, team coordination)
-- ✅ All 428+ orchestration tests passing
-- ✅ Foundation for real subprocess execution and persistence
+- 1,637 lines of Go implementation + tests
+- Core dispatch infrastructure (validation, confirmation gating, async job stores, team coordination)
+- All 428+ orchestration tests passing
+- Foundation for real subprocess execution and persistence
 
 ### By End of Phase 3
-- ✅ Persistent job store (SQLite)
-- ✅ Real child process spawning with role resolution
-- ✅ Interactive confirmation prompts for write modes
-- ✅ End-to-end dispatch workflow tests (14+ test cases)
-- ✅ 550+ total orchestration tests passing
-- ✅ No Python subprocess calls in dispatch code path
+- Persistent job store (SQLite)
+- Real child process spawning with role resolution
+- Interactive confirmation prompts for write modes
+- End-to-end dispatch workflow tests (14+ test cases)
+- 550+ total orchestration tests passing
+- No Python subprocess calls in dispatch code path
 
 ### By End of Phase 4
-- ✅ Go MCP dispatch server (replaces Python dispatch_server.py)
-- ✅ Full Python elimination from dispatch operations
-- ✅ Backward compatibility with old token format
-- ✅ Complete dispatch_core.py port (3,107 lines → 4,000-4,500 lines Go)
-- ✅ 600+ total orchestration + MCP tests passing
-- ✅ Production-ready Go CLI with no Python dependencies for dispatch
+- Go MCP dispatch server (replaces Python dispatch_server.py)
+- Full Python elimination from dispatch operations
+- Backward compatibility with old token format
+- Complete dispatch_core.py port (3,107 lines → 4,000-4,500 lines Go)
+- 600+ total orchestration + MCP tests passing
+- Production-ready Go CLI with no Python dependencies for dispatch
 
 ---
 

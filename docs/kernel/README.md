@@ -8,7 +8,7 @@ This directory contains documentation for the Agentic SDLC repository.
 - `gate-rationale.md` - Explanation of the ten-gate lifecycle design
 - `usage-overview.md` - Command usage and examples
 
-## Overview
+## What the kernel governs
 
 Agentic SDLC provides a ten-gate lifecycle governance system for agentic
 software development. It enforces structured development workflows with

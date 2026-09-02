@@ -179,7 +179,7 @@ The Cadre CLI currently consists of:
 - ✗ Cannot test against Python reference during development
 - ✗ Harder to review (10k+ lines in one PR)
 - ✗ Higher rollback cost if issues discovered late
-- ✓ Incremental phasing chosen instead
+- Incremental phasing chosen instead
 
 ---
 
@@ -247,30 +247,30 @@ The Cadre CLI currently consists of:
 
 ## 5. Implementation Plan
 
-### Phase 1: Core Infrastructure (Weeks 1-2, ~30 hours) ✅ DONE
-- ✅ Go module setup (`go.mod`, `cmd/cadre/main.go`, `Makefile`)
-- ✅ Dispatcher and version detection
-- ✅ Config resolver (exact replica of settings.py precedence chain)
-- ✅ SDLC delegation with provider injection (exact replica)
-- ✅ Interop layer for Python fallback
-- ✅ Platform-specific paths (POSIX/Windows)
-- ✅ Unit tests for dispatcher, config, SDLC, paths
-- ✅ Cross-platform build (linux, darwin, windows)
+### Phase 1: Core Infrastructure (Weeks 1-2, ~30 hours) DONE
+- Go module setup (`go.mod`, `cmd/cadre/main.go`, `Makefile`)
+- Dispatcher and version detection
+- Config resolver (exact replica of settings.py precedence chain)
+- SDLC delegation with provider injection (exact replica)
+- Interop layer for Python fallback
+- Platform-specific paths (POSIX/Windows)
+- Unit tests for dispatcher, config, SDLC, paths
+- Cross-platform build (linux, darwin, windows)
 
-### Phase 2: Hybrid Orchestration (Weeks 3-4, ~4 hours) ✅ DONE
+### Phase 2: Hybrid Orchestration (Weeks 3-4, ~4 hours) DONE
 **Strategy:** Infrastructure in Go, commands via Python interop (realistic scope).
 
-- ✅ `internal/orchestration/manifest.go` — Roster manifest loading + validation
-- ✅ `internal/orchestration/routing.go` — Routing config loading + validation
-- ✅ Unit tests: manifest containment checks, routing validation (147 routes verified)
+- `internal/orchestration/manifest.go` — Roster manifest loading + validation
+- `internal/orchestration/routing.go` — Routing config loading + validation
+- Unit tests: manifest containment checks, routing validation (147 routes verified)
 - 🐍 `cadre select` remained Python here (routed through Go dispatcher); ported to Go 2026-08-14 — see §8
 - 🐍 `cadre selection-telemetry` remains Python (routed through Go dispatcher)
 - 🐍 `cadre profile` remains Python (routed through Go dispatcher)
 
 **Rationale:** Routing overlay (211 lines, 15 validation rules) and dispatch plan builder (572 lines, complex orchestration logic) are security-critical and behaviorally complex. Python versions are proven in production. Hybrid approach prioritizes correctness over 100% Go migration. Users see identical CLI behavior; internals use Python subprocesses via Go dispatcher.
 
-### Phase 3: Generators (Weeks 5-6, ~15-20 hours) ✅ DONE
-- ✅ Ported `cadre generate-role-metadata`, `cadre generate-plugin`,
+### Phase 3: Generators (Weeks 5-6, ~15-20 hours) DONE
+- Ported `cadre generate-role-metadata`, `cadre generate-plugin`,
   `cadre generate-authority-aides` (native Go, `internal/generators/`,
   `internal/cli/generate_*.go`; no Python interop in any of the three)
 - Went substantially beyond this phase's original generator-only scope: by
@@ -288,10 +288,10 @@ The Cadre CLI currently consists of:
   artifact separate from each package's own Go test suite; not verified
   against this checklist item specifically.
 
-### Switchover ✅ DONE
-- ✅ `bin/cadre.py` deleted; `bin/cadre` is now a shell shim that builds
+### Switchover DONE
+- `bin/cadre.py` deleted; `bin/cadre` is now a shell shim that builds
   and execs `cmd/cadre` (see `bin/cadre`'s own header comment)
-- ✅ `bin/subcommands.tsv` emptied of the rows now handled by Go --
+- `bin/subcommands.tsv` emptied of the rows now handled by Go --
   16 rows remain in it, but every one of those 16 names is *also*
   intercepted earlier in `internal/cli/dispatcher.go`'s command switch, so
   the TSV-driven Python-fallback code path is dead: it can never be
@@ -367,7 +367,7 @@ This distinguishes what the human actually decided from what an agent proposed a
 **Architecture reviewed by:** code-reviewer, security-reviewer, compliance-reviewer (Wave 4), which raised the findings this revision addresses -- including this attribution issue itself.
 
 **Phase 2 scope decision (2026-08-13):** User chose hybrid approach for Phase 2:
-- Layer 1 (manifest + routing loading) → Go ✅
+- Layer 1 (manifest + routing loading) → Go
 - Layers 2-5 (overlay merge, dispatch plan, formatters, CLIs) → Python interop 🐍
 **Rationale:** Routing overlay has 15 security-critical validation rules (RO-FR-3..RO-FR-17). Dispatch plan builder is complex orchestration logic (572 lines). Full port would require 30-35 additional hours. Hybrid approach prioritizes proven correctness (Python reference implementations) over 100% Go migration. Users see identical CLI behavior. Infrastructure (manifest + routing loading) is now in Go for potential Phase 4 expansion.
 

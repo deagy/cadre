@@ -57,7 +57,7 @@
 
 ## Executive Summary
 
-This document defines the comprehensive architectural strategy for refactoring the Cadre CLI from Python to Go while preserving backward compatibility, feature parity, and the existing SDLC delegation model. The design prioritizes:
+This document defines the architecture for refactoring the Cadre CLI from Python to Go while preserving backward compatibility, feature parity, and the existing SDLC delegation model. The design prioritizes:
 
 1. **Single monolithic Go binary** architecture with subcommand packages
 2. **Incremental porting** (high-value subcommands first, knowledge store stays Python longer)

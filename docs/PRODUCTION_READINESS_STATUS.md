@@ -1,5 +1,20 @@
 # Production Readiness Status
 
+> **Historical record, not a description of the shipped system.** Written
+> 2026-08-13 for a direction cadre did not take: a long-running Cadre service
+> deployed as a container, with liveness and readiness probes, a Prometheus
+> `/metrics` endpoint and a Kubernetes rollout. None of that exists. This
+> repository has no `Dockerfile`, no `docker-compose.yml`, no `k8s/` or
+> `charts/` directory; nothing in any `.go` file serves `/health`, `/ready` or
+> `/metrics`, and there is no Prometheus dependency. `cadre` is a CLI and a
+> plugin suite, and its only servers are the two stdio MCP servers listed in
+> `cadre --help`.
+>
+> The commands below therefore cannot be run — `docker build .` has no
+> Dockerfile to read and `kubectl apply -f k8s-deployment.yaml` names a file
+> that is not in the repository. Kept because the intent is a legible record of
+> what was planned; read it as of its date, not as instructions.
+
 ## Summary
 
 **Phases 9-14 Implementation Status: MOSTLY COMPLETE**
