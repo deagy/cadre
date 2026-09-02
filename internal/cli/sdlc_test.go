@@ -71,7 +71,12 @@ func TestDispatchSDLC_UsesInTreeFallback(t *testing.T) {
 	isolateSDLCPathLookup(t)
 
 	repoRoot := t.TempDir()
-	binDir := filepath.Join(repoRoot, "bin")
+	// The packaged lifecycle shim, which is where an installed tree keeps the
+	// kernel entry point. This fixture used to build `<repoRoot>/bin/agentic-sdlc`
+	// and passed for years against a path the repository stopped having when the
+	// kernel was extracted -- the fixture agreed with the code and neither agreed
+	// with a real checkout.
+	binDir := filepath.Join(repoRoot, "plugin", "plugins", "lifecycle", "bin")
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +109,7 @@ func TestDispatchSDLC_UsesInTreeFallback(t *testing.T) {
 
 func TestDispatchSDLC_NoBinaryFound(t *testing.T) {
 	isolateSDLCPathLookup(t)
-	repoRoot := t.TempDir() // no bin/agentic-sdlc present
+	repoRoot := t.TempDir() // no packaged lifecycle shim present
 
 	var stdout, stderr bytes.Buffer
 	code := DispatchSDLC(context.Background(), repoRoot, []string{"plan"}, false, SDLCDeps{
@@ -127,7 +132,12 @@ func TestDispatchSDLC_NonzeroExitPropagates(t *testing.T) {
 	isolateSDLCPathLookup(t)
 
 	repoRoot := t.TempDir()
-	binDir := filepath.Join(repoRoot, "bin")
+	// The packaged lifecycle shim, which is where an installed tree keeps the
+	// kernel entry point. This fixture used to build `<repoRoot>/bin/agentic-sdlc`
+	// and passed for years against a path the repository stopped having when the
+	// kernel was extracted -- the fixture agreed with the code and neither agreed
+	// with a real checkout.
+	binDir := filepath.Join(repoRoot, "plugin", "plugins", "lifecycle", "bin")
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

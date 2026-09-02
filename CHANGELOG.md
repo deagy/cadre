@@ -243,6 +243,20 @@ target is still required so an incidental CWD never becomes a write target.
   does not, sending exactly the people it could not help looking for a network
   fault.
 
+- **`cadre sdlc` finds the kernel a plugin install actually produces.** The
+  last resort below `AGENTIC_SDLC_BIN` and `PATH` read
+  `<repoRoot>/bin/agentic-sdlc`, which was true while the kernel shipped in
+  this repository and has not existed since it was extracted. `install.sh`
+  puts no kernel on `PATH` and sets no override -- it warms the packaged
+  lifecycle shim's cache -- so a documented install downloaded a verified
+  kernel and then answered every `cadre sdlc` with "install Agentic SDLC".
+  `cadre select` and `cadre doctor` resolve through the same order, so all
+  three now report the same kernel.
+
+  Its own fixture had been building `<repoRoot>/bin/agentic-sdlc` and passing
+  against a path the repository stopped having: the test agreed with the code
+  and neither agreed with a checkout.
+
 - **`bin/cadre` falls back to the packaged launcher when there is no Go
   toolchain.** `install.sh` links `~/.local/bin/cadre` at this script and
   states its own requirements as git and Python; without Go, every subcommand

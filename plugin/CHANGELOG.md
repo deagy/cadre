@@ -15,6 +15,25 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.24.3](https://github.com/deagy/cadre/releases/tag/plugin-v0.24.3) - 2026-09-02
+
+### Fixed
+
+- **`cadre sdlc` could not find the kernel the installer had just fetched.**
+  `install.sh --with-lifecycle` puts no kernel on `PATH` and sets no
+  `AGENTIC_SDLC_BIN`; it runs the packaged lifecycle shim once, which downloads
+  and caches a verified kernel. Every resolver looked only at
+  `AGENTIC_SDLC_BIN` and `PATH`, and the last resort below those read
+  `<repoRoot>/bin/agentic-sdlc` -- true while the kernel shipped in the cadre
+  repository, and a path that has not existed since it was extracted. So a
+  machine that followed the documented instructions had a working kernel and
+  every `cadre sdlc` answered "install Agentic SDLC".
+
+  The packaged shim is now the last resort, for `cadre sdlc`, `cadre select` and
+  `cadre doctor` alike. It stays last: an explicit `AGENTIC_SDLC_BIN`, a
+  configured `agentic_sdlc.bin_path`, or an `agentic-sdlc` on `PATH` all still
+  win, because each is a choice someone made about which kernel runs.
+
 ## [0.24.2](https://github.com/deagy/cadre/releases/tag/plugin-v0.24.2) - 2026-09-02
 
 ### Fixed

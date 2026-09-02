@@ -23,7 +23,7 @@ import (
 type KernelResolution struct {
 	// Path is the binary that answers, or empty when none does.
 	Path string `json:"path,omitempty"`
-	// Source is "AGENTIC_SDLC_BIN" or "PATH".
+	// Source is "AGENTIC_SDLC_BIN", "PATH" or "packaged plugin".
 	Source string `json:"source,omitempty"`
 	// Version is what it reports, trimmed.
 	Version string `json:"version,omitempty"`
@@ -73,10 +73,37 @@ func olderThan(version, floor string) bool {
 	return false
 }
 
+// PackagedKernelShim reports the lifecycle plugin's own `agentic-sdlc`, which
+// downloads and verifies a released kernel on first use.
+//
+// It is the kernel entry point an `install.sh` install actually produces:
+// nothing is put on PATH and no `AGENTIC_SDLC_BIN` is set, so a machine that
+// followed the documented instructions had the kernel cached and every
+// `cadre sdlc` still answering "install Agentic SDLC". The stale answer here
+// was `<repoRoot>/bin/agentic-sdlc` -- true while the kernel shipped in this
+// repository, and a path that has not existed since it was extracted.
+//
+// Last resort by design: an explicit AGENTIC_SDLC_BIN, a configured
+// agentic_sdlc.bin_path, or an `agentic-sdlc` the operator installed on PATH
+// all still win, because each is a choice a human made about which kernel runs.
+func PackagedKernelShim(repoRoot string) (string, bool) {
+	if repoRoot == "" {
+		return "", false
+	}
+	shim := filepath.Join(repoRoot, "plugin", "plugins", "lifecycle", "bin", "agentic-sdlc")
+	info, err := os.Stat(shim)
+	if err != nil || info.IsDir() {
+		return "", false
+	}
+	return shim, true
+}
+
 // ResolveKernel answers the question `cadre sdlc` and `cadre select` answer
-// silently, in the same order they do: the explicit override first, then PATH.
+// silently, in the same order they do: the explicit override first, then PATH,
+// then the packaged shim inside repoRoot. Pass an empty repoRoot to skip the
+// last one.
 func ResolveKernel(explicitBin string, expected string, lookPath func(string) (string, error),
-	allOnPath func(string) []string, run func(string) (string, error)) KernelResolution {
+	allOnPath func(string) []string, run func(string) (string, error), repoRoot string) KernelResolution {
 
 	resolution := KernelResolution{Expected: expected}
 
@@ -86,8 +113,13 @@ func ResolveKernel(explicitBin string, expected string, lookPath func(string) (s
 	default:
 		found, err := lookPath("agentic-sdlc")
 		if err != nil {
-			resolution.Detail = "no agentic-sdlc on PATH and AGENTIC_SDLC_BIN is unset; " +
-				"`cadre select` runs standalone and says so in the plan"
+			if shim, ok := PackagedKernelShim(repoRoot); ok {
+				resolution.Path, resolution.Source = shim, "packaged plugin"
+				break
+			}
+			resolution.Detail = "no agentic-sdlc on PATH, AGENTIC_SDLC_BIN is unset, and " +
+				"no packaged lifecycle shim was found; `cadre select` runs standalone " +
+				"and says so in the plan"
 			return resolution
 		}
 		resolution.Path, resolution.Source = found, "PATH"

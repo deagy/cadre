@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/deagy/cadre/cli/internal/config"
+	"github.com/deagy/cadre/cli/internal/orchestration"
 )
 
 // sdlcDescription mirrors bin/cadre.py's SDLC_DESCRIPTION, used by usage
@@ -71,15 +72,22 @@ func DispatchSDLC(ctx context.Context, repoRoot string, rest []string, interacti
 	}
 
 	if sdlcBin == "" {
-		// The kernel ships in this repository since the monorepo merge, so
-		// a checkout needs no install and no AGENTIC_SDLC_BIN. This is the
-		// last resort deliberately: an explicit env var or a configured
+		// The packaged lifecycle shim, which downloads and verifies a
+		// released kernel on first use. This is the last resort
+		// deliberately: an explicit env var or a configured
 		// agentic_sdlc.bin_path still wins, and so does an `agentic-sdlc`
 		// the operator installed themselves, because either is a choice
 		// the human made about which kernel to run.
-		inTree := filepath.Join(repoRoot, "bin", "agentic-sdlc")
-		if info, statErr := os.Stat(inTree); statErr == nil && !info.IsDir() {
-			sdlcBin = inTree
+		//
+		// It read `<repoRoot>/bin/agentic-sdlc`, which was true while the
+		// kernel shipped in this repository and has not existed since it
+		// was extracted to deagy/cadre-kernel. The consequence was only
+		// visible off a developer machine: install.sh puts no kernel on
+		// PATH and sets no AGENTIC_SDLC_BIN, so a clean install downloaded
+		// the kernel, cached it, and then answered every `cadre sdlc` with
+		// "install Agentic SDLC".
+		if shim, ok := orchestration.PackagedKernelShim(repoRoot); ok {
+			sdlcBin = shim
 		}
 	}
 

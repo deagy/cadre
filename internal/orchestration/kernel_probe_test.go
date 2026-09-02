@@ -2,6 +2,8 @@ package orchestration
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -20,7 +22,7 @@ func noneOnPath(string) []string { return nil }
 func TestAStaleKernelIsReportedAsStale(t *testing.T) {
 	found := func(string) (string, error) { return "/home/someone/.local/bin/agentic-sdlc", nil }
 
-	resolution := ResolveKernel("", "0.14.2", found, noneOnPath, stubRun("0.13.2"))
+	resolution := ResolveKernel("", "0.14.2", found, noneOnPath, stubRun("0.13.2"), "")
 
 	if !resolution.OK {
 		t.Fatalf("a kernel that answered was reported unreachable: %+v", resolution)
@@ -37,7 +39,7 @@ func TestThePinnedKernelIsNotFlagged(t *testing.T) {
 	found := func(string) (string, error) { return "/usr/local/bin/agentic-sdlc", nil }
 
 	for _, version := range []string{"0.14.2", "0.14.3", "0.15.0", "1.0.0"} {
-		resolution := ResolveKernel("", "0.14.2", found, noneOnPath, stubRun(version))
+		resolution := ResolveKernel("", "0.14.2", found, noneOnPath, stubRun(version), "")
 		if resolution.TooOld {
 			t.Errorf("%s was flagged against a 0.14.2 pin", version)
 		}
@@ -50,7 +52,7 @@ func TestThePinnedKernelIsNotFlagged(t *testing.T) {
 func TestAnUnreadableVersionIsNotCalledStale(t *testing.T) {
 	found := func(string) (string, error) { return "/usr/local/bin/agentic-sdlc", nil }
 
-	resolution := ResolveKernel("", "0.14.2", found, noneOnPath, stubRun("devel +abc123"))
+	resolution := ResolveKernel("", "0.14.2", found, noneOnPath, stubRun("devel +abc123"), "")
 	if resolution.TooOld {
 		t.Errorf("an unparseable version was called stale: %+v", resolution)
 	}
@@ -64,7 +66,7 @@ func TestEverySecondKernelOnPathIsNamed(t *testing.T) {
 		return []string{"/home/someone/.local/bin/agentic-sdlc", "/usr/local/bin/agentic-sdlc"}
 	}
 
-	resolution := ResolveKernel("", "0.14.2", found, all, stubRun("0.14.2"))
+	resolution := ResolveKernel("", "0.14.2", found, all, stubRun("0.14.2"), "")
 	if len(resolution.Shadowed) != 1 || resolution.Shadowed[0] != "/usr/local/bin/agentic-sdlc" {
 		t.Errorf("the shadowed kernel was not named: %+v", resolution.Shadowed)
 	}
@@ -77,7 +79,7 @@ func TestTheOverrideWins(t *testing.T) {
 		return "", errors.New("unreachable")
 	}
 
-	resolution := ResolveKernel("/explicit/agentic-sdlc", "0.14.2", found, noneOnPath, stubRun("0.14.2"))
+	resolution := ResolveKernel("/explicit/agentic-sdlc", "0.14.2", found, noneOnPath, stubRun("0.14.2"), "")
 	if resolution.Source != "AGENTIC_SDLC_BIN" || resolution.Path != "/explicit/agentic-sdlc" {
 		t.Errorf("the override did not win: %+v", resolution)
 	}
@@ -88,11 +90,78 @@ func TestTheOverrideWins(t *testing.T) {
 func TestNothingReachableSaysSo(t *testing.T) {
 	missing := func(string) (string, error) { return "", errors.New("not found") }
 
-	resolution := ResolveKernel("", "0.14.2", missing, noneOnPath, stubRun("0.14.2"))
+	resolution := ResolveKernel("", "0.14.2", missing, noneOnPath, stubRun("0.14.2"), "")
 	if resolution.OK || resolution.Path != "" {
 		t.Errorf("expected nothing reachable: %+v", resolution)
 	}
 	if !strings.Contains(resolution.Detail, "standalone") {
 		t.Errorf("the detail does not explain what happens: %q", resolution.Detail)
+	}
+}
+
+// TestThePackagedShimIsFoundWhenNothingIsOnPath.
+//
+// The case a developer machine cannot produce. `install.sh` puts no kernel on
+// PATH and sets no AGENTIC_SDLC_BIN; it runs the packaged shim once to warm the
+// cache and leaves it inside the checkout. Every resolver looked only at
+// AGENTIC_SDLC_BIN and PATH, so a machine that followed the documented
+// instructions had a working kernel and no way to reach it.
+func TestThePackagedShimIsFoundWhenNothingIsOnPath(t *testing.T) {
+	root := t.TempDir()
+	shimDir := filepath.Join(root, "plugin", "plugins", "lifecycle", "bin")
+	if err := os.MkdirAll(shimDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shim := filepath.Join(shimDir, "agentic-sdlc")
+	if err := os.WriteFile(shim, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	missing := func(string) (string, error) { return "", errors.New("not found") }
+	resolution := ResolveKernel("", "0.14.4", missing, noneOnPath, stubRun("0.14.4"), root)
+	if resolution.Path != shim {
+		t.Errorf("resolved %q, want the packaged shim %q", resolution.Path, shim)
+	}
+	if resolution.Source != "packaged plugin" {
+		t.Errorf("source = %q, want %q", resolution.Source, "packaged plugin")
+	}
+}
+
+// TestPATHStillBeatsThePackagedShim.
+//
+// The shim is a last resort, not a new default. An `agentic-sdlc` the operator
+// installed is a choice they made about which kernel runs, and a fallback that
+// overrode it would silently replace their kernel with a downloaded one.
+func TestPATHStillBeatsThePackagedShim(t *testing.T) {
+	root := t.TempDir()
+	shimDir := filepath.Join(root, "plugin", "plugins", "lifecycle", "bin")
+	if err := os.MkdirAll(shimDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(shimDir, "agentic-sdlc"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	found := func(string) (string, error) { return "/usr/local/bin/agentic-sdlc", nil }
+	resolution := ResolveKernel("", "0.14.4", found, noneOnPath, stubRun("0.14.4"), root)
+	if resolution.Source != "PATH" {
+		t.Errorf("source = %q, want PATH -- the packaged shim overrode an installed kernel",
+			resolution.Source)
+	}
+}
+
+// TestNoShimAndNoPathStillReportsNothing.
+//
+// The fallback must not invent a path. A repoRoot with no packaged plugin in it
+// is the ordinary case for a pip or wheel install, and reporting a shim that is
+// not there would turn a clear "no kernel" into an exec failure.
+func TestNoShimAndNoPathStillReportsNothing(t *testing.T) {
+	missing := func(string) (string, error) { return "", errors.New("not found") }
+	resolution := ResolveKernel("", "0.14.4", missing, noneOnPath, stubRun("0.14.4"), t.TempDir())
+	if resolution.Path != "" {
+		t.Errorf("resolved %q from a root with no shim", resolution.Path)
+	}
+	if resolution.Detail == "" {
+		t.Error("no detail explaining why nothing resolved")
 	}
 }

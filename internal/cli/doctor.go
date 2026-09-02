@@ -9,6 +9,7 @@ import (
 	"github.com/deagy/cadre/cli/internal/engine/provider"
 	"github.com/deagy/cadre/cli/internal/knowledge"
 	"github.com/deagy/cadre/cli/internal/orchestration"
+	"github.com/deagy/cadre/cli/internal/platform"
 )
 
 // DoctorCmd is the `cadre doctor` command. Reports which cadre binary is
@@ -66,9 +67,16 @@ func DoctorCmd(args []string) int {
 
 	// Which kernel this machine would actually run. Probed here for the same
 	// reason the store driver is: internal/cli already imports both packages.
+	// repoRoot is passed so this reports the same kernel `cadre sdlc` would
+	// run. Best-effort: outside a checkout there is no packaged shim to find,
+	// and an empty root simply skips that last resort.
+	kernelRoot, rootErr := platform.RepoRoot()
+	if rootErr != nil {
+		kernelRoot = ""
+	}
 	report.Kernel = orchestration.ResolveKernel(
 		os.Getenv("AGENTIC_SDLC_BIN"), provider.KernelVersion, exec.LookPath,
-		orchestration.LookAllOnPath, orchestration.KernelVersionOf)
+		orchestration.LookAllOnPath, orchestration.KernelVersionOf, kernelRoot)
 
 	if asJSON {
 		data, err := json.MarshalIndent(report, "", "  ")
