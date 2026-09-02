@@ -667,6 +667,13 @@ type DeleteStagedResult struct {
 	ContentDigest    string `json:"content_digest"`
 	StatusAtDeletion string `json:"status_at_deletion"`
 	EvidenceRetained bool   `json:"evidence_retained"`
+
+	// ObservedActor is what the process saw when this ran, echoed back so
+	// the distinction is visible at the moment of the deletion rather than
+	// only to whoever reads the evidence table afterwards. The caller
+	// already knows what they passed in --deleted-by; this is the half they
+	// did not choose.
+	ObservedActor string `json:"observed_actor"`
 }
 
 // DeleteStagedRecord deletes a staged record, leaving evidence behind.
@@ -737,13 +744,17 @@ func (s *Store) DeleteStagedRecord(recordID string, input DeleteStagedInput) (*D
 	// Evidence is written first, so a failure in the delete cannot leave a
 	// deletion unrecorded. The record's history goes with the record via
 	// ON DELETE CASCADE; this row is what survives.
+	// Resolved once: the row written and the row reported must not be able
+	// to disagree about what was seen.
+	observed := platform.ObserveActor().String()
+
 	if _, err := tx.Exec(
 		"INSERT INTO staged_record_deletions (record_id, title, content_digest, status_at_deletion, "+
 			"reason, deleted_by, authorized_by, observed_actor, deleted_at) "+
 			"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		recordID, StagedString(frontmatter, "title"), StagedString(frontmatter, "content_digest"),
 		status, input.Reason, input.DeletedBy, authorizedBy,
-		platform.ObserveActor().String(), stagedNow()); err != nil {
+		observed, stagedNow()); err != nil {
 		return nil, fmt.Errorf("cannot record staged deletion evidence for %q: %w", recordID, err)
 	}
 	if _, err := tx.Exec("DELETE FROM staged_records WHERE id = ?", recordID); err != nil {
@@ -759,5 +770,6 @@ func (s *Store) DeleteStagedRecord(recordID string, input DeleteStagedInput) (*D
 		ContentDigest:    StagedString(frontmatter, "content_digest"),
 		StatusAtDeletion: status,
 		EvidenceRetained: true,
+		ObservedActor:    observed,
 	}, nil
 }
