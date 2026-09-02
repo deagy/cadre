@@ -62,6 +62,104 @@ func commandSegments(line string, inFence bool) []string {
 	return segments
 }
 
+// scanMarkdownForVerbs extracts every `cadre <verb>` mention in one file.
+//
+// Split out of the walker so the repository root can be scanned without
+// recursing into it: the root holds hand-authored documents beside every
+// generated and vendored tree in the project.
+func scanMarkdownForVerbs(path string) ([]documentedVerb, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return scanMarkdownLines(path, strings.Split(string(content), "\n")), nil
+}
+
+// scanMarkdownLines is the shared extraction, over lines a caller may have
+// already trimmed.
+func scanMarkdownLines(path string, lines []string) []documentedVerb {
+	var found []documentedVerb
+	inFence := false
+	for index, text := range lines {
+		if strings.HasPrefix(strings.TrimSpace(text), "```") {
+			inFence = !inFence
+			continue
+		}
+		for _, segment := range commandSegments(text, inFence) {
+			if match := knowledgeVerbPattern.FindStringSubmatch(segment); match != nil {
+				found = append(found, documentedVerb{
+					verb: "knowledge " + match[1], file: path, line: index + 1})
+				continue
+			}
+			if match := topLevelVerbPattern.FindStringSubmatch(segment); match != nil {
+				found = append(found, documentedVerb{
+					verb: match[1], file: path, line: index + 1})
+			}
+		}
+	}
+	return found
+}
+
+// linesBeforeDecisionLog truncates a document at its Decision Log heading.
+//
+// Same principle that keeps roster/orchestration/runs/ and the CHANGELOG's
+// dated releases out of this guard: a decision log is a record of what was
+// believed and decided on a date, and a command named in one was real when
+// it was written. ADR-001's log names an undocumented `cadre execute` found
+// during a refactor -- and resolves it three lines later, "Resolved
+// 2026-08-14 by removal." Rewriting that would falsify the record to satisfy
+// a guard, which is the opposite of what the guard is for. The document
+// body above the log is a live claim and is still scanned.
+func linesBeforeDecisionLog(lines []string) []string {
+	for index, text := range lines {
+		trimmed := strings.TrimSpace(text)
+		if strings.HasPrefix(trimmed, "#") && strings.Contains(strings.ToLower(trimmed), "decision log") {
+			return lines[:index]
+		}
+	}
+	return lines
+}
+
+// scanRepoRootMarkdown reads the hand-authored .md files at the repository
+// root, without recursing.
+//
+// This root is not an afterthought either. CP-4 on the capability-parity
+// ultragoal found that the two worst stale-capability documents in the
+// project -- RELEASE_NOTES_PHASE4.md, announcing retention and deletion as
+// COMPLETE and Production Ready, and PHASE4_ROADMAP.md -- sat here, outside
+// every scan root this guard had. Both were corrected by hand, and a
+// phantom verb injected into either one still passed this test, while the
+// same injection into roster/ failed. A correction with no guard behind it
+// is exactly what this criterion exists to prevent, so the guard now
+// reaches the files it was written about.
+//
+// CHANGELOG.md is excluded here because scanUnreleasedChangelog already
+// reads it, and reads only the section that is a claim rather than history.
+func scanRepoRootMarkdown(t *testing.T, repo string) []documentedVerb {
+	t.Helper()
+	entries, err := os.ReadDir(repo)
+	if err != nil {
+		t.Fatalf("reading %s: %v", repo, err)
+	}
+	var found []documentedVerb
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+		if entry.Name() == "CHANGELOG.md" {
+			continue
+		}
+		path := filepath.Join(repo, entry.Name())
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("scanning %s: %v", entry.Name(), err)
+		}
+		lines := linesBeforeDecisionLog(strings.Split(string(content), "\n"))
+		found = append(found, scanMarkdownLines(path, lines)...)
+	}
+	return found
+}
+
 // scanDocumentedKnowledgeVerbs walks the roster for verbs the documents name.
 func scanDocumentedKnowledgeVerbs(t *testing.T, root string) []documentedVerb {
 	t.Helper()
@@ -86,28 +184,11 @@ func scanDocumentedKnowledgeVerbs(t *testing.T, root string) []documentedVerb {
 		if !strings.HasSuffix(path, ".md") {
 			return nil
 		}
-		content, err := os.ReadFile(path)
+		mentions, err := scanMarkdownForVerbs(path)
 		if err != nil {
 			return err
 		}
-		inFence := false
-		for index, text := range strings.Split(string(content), "\n") {
-			if strings.HasPrefix(strings.TrimSpace(text), "```") {
-				inFence = !inFence
-				continue
-			}
-			for _, segment := range commandSegments(text, inFence) {
-				if match := knowledgeVerbPattern.FindStringSubmatch(segment); match != nil {
-					found = append(found, documentedVerb{
-						verb: "knowledge " + match[1], file: path, line: index + 1})
-					continue
-				}
-				if match := topLevelVerbPattern.FindStringSubmatch(segment); match != nil {
-					found = append(found, documentedVerb{
-						verb: match[1], file: path, line: index + 1})
-				}
-			}
-		}
+		found = append(found, mentions...)
 		return nil
 	})
 	if err != nil {
@@ -221,6 +302,7 @@ func TestEveryDocumentedKnowledgeVerbIsAnswerable(t *testing.T) {
 		}
 		documented = append(documented, scanDocumentedKnowledgeVerbs(t, scanRoot)...)
 	}
+	documented = append(documented, scanRepoRootMarkdown(t, repo)...)
 	documented = append(documented, scanUnreleasedChangelog(t, filepath.Join(repo, "CHANGELOG.md"))...)
 	if len(documented) == 0 {
 		t.Fatal("no documented verbs found; this guard would assert nothing")
@@ -284,5 +366,58 @@ func TestTheLiveVerbListMatchesWhatTheDispatcherAnswers(t *testing.T) {
 		if strings.Contains(stderr, "unknown subcommand") {
 			t.Errorf("%q is declared live but the dispatcher does not answer it", verb)
 		}
+	}
+}
+
+// TestTheGuardReachesTheRepositoryRoot pins the scan surface that CP-4 found
+// missing.
+//
+// The capability-parity ultragoal corrected two documents at the repository
+// root -- RELEASE_NOTES_PHASE4.md and PHASE4_ROADMAP.md -- that had announced
+// retention and deletion as complete and production-ready two hours before
+// the commit removing them. The corrections were sound. They also had no
+// guard behind them: this test's own scan roots were roster/ and
+// .agents/skills/, so a phantom verb injected into either root document
+// passed while the same injection into roster/ failed.
+//
+// The criterion those corrections served claims to be enforced rather than
+// restored. It was not, for those two files, and nothing said so -- the
+// per-criterion checks passed because they read the files rather than the
+// mechanism. This test asserts the mechanism, so a future narrowing of the
+// scan roots fails here rather than being discovered by the next audit.
+func TestTheGuardReachesTheRepositoryRoot(t *testing.T) {
+	repo, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "roster")); err != nil {
+		t.Skipf("no roster/ beside this package: %v", err)
+	}
+
+	mentions := scanRepoRootMarkdown(t, repo)
+	if len(mentions) == 0 {
+		t.Fatal("the repository root yielded no verb mentions; the root scan is " +
+			"wired up but reaching nothing, which asserts as little as not scanning it")
+	}
+
+	// Every mention must come from a root-level file, never a nested one:
+	// the root scan is deliberately non-recursive, because the root also
+	// holds the generated and vendored trees.
+	for _, mention := range mentions {
+		if filepath.Dir(mention.file) != repo {
+			t.Errorf("root scan recursed into %s; it must stay at the top level", mention.file)
+		}
+	}
+
+	// And the history exclusion must still hold, or the guard would force a
+	// dated decision log to be rewritten to satisfy it.
+	lines := []string{
+		"Run `cadre knowledge search` for this.",
+		"## 8. Decision Log",
+		"- Removed the undocumented `cadre zzzhistoric` command.",
+	}
+	kept := scanMarkdownLines("x.md", linesBeforeDecisionLog(lines))
+	if len(kept) != 1 || kept[0].verb != "knowledge search" {
+		t.Fatalf("expected only the pre-log mention to survive, got %+v", kept)
 	}
 }
