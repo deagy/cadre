@@ -105,3 +105,42 @@ func TestTheRefusalDoesNotReachLiveFlags(t *testing.T) {
 		}
 	}
 }
+
+// A value that looks like a refused flag is a value, not a request.
+//
+// CP-4 found this by running it: `delete-staged --reason "--retention-days"`
+// was refused as an absent capability instead of deleting the record. That
+// is worse than the parser error the refusal replaced -- it broke a working
+// command, on a perfectly good deletion reason that happened to mention the
+// capability the reason was about.
+func TestAValueThatLooksLikeARefusedFlagIsNotARequest(t *testing.T) {
+	for _, args := range [][]string{
+		{"delete-staged", "--id", "KS-1", "--reason", "--retention-days", "--deleted-by", "x"},
+		{"delete-staged", "--id", "KS-1", "--reason", "--trigger", "--deleted-by", "x"},
+		{"disposition-staged", "--reason", "--as-of", "--id", "KS-1"},
+		{"propose", "--input", "--retention-days"},
+	} {
+		output, _ := runKnowledgeCapturingStderr(t, true, args...)
+		if strings.Contains(output, "belonged to a capability this binary does not have") {
+			t.Fatalf("a flag's value was read as a request: %v\ngot: %s", args, output)
+		}
+	}
+}
+
+// And the same token in flag position is still refused, so the fix above did
+// not simply switch the check off.
+func TestTheFlagItselfIsStillRefusedAfterTheValueFix(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		says string
+	}{
+		{[]string{"search", "--classification", "internal", "--retention-days", "30"}, "retention-days"},
+		{[]string{"search", "--all-sources", "--trigger", "x"}, "trigger"},
+		{[]string{"delete-staged", "--id", "KS-1", "--as-of", "2026-01-01"}, "as-of"},
+	} {
+		output, code := runKnowledgeCapturingStderr(t, false, tc.args...)
+		if code != 2 || !strings.Contains(output, "--"+tc.says) {
+			t.Fatalf("a real request was not refused: %v (exit %d)\ngot: %s", tc.args, code, output)
+		}
+	}
+}

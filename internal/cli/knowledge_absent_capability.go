@@ -47,19 +47,55 @@ var absentKnowledgeCapabilityFlags = map[string]string{
 		"evidence to read",
 }
 
+// booleanKnowledgeFlags are the flags in this namespace that take no value.
+//
+// Read from the `fs.Bool` declarations across knowledge*.go. Kept as a list
+// because the refusal runs before any flag set is built -- knowing this from
+// the parser would mean parsing, and parsing is what this precedes.
+var booleanKnowledgeFlags = map[string]bool{
+	"all-sources": true, "diverged-from-proposal": true, "dry-run": true,
+	"json": true, "reclaim": true, "render-only": true,
+}
+
 // refuseAbsentKnowledgeCapability reports a retention or erasure request that
 // reaches a live `cadre knowledge` command, and returns true when it did.
 //
 // Checked before flag parsing, because the parser's own error is what this
 // exists to replace.
 func refuseAbsentKnowledgeCapability(args []string) bool {
+	// A token is only a flag if it is not the *value* of the flag before it.
+	//
+	// Scanning argv blind refused `--reason "--retention-days"` -- a
+	// perfectly good deletion reason, on a command that works, mentioning
+	// the capability the reason is about. The refusal fired instead of the
+	// deletion. That is worse than the parser error this replaced: it broke
+	// a working command to improve a message.
+	//
+	// The heuristic is `--flag value`: a token following a dashed token with
+	// no `=` is that flag's value and is not examined -- unless that flag is
+	// boolean, where the next token is the following flag rather than a
+	// value.
+	//
+	// booleanKnowledgeFlags exists for that case, and its failure mode is
+	// deliberately one-directional: a boolean flag missing from the list
+	// makes the refusal skip the token after it, so a real request degrades
+	// to the parser error -- exactly the pre-refusal behaviour. A list that
+	// is merely out of date can therefore never refuse work someone was
+	// entitled to do, which is the failure that matters.
+	skipNext := false
 	for _, arg := range args {
 		if arg == "--" {
 			break // everything after is positional
 		}
+		if skipNext {
+			skipNext = false
+			continue
+		}
 		name := strings.TrimLeft(arg, "-")
 		if index := strings.IndexByte(name, '='); index >= 0 {
 			name = name[:index]
+		} else if strings.HasPrefix(arg, "-") && !booleanKnowledgeFlags[name] {
+			skipNext = true
 		}
 		if !strings.HasPrefix(arg, "-") || name == "" {
 			continue
