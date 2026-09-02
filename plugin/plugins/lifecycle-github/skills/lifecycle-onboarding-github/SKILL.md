@@ -33,7 +33,7 @@ lighter (a plain checklist, GitHub Issues), say so and stop — this skill is
 specifically for G1-G10 gate tracking.
 
 Check whether `agentic-sdlc` is reachable (`AGENTIC_SDLC_BIN` env var,
-`agentic-sdlc` on `PATH`, or the shim packaged with this plugin at
+`agentic-sdlc` on `PATH`, or the shim packaged with the lifecycle plugin at
 `plugins/lifecycle/bin/agentic-sdlc`). If not, tell the human in plain terms
 that a one-time install step is needed, offer to do it (`./install.sh
 --with-lifecycle`, or an archive from a
