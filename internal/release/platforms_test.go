@@ -605,3 +605,67 @@ func TestEveryEngineCrossBuildLegForcesCgo(t *testing.T) {
 		t.Error("no engine cross-build leg found; this guard checked nothing")
 	}
 }
+
+// TestTheWheelPlatformsMatchTheContract.
+//
+// release.yml builds one wheel per platform from a here-doc list, because pip
+// needs a PEP 425 tag per platform and the contract has no opinion about those.
+// The list is therefore hand-kept, and it has drifted from the contract twice:
+// once when darwin/amd64 left, and again when linux/arm64 returned.
+//
+// Both times the wheel-count check caught it -- at the last job of the release,
+// after every build in the matrix had already succeeded, on a number. That is a
+// correct guard in the wrong place. This one reads the same list and fails in a
+// test suite instead.
+//
+// It compares the goos/goarch pairs only. The tags stay unchecked here on
+// purpose: asserting them would mean encoding pip's platform vocabulary in this
+// repository, and a wrong tag has its own guard -- the wheel-contents step,
+// which installs against the tag it claims.
+func TestTheWheelPlatformsMatchTheContract(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatalf("resolving the repository root: %v", err)
+	}
+	content, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release.yml"))
+	if err != nil {
+		t.Fatalf("reading release.yml: %v", err)
+	}
+
+	block := wheelPlatformBlock.FindSubmatch(content)
+	if block == nil {
+		t.Fatal("no PLATFORMS here-doc in release.yml. If the wheel step stopped " +
+			"using one, this guard is stale; if it was renamed, the guard now " +
+			"passes over a list nothing checks")
+	}
+
+	listed := map[string]bool{}
+	for _, line := range strings.Split(string(block[1]), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		listed[fields[0]+"/"+fields[1]] = true
+	}
+	if len(listed) == 0 {
+		t.Fatal("the PLATFORMS here-doc parsed to nothing; this guard checked nothing")
+	}
+
+	contracted := map[string]bool{}
+	for _, platform := range PlatformsFor(ProgramCLI) {
+		contracted[platform.String()] = true
+		if !listed[platform.String()] {
+			t.Errorf("the CLI publishes %s but release.yml builds no wheel for it; "+
+				"the release fails at the wheel count after the whole matrix has built",
+				platform)
+		}
+	}
+	for platform := range listed {
+		if !contracted[platform] {
+			t.Errorf("release.yml builds a wheel for %s, which the CLI does not "+
+				"publish; there will be no binary to put in it", platform)
+		}
+	}
+}
+
+var wheelPlatformBlock = regexp.MustCompile(`(?s)<<'PLATFORMS'\n(.*?)\n\s*PLATFORMS`)

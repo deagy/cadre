@@ -629,9 +629,17 @@ jobs:
           version="${{ steps.version.outputs.value }}"
           mkdir -p wheel-binaries
 
-          # goos goarch platform-tag exe-suffix. Kept in step with the build
-          # matrix above and with internal/release/platforms.go, which the
-          # contract test guards.
+          # goos goarch platform-tag exe-suffix.
+          #
+          # This list is the wheels' side of the platform contract, and it has
+          # drifted from it twice. The count check below caught it both times,
+          # at the last job of the release with every build already succeeded.
+          # TestTheWheelPlatformsMatchTheContract now compares the pairs here
+          # against internal/release.PlatformsFor, so the drift fails in a test
+          # rather than after a twenty-minute build matrix.
+          #
+          # The PEP 425 tags stay hand-written: they are pip's vocabulary, not
+          # this repository's, and the contract has no opinion about them.
           while read -r goos goarch tag suffix; do
             archive="flat-dist/cadre-v$version-$goos-$goarch"
             if [ "$goos" = "windows" ]; then
@@ -654,6 +662,7 @@ jobs:
             echo "built $(basename "$built")"
           done <<'PLATFORMS'
           linux amd64 manylinux_2_17_x86_64 
+          linux arm64 manylinux_2_17_aarch64 
           darwin arm64 macosx_11_0_arm64 
           windows amd64 win_amd64 .exe
           PLATFORMS
