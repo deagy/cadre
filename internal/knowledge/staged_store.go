@@ -49,6 +49,13 @@ CREATE TABLE IF NOT EXISTS staged_records (
   frontmatter_json TEXT NOT NULL,
   body TEXT NOT NULL,
   content_digest TEXT NOT NULL,
+  -- What the process saw when this record was staged, beside the
+  -- caller-asserted staged_by in frontmatter_json. A column rather than a
+  -- frontmatter key on purpose: frontmatter is the record's own contract,
+  -- validated against proposed-knowledge.schema.json and exported to
+  -- proposed-knowledge/, and an observation is the store's note about how
+  -- the record arrived rather than part of what the record claims.
+  observed_actor TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -61,6 +68,11 @@ CREATE TABLE IF NOT EXISTS staged_record_dispositions (
   classification_used TEXT NOT NULL,
   diverged_from_proposal INTEGER NOT NULL,
   decided_by TEXT NOT NULL,
+  -- Beside decided_by, which is caller-asserted. disposition-staged
+  -- refuses a decider equal to the stager, and that check still compares
+  -- two asserted strings -- this records what the process saw while it
+  -- did so, and changes nothing about the comparison.
+  observed_actor TEXT NOT NULL DEFAULT '',
   decided_at TEXT NOT NULL,
   PRIMARY KEY (record_id, sequence)
 );
@@ -144,7 +156,14 @@ type DispositionEntry struct {
 	ClassificationUsed   string `json:"classification_used"`
 	DivergedFromProposal bool   `json:"diverged_from_proposal"`
 	DecidedBy            string `json:"decided_by"`
-	DecidedAt            string `json:"decided_at"`
+
+	// ObservedActor is what the process saw when this decision was
+	// recorded, beside the caller-asserted DecidedBy. Empty for a
+	// disposition restored from a history sidecar: that decision was made
+	// by a process this one cannot speak for.
+	ObservedActor string `json:"observed_actor"`
+
+	DecidedAt string `json:"decided_at"`
 }
 
 // StagedImportAuthorization records who authorized admitting one
@@ -308,9 +327,30 @@ func (s *Store) ListStagedRecords(status string) ([]StagedSummary, error) {
 // the frontmatter carries the *current* disposition while this carries all of
 // them. A record deferred and later accepted retains both, which is exactly
 // what a single overwritten field would lose.
+// StagedObservedActor returns what the process saw when a record was staged,
+// beside the caller-asserted `staged_by` in its frontmatter.
+//
+// Separate from GetStagedRecord because it is not part of the record: the
+// frontmatter is the record's own contract, validated and exported, while
+// this is the store's note about how the record arrived. A caller reading
+// the record gets what the record claims; a caller asking this gets what
+// the store saw.
+func (s *Store) StagedObservedActor(recordID string) (string, error) {
+	var observed string
+	err := s.db.QueryRow(
+		"SELECT observed_actor FROM staged_records WHERE id = ?", recordID).Scan(&observed)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("%q: %w", recordID, ErrStagedRecordNotFound)
+	}
+	if err != nil {
+		return "", fmt.Errorf("cannot read observed actor for %q: %w", recordID, err)
+	}
+	return observed, nil
+}
+
 func (s *Store) StagedHistory(recordID string) ([]DispositionEntry, error) {
 	rows, err := s.db.Query(
-		"SELECT sequence, action, reason, classification_used, diverged_from_proposal, decided_by, "+
+		"SELECT sequence, action, reason, classification_used, diverged_from_proposal, decided_by, observed_actor, "+
 			"decided_at FROM staged_record_dispositions WHERE record_id = ? ORDER BY sequence", recordID)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read disposition history for %q: %w", recordID, err)
@@ -322,7 +362,7 @@ func (s *Store) StagedHistory(recordID string) ([]DispositionEntry, error) {
 		var entry DispositionEntry
 		var diverged int
 		if err := rows.Scan(&entry.Sequence, &entry.Action, &entry.Reason, &entry.ClassificationUsed,
-			&diverged, &entry.DecidedBy, &entry.DecidedAt); err != nil {
+			&diverged, &entry.DecidedBy, &entry.ObservedActor, &entry.DecidedAt); err != nil {
 			return nil, fmt.Errorf("cannot read disposition history row: %w", err)
 		}
 		entry.DivergedFromProposal = diverged != 0
@@ -457,13 +497,16 @@ func (s *Store) PutStagedRecord(frontmatter map[string]any, body string) (string
 	}
 
 	_, err = s.db.Exec(
-		"INSERT INTO staged_records (id, status, frontmatter_json, body, content_digest, created_at, updated_at) "+
-			"VALUES (?, ?, ?, ?, ?, ?, ?) "+
+		"INSERT INTO staged_records (id, status, frontmatter_json, body, content_digest, "+
+			"observed_actor, created_at, updated_at) "+
+			"VALUES (?, ?, ?, ?, ?, ?, ?, ?) "+
 			"ON CONFLICT(id) DO UPDATE SET status = excluded.status, "+
 			"frontmatter_json = excluded.frontmatter_json, body = excluded.body, "+
-			"content_digest = excluded.content_digest, updated_at = excluded.updated_at",
+			"content_digest = excluded.content_digest, "+
+			"observed_actor = excluded.observed_actor, updated_at = excluded.updated_at",
 		recordID, StagedString(frontmatter, "status"), string(encoded), body,
-		StagedString(frontmatter, "content_digest"), createdAt, now)
+		StagedString(frontmatter, "content_digest"), platform.ObserveActor().String(),
+		createdAt, now)
 	if err != nil {
 		return "", fmt.Errorf("cannot store staged record %q: %w", recordID, err)
 	}
@@ -614,9 +657,10 @@ func (s *Store) DispositionStagedRecord(recordID string, input DispositionInput)
 	}
 	_, err = s.db.Exec(
 		"INSERT INTO staged_record_dispositions (record_id, sequence, action, reason, classification_used, "+
-			"diverged_from_proposal, decided_by, decided_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			"diverged_from_proposal, decided_by, observed_actor, decided_at) "+
+			"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		recordID, sequence, input.Action, input.Reason, input.ClassificationUsed, diverged,
-		input.DecidedBy, stagedNow())
+		input.DecidedBy, platform.ObserveActor().String(), stagedNow())
 	if err != nil {
 		return nil, fmt.Errorf("cannot record disposition for %q: %w", recordID, err)
 	}

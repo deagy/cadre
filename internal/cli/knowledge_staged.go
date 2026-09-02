@@ -414,11 +414,20 @@ func knowledgeStagedShow(store *knowledge.Store, args []string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	// What the store saw when this arrived, beside what the record claims
+	// in `staged_by`. Surfaced here because this is where a reader asks who
+	// staged something -- a disclosure that lives only in SECURITY.md is a
+	// disclosure the reader has to already know to look for.
+	observed, err := store.StagedObservedActor(*recordID)
+	if err != nil {
+		return nil, err
+	}
 	return map[string]any{
 		"id":                    *recordID,
 		"frontmatter":           frontmatter,
 		"body":                  body,
 		"text":                  text,
+		"observed_actor":        observed,
 		"disposition_history":   history,
 		"import_authorizations": authorizations,
 	}, nil

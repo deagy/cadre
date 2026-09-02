@@ -359,3 +359,57 @@ func TestAnAssertedActorDoesNotReplaceTheObservedOne(t *testing.T) {
 			row.ObservedActor)
 	}
 }
+
+// All four actor flags, not just the deletion path.
+//
+// The first attempt at this criterion covered `--deleted-by` and
+// `--authorized-by` and argued deletion was where an unverifiable actor
+// costs most. Verification disagreed, and the argument that settled it came
+// from the spec itself: its neighbouring criterion rules out disclosure that
+// lives "not only in SECURITY.md", so a runtime record is what the bar
+// means. `staged_by` and `decided_by` get the same treatment.
+func TestStagingAndDispositionRecordWhatWasObserved(t *testing.T) {
+	store := testStagedStore(t)
+	recordID := testStageRecord(t, store, "KS-20260101-four-flags")
+
+	observed, err := store.StagedObservedActor(recordID)
+	if err != nil {
+		t.Fatalf("reading the staged observation: %v", err)
+	}
+	if observed == "" {
+		t.Fatal("propose recorded no observation beside the asserted staged_by")
+	}
+	if observed == testStagedProposer {
+		t.Fatalf("the observation equals the asserted stager (%q); a flag must not set it", observed)
+	}
+
+	if _, err := store.DispositionStagedRecord(recordID, DispositionInput{
+		Action:             "accepted",
+		Reason:             "checking the disposition observation",
+		ClassificationUsed: "internal",
+		DecidedBy:          "a-different-steward",
+	}); err != nil {
+		t.Fatalf("disposition: %v", err)
+	}
+
+	history, err := store.StagedHistory(recordID)
+	if err != nil {
+		t.Fatalf("reading history: %v", err)
+	}
+	if len(history) != 1 {
+		t.Fatalf("expected one disposition, got %d", len(history))
+	}
+	entry := history[0]
+	if entry.DecidedBy != "a-different-steward" {
+		t.Fatalf("the asserted decider was lost: %q", entry.DecidedBy)
+	}
+	if entry.ObservedActor == "" {
+		t.Fatal("disposition-staged recorded no observation beside the asserted decided_by")
+	}
+	if entry.ObservedActor == entry.DecidedBy {
+		t.Fatalf("the observation equals the assertion (%q)", entry.ObservedActor)
+	}
+	if !strings.Contains(entry.ObservedActor, ":") {
+		t.Fatalf("observed actor %q reads as a bare name", entry.ObservedActor)
+	}
+}

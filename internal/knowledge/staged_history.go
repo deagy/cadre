@@ -240,6 +240,10 @@ func (s *Store) PutStagedHistory(recordID string, history []DispositionEntry) (i
 			diverged = 1
 		}
 		if _, err := tx.Exec(
+			// observed_actor is left empty deliberately. This restores a
+			// decision made elsewhere, at some earlier time, by a process
+			// this one cannot speak for -- writing what *this* process sees
+			// would claim to have observed something it did not.
 			"INSERT INTO staged_record_dispositions (record_id, sequence, action, reason, "+
 				"classification_used, diverged_from_proposal, decided_by, decided_at) "+
 				"VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
