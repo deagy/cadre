@@ -430,3 +430,74 @@ func TestPluginLayoutStillBeatsAWheelInstall(t *testing.T) {
 		t.Errorf("root = %q found=%v, want the plugin's own suite/", got, found)
 	}
 }
+
+// The project-tier walk must not reach the home directory.
+//
+// Issue #249. `find_project_local_config` checked each directory before
+// testing the .git boundary, and that boundary only exists when a project
+// root does. From a directory with no .git anywhere above it, the walk
+// climbed to $HOME -- where `~/.agents/<store>/config.json` is the *global*
+// store's own configuration. The same directory then answered to both
+// tiers depending only on where the caller stood.
+//
+// The consequences were all silent: KNOWLEDGE_STORE_HOME appeared to do
+// nothing, and writes landed in the shared store while the caller believed
+// they were project-scoped. That happened during verification of another
+// issue and needed a deletion with a named authorized human to reverse.
+//
+// The issue closes noting "No test pins the current behaviour." This is it.
+func TestTheProjectWalkStopsBelowHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // Windows
+
+	// The global store's own config, exactly where it lives by default.
+	globalDir := filepath.Join(home, ".agents", "knowledge-store")
+	if err := os.MkdirAll(globalDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	globalConfig := filepath.Join(globalDir, "config.json")
+	if err := os.WriteFile(globalConfig, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// A directory under $HOME with no .git between it and home.
+	deep := filepath.Join(home, "work", "a", "b")
+	if err := os.MkdirAll(deep, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	relative := filepath.Join(".agents", "knowledge-store", "config.json")
+	if found, ok := FindFileAtProjectRoot(relative, deep); ok {
+		t.Fatalf("the walk reached the home directory and returned %q as project-local.\n"+
+			"  That file is the global store's own config, so the global store would resolve\n"+
+			"  as tier 1 and KNOWLEDGE_STORE_HOME would be silently ignored.", found)
+	}
+}
+
+// The bound must not break the case it shares a function with: a genuine
+// project-local file below home is still found.
+func TestAProjectLocalFileBelowHomeIsStillFound(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	project := filepath.Join(home, "work", "proj")
+	configDir := filepath.Join(project, ".agents", "knowledge-store")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(configDir, "config.json")
+	if err := os.WriteFile(want, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	relative := filepath.Join(".agents", "knowledge-store", "config.json")
+	got, ok := FindFileAtProjectRoot(relative, project)
+	if !ok {
+		t.Fatal("a project-local config in the working directory was not found")
+	}
+	if got != want {
+		t.Fatalf("found %q, want %q", got, want)
+	}
+}

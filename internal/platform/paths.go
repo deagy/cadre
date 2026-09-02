@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // ErrRepoRootNotFound is returned by RepoRoot when no .git boundary is found
@@ -85,6 +86,21 @@ func FindProjectRoot(from string) (string, error) {
 // .git (the project boundary) if no match is found first, so a file above
 // the project root is never picked up.
 //
+// The walk also stops *below* the user's home directory, and that bound is
+// the point rather than a safety margin. The .git boundary holds only when
+// a project root exists; with no .git anywhere in the ancestry the walk
+// otherwise climbed to $HOME, where ~/.agents/<store>/config.json is the
+// *global* store's own configuration. The same directory then answered to
+// both tiers depending only on where the caller stood: the global store
+// resolved as project-local, KNOWLEDGE_STORE_HOME was consulted and
+// silently ignored, and writes landed in the shared store while the caller
+// believed they were project-scoped. That is not hypothetical -- it
+// happened during verification and needed an authorized deletion to
+// reverse (issue #249).
+//
+// A project cannot be $HOME, so refusing to look there costs nothing and
+// removes the aliasing entirely.
+//
 // This is the single implementation of the walk-up-to-.git discovery
 // convention shared across this repository's project-local override
 // mechanisms -- mirrors roster/shared/src/resolve.py's
@@ -108,8 +124,20 @@ func FindFileAtProjectRoot(relativePath, start string) (string, bool) {
 		return "", false
 	}
 
+	// Resolved once, outside the loop: a walk that consults the environment
+	// on every iteration can change its own boundary mid-walk.
+	home, homeErr := os.UserHomeDir()
+	if homeErr == nil {
+		home, _ = filepath.Abs(home)
+	}
+
 	const maxWalkDepth = 64
 	for i := 0; i < maxWalkDepth; i++ {
+		// At or above home is not a project. Checked before the candidate,
+		// because the file that would match there is the global store's own.
+		if homeErr == nil && (current == home || isAncestorOf(current, home)) {
+			return "", false
+		}
 		candidate := filepath.Join(current, relativePath)
 		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
 			return candidate, true
@@ -124,6 +152,15 @@ func FindFileAtProjectRoot(relativePath, start string) (string, bool) {
 		current = parent
 	}
 	return "", false
+}
+
+// isAncestorOf reports whether dir is a strict ancestor of other.
+func isAncestorOf(dir, other string) bool {
+	rel, err := filepath.Rel(dir, other)
+	if err != nil || rel == "." {
+		return false
+	}
+	return !strings.HasPrefix(rel, "..")
 }
 
 // FindInstallationRoot locates the root directory of *this CLI's own
