@@ -44,6 +44,12 @@ var knowledgeStagedSubcommands = []string{
 	"disposition-staged",
 	"ingest-accepted",
 	"delete-staged",
+	// Not staged-record verbs, but routed here because they need the same
+	// staged store: that is where deletion evidence lives, beside the
+	// evidence for staged records, so both halves of "what was removed and
+	// why" are readable from one place.
+	"delete-ingested",
+	"deletion-evidence",
 }
 
 // IsKnowledgeStagedSubcommand reports whether name is a staged-record verb.
@@ -244,6 +250,10 @@ func runKnowledgeStaged(cfg *knowledge.Config, subcommand string, args []string)
 		return knowledgeStagedIngestAccepted(store, cfg, args)
 	case "delete-staged":
 		return knowledgeStagedDelete(store, args)
+	case "delete-ingested":
+		return knowledgeDeleteIngested(cfg, args)
+	case "deletion-evidence":
+		return knowledgeDeletionEvidence(cfg, args)
 	default:
 		return nil, fmt.Errorf("unknown staged-record subcommand: %s", subcommand)
 	}

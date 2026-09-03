@@ -86,15 +86,6 @@ var pythonEraVerbs = map[string]string{
 	"retention-report": "per-message retention windows were a Python-era capability; this " +
 		"binary records none, so there is nothing to report on. Whether that is restored or " +
 		"declared absent is an open decision",
-	"delete-ingested": "deleting ingested content, with the evidence the policy describes, is " +
-		"not a capability this binary has. Content lives in a recall store, whose Go API " +
-		"deletes by document or chunk id -- note that `recall`'s own CLI exposes no delete " +
-		"command either, so this is a library call, not something to run",
-	"deletion-evidence": "the Python CLI's verb covered evidence for staged records and for " +
-		"ingested content. Half of it exists here: `deletion-evidence-staged` reads back what " +
-		"`delete-staged` wrote to `staged_record_deletions`. The ingested half does not, and " +
-		"cannot -- no command here deletes ingested content, so there is no evidence of it to " +
-		"read",
 }
 
 // AnswerableKnowledgeVerbs is every `cadre knowledge <verb>` this CLI answers
@@ -145,6 +136,11 @@ Subcommands:
 Proposal workflow (separate from retrieval, routed before this command):
   propose, show-staged, list-staged, import-staged, disposition-staged,
   ingest-accepted, delete-staged, deletion-evidence-staged
+
+Removing ingested content:
+  delete-ingested      Remove an ingested document and record why
+  deletion-evidence    Read back what was removed, by whom, and whether
+                       anything verified the name they gave
 
 The retrieval engine moved to recall (https://github.com/deagy/recall).
 Verbs that maintained cadre's own engine are retired; running one names the
