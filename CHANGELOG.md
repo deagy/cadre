@@ -9,6 +9,29 @@ that. New adopters should start with the
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.7.7
+
+**Fixes 0.7.6, whose server support did not work.** 0.7.6 announced that a
+knowledge config could name a `recall-server` and that cadre would record the
+subject it authenticates. `LoadConfig` never read the `server` block, so the
+setting had no effect and the authenticated path could not be reached from a
+released binary at all. It is read now, and a malformed block or a credential
+with no URL refuses rather than being ignored — silently dropping either would
+leave a caller believing their records carry an authenticated subject when they
+carry this machine's OS user.
+
+**A credential is never recorded as an identity.** recall's API-key
+authenticators return the presented key as the subject, which is reasonable for
+them and unsafe to persist: a staged record carries `observed_actor` into a
+file, and this repository refuses secret-shaped config keys precisely to keep
+credentials off disk. cadre now refuses such a subject and says so, rather than
+storing or hashing it. Use an authenticator whose subject names a person — JWT
+— and it is recorded.
+
+Requires recall 0.3.5 or later, which additionally fixes concurrent writes to a
+shared store and adds end-to-end namespace isolation coverage.
+
+
 ## 0.7.6
 
 **Separation of duties compares who ran the command, where that can be
