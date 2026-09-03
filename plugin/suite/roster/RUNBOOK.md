@@ -79,7 +79,7 @@ Use `catalog.yaml` when an orchestrator needs a machine-readable role inventory.
 `internal/orchestration/schema_validate.go` is a third, independent check over `catalog.yaml`/`routing.json`, distinct from and additive to the two above -- it does not replace either:
 
 - `internal/generators/catalog_generation.go --check` answers "did you forget to regenerate after editing `AGENT.md` frontmatter" (generation drift), and only works when the frontmatter sources are available to regenerate against.
-- `internal/orchestration/routing_health_test.go` answers "is every catalog agent reachable from routing.json, and does every routing.json agent reference resolve to a real catalog agent" (reachability/orphan/dangling-reference coverage), assuming both files already parsed and are well-typed. It also answers one question internal to routing.json: does any rule's `exclude_paths` fully shadow one of its own `paths` globs, leaving that glob dead while the rule keeps its `reviewers`/`human_gate` and quietly matches on keywords alone (or never matches at all, if it has no keywords). That verdict is exact, not sampled: `internal/orchestration/glob_containment.go` decides `L(paths[i]) ⊆ ⋃L(exclude_paths)` as regular-language containment, which this glob dialect makes decidable — so a finding means every path the glob could ever match is excluded, including when only the *union* of several exclusions achieves it. A pattern that exceeds the decision procedure's state budget is skipped rather than reported, making a missed finding its only imprecision.
+- `internal/orchestration/routing_health_test.go` answers "is every catalog agent reachable from routing.json, and does every routing.json agent reference resolve to a real catalog agent" (reachability/orphan/dangling-reference coverage), assuming both files already parsed and are well-typed. It also answers one question internal to routing.json: does any rule's `exclude_paths` fully shadow one of its own `paths` globs, leaving that glob dead while the rule keeps its `reviewers`/`human_gate` and quietly matches on keywords alone (or never matches at all, if it has no keywords). That verdict is exact, not sampled: `internal/selector/match.go` decides `L(paths[i]) ⊆ ⋃L(exclude_paths)` as regular-language containment, which this glob dialect makes decidable — so a finding means every path the glob could ever match is excluded, including when only the *union* of several exclusions achieves it. A pattern that exceeds the decision procedure's state budget is skipped rather than reported, making a missed finding its only imprecision.
 - `internal/orchestration/schema_validate.go` answers "is this file's own shape/type/enum content valid" -- standalone, without `AGENT.md` frontmatter and without invoking any generator first. It validates `catalog.yaml` against `roster/catalog.schema.json` and `routing.json` against `roster/orchestration/routing.schema.json` (both JSON Schema Draft 2020-12, matching the `roster/orchestration/selection.schema.json` precedent), plus a handful of supplementary Python checks for cross-field/consistency properties JSON Schema cannot express cleanly (duplicate `catalog.yaml` role ids, `definition` paths that don't resolve to a real file, `cross_stack.minimum_matches`/`team_recipes[].minimum_matches`/`minimum_members_selected` exceeding their sibling array's length). It reports every finding in one pass, not just the first, with a JSON-pointer-style location per finding.
 
 ```sh
@@ -864,7 +864,7 @@ If the target project uses this repository's cloud stack, use
 `provider/provider.json`, and generated project wrappers are
 static copies bound to that provider version.
 
-For a first task, generate a deterministic dispatch plan with the bundled `plan` command, or drive full lifecycle orchestration with the LangGraph engine in `engine/` — see `engine/README.md` for its CLI and service. Keep lifecycle `required_quality_gates` separate from mutation-oriented `human_gates`, and store task state in the target repository rather than the plugin installation.
+For a first task, generate a deterministic dispatch plan with the bundled `plan` command. Full lifecycle orchestration used to be driven by a LangGraph engine in this repository; that was deleted at `2ccfbf0f` along with the last of the Python, and no replacement ships here — see `roster/RUNBOOK.md` for its CLI and service. Keep lifecycle `required_quality_gates` separate from mutation-oriented `human_gates`, and store task state in the target repository rather than the plugin installation.
 
 Before team adoption:
 
@@ -1114,7 +1114,7 @@ one a caller supplied on purpose.
 `GITLAB_SVC_TOKEN` and the knowledge store's embedding API key are never
 read from, or written to, a cadre config file — they stay direct
 `os.environ` reads in `gitlab_core.resolve_token()` and
-`internal/knowledge/persistence.go`. If a config file contains a
+`internal/knowledge/config.go`. If a config file contains a
 secret-shaped key (`*.token`, `*_token`, `*.api_key`, `*.password`,
 `*.secret`, `gitlab.svc_token`), loading that file fails loudly, naming the
 offending key and never echoing its value.

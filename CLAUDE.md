@@ -10,7 +10,7 @@ A runner-neutral **Cadre** monorepo. Four repositories were merged into this one
 | --- | --- |
 | `roster/` | 159 specialist role definitions (`<phase>/<role>/AGENT.md`), 20 non-authoring context packs, their inventory (`catalog.yaml`), deterministic orchestration/routing, shared policy, and the knowledge store. |
 | *(not here)* | The G1–G10 lifecycle kernel — gate contracts, run-record validation, gate-authority semantics, project initializer — lives at `deagy/cadre-kernel`. The `kernel/` directory was deleted at `11eefd47`. A separately versioned, separately publishable pip distribution. |
-| `engine/` | The LangGraph orchestration engine that drives a task through the gates as a compiled graph (`uv`, Python ≥3.11). |
+| *(deleted)* | The LangGraph orchestration engine drove a task through the gates as a compiled graph. Removed at `2ccfbf0f` with the last of the Python. |
 | `provider/` | The `secure-cloud` provider bundle: profiles, extensions, generated Codex wrappers, and `provider.json`'s `kernel_compatibility` window. |
 | `providers/` | The kernel's own example default provider package. |
 | `plugin/` | Hand-authored plugin distribution sources: the marketplace manifest, the three lifecycle plugin manifests, the three Cline plugins, and packaging tools. |
@@ -97,7 +97,7 @@ This repository now has one Go module of its own (`cmd/`, `internal/`, repositor
 
 **Kernel ownership boundary (read this before touching lifecycle-adjacent code):** the kernel — now the separate repository `deagy/cadre-kernel` — owns lifecycle gate schemas (G1–G10), run-record validation, and gate-authority semantics — that ownership is permanent. `roster/` owns the Secure Cloud role catalog, role policies, workflows, the knowledge store, and the `secure-cloud` provider profile.
 
-Until the merge this was enforced *by construction*: two repositories cannot import each other's internals. That guarantee is gone, and nothing about a single tree stops `roster/` from doing `from agentic_sdlc import validate_repository` and quietly taking over gate evaluation — a change that would look small and reasonable in review. The replacement is `internal/kernel/kernel_boundary_test.go`, which permits exactly two couplings: shelling out to the kernel CLI through `internal/selector/gates.go`, and reading `kernel/contracts/*.json` as data. Roster asks; the kernel answers. `.github/CODEOWNERS` gives `kernel/` and `kernel/contracts/` their own review.
+Until the merge this was enforced *by construction*: two repositories cannot import each other's internals. That guarantee is gone, and nothing about a single tree stops `roster/` from doing `from agentic_sdlc import validate_repository` and quietly taking over gate evaluation — a change that would look small and reasonable in review. The replacement is `internal/orchestration/roster_boundary_test.go`. Roster asks; the kernel answers — and since the kernel is now a separate repository again, the boundary is once more enforced by construction as well.
 
 Never move lifecycle schemas, run-record validators, or gate-authority logic into `roster/`, and never have it infer gate approval, risk acceptance, or compliance applicability for *other* projects — `cadre select` emits a plan only (routes, evidence, primary/review/support agents, workflow, a `teams` array, and lifecycle applicability when `agentic-sdlc` is also on `PATH`); it never retrieves knowledge, invokes agents, approves gates, merges, deploys, or mutates infrastructure. This repository does not run its own `.agentic-sdlc/` overlay and has no lifecycle records of its own.
 
@@ -126,7 +126,7 @@ readable as the provenance record for history predating the merge commit,
 but receive no further changes:
 
 - [`deagy/cadre`](https://github.com/deagy/cadre) — role catalog, routing, knowledge store → `roster/`
-- [`deagy/agentic-sdlc`](https://github.com/deagy/agentic-sdlc) — lifecycle kernel + engine → `kernel/`, `engine/`
+- [`deagy/agentic-sdlc`](https://github.com/deagy/agentic-sdlc) — lifecycle kernel + engine, merged here and since removed: the kernel moved on to `deagy/cadre-kernel`, and the engine was deleted at `2ccfbf0f` (deleted)
 - [`deagy/cadre-lifecycle`](https://github.com/deagy/cadre-lifecycle) — plugin distribution → `plugin/`
 - [`deagy/cadre-profile-secure-cloud`](https://github.com/deagy/cadre-profile-secure-cloud) — a two-file mirror whose `profile.json` was byte-identical to `provider/profiles/secure-cloud/`
 

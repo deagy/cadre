@@ -114,7 +114,7 @@ The kernel is a separate repository, so `cadre sdlc` needs it installed —
 from `AGENTIC_SDLC_BIN`, `PATH`, or the shim the lifecycle plugin packages.
 The orchestration tests run without one, but resolve the lifecycle contract by looking for an
 `agentic-sdlc` executable on `PATH`, so without one they run in *standalone*
-mode; CI sets `AGENTIC_SDLC_BIN` to this repository's own `bin/agentic-sdlc`
+mode; CI sets `AGENTIC_SDLC_BIN` to a kernel installed from `deagy/cadre-kernel`
 to exercise the integrated paths, and you can too. Point the variable
 somewhere else only to use a *different* kernel deliberately.
 
@@ -148,15 +148,13 @@ subdirectory was deleted at `11eefd47`, and the `kernel-v*` releases it was
 published under have been retired so the kernel has one release home. The
 `kernel-v*` tags remain as history and are not added to.
 
-From a checkout, `bin/agentic-sdlc` builds it on first use and execs it —
-no separate clone and no install step:
+Install it from a [cadre-kernel release](https://github.com/deagy/cadre-kernel/releases),
+or run `./install.sh --with-lifecycle`, which does it for you. From a
+*cadre-kernel* checkout, that repository's own `bin/agentic-sdlc` wrapper
+builds and execs the binary on first use — it is not a file here.
 
-```sh
-./bin/agentic-sdlc --version
-```
-
-Put `bin/agentic-sdlc` on `PATH` (a symlink works — it resolves its own
-location), or set `AGENTIC_SDLC_BIN=/path/to/agentic-sdlc`.
+Put the resulting binary on `PATH`, or set
+`AGENTIC_SDLC_BIN=/path/to/agentic-sdlc`.
 
 Either way, once `agentic-sdlc` resolves on `PATH` (or via `AGENTIC_SDLC_BIN`),
 run `cadre sdlc init --root /path/to/target`.
@@ -368,7 +366,7 @@ component-prefixed tags:
 | Component | Version source | Tag |
 | --- | --- | --- |
 | Plugin distribution | `plugin/**/plugin.json` (all 8 manifests) | `plugin-v*` |
-| Lifecycle kernel *(pin only — released from [deagy/cadre-kernel](https://github.com/deagy/cadre-kernel) under `v*`)* | `internal/kernel/provider.go` (`Version`) | none cut here; `kernel-v*` is history |
+| Lifecycle kernel *(pin only — released from [deagy/cadre-kernel](https://github.com/deagy/cadre-kernel) under `v*`)* | `internal/orchestration/kernel_probe.go` | none cut here; `kernel-v*` is history |
 | Cadre CLI | `VERSION` | `cli-v*` |
 
 The prefixes are load-bearing. This repository inherited 25 bare `v*` tags
@@ -380,7 +378,7 @@ rather than failing. Those old tags are left as-is.
 Keep the version lines independent: `provider/provider.json`'s
 `kernel_compatibility` window is only meaningful if the kernel can move
 separately from the role catalog, and
-`internal/kernel/kernel_boundary_test.go` asserts it.
+`internal/orchestration/roster_boundary_test.go` asserts it.
 
 To ship a change through to installed plugins:
 
@@ -390,10 +388,10 @@ To ship a change through to installed plugins:
    `./bin/cadre plugin-version --set X.Y.Z`
 
 Once that lands on `main`, [`release.yml`](.github/workflows/release.yml)
-tags and publishes automatically — no manual `git tag`. The kernel job does
-the same for `kernel/`, and additionally attaches a wheel, an sdist, and
-`SHA256SUMS`, which is what lets the lifecycle `bin/agentic-sdlc` shim verify
-what it downloads.
+tags and publishes automatically — no manual `git tag`. The kernel is
+released from its own repository, `deagy/cadre-kernel`, whose release attaches
+one archive per platform and `SHA256SUMS` — that checksum file is what lets the
+lifecycle plugin's shim verify what it downloads.
 Both jobs are idempotent and only ever tag reviewed, merged content.
 
 **Merging a version-bump PR is the release approval.** The workflow itself

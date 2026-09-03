@@ -181,9 +181,14 @@ The Python dependency-manifest gap tracked by `#189`/`#195`/`#196`/`#197`
 remains open, but on a corrected basis. It was never blocked by genericness
 of the filename — that was never the real test, per the correction above.
 
-**Stated plainly, this is a present-tense coverage gap, not a hypothetical
-one.** Today, a change to a Python dependency manifest (root `pyproject.toml`,
-`kernel/pyproject.toml`, `engine/pyproject.toml`) gets zero default
+**This was a present-tense coverage gap when written, and is now moot.** This
+repository tracks no Python: `kernel/` and `engine/` were both deleted at
+`11eefd47` and `2ccfbf0f` (deleted), and
+`git ls-files '*.py'` returns nothing. The paragraph is kept because the
+reasoning about routing coverage still applies to any manifest type the
+routing table does not name. As written, a change to a Python dependency
+manifest (root `pyproject.toml`, and `kernel/pyproject.toml` (deleted),
+and `engine/pyproject.toml` (deleted)) got zero default
 `supply-chain-security-reviewer`/`security-reviewer` routing — it falls
 through to `needs-triage` unless task wording happens to hit an unrelated
 route's keywords. An otherwise-identical change to a `go.mod`, `go.sum`,
@@ -197,8 +202,8 @@ informed risk — not a passive default — and it remains open because:
   repository-identity-aware predicate, which was the *other* half of what
   `#196` originally gestured at as a possible resolution path.
 
-A future PR adding `**/pyproject.toml` (and the two nested
-`kernel/pyproject.toml` / `engine/pyproject.toml` manifests) to
+A future PR adding `**/pyproject.toml` (and, when they existed, the two
+nested manifests under `kernel/` and `engine/` (deleted)) to
 `supply-chain` would be **consistent with the two-part test above** —
 `supply-chain-security-reviewer` and `security-reviewer` reviewing a Python
 dependency-pin change is exactly the same kind of domain-general,

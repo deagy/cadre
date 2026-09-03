@@ -899,7 +899,7 @@ written to be read before enabling it, not after.
   which is new ground for this register. Bounded by: an operator-configured
   `base_url` only (never caller- or model-supplied, and `global_only` so a
   cloned repository cannot redirect it); redirects refused outright
-  (`_RejectRedirects`, following `internal/knowledge/persistence.go`), so an endpoint cannot move
+  (`_RejectRedirects`, following `internal/orchestration/api_runner_endpoint.go`), so an endpoint cannot move
   the request and its `Authorization` header to a host the operator never
   configured; a response size cap; a request timeout; and a URL policy that
   accepts `https://` anywhere but `http://` only toward a loopback,
