@@ -30,6 +30,7 @@ The suite selects, coordinates, tests, reviews, documents, supports, and escalat
 
 | Goal | Start here |
 | --- | --- |
+| **New here** | **[cadre, the kernel, and recall](docs/the-three-repositories.md)** — what the three are, how they connect, and in what order to adopt them |
 | **Install it** | **[Installing Cadre](docs/INSTALL.md)** — prerequisites, every runner, and authenticating the one you use |
 | Understand the suite | [IDENTITY.md](IDENTITY.md), then [documentation index](docs/README.md) |
 | Adopt this suite in a new project, start to finish | [Adopt-Cadre quickstart](docs/adopt-cadre-quickstart.md) |
