@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"strings"
 
 	"github.com/deagy/cadre/cli/internal/knowledge"
 )
@@ -86,7 +87,16 @@ func knowledgeDeleteIngested(cfg *knowledge.Config, args []string) (any, error) 
 		DeletedBy:     *deletedBy,
 	}
 	if err := store.RecordIngestedDeletion(deletion); err != nil {
-		return nil, err
+		// The content is already gone by this point, so this error is not a
+		// failed command -- it is a command that half-succeeded and left no
+		// trace of the half that worked. Saying only "cannot record the
+		// deletion" invites the reader to run it again, which will refuse
+		// because the chunks are no longer there, and the evidence will
+		// simply never exist.
+		return nil, fmt.Errorf(
+			"%d chunk(s) of %q were removed and the evidence could NOT be written: %w\n\n"+
+				"The content is gone. Re-running will refuse, because there is nothing left "+
+				"to delete. Record this deletion by hand", before, *documentID, err)
 	}
 
 	recorded, err := store.IngestedDeletions(*documentID)
@@ -97,13 +107,42 @@ func knowledgeDeleteIngested(cfg *knowledge.Config, args []string) (any, error) 
 	if len(recorded) > 0 {
 		written = recorded[0]
 	}
-	return map[string]any{
+	result := map[string]any{
 		"document_id":    *documentID,
 		"chunks_removed": before,
 		"evidence":       written,
 		"note": "The content is gone and the evidence is not. The deletion record carries no " +
 			"foreign key to the document, deliberately, so it outlives what it describes.",
-	}, nil
+	}
+	if scope := describeDeletionScope(cfg); scope != "" {
+		result["scope"] = scope
+	}
+	return result, nil
+}
+
+// describeDeletionScope says, where a caller can see it, that a scoped server
+// credential does not scope this command.
+//
+// `delete-ingested` and `deletion-evidence` open the SQLite file directly.
+// They never reach recall-server, so `ScopedAPIKeyAuth` and the namespace
+// filter -- which do hold on the HTTP path, and were verified there -- are not
+// in the way. A credential scoped to one namespace can delete another
+// namespace's content through this command, and read another namespace's
+// deletion records.
+//
+// That is a property of where the deletion path sits rather than a bug in the
+// scoping, and moving it behind the server is a larger change than this goal
+// took on. What was wrong was that the limit was written down only in a source
+// comment: a colleague configuring a scoped key would reasonably assume it
+// scopes everything the tool does, and nothing they could see said otherwise.
+func describeDeletionScope(cfg *knowledge.Config) string {
+	if cfg == nil || strings.TrimSpace(cfg.Server.URL) == "" {
+		return ""
+	}
+	return "A server credential is configured, and it does not limit this command. " +
+		"delete-ingested and deletion-evidence open the store file directly rather than " +
+		"going through recall-server, so namespace scoping does not apply to them: this " +
+		"can delete content, and read deletion records, outside the credential's namespaces."
 }
 
 func knowledgeDeletionEvidence(cfg *knowledge.Config, args []string) (any, error) {
@@ -130,9 +169,13 @@ func knowledgeDeletionEvidence(cfg *knowledge.Config, args []string) (any, error
 			"actor_verification": describeActorVerification(d.ObservedActor),
 		})
 	}
-	return map[string]any{
+	out := map[string]any{
 		"deletions": verification,
 		"note": "deleted_by is a string the caller supplied. actor_verification says whether " +
 			"anything checked it; see `deletion-evidence-staged` for the staged half.",
-	}, nil
+	}
+	if scope := describeDeletionScope(cfg); scope != "" {
+		out["scope"] = scope
+	}
+	return out, nil
 }

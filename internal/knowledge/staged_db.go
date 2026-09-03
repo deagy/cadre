@@ -116,10 +116,47 @@ func initStagedSchema(db *sql.DB) error {
 }
 
 func execWithBusyRetry(db *sql.DB, statement string) error {
-	deadline := time.Now().Add(BusyTimeout)
+	return execArgsWithBusyRetryFor(db, BusyTimeout, statement)
+}
+
+// EvidenceBusyTimeout is how long a write is retried when losing it would
+// destroy a record of something that already happened.
+//
+// It is twelve times BusyTimeout because the two are answering different
+// questions. An ordinary write that loses a lock race can be re-run: the
+// caller sees an error, tries again, nothing was lost. The deletion-evidence
+// INSERT cannot -- by the time it runs, the content it describes is gone, and
+// re-running the command refuses because there is nothing left to delete. So
+// the failure is not "try again later", it is a permanent hole in an audit
+// trail, and a minute of patience is cheap against that.
+//
+// This is not the fix it first looked like. The obvious reading of CP-4's
+// finding was "the INSERT lacks the retry the schema creation has", and adding
+// one changes nothing on its own: the connection string already sets
+// busy_timeout(5000), so the driver blocks for the whole of BusyTimeout inside
+// the very first Exec and the retry loop finds its deadline already spent. A
+// retry whose budget is consumed before its first check is decoration. What
+// makes it a guard is the longer budget.
+const EvidenceBusyTimeout = 60 * time.Second
+
+// execArgsWithBusyRetryFor is execWithBusyRetry for a statement with arguments
+// and a caller-chosen budget.
+//
+// The retrying helper took no arguments, which quietly meant that every
+// parameterised write -- every INSERT that actually carries data -- went out
+// without a retry. `RecordIngestedDeletion` created its table through the
+// retrying path and wrote the row through a plain `db.Exec` one line later, so
+// the schema was robust to a competing writer and the evidence was not.
+//
+// CP-4 reproduced the consequence deterministically: with a second process
+// holding the write lock, the content was deleted and the record of its
+// deletion was never written. Content gone, evidence absent -- the one outcome
+// a deletion-evidence table exists to make impossible.
+func execArgsWithBusyRetryFor(db *sql.DB, budget time.Duration, statement string, args ...any) error {
+	deadline := time.Now().Add(budget)
 	delay := 10 * time.Millisecond
 	for {
-		_, err := db.Exec(statement)
+		_, err := db.Exec(statement, args...)
 		if err == nil {
 			return nil
 		}
