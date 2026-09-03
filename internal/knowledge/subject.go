@@ -106,7 +106,20 @@ func authenticatedSubject(server ServerConfig) (subject string, credential strin
 		return "", key, err
 	}
 	if key != "" {
+		// Both headers, and the reason is that neither alone reaches every
+		// authenticator recall ships. Its API-key authenticators read
+		// X-API-Key first and fall back to Bearer; its JWT authenticator
+		// reads only Bearer.
+		//
+		// Sending only X-API-Key -- which this did -- left the JWT path
+		// unauthenticated, and the API-key path returns the credential as
+		// the subject, which the caller above refuses to record. Between
+		// them there was no configuration that produced a usable subject at
+		// all: the mechanism was present in the code and dead in practice,
+		// and the refusal message directed operators at JWT, the one path
+		// that could not work.
 		request.Header.Set("X-API-Key", key)
+		request.Header.Set("Authorization", "Bearer "+key)
 	}
 
 	response, err := http.DefaultClient.Do(request)

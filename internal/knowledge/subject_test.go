@@ -118,3 +118,53 @@ func TestACredentialIsNeverRecordedAsTheSubject(t *testing.T) {
 		t.Fatalf("a credential-as-subject was recorded as verified: %q", got)
 	}
 }
+
+// A subject that is not the credential must be recorded.
+//
+// The two tests above cover a server echoing the key back (refused) and a
+// server vouching for nobody (not a subject). Neither covers the case the
+// whole feature exists for: an authenticator whose subject names a person.
+//
+// That gap was not academic. cadre sent only X-API-Key; recall's JWT
+// authenticator reads only Authorization: Bearer, so the one path whose
+// subject is a person never authenticated, while the API-key path returned
+// the credential and was refused. No configuration produced a usable subject,
+// and the mock in the test above hid it by reading whichever header cadre
+// happened to send.
+//
+// This mock reads Bearer specifically, and returns a subject that is not the
+// token -- which is what a JWT authenticator does.
+func TestABearerSubjectThatIsNotTheCredentialIsRecorded(t *testing.T) {
+	const token = "header.payload.signature"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authorization := r.Header.Get("Authorization")
+		if !strings.HasPrefix(authorization, "Bearer ") {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if strings.TrimPrefix(authorization, "Bearer ") != token {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		// A person, not the token -- the distinction the feature turns on.
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"authenticated": true,
+			"subject":       "carol@corp.example",
+		})
+	}))
+	defer server.Close()
+
+	t.Setenv("TEST_RECALL_KEY", token)
+	got := ResolveActorObserver(&Config{
+		Server: ServerConfig{URL: server.URL, APIKeyEnv: "TEST_RECALL_KEY"},
+	})()
+
+	if !IsAuthenticatedSubject(got) {
+		t.Fatalf("a bearer-authenticated subject was not recorded as verified: %q.\n"+
+			"If this fails with the local observation, the credential is not reaching the "+
+			"server on the header its authenticator reads.", got)
+	}
+	if got != authenticatedSubjectPrefix+"carol@corp.example" {
+		t.Fatalf("recorded %q, want the subject the server named", got)
+	}
+}

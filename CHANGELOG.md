@@ -9,6 +9,18 @@ that. New adopters should start with the
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.7.8
+
+**Fixes the last thing keeping 0.7.7's server support unusable.** cadre sent
+the credential only as `X-API-Key`. recall's API-key authenticators read that
+header and return the presented key as the subject, which 0.7.7 correctly
+refuses to record; its JWT authenticator — the one whose subject names a person,
+and the one 0.7.7's refusal message tells you to use — reads only
+`Authorization: Bearer`, and never saw the credential at all. Between them there
+was no configuration that produced a usable authenticated subject. Both headers
+are sent now.
+
+
 ## 0.7.7
 
 **Fixes 0.7.6, whose server support did not work.** 0.7.6 announced that a
