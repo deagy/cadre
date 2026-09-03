@@ -152,6 +152,28 @@ type RetentionConfig struct {
 	RefuseRestrictedWithoutWindow bool            `json:"refuse_restricted_without_window"`
 }
 
+// ServerConfig points the store at a running recall-server.
+//
+// Optional, and absent by default. Its purpose is not performance or sharing
+// but attribution: a server authenticates the caller and decides what that
+// credential names, and that answer is the one thing in an actor field the
+// caller did not choose. Without it, `staged_by` and `decided_by` are strings
+// somebody typed and `observed_actor` is this machine's OS user and git
+// config, which the same somebody owns.
+//
+// The credential is an environment variable *name*, never a value. Config
+// files here refuse secret-shaped keys outright (internal/config/files.go),
+// and a token in a file that gets committed or synced is the failure this
+// avoids by construction rather than by care.
+type ServerConfig struct {
+	// URL is the recall-server base URL. Empty means no server, which is
+	// the default and a supported way to run.
+	URL string `json:"url"`
+
+	// APIKeyEnv names the environment variable holding the credential.
+	APIKeyEnv string `json:"api_key_env"`
+}
+
 // Config is the fully resolved, validated knowledge-store configuration.
 type Config struct {
 	Database  string          `json:"database"`
@@ -159,6 +181,7 @@ type Config struct {
 	Chunking  ChunkingConfig  `json:"chunking"`
 	Ingestion IngestionConfig `json:"ingestion"`
 	Retention RetentionConfig `json:"retention"`
+	Server    ServerConfig    `json:"server"`
 }
 
 // ConfigError is a caller-facing configuration or validation failure. The

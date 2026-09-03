@@ -201,7 +201,17 @@ func openStagedStore(cfg *knowledge.Config) (*knowledge.Store, error) {
 			return nil, err
 		}
 	}
-	return knowledge.OpenStaged(stagedPath)
+	store, err := knowledge.OpenStaged(stagedPath)
+	if err != nil {
+		return nil, err
+	}
+	// Who this process records as having acted. Local observation by
+	// default; the subject a recall-server authenticates when one is
+	// configured. Resolved here, once, rather than per call: asking the
+	// server on every write would turn one attribution question into a
+	// per-operation network dependency.
+	store.SetActorObserver(knowledge.ResolveActorObserver(cfg))
+	return store, nil
 }
 
 // runKnowledgeStaged opens the staged store and dispatches.

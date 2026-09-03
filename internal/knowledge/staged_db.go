@@ -286,3 +286,15 @@ func IsAuthenticatedSubject(observed string) bool {
 	return strings.HasPrefix(observed, authenticatedSubjectPrefix) &&
 		strings.TrimPrefix(observed, authenticatedSubjectPrefix) != ""
 }
+
+// SetActorObserver replaces what this store records as having acted.
+//
+// Package-level rather than a constructor argument because OpenStaged is
+// called from several places and only the CLI has a resolved Config to decide
+// with. Nothing reads a flag: the observation's whole value is that a caller
+// cannot choose it, and an option that let them would dismantle exactly that.
+func (s *Store) SetActorObserver(observe func() string) {
+	if observe != nil {
+		s.observeActor = observe
+	}
+}
