@@ -84,3 +84,37 @@ func TestNoServerKeepsTheLocalObservation(t *testing.T) {
 		t.Fatalf("no server configured produced %q, which reads as verified", got)
 	}
 }
+
+// A server that names the credential as the subject must not have it recorded.
+//
+// recall's API-key authenticators return the presented key as the subject.
+// Persisting that would write a live credential into a staged-record file, in
+// a repository whose config layer hard-errors on secret-shaped keys precisely
+// to keep credentials off disk. Raised by CP-3v as an aside; it is the more
+// serious of the two findings, because the other made a feature unreachable
+// and this one would have leaked.
+func TestACredentialIsNeverRecordedAsTheSubject(t *testing.T) {
+	const secret = "sk-live-do-not-persist-me"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Exactly what APIKeyAuth and ScopedAPIKeyAuth do: the subject is
+		// the key that was presented.
+		presented := r.Header.Get("X-API-Key")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"authenticated": presented != "",
+			"subject":       presented,
+		})
+	}))
+	defer server.Close()
+
+	t.Setenv("TEST_RECALL_KEY", secret)
+	got := ResolveActorObserver(&Config{
+		Server: ServerConfig{URL: server.URL, APIKeyEnv: "TEST_RECALL_KEY"},
+	})()
+
+	if strings.Contains(got, secret) {
+		t.Fatalf("the recorded actor contains the credential: %q", got)
+	}
+	if IsAuthenticatedSubject(got) {
+		t.Fatalf("a credential-as-subject was recorded as verified: %q", got)
+	}
+}

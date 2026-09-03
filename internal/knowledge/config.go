@@ -511,8 +511,29 @@ func LoadConfig(configPath string) (*Config, string, error) {
 		return nil, "", configErrorf("retention.refuse_restricted_without_window must be a boolean")
 	}
 
+	// The server block is optional and absent by default, so a missing key
+	// is not an error. A present one that is not an object is: silently
+	// ignoring a malformed server block would leave a caller believing their
+	// records are attributed to an authenticated subject when they are not,
+	// which is worse than refusing to start.
+	var server ServerConfig
+	if rawServer, present := raw["server"]; present {
+		serverRaw, ok := rawServer.(map[string]any)
+		if !ok {
+			return nil, "", configErrorf("server must be an object when present")
+		}
+		server.URL, _ = serverRaw["url"].(string)
+		server.APIKeyEnv, _ = serverRaw["api_key_env"].(string)
+		if strings.TrimSpace(server.URL) == "" && strings.TrimSpace(server.APIKeyEnv) != "" {
+			return nil, "", configErrorf(
+				"server.api_key_env is set without server.url: a credential with nowhere to " +
+					"send it authenticates nothing")
+		}
+	}
+
 	cfg := &Config{
 		Database: resolvedDatabase,
+		Server:   server,
 		Embedding: EmbeddingConfig{
 			Provider: provider, Model: model, Dimensions: dimensions,
 			BaseURL: baseURL, APIKeyEnv: apiKeyEnv,

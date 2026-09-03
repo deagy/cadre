@@ -41,7 +41,34 @@ func ResolveActorObserver(cfg *Config) func() string {
 		return local
 	}
 
-	subject, err := authenticatedSubject(cfg.Server)
+	subject, credential, err := authenticatedSubject(cfg.Server)
+
+	// A subject that is the credential is not an identity worth writing down.
+	//
+	// recall's API-key authenticators return the presented key as the subject
+	// -- both APIKeyAuth and ScopedAPIKeyAuth do, and for their own purposes
+	// that is reasonable, because the key is what they know. It is not
+	// reasonable to persist: a staged record carries observed_actor into a
+	// file, and this repository's config layer hard-errors on secret-shaped
+	// keys specifically so that credentials do not reach disk. Recording one
+	// as the actor would route a secret to the same place through a door
+	// nobody was watching.
+	//
+	// So this refuses the value rather than storing or hashing it. A digest
+	// would still be derived from a live credential, and would still be a
+	// secret-shaped string in a record a person reads. Configure a JWT
+	// authenticator, whose subject is a claim about a person rather than the
+	// token itself, and this records it.
+	if subject != "" && credential != "" && subject == credential {
+		fmt.Fprintf(os.Stderr,
+			"cadre knowledge: %s authenticated this credential and named it as the subject, "+
+				"which means the subject is the credential itself. Refusing to write that into "+
+				"a record; use an authenticator whose subject names a person, such as JWT. "+
+				"Recording the local observation instead, which names this machine.\n",
+			cfg.Server.URL)
+		return local
+	}
+
 	if err != nil || subject == "" {
 		if err != nil {
 			fmt.Fprintf(os.Stderr,
@@ -61,12 +88,12 @@ func ResolveActorObserver(cfg *Config) func() string {
 // Deliberately its own small request rather than a field on some other
 // response: the question "who does this server say I am" has one answer and
 // wanting it should not require uploading or searching anything.
-func authenticatedSubject(server ServerConfig) (string, error) {
+func authenticatedSubject(server ServerConfig) (subject string, credential string, err error) {
 	key := ""
 	if name := strings.TrimSpace(server.APIKeyEnv); name != "" {
 		key = os.Getenv(name)
 		if key == "" {
-			return "", fmt.Errorf("%s names the credential and is unset or empty", name)
+			return "", "", fmt.Errorf("%s names the credential and is unset or empty", name)
 		}
 	}
 
@@ -76,7 +103,7 @@ func authenticatedSubject(server ServerConfig) (string, error) {
 	endpoint := strings.TrimRight(server.URL, "/") + "/whoami"
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return "", err
+		return "", key, err
 	}
 	if key != "" {
 		request.Header.Set("X-API-Key", key)
@@ -84,12 +111,12 @@ func authenticatedSubject(server ServerConfig) (string, error) {
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		return "", err
+		return "", key, err
 	}
 	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("whoami returned %s", response.Status)
+		return "", key, fmt.Errorf("whoami returned %s", response.Status)
 	}
 
 	var body struct {
@@ -97,13 +124,13 @@ func authenticatedSubject(server ServerConfig) (string, error) {
 		Subject       string `json:"subject"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		return "", err
+		return "", key, err
 	}
 	// A server that vouches for nobody is not an error and is not a subject.
 	// Recording its silence as an identity is the defect this exists to
 	// avoid, one layer further out.
 	if !body.Authenticated {
-		return "", nil
+		return "", key, nil
 	}
-	return body.Subject, nil
+	return body.Subject, key, nil
 }
