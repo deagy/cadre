@@ -36,7 +36,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/deagy/cadre/cli/internal/platform"
 )
 
 // stagedSchema is additive and idempotent, matching database.go's own
@@ -552,7 +551,7 @@ func (s *Store) PutStagedRecord(frontmatter map[string]any, body string) (string
 			"content_digest = excluded.content_digest, "+
 			"observed_actor = excluded.observed_actor, updated_at = excluded.updated_at",
 		recordID, StagedString(frontmatter, "status"), string(encoded), body,
-		StagedString(frontmatter, "content_digest"), platform.ObserveActor().String(),
+		StagedString(frontmatter, "content_digest"), s.observeActor(),
 		createdAt, now)
 	if err != nil {
 		return "", fmt.Errorf("cannot store staged record %q: %w", recordID, err)
@@ -668,6 +667,36 @@ func (s *Store) DispositionStagedRecord(recordID string, input DispositionInput)
 				"a steward other than the proposer must decide, per roster/shared/agent-autonomy.yaml and "+
 				"the knowledge-store steward's role definition.", input.DecidedBy)
 	}
+	// The name check above compares two strings the caller supplied, so it
+	// is satisfied by staging as one name and deciding as another. This one
+	// compares who ran each command -- but only where that is something a
+	// caller could not have chosen.
+	//
+	// A local store cannot supply that. ObserveActor reads the OS user and
+	// git config, and a caller who owns the machine owns both, so two
+	// identical observations there mean "the same machine", which is not the
+	// same claim as "the same person" and is the normal case for one
+	// operator working alone. Refusing on it would remove a workflow that
+	// works today and is not dishonest, only unverified -- and the CLI says
+	// so at the point of use rather than leaving the reader to infer it.
+	//
+	// A subject authenticated by recall-server is different in kind: the
+	// caller presents a credential and the server decides what it names.
+	// That is the value AC-6 asks for, and where it exists this refuses.
+	deciding := s.observeActor()
+	staged, err := s.StagedObservedActor(recordID)
+	if err != nil {
+		return nil, err
+	}
+	if IsAuthenticatedSubject(staged) && staged == deciding {
+		return nil, stagedErrorf(
+			"the same authenticated subject (%s) staged this record and is dispositioning it, "+
+				"as %q and %q. Authorship and approval are separate, and the names differing does "+
+				"not make the people differ: this compares the credential each command "+
+				"authenticated with, not what the caller typed.",
+			strings.TrimPrefix(staged, authenticatedSubjectPrefix),
+			StagedString(frontmatter, "staged_by"), input.DecidedBy)
+	}
 	if strings.TrimSpace(input.Reason) == "" {
 		return nil, stagedErrorf(
 			"a disposition requires a reason: an unexplained decision is not an audit trail")
@@ -707,7 +736,7 @@ func (s *Store) DispositionStagedRecord(recordID string, input DispositionInput)
 			"diverged_from_proposal, decided_by, observed_actor, decided_at) "+
 			"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		recordID, sequence, input.Action, input.Reason, input.ClassificationUsed, diverged,
-		input.DecidedBy, platform.ObserveActor().String(), stagedNow())
+		input.DecidedBy, deciding, stagedNow())
 	if err != nil {
 		return nil, fmt.Errorf("cannot record disposition for %q: %w", recordID, err)
 	}
@@ -738,7 +767,7 @@ func (s *Store) RecordStagedImportAuthorization(recordID, contentDigest, statusA
 		"INSERT OR REPLACE INTO staged_record_imports (record_id, content_digest, status_at_import, "+
 			"authorized_by, observed_actor, directory, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		recordID, contentDigest, statusAtImport, authorizedBy,
-		platform.ObserveActor().String(), directory, stagedNow())
+		s.observeActor(), directory, stagedNow())
 	if err != nil {
 		return fmt.Errorf("cannot record import authorization for %q: %w", recordID, err)
 	}
@@ -838,7 +867,7 @@ func (s *Store) DeleteStagedRecord(recordID string, input DeleteStagedInput) (*D
 	// ON DELETE CASCADE; this row is what survives.
 	// Resolved once: the row written and the row reported must not be able
 	// to disagree about what was seen.
-	observed := platform.ObserveActor().String()
+	observed := s.observeActor()
 
 	if _, err := tx.Exec(
 		"INSERT INTO staged_record_deletions (record_id, title, content_digest, status_at_deletion, "+

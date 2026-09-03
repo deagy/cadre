@@ -435,6 +435,7 @@ func knowledgeStagedShow(store *knowledge.Store, args []string) (any, error) {
 		"body":                  body,
 		"text":                  text,
 		"observed_actor":        observed,
+		"actor_verification":    describeActorVerification(observed),
 		"disposition_history":   history,
 		"import_authorizations": authorizations,
 	}, nil
@@ -913,4 +914,32 @@ func knowledgeStagedDelete(store *knowledge.Store, args []string) (any, error) {
 		DeletedBy:    *deletedBy,
 		AuthorizedBy: *authorizedBy,
 	})
+}
+
+// describeActorVerification says, in the record itself, whether anything
+// checked the names it carries.
+//
+// The staged record holds two kinds of actor. `staged_by` and `decided_by`
+// are strings the caller typed. `observed_actor` is what the process saw --
+// and on a local store that is the OS user and git config, both of which the
+// same caller owns, so it is context rather than proof.
+//
+// A reader cannot tell those apart by looking, and a record that reads as an
+// approval trail while resting on unverified names is the defect this goal
+// exists to close. Where the gap cannot be closed -- a local store has no
+// authenticated subject and cannot have one -- the honest thing is to say so
+// at the point of use, not in a document the reader has not opened.
+func describeActorVerification(observed string) string {
+	switch {
+	case knowledge.IsAuthenticatedSubject(observed):
+		return "verified: the observed actor is a subject an authenticating store vouched for, " +
+			"and the caller could not choose it"
+	case observed == "" || observed == "unobserved":
+		return "unverified: nothing could be observed about who ran this, and the actor names " +
+			"here are strings the caller supplied"
+	default:
+		return "unverified: the observed actor is this machine's OS user and git config, which " +
+			"the caller owns. It records which machine acted, not which person, and the actor " +
+			"names here are strings the caller supplied"
+	}
 }

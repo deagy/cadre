@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deagy/cadre/cli/internal/platform"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -24,6 +26,13 @@ import (
 type Store struct {
 	db   *sql.DB
 	path string
+
+	// observeActor reports who is running this process. A seam, not a
+	// setting: nothing outside this package's own tests replaces it, and
+	// no flag reaches it. The point of the observation is that a caller
+	// cannot choose it, so making it configurable at the CLI would
+	// dismantle the property it exists to provide.
+	observeActor func() string
 }
 
 // StagedDatabaseFile is the staged store's own database, beside whatever
@@ -81,7 +90,7 @@ func OpenStaged(dbPath string) (*Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	return &Store{db: db, path: dbPath}, nil
+	return &Store{db: db, path: dbPath, observeActor: defaultObserveActor}, nil
 }
 
 // initStagedSchema creates the staged tables. Idempotent.
@@ -249,4 +258,31 @@ func StagedDriverAvailable() error {
 	}
 	defer func() { _ = db.Close() }()
 	return db.Ping()
+}
+
+// defaultObserveActor is what a Store observes in production.
+//
+// Separate from platform.ObserveActor only so the tests in this package can
+// vary it; the production path has one implementation and no way to reach it
+// from outside.
+func defaultObserveActor() string {
+	return platform.ObserveActor().String()
+}
+
+// authenticatedSubjectPrefix marks an actor a server vouched for.
+//
+// The observed_actor column holds two different kinds of thing, and telling
+// them apart is what lets separation of duties be enforced where it means
+// something and not where it does not. A machine observation reads
+// "os:deagy git:someone@example.com" and is worth recording; it is not worth
+// refusing on, because the caller controls every part of it. A subject
+// carries this prefix and came from a credential the caller presented and a
+// server checked.
+const authenticatedSubjectPrefix = "subject:"
+
+// IsAuthenticatedSubject reports whether an observed actor was vouched for by
+// something outside the caller's machine.
+func IsAuthenticatedSubject(observed string) bool {
+	return strings.HasPrefix(observed, authenticatedSubjectPrefix) &&
+		strings.TrimPrefix(observed, authenticatedSubjectPrefix) != ""
 }
