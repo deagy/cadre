@@ -44,9 +44,14 @@ separately to use `cadre knowledge`; it is compiled in.
 
 **cadre → the kernel is a subprocess.** cadre finds `agentic-sdlc` through
 `AGENTIC_SDLC_BIN`, on `PATH`, or in the shim the lifecycle plugin packages,
-and shells out to it. That boundary is deliberate and enforced:
-`internal/orchestration/roster_boundary_test.go` permits the coupling and
-refuses anything deeper. Roster asks; the kernel answers.
+and shells out to it — `internal/cli/sdlc.go` and
+`internal/orchestration/kernel_probe.go` are where.
+
+**That boundary is enforced by construction rather than by a test.** The kernel
+is a separate Go module and is not in cadre's `go.mod`, so cadre cannot import
+it even by accident; the only thing it can do is execute a binary. Roster asks;
+the kernel answers. Before the two repositories were split apart this was a
+convention held by a guard, and it is now a property of the build.
 
 **Nothing flows the other way.** The kernel does not know cadre exists beyond
 accepting a provider bundle from it. recall knows nothing about either.
@@ -86,6 +91,7 @@ and a test now fails if another appears.
 | **G1–G10** | Intent, Requirements Baseline, Architecture, Governance and Data, Security and Crypto, Verification and Test, Evidence, Release Readiness, Deployment Authorization (human-only), Runtime Conformance — the contract's own names, read from `agentic-sdlc show-contract lifecycle-gates`, which is normative if this table ever drifts. |
 | **provider** | See above — the word is overloaded. In cadre and the kernel: a bundle of roles, profiles and extensions. |
 | **overlay** | The `.agentic-sdlc/` directory the kernel writes into *your* project, holding its authorities, profile and run records. Your project owns it; installing or upgrading the tooling never takes it over. |
+| **kernel** | The lifecycle kernel: the `agentic-sdlc` binary and the repository that produces it. Overloaded — see above. |
 | **human gate** | A gate a person must clear. G9 Deployment Authorization is always one. Agents may prepare evidence for it and may not clear it. |
 
 ## What none of them do
