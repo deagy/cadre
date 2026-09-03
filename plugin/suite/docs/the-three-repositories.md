@@ -99,6 +99,27 @@ and a test now fails if another appears.
 | **kernel** | The lifecycle kernel: the `agentic-sdlc` binary and the repository that produces it. Overloaded — see above. |
 | **human gate** | A gate a person must clear. G9 Deployment Authorization is always one. Agents may prepare evidence for it and may not clear it. |
 
+## Sharing a store, and what that does and does not give you
+
+A `recall-server` can hold one store for several people, and recall enforces
+which namespaces a credential may read and write — that holds, and P4 of the
+team-readiness goal tested it by trying to break it: an upload naming another
+tenant's namespace is refused, and crafted query parameters and request bodies
+are ignored in favour of the scope the server derives from the credential.
+
+**cadre does not use that.** Its `server` block is attribution only: with one
+configured, `cadre knowledge` asks who your credential authenticates as and
+records the answer, and then reads and writes the local database directly. So
+two colleagues sharing a cadre store get:
+
+- a truthful record of who staged, approved and deleted what, and
+- **no access control at all** — either of them can delete the other's ingested
+  content and read the other's deletion evidence.
+
+That is not a suspicion; it was demonstrated with two credentials against the
+released binaries. If you need the second property, use `recall-server`
+directly, where it is enforced, rather than through `cadre knowledge`.
+
 ## What none of them do
 
 No amount of this dispatches work you did not ask for, approves its own gates,

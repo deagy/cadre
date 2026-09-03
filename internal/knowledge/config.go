@@ -154,6 +154,23 @@ type RetentionConfig struct {
 
 // ServerConfig points the store at a running recall-server.
 //
+// **Attribution, not access control.** This is the sentence to read before
+// sharing a store with anyone. A configured server decides *who you are* and
+// that answer is recorded; it does not decide *what you may touch*. cadre's
+// data path opens the local database directly whether or not a server is
+// configured, so recall's namespace scoping -- which does hold, and was
+// tested under deliberate attack -- never applies to anything cadre does.
+//
+// Concretely: two colleagues sharing one cadre store get a truthful record of
+// who deleted what, and no protection against either of them deleting the
+// other's content or reading the other's deletion evidence. That was found by
+// doing it, with two credentials, against released binaries.
+//
+// Closing it means routing cadre's reads and writes through the server, which
+// reverses this goal's charter decision that the local file stays the default
+// path, and is a larger change than the attribution work this block was added
+// for.
+//
 // Optional, and absent by default. Its purpose is not performance or sharing
 // but attribution: a server authenticates the caller and decides what that
 // credential names, and that answer is the one thing in an actor field the
