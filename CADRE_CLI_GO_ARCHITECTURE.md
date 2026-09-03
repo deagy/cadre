@@ -1,5 +1,12 @@
 # Cadre CLI Go Refactoring Architecture
 
+> **Historical record, not a description of the shipped system.** This is the
+> architecture approved on 2026-08-13 for a refactor that has since completed
+> and diverged: the CLI is Go, the lifecycle kernel has moved to its own
+> repository, and several file paths named below no longer exist. Read it for
+> the reasoning behind the design, not as a map of the current tree. ADR-001's
+> Decision Log records where implementation went further than this planned.
+
 **Document Status:** Approved by Human Authorization  
 **Date:** 2026-08-13  
 **Approval:** Daniel Eagy (Human Project Lead)  

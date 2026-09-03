@@ -1,5 +1,11 @@
 # Python Elimination Plan
 
+> **Historical record — this finished.** `git ls-files '*.py'` returns nothing;
+> `kernel/` and `engine/`, the last two Python components, were deleted at
+> `11eefd47` and `2ccfbf0f`. The sequencing below is what was planned and in
+> what order, not work that remains. `REMAINING_PYTHON_SCOPE.md` records the
+> end state.
+
 **Target: zero lines of Python in this repository.**
 
 This is the sequencing document for that goal. `REMAINING_PYTHON_SCOPE.md`
