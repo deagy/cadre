@@ -86,12 +86,12 @@ var pathRootsThisRepoOwns = map[string]bool{
 // write rather than a silent loosening -- the same discipline the sibling
 // guard applies to module names.
 var pathsThatNameSomewhereElse = map[string]string{
-	".agents/knowledge-store/config.json": "a store config in the reader's own project, created by them; never present here",
-	".agents/cadre.yaml":                  "project-local operator settings in the reader's repository",
-	".claude/agents":                      "a runtime override directory in the reader's environment",
-	".codex/agents":                       "a runtime override directory in the reader's environment",
-	"kernel/contracts":                    "the kernel repository's own layout, at deagy/cadre-kernel",
-	"bin/agentic-sdlc":                    "the build-and-exec wrapper in deagy/cadre-kernel's checkout, named here when explaining how that repository works",
+	".agents/knowledge-store/config.json":   "a store config in the reader's own project, created by them; never present here",
+	".agents/cadre.yaml":                    "project-local operator settings in the reader's repository",
+	".claude/agents":                        "a runtime override directory in the reader's environment",
+	".codex/agents":                         "a runtime override directory in the reader's environment",
+	"kernel/contracts":                      "the kernel repository's own layout, at deagy/cadre-kernel",
+	"bin/agentic-sdlc":                      "the build-and-exec wrapper in deagy/cadre-kernel's checkout, named here when explaining how that repository works",
 	"kernel/contracts/lifecycle-gates.json": "the kernel repository's own file, at deagy/cadre-kernel",
 }
 

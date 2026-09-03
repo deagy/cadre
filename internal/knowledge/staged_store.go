@@ -35,7 +35,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
 )
 
 // stagedSchema is additive and idempotent, matching database.go's own

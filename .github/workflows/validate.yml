@@ -213,10 +213,15 @@ jobs:
       - run: |
           "$AGENTIC_SDLC_BIN" --version
           "$AGENTIC_SDLC_BIN" show-contract lifecycle-gates > /dev/null
-      - name: gofmt (fails on any formatting diff)
+      # -s, matching recall's own check. Without it this repository accepts
+      # code that recall's CI rejects, and recall checks cadre out into
+      # .cadre-origin/ for its fail-closed contract guard -- so a file
+      # formatted to cadre's laxer standard fails recall's build instead of
+      # this one, in a repository whose author did not write it.
+      - name: gofmt -s (fails on any formatting diff)
         run: |
           set -eu
-          diff="$(gofmt -l .)"
+          diff="$(gofmt -s -l .)"
           if [ -n "$diff" ]; then
             echo "gofmt issues found in:"
             echo "$diff"
