@@ -46,8 +46,11 @@ separately to use `cadre knowledge`; it is compiled in.
 
 **cadre → the kernel is a subprocess.** cadre finds `agentic-sdlc` through
 `AGENTIC_SDLC_BIN`, on `PATH`, or in the shim the lifecycle plugin packages,
-and shells out to it — `internal/cli/sdlc.go` and
-`internal/orchestration/kernel_probe.go` are where.
+and shells out to it. Four places do, and that is the complete list at the time
+of writing: `internal/cli/sdlc.go` runs a subcommand,
+`internal/orchestration/kernel_probe.go` asks its version,
+`internal/selector/gates.go` fetches the lifecycle contract, and
+`internal/generators/plugin_generation.go` validates a provider bundle.
 
 **That boundary is enforced by construction rather than by a test.** The kernel
 is a separate Go module and is not in cadre's `go.mod`, so cadre cannot import
