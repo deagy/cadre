@@ -194,8 +194,12 @@ it resolves its own location:
 ln -s "$PWD/bin/cadre" ~/.local/bin/cadre
 ```
 
-The lifecycle kernel is in this repository, so `cadre sdlc` works from a
-checkout with no install and no `AGENTIC_SDLC_BIN`.
+The lifecycle kernel is a **separate repository**,
+[deagy/cadre-kernel](https://github.com/deagy/cadre-kernel). A checkout of
+Cadre alone does not have it: `cadre sdlc` resolves it from
+`AGENTIC_SDLC_BIN`, from `PATH`, or from the shim the lifecycle plugin
+packages. `./install.sh --with-lifecycle` installs it for you — see
+[Adding lifecycle governance](#adding-lifecycle-governance) below.
 
 ---
 

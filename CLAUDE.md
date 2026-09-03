@@ -9,7 +9,7 @@ A runner-neutral **Cadre** monorepo. Four repositories were merged into this one
 | Directory | What it owns |
 | --- | --- |
 | `roster/` | 159 specialist role definitions (`<phase>/<role>/AGENT.md`), 20 non-authoring context packs, their inventory (`catalog.yaml`), deterministic orchestration/routing, shared policy, and the knowledge store. |
-| `kernel/` | The G1–G10 lifecycle kernel: gate contracts, run-record validation, gate-authority semantics, project initializer. A separately versioned, separately publishable pip distribution. |
+| *(not here)* | The G1–G10 lifecycle kernel — gate contracts, run-record validation, gate-authority semantics, project initializer — lives at `deagy/cadre-kernel`. The `kernel/` directory was deleted at `11eefd47`. A separately versioned, separately publishable pip distribution. |
 | `engine/` | The LangGraph orchestration engine that drives a task through the gates as a compiled graph (`uv`, Python ≥3.11). |
 | `provider/` | The `secure-cloud` provider bundle: profiles, extensions, generated Codex wrappers, and `provider.json`'s `kernel_compatibility` window. |
 | `providers/` | The kernel's own example default provider package. |
@@ -95,7 +95,7 @@ This repository now has one Go module of its own (`cmd/`, `internal/`, repositor
 
 ## Architecture
 
-**Kernel ownership boundary (read this before touching lifecycle-adjacent code):** `kernel/` owns lifecycle gate schemas (G1–G10), run-record validation, and gate-authority semantics — that ownership is permanent. `roster/` owns the Secure Cloud role catalog, role policies, workflows, the knowledge store, and the `secure-cloud` provider profile.
+**Kernel ownership boundary (read this before touching lifecycle-adjacent code):** the kernel — now the separate repository `deagy/cadre-kernel` — owns lifecycle gate schemas (G1–G10), run-record validation, and gate-authority semantics — that ownership is permanent. `roster/` owns the Secure Cloud role catalog, role policies, workflows, the knowledge store, and the `secure-cloud` provider profile.
 
 Until the merge this was enforced *by construction*: two repositories cannot import each other's internals. That guarantee is gone, and nothing about a single tree stops `roster/` from doing `from agentic_sdlc import validate_repository` and quietly taking over gate evaluation — a change that would look small and reasonable in review. The replacement is `internal/kernel/kernel_boundary_test.go`, which permits exactly two couplings: shelling out to the kernel CLI through `internal/selector/gates.go`, and reading `kernel/contracts/*.json` as data. Roster asks; the kernel answers. `.github/CODEOWNERS` gives `kernel/` and `kernel/contracts/` their own review.
 

@@ -835,9 +835,9 @@ instead of the steps below — ask an agent to run it and it drives the whole
 flow conversationally, in plain language, on your behalf. The rest of this
 section is the direct CLI reference for engineers who prefer it.
 
-The `agentic-sdlc` kernel — its source lives in this repository under
-`kernel/`, but it is still released as a separate, independently versioned
-distribution (see `README.md`'s "Releasing" section) — separates the reusable
+The `agentic-sdlc` kernel — a separate repository,
+[deagy/cadre-kernel](https://github.com/deagy/cadre-kernel), independently
+versioned and released there — separates the reusable
 lifecycle kernel from target-project state:
 
 ```text
@@ -891,7 +891,7 @@ cadre profile diff \
   --original-profile  /path/to/captured-original-profile.json
 ```
 
-`--copy-provider`/`--copy-profile` (required) point at whatever files or exported records hold the target project's current copy — this repository does not assume a specific `.agentic-sdlc/` internal layout for them (that shape belongs to the kernel, `kernel/` — a permanently separate, independently versioned component within this repository, not `roster/`). `--original-provider`/`--original-profile` (optional) point at a snapshot of what that copy was originally captured from, if the target project kept one; omitting them is expected and reported as a distinct `provenance-undetermined` state rather than silently guessed. `--current-provider`/`--current-profile` let you override this checkout's own release artifacts; by default the tool auto-detects them (working-tree `provider/provider.json` in a source checkout, or the packaged plugin's own `provider.json` when run from an installed plugin).
+`--copy-provider`/`--copy-profile` (required) point at whatever files or exported records hold the target project's current copy — this repository does not assume a specific `.agentic-sdlc/` internal layout for them (that shape belongs to the kernel — the separate repository `deagy/cadre-kernel`, independently versioned, not `roster/`). `--original-provider`/`--original-profile` (optional) point at a snapshot of what that copy was originally captured from, if the target project kept one; omitting them is expected and reported as a distinct `provenance-undetermined` state rather than silently guessed. `--current-provider`/`--current-profile` let you override this checkout's own release artifacts; by default the tool auto-detects them (working-tree `provider/provider.json` in a source checkout, or the packaged plugin's own `provider.json` when run from an installed plugin).
 
 The report classifies each of the two artifacts independently into one of five states — `current` (copy matches this release exactly), `stale-unmodified` (copy matches ORIGINAL, which is now behind this release), `diverged` (copy no longer matches ORIGINAL, regardless of whether ORIGINAL is also behind), `copy-invalid` (copy fails basic structural validation — malformed JSON or a missing required field), or `provenance-undetermined` (no resolvable ORIGINAL was supplied) — and names every differing field, old value, and new value in one pass, not just the first difference. Exit code `0` means both artifacts are `current`; any other state exits non-zero. Neither the `current` state nor its zero exit code is an approval, gate-pass, or compliance signal — see the printed disclaimer and `internal/orchestration/profile_diff.go`'s own module docstring for the full boundary-safety rationale (`roster/orchestration/runs/cadre-idea-4-profile-diff-2026-07-29/requirements.md`, PD-FR-13..PD-FR-17).
 

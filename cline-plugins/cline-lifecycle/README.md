@@ -80,9 +80,9 @@ supports.
 
 `bin/cadre sdlc` is a thin pass-through to the separately-installed
 `agentic-sdlc` kernel binary — gate state and transitions live entirely in
-that kernel, a permanently separate, independently versioned component (its
-source is in-tree at `kernel/`, but it is installed and invoked as a
-standalone binary; see root `CLAUDE.md`'s kernel ownership boundary). Install
+that kernel, a separate repository (`deagy/cadre-kernel`), independently
+versioned and installed and invoked as a standalone binary; see root
+`CLAUDE.md`'s kernel ownership boundary. Install
 it first via one of the lifecycle plugins' bundled bootstrap scripts, e.g.:
 
 ```sh

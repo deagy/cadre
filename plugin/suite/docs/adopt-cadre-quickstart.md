@@ -27,11 +27,13 @@ is checkout-only for the same reason. Everything else works everywhere.
 
 ## 2. Initialize lifecycle tracking for your project
 
-Lifecycle gates (G1–G10) are driven by the Agentic SDLC kernel. It ships in
-this repository, so a checkout needs no separate install and no
-`AGENTIC_SDLC_BIN` — `cadre sdlc` finds it. If you installed Cadre as a
-plugin instead, install the kernel once with the `/cadre-install-kernel`
-skill; see [Adding lifecycle
+Lifecycle gates (G1–G10) are driven by the Agentic SDLC kernel, which is a
+**separate repository** —
+[deagy/cadre-kernel](https://github.com/deagy/cadre-kernel) — and installs
+separately. `cadre sdlc` resolves it from `AGENTIC_SDLC_BIN`, from `PATH`, or
+from the shim the lifecycle plugin packages. `./install.sh --with-lifecycle`
+does it for you; as a plugin, use the `/cadre-install-kernel`
+skill. See [Adding lifecycle
 governance](INSTALL.md#adding-lifecycle-governance).
 
 Then initialize your project through this suite's compatibility launcher,

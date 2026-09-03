@@ -103,7 +103,7 @@ development dependency during installation.
 
 ## Quick start
 
-Read [AGENTS.md](AGENTS.md) first, then use the [getting-started guide](docs/getting-started.md). `bin/cadre` builds the Go CLI under `cmd/cadre` on first use and caches the binary, rebuilding only when Go sources change, so Go is needed on `PATH` only when a build actually runs. See "Put `cadre` on `PATH`" to put it on `PATH`, or run it as `./bin/cadre` (`.\bin\cadre.ps1` in PowerShell) from the repository root. Then validate the suite-only component, the orchestration tools, and the in-tree lifecycle kernel:
+Read [AGENTS.md](AGENTS.md) first, then use the [getting-started guide](docs/getting-started.md). `bin/cadre` builds the Go CLI under `cmd/cadre` on first use and caches the binary, rebuilding only when Go sources change, so Go is needed on `PATH` only when a build actually runs. See "Put `cadre` on `PATH`" to put it on `PATH`, or run it as `./bin/cadre` (`.\bin\cadre.ps1` in PowerShell) from the repository root. Then validate the suite-only component and the orchestration tools (the lifecycle kernel is a separate repository and is validated there):
 
 ```sh
 go test ./internal/generators/
