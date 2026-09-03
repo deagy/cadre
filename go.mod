@@ -8,7 +8,7 @@ tool (
 )
 
 require (
-	github.com/deagy/recall v0.3.1
+	github.com/deagy/recall v0.3.6
 	github.com/mattn/go-sqlite3 v1.14.49
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
@@ -243,5 +243,3 @@ require (
 	mvdan.cc/gofumpt v0.9.2 // indirect
 	mvdan.cc/unparam v0.0.0-20251027182757-5beb8c8f8f15 // indirect
 )
-
-replace github.com/deagy/recall => /home/deagy/sdk/recall
