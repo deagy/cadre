@@ -9,6 +9,30 @@ that. New adopters should start with the
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.7.6
+
+**Separation of duties compares who ran the command, where that can be
+verified.** `cadre knowledge disposition-staged` refused when `--decided-by`
+equalled the record's `staged_by` — two strings the caller supplied, so staging
+as one name and approving as another satisfied it. It now also compares the
+observed actor, and refuses when the same *authenticated subject* does both.
+
+**A knowledge config may name a `recall-server`.** New optional `server` block:
+a URL, and the *name* of an environment variable holding the credential, never
+a value. With one configured, cadre asks the server who that credential
+authenticates as and records the answer; the caller chose which credential to
+present and did not choose what the server decided it names, which is what an
+actor field needs to be evidence rather than a string. Requires recall 0.3.4 or
+later for `GET /whoami`.
+
+**Nothing changes without a server, deliberately.** A local store's observed
+actor is this machine's OS user and git config, both owned by the same caller —
+it records which machine acted, not which person. One operator staging and
+approving their own proposal stays supported. What changed is that
+`cadre knowledge show-staged` now reports `actor_verification` saying so at the
+point of use, instead of leaving a reader to infer it from a document.
+
+
 **Note on the entries below the monorepo merge.** They describe an arrangement
 that no longer exists: the packaged plugin used to live in its own repository
 (`deagy/cadre-plugin`, later `deagy/cadre-lifecycle`), this repository's tags
