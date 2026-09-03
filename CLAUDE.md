@@ -46,8 +46,6 @@ go test ./internal/generators/ -run TestNameHere -v
 # The kernel is a separate repository (deagy/cadre-kernel). `cadre sdlc` and
 # the lifecycle-contract tests resolve it from AGENTIC_SDLC_BIN, PATH, or the
 # packaged plugin shim; without one they run in standalone mode.
-go test ./internal/kernel/                                        # kernel
-cd engine && uv sync && uv run python -m pytest                   # LangGraph engine
 
 # Regeneration after editing roster/, .agents/skills/, or AGENTS.md.
 # git add new files FIRST -- untracked files are silently skipped (see below)

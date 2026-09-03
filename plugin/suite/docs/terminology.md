@@ -31,14 +31,16 @@ it names a concrete field or file, the link goes to that source instead.
 
 ## Relationship between the kernel, provider, and plugin
 
-These are directories within one repository, not separate checkouts — the
-ownership separation between them is unchanged, but the repository boundary
-that used to enforce it is gone. `CLAUDE.md`'s "Archived upstreams" records
-which repositories merged and when.
+The kernel is a separate repository again —
+[deagy/cadre-kernel](https://github.com/deagy/cadre-kernel) — so the ownership
+separation between these three is enforced by construction rather than by
+convention: cadre does not depend on the kernel module and cannot import it.
+The provider and the plugin are directories here. `CLAUDE.md`'s "Archived
+upstreams" records which repositories merged, and the kernel's departure since.
 
 ```mermaid
 graph TD
-    K["portable Agentic SDLC kernel (kernel/)"] --> O["target-project overlay and run records"]
+    K["portable Agentic SDLC kernel (deagy/cadre-kernel)"] --> O["target-project overlay and run records"]
 
     subgraph P["Secure Cloud provider (roster/ — the register)"]
         P1["role catalog and AGENT.md definitions"]

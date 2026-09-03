@@ -59,6 +59,27 @@ var (
 	markdownLinkTarget = regexp.MustCompile(`\[[^\]]*\]\(([^)\s#]+)\)`)
 	backtickedPath     = regexp.MustCompile("`([A-Za-z0-9_.-]+/[A-Za-z0-9_./-]*)`")
 	selfRepoTreeURL    = regexp.MustCompile(`https://github\.com/deagy/cadre/(?:tree|blob)/[^/]+/([^)\s#]+)`)
+
+	// A bare directory token, unbackticked, inside prose or a diagram label.
+	//
+	// This exists because the guard could not see the thing it was written to
+	// catch. docs/terminology.md said the kernel lives "within one repository"
+	// and drew a mermaid node labelled `kernel/` -- no backticks, no markdown
+	// link -- so it survived four rounds of a defect class this guard is the
+	// instrument for, while another document claimed the class was closed and
+	// guarded.
+	//
+	// Deliberately narrow: only the top-level directories this repository
+	// either has or is known to have lost, and only where the token ends in a
+	// slash. Matching every `word/` in prose would report a URL fragment, a
+	// GitLab group, and every path in every other project.
+	//
+	// Anchored so a path *ending* in these names does not match: `internal/kernel/`
+	// is this repository's own concern and `~/.claude/plugins/data/<id>/kernel/`
+	// is a directory in the reader's environment. Only a bare token, at a word
+	// boundary with no path separator before it, is a claim about the top level
+	// here.
+	bareDirectoryToken = regexp.MustCompile(`(?:^|[\s"'(\[])(kernel|engine)/(?:[\s"',.)\]]|$)`)
 )
 
 // pathRootsThisRepoOwns are the first segments a reference must start with to
@@ -251,6 +272,9 @@ func TestNoOperationalDocPointsAtAPathThatIsGone(t *testing.T) {
 				check(relative, number, line, match[1], &findings)
 			}
 			for _, match := range backtickedPath.FindAllStringSubmatch(line, -1) {
+				check(relative, number, line, match[1], &findings)
+			}
+			for _, match := range bareDirectoryToken.FindAllStringSubmatch(line, -1) {
 				check(relative, number, line, match[1], &findings)
 			}
 		}
