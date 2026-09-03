@@ -154,24 +154,26 @@ cicd:
   container_registry: gitlab container registry
   artifact_signing: >
     cosign keyless (Sigstore OIDC), sign once at build tier, verify before every
-    promotion. This repository publishes two artifacts, on separate tags:
-    the plugin distribution (plugin-v*) and the lifecycle kernel (kernel-v*).
-    The kernel release attaches one archive per platform and SHA256SUMS, and
-    each lifecycle plugin's bin/agentic-sdlc shim verifies the checksum before
-    running what it downloaded -- refusing on a mismatch rather than falling
-    back. The plugin release is a
-    tag plus release notes with no attached archive, since a marketplace
-    installs from the repository tree rather than a downloaded artifact.
-    The kernel release also carries an SPDX SBOM of its dependency tree and a
-    SLSA build-provenance attestation over the wheel, sdist, and SBOM, minted
-    from the workflow's OIDC identity via GitHub's hosted Sigstore -- this is
-    the keyless cosign posture above, with no signing key to manage. Verify
-    with `gh attestation verify <file> --repo deagy/cadre`. Still open: the
-    plugin distribution publishes no archive to attest, since a marketplace
-    installs from the repository tree rather than a downloaded artifact, so
-    it has provenance only through its git tag. The pip/pipx wheel is
-    deliberately not published anywhere, so it has no promotion path to
-    verify.
+    promotion. This repository publishes two artifacts, on separate tags: the
+    CLI (cli-v*), which attaches per-platform archives, Python wheels and an
+    SPDX SBOM, and the plugin distribution (plugin-v*), which attaches only an
+    SBOM because a marketplace installs from the repository tree rather than a
+    downloaded archive. The lifecycle kernel is not published here at all -- it
+    releases from deagy/cadre-kernel under v* tags, attaching one archive per
+    platform plus SHA256SUMS, and each lifecycle plugin's bin/agentic-sdlc shim
+    verifies that checksum before running what it downloaded, refusing on a
+    mismatch rather than falling back. The kernel-v* tags in this repository are
+    history and carry no releases.
+    The CLI release carries an SPDX SBOM of its dependency tree and a SLSA
+    build-provenance attestation minted from the workflow's OIDC identity via
+    GitHub's hosted Sigstore -- this is the keyless cosign posture above, with
+    no signing key to manage. Verify with
+    `gh attestation verify <file> --repo deagy/cadre`. Still open: the plugin
+    distribution attaches only an SBOM and no archive to attest, since a
+    marketplace installs from the repository tree, so it has provenance only
+    through its git tag; and the kernel's own releases, being in another
+    repository, are outside this posture and carry SHA256SUMS rather than an
+    attestation.
 
 observability:
   platform: prometheus + grafana + loki + tempo, opentelemetry for instrumentation
