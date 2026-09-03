@@ -9,6 +9,28 @@ that. New adopters should start with the
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.7.9
+
+**`cadre knowledge delete-ingested` and `deletion-evidence` exist again.** Both
+were real commands in the Python CLI, removed at `b418031e` and never rebuilt;
+until now nothing shipped could remove ingested content, so a request to have
+your notes taken out of the store had no answer. recall's store has deleted by
+document id throughout — what was missing was a way to reach it without writing
+Go.
+
+`delete-ingested` counts before and after, and refuses three things rather than
+producing a record that reads as evidence and is not: deleting a document that
+holds no chunks, recording evidence after a partial removal, and presenting
+`deleted_by` as verified when nothing checked it. The evidence carries no
+foreign key to the document, deliberately, so it outlives what it describes.
+
+`deletion-evidence` reads it back, with the same `actor_verification` line
+`show-staged` carries.
+
+Requires recall 0.3.6 or later for `DocumentChunkCount`, which is how a
+deletion can be checked at all rather than assumed from a nil error.
+
+
 ## 0.7.8
 
 **Fixes the last thing keeping 0.7.7's server support unusable.** cadre sent
