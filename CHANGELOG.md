@@ -9,6 +9,25 @@ that. New adopters should start with the
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.7.12
+
+**The deletion-evidence table is created when the store is opened, not when
+the first deletion is recorded.** It used to be created one statement before
+the INSERT that needed it, which meant that on a store that had never recorded
+a deletion, a `CREATE TABLE` ran after the content was already gone. Under a
+competing writer that path gave up after about five seconds with a bare
+`database is locked`, where a store that had recorded a deletion before waited
+a full minute and then said what had happened. Same command, same situation,
+twelve times the patience depending on history the caller cannot see.
+
+Nothing was lost in either case -- the short path failed before deleting
+anything -- but the guarantee was uneven, and the uneven half was the common
+one: a project's first deletion.
+
+Opening a store now also reports a lock plainly ("another process is using
+this knowledge store... Nothing has been changed -- run the command again")
+rather than passing a raw SQLite error up.
+
 ## 0.7.11
 
 **Deletion evidence can no longer be lost while the content is gone.** The
