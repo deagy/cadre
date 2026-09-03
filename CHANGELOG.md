@@ -9,6 +9,30 @@ that. New adopters should start with the
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.7.11
+
+**Deletion evidence can no longer be lost while the content is gone.** The
+evidence row for a deleted document went out without a retry, so a competing
+writer could take the store's write lock and leave `delete-ingested` having
+removed the chunks and recorded nothing. Re-running does not repair it — there
+is nothing left to delete, so the row is never written. Both the evidence write
+and the schema creation it depends on now have a budget of their own, longer
+than the ordinary one, because an ordinary write that loses a race can be
+re-run and this one cannot.
+
+**`delete-ingested` and `deletion-evidence` now say that a server credential
+does not scope them.** They open the store file directly and never reach
+recall-server, so `ScopedAPIKeyAuth` and its namespace filter — which do hold
+on the HTTP path — are not in the way: a credential scoped to one namespace can
+delete another namespace's content through these commands, and read another
+namespace's deletion records. That limit was written down in the source and in
+`docs/the-three-repositories.md`, and nowhere a caller would meet it. It is now
+in both commands' output whenever a server is configured.
+
+If either command fails to record its evidence, the error now says that the
+content was already removed and how many chunks went, rather than reporting a
+database error that invites a retry which will refuse.
+
 ## 0.7.9
 
 **`cadre knowledge delete-ingested` and `deletion-evidence` exist again.** Both
