@@ -62,22 +62,6 @@ func (s *Store) RecordIngestedDeletion(deletion IngestedDeletion) error {
 	if deletion.DeletedBy == "" {
 		return stagedErrorf("a deletion record needs a deleted_by")
 	}
-	// The schema creation needs the evidence budget too, and finding that out
-	// is the whole value of having falsified this.
-	//
-	// The first fix gave the INSERT a longer budget and left `CREATE TABLE IF
-	// NOT EXISTS` on the ordinary one. The test passed. It also passed with
-	// the longer budget removed, and then failed on the unmodified code --
-	// which is the signature of a test measuring something other than what it
-	// claims. On a store whose table does not exist yet, the CREATE is the
-	// first write to want the lock, so it is the call that loses the race, and
-	// which of the two failed depended on nothing more than whether some
-	// earlier command had already created the table.
-	//
-	// A guard that passes for a reason you cannot name is not yet a guard.
-	if err := execArgsWithBusyRetryFor(s.db, EvidenceBusyTimeout, ingestedDeletionSchema); err != nil {
-		return fmt.Errorf("cannot create the ingested-deletion table: %w", err)
-	}
 	// Retried, because by the time this runs the content is already gone.
 	// Every other write in this package that could lose a lock race retries;
 	// this one did not, and it is the one whose failure cannot be undone by
@@ -100,9 +84,6 @@ func (s *Store) RecordIngestedDeletion(deletion IngestedDeletion) error {
 // no longer exists is the normal case rather than an anomaly — that is what
 // the missing foreign key is for.
 func (s *Store) IngestedDeletions(documentID string) ([]IngestedDeletion, error) {
-	if err := execWithBusyRetry(s.db, ingestedDeletionSchema); err != nil {
-		return nil, fmt.Errorf("cannot create the ingested-deletion table: %w", err)
-	}
 	query := "SELECT document_id, chunks_removed, reason, deleted_by, observed_actor, deleted_at " +
 		"FROM ingested_deletions"
 	var rows *sql.Rows

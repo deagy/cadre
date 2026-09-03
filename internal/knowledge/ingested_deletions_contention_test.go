@@ -31,6 +31,11 @@ func TestDeletionEvidenceSurvivesALockHeldPastTheOrdinaryTimeout(t *testing.T) {
 
 	// One uncontended deletion first, so the table exists.
 	//
+	// Since the table is now created at open this is no longer what makes
+	// the test discriminating -- TestTheEvidenceTableExistsFromOpen covers
+	// that -- but it is left in place because it also seeds a second row,
+	// and a store with one row behaves differently from an empty one.
+	//
 	// Without this the test does not measure what it says. `CREATE TABLE IF
 	// NOT EXISTS` runs before the INSERT and is the first statement to want
 	// the write lock, so on a fresh store it absorbs all the contention and
@@ -124,5 +129,48 @@ func TestDeletionEvidenceSurvivesALockHeldPastTheOrdinaryTimeout(t *testing.T) {
 	if recorded[0].ChunksRemoved != 11 {
 		t.Fatalf("the record says %d chunks, the deletion removed 11",
 			recorded[0].ChunksRemoved)
+	}
+}
+
+// The deletion-evidence table exists before any deletion, not after one.
+//
+// This is the structural half of what a timing test can only sample. It was
+// created lazily, one statement before the INSERT that needed it, so on a
+// store that had never recorded a deletion a CREATE TABLE ran after the
+// content was already gone -- and lost to a lock, it took the record with it
+// while the ordinary five-second budget applied.
+//
+// Asserting the table is present on a freshly opened store says the same
+// thing without depending on any lock, any timing, or any competing process:
+// there is no moment at which a deletion can be interrupted by a schema
+// change, because the schema change already happened.
+func TestTheEvidenceTableExistsFromOpen(t *testing.T) {
+	path := t.TempDir() + "/staged.db"
+	store, err := OpenStaged(path)
+	if err != nil {
+		t.Fatalf("cannot open the store: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	var name string
+	err = store.db.QueryRow(
+		"SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ingested_deletions'").
+		Scan(&name)
+	if err != nil {
+		t.Fatalf("ingested_deletions is absent from a freshly opened store: %v\n\n"+
+			"Created lazily, its CREATE TABLE runs after the content it describes "+
+			"has been deleted, which is the one moment when losing a lock cannot "+
+			"be retried.", err)
+	}
+
+	// Reading evidence from a store that has recorded none must return an
+	// empty list rather than failing on a missing table -- the read path used
+	// to create the table itself, and no longer does.
+	deletions, err := store.IngestedDeletions("")
+	if err != nil {
+		t.Fatalf("reading evidence from a store with none failed: %v", err)
+	}
+	if len(deletions) != 0 {
+		t.Fatalf("a fresh store reports %d deletion(s)", len(deletions))
 	}
 }

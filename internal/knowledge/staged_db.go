@@ -102,7 +102,40 @@ func OpenStaged(dbPath string) (*Store, error) {
 // either finds the work done or does it.
 func initStagedSchema(db *sql.DB) error {
 	if err := execWithBusyRetry(db, stagedSchema); err != nil {
+		if isLockedError(err) {
+			return fmt.Errorf(
+				"another process is using this knowledge store and did not release it "+
+					"within %s. Nothing has been changed -- run the command again: %w",
+				BusyTimeout, err)
+		}
 		return fmt.Errorf("cannot initialize schema: %w", err)
+	}
+
+	// The deletion-evidence table is created here, at open, and not where it
+	// is first written.
+	//
+	// It used to be created lazily inside RecordIngestedDeletion, one line
+	// before the INSERT -- which meant that on a store that had never
+	// recorded a deletion, a CREATE TABLE ran *after* the content was gone.
+	// CP-4 round 2 measured the consequence: on a warm store the evidence
+	// write waited out a lock for the full EvidenceBusyTimeout and reported
+	// properly; on a cold one the same command died in about five seconds
+	// with a bare SQLITE_BUSY. Twelve times shorter, on the more common case
+	// -- a project's first-ever deletion.
+	//
+	// Widening the lazy create's budget would have equalised the two numbers
+	// and kept the shape: a schema change running at the worst possible
+	// moment. Creating it at open removes the case instead. A failure here
+	// happens before anything is deleted, which is why five seconds is a
+	// reasonable budget in this position and was not in the other one.
+	if err := execWithBusyRetry(db, ingestedDeletionSchema); err != nil {
+		if isLockedError(err) {
+			return fmt.Errorf(
+				"another process is using this knowledge store and did not release it "+
+					"within %s. Nothing has been changed -- run the command again: %w",
+				BusyTimeout, err)
+		}
+		return fmt.Errorf("cannot initialize the deletion-evidence table: %w", err)
 	}
 	// CREATE TABLE IF NOT EXISTS does nothing to a table that already
 	// exists, so a column added to stagedSchema never reaches a store
