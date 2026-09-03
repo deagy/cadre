@@ -63,7 +63,7 @@ AGENTIC_SDLC_BIN="$PWD/bin/agentic-sdlc" \
   python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
 ```
 
-The kernel's own tests (`kernel/test`) are different again: they import the
+The kernel's own tests live in its own repository now (deleted here): they import the
 package in-process and need neither the variable nor anything on `PATH`. See
 the [lifecycle guide](lifecycle-and-plugin-operations.md) to point at a
 separately installed kernel instead.

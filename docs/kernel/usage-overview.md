@@ -11,12 +11,17 @@ engineering work itself — it enforces *sequencing, evidence, and
 human-approval discipline* around work that happens elsewhere (in a target
 project, done by humans or dispatched agents).
 
-## Three parts, three jobs
+## Two parts, two jobs
+
+The LangGraph engine that used to be the third is gone — it lived at `engine/` (deleted),
+removed at `2ccfbf0f` along with the last of the Python.
+Nothing in this repository drives a task through the gates as a compiled graph
+any more; sequencing is the caller's job.
 
 | Part | Role |
 |---|---|
-| **The kernel** (`kernel/`, pip/pipx-installable as `agentic-sdlc`) | Bootstraps a target project, tracks gate/approval state as JSON on disk, validates it. Deterministic bookkeeping — no orchestration. |
-| **The LangGraph engine** (`engine/`, installed as `agentic-sdlc-lg`) | Actually *drives* a task through the gates as a compiled graph: dispatches author/reviewer agents, enforces separation-of-duties, stops at human/mutation-gate interrupts. This is what replaced the earlier prompt-driven "six `SKILL.md` files an LLM had to interpret step by step." |
+| **The kernel** (a separate repository, [deagy/cadre-kernel](https://github.com/deagy/cadre-kernel), installed as the `agentic-sdlc` binary) | Bootstraps a target project, tracks gate/approval state as JSON on disk, validates it. Deterministic bookkeeping — no orchestration. |
+| ~~**The LangGraph engine**~~ (deleted) | Drove a task through the gates as a compiled graph: dispatches author/reviewer agents, enforces separation-of-duties, stops at human/mutation-gate interrupts. This is what replaced the earlier prompt-driven "six `SKILL.md` files an LLM had to interpret step by step." |
 | **A provider** (e.g. `providers/agentic-sdlc-defaults/`, or an external one like `deagy/agents`) | Supplies the domain-specific pieces the kernel deliberately ships none of: an agent catalog, profiles (routing/gate bindings), optional extensions. The kernel is generic; providers make it concrete for a given team's stack. |
 
 **Key architectural rule**: a consuming project owns its own decisions and
@@ -27,11 +32,10 @@ stay put.
 
 ## The actual usage flow
 
-1. **Install** — build the kernel from a checkout (`./bin/agentic-sdlc`
-   builds and execs the Go binary; see the [kernel's README](https://github.com/deagy/cadre-kernel#install)),
-   and separately set up the
-   LangGraph engine if you want real orchestration (`uv sync` in
-   `engine/`, or install it too).
+1. **Install** — take a binary from a
+   [cadre-kernel release](https://github.com/deagy/cadre-kernel/releases), or run
+   `./install.sh --with-lifecycle`, which does it for you. See the
+   [kernel's README](https://github.com/deagy/cadre-kernel#install).
 2. **Initialize a target project**:
    ```sh
    agentic-sdlc init --root /path/to/target [--provider provider.json --profile <id>]

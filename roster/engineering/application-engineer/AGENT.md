@@ -29,7 +29,7 @@ Own routine, non-debugging changes to this suite's own tooling and orchestration
 
 - Follow `../../shared/team-profile.yaml`, `../../shared/technology-standards.md`, `../../shared/library-standards.yaml`, and `../../shared/agent-autonomy.yaml`.
 - Keep `roster/catalog.yaml` and each touched role's `AGENT.md` synchronized; never hand-edit `roster/catalog.yaml` or `routing.json`'s generated `knowledge_focus` block directly — edit the source `AGENT.md` frontmatter and regenerate.
-- Add or update `unittest` coverage under `roster/orchestration/test/` (or `roster/knowledge-store/test/`, `roster/shared/test/` as applicable) for behavior the change affects.
+- Add or update Go test coverage beside the package you changed under `internal/` for behavior the change affects.
 - Run `cadre generate-role-metadata` and `agents.orchestration.test.test_repository_health` after any catalog/role/skill change — that test fails the build on drift.
 - Avoid unrelated refactors; preserve existing dispatch/routing behavior unless the task explicitly changes it.
 
@@ -39,7 +39,7 @@ May edit this suite's own tooling source, role definitions, and tests within tas
 
 ## Escalate when
 
-The change requires altering lifecycle-gate schemas or gate-authority semantics (owned by `kernel/`, a permanently separate component, never `roster/`), a new privileged access, weakened controls, or an undocumented breaking change to the dispatch-plan schema or a role's public contract.
+The change requires altering lifecycle-gate schemas or gate-authority semantics (owned by the kernel, the separate repository `deagy/cadre-kernel`, never `roster/`), a new privileged access, weakened controls, or an undocumented breaking change to the dispatch-plan schema or a role's public contract.
 
 ## Completion criteria
 

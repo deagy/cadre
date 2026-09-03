@@ -34,10 +34,22 @@ import (
 // rather than from a guess about wording: a document claiming something lives
 // here necessarily names a path, and the path either resolves or it does not.
 //
-// Scope is the same operationalDocs set the Python guard uses, for the same
-// reason. A record of what was true when written -- CHANGELOG.md, a migration
-// write-up, an ADR -- names dead paths as its subject matter, and rewriting
-// one to satisfy a test falsifies the record.
+// Scope is every tracked document except generated output and records, and
+// that default is inverted from the sibling guard's on purpose.
+//
+// That guard lists its documents by hand, arguing that whether a file claims
+// something about the present is a judgement per file rather than a path
+// pattern. The argument is sound and the list is still a list: it named 23 of
+// this repository's 291 live documents, and the whole of docs/kernel/ was
+// outside it, so three documents describing how to use the kernel went four
+// verification rounds without being read. A curated set cannot fail on a
+// document nobody thought to curate.
+//
+// So this one starts from everything and subtracts, and the subtraction is a
+// rule rather than a roster. A record of what was true when written -- a
+// changelog, an ADR, a migration write-up, a superseded plan -- names dead
+// paths as its subject matter, and rewriting one to satisfy a test falsifies
+// the record.
 
 // referencedPath matches a markdown link target and a backticked path.
 //
@@ -110,6 +122,73 @@ func trackedPaths(t *testing.T, root string) map[string]bool {
 	return paths
 }
 
+// generatedTrees are produced by generate-role-metadata, generate-plugin and
+// port-cline-agents. A dead reference in one of them comes from a source that
+// is also scanned, so fixing the source fixes every copy; reporting all four
+// would turn one defect into hundreds of findings.
+var generatedTrees = []string{"plugin/", "cline-plugins/", "provider/"}
+
+// recordPathMarkers identify documents that describe a past state by their
+// nature rather than by a banner.
+var recordPathMarkers = []string{
+	"CHANGELOG", "_PLAN.md", "_SCOPE.md", "ROADMAP", "ADR-",
+	"/proposals/", "/migration/", "/investigations/", "proposed-knowledge/",
+	"docs/archive/", "roster/orchestration/runs/", "ARCHITECTURE.md",
+}
+
+// recordBanner is the self-declaration a document carries when it is kept as
+// history. Checked against the opening of the file, where such a banner
+// belongs -- a reader who has to scroll to find it has already been misled.
+var recordBanner = regexp.MustCompile(`(?i)historical record|not a description of the shipped|superseded|record of what was`)
+
+func liveDocuments(t *testing.T, root string) []string {
+	t.Helper()
+	command := exec.Command("git", "ls-files", "*.md")
+	command.Dir = root
+	output, err := command.Output()
+	if err != nil {
+		t.Skipf("cannot list tracked files (not a git checkout?): %v", err)
+	}
+	var live []string
+	for _, relative := range strings.Split(string(output), "\n") {
+		relative = strings.TrimSpace(relative)
+		if relative == "" {
+			continue
+		}
+		generated := false
+		for _, tree := range generatedTrees {
+			if strings.HasPrefix(relative, tree) {
+				generated = true
+			}
+		}
+		if generated || strings.Contains(relative, "/agents/") {
+			continue
+		}
+		record := false
+		for _, marker := range recordPathMarkers {
+			if strings.Contains(relative, marker) {
+				record = true
+			}
+		}
+		if record {
+			continue
+		}
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
+		if err != nil {
+			continue
+		}
+		opening := content
+		if len(opening) > 1400 {
+			opening = opening[:1400]
+		}
+		if recordBanner.Match(opening) {
+			continue
+		}
+		live = append(live, relative)
+	}
+	return live
+}
+
 func TestNoOperationalDocPointsAtAPathThatIsGone(t *testing.T) {
 	root := filepath.Dir(filepath.Dir(mustGetwd(t)))
 	if _, err := os.Stat(filepath.Join(root, "roster")); err != nil {
@@ -117,17 +196,7 @@ func TestNoOperationalDocPointsAtAPathThatIsGone(t *testing.T) {
 	}
 	tracked := trackedPaths(t, root)
 
-	paths := append([]string{}, operationalDocs...)
-	for _, glob := range operationalDocGlobs {
-		matches, err := filepath.Glob(filepath.Join(root, glob))
-		if err != nil {
-			t.Fatalf("bad glob %q: %v", glob, err)
-		}
-		for _, match := range matches {
-			relative, _ := filepath.Rel(root, match)
-			paths = append(paths, filepath.ToSlash(relative))
-		}
-	}
+	paths := liveDocuments(t, root)
 
 	check := func(doc string, number int, line, reference string, findings *[]string) {
 		reference = strings.TrimSuffix(reference, "/")
@@ -189,8 +258,11 @@ func TestNoOperationalDocPointsAtAPathThatIsGone(t *testing.T) {
 
 	// A guard that scans nothing passes. The operational set is listed by
 	// hand, so an editing accident that empties it would look like success.
-	if read < 10 {
-		t.Fatalf("read only %d operational documents; the list is broken, not the docs", read)
+	// A guard that scans nothing passes. The set is discovered rather than
+	// listed now, so the way it empties is a bad exclusion rule rather than an
+	// editing accident -- which is easier to introduce and just as silent.
+	if read < 100 {
+		t.Fatalf("read only %d live documents of an expected ~290; the exclusion rules are broken, not the docs", read)
 	}
 	if len(findings) > 0 {
 		sort.Strings(findings)

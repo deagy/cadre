@@ -46,7 +46,7 @@ curl -fsSL "$base/SHA256SUMS" | sha256sum --check --ignore-missing
 ```
 
 **`pipx install` is not how you get the kernel, and no longer works.** The
-kernel was a Python distribution installed from a `kernel/` subdirectory of
+kernel was a Python distribution installed from a `kernel/` subdirectory (deleted) of
 this repository; it is a Go binary in its own repository now, that subdirectory
 was deleted at `11eefd47`, and the `kernel-v*` releases it was fetched from
 have been retired so the kernel has one release home. `pip install
