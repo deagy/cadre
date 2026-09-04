@@ -166,8 +166,8 @@ github.com/dave/jennifer v1.7.1/go.mod h1:nXbxhEmQfOZhWml3D1cDK5M1FLnMSozpbFN/m3
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/deagy/recall v0.4.0 h1:WCft8fOsi83o7/1Qc07IgosJ9aVAFsx0CHHyeB8mObE=
-github.com/deagy/recall v0.4.0/go.mod h1:c83FSsHDm2ko5b/3RXbKTKYLEqy+a+u9UpRUKO/NNtg=
+github.com/deagy/recall v0.5.0 h1:MzGV/bHjL+T3W2PxDVzR5fgr6ZpX6DBhKU3HR/BDwPg=
+github.com/deagy/recall v0.5.0/go.mod h1:c83FSsHDm2ko5b/3RXbKTKYLEqy+a+u9UpRUKO/NNtg=
 github.com/denis-tingaikin/go-header v0.5.0 h1:SRdnP5ZKvcO9KKRP1KJrhFR3RrlGuD+42t4429eC9k8=
 github.com/denis-tingaikin/go-header v0.5.0/go.mod h1:mMenU5bWrok6Wl2UsZjy+1okegmwQ3UgWl4V1D8gjlY=
 github.com/dlclark/regexp2 v1.12.0 h1:0j4c5qQmnC6XOWNjP3PIXURXN2gWx76rd3KvgdPkCz8=
