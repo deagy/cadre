@@ -8,7 +8,7 @@ tool (
 )
 
 require (
-	github.com/deagy/recall v0.3.6
+	github.com/deagy/recall v0.4.0
 	github.com/mattn/go-sqlite3 v1.14.49
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
