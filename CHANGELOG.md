@@ -9,6 +9,21 @@ that. New adopters should start with the
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.7.13
+
+**Dependency bump: recall 0.4.0 to 0.5.0.** No behaviour in cadre changes. It
+imports `recall/core`, `recall/index` and `recall/govern`; that release touched
+`loader`, `config` and `cmd`, so none of the packages cadre uses moved.
+
+What 0.5.0 adds, for anyone reading this while deciding whether it matters
+here: chat exports can be ingested as one document per conversation via
+`store.conversation_formats`, a mapping of dot-paths that claims a file when its
+turn and text paths resolve; and the `MinChunkSize` doc comment was corrected --
+the field discards short chunks and never merged them, which the comment had
+claimed for as long as it existed.
+
+Verified before release: go build and go vet clean, all 33 test packages pass.
+
 ## 0.7.12
 
 **The deletion-evidence table is created when the store is opened, not when
