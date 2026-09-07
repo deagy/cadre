@@ -182,3 +182,121 @@ func containsSubstr(haystack, needle string) bool {
 	}
 	return false
 }
+
+// --- Symlink escape guard tests ---
+
+func TestRejectSymlinkEscapeOnReadWithDepthCatchesFileEscape(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("symlink creation may be restricted in some CI sandboxes")
+	}
+	outside := t.TempDir()
+	outsideFile := filepath.Join(outside, "evil.yaml")
+	os.WriteFile(outsideFile, []byte("evil_config: true\n"), 0o644)
+
+	project := makeGitCheckout(t)
+	agentsDir := filepath.Join(project, ".agents", "shared")
+	os.MkdirAll(agentsDir, 0o755)
+	symlinkPath := filepath.Join(agentsDir, "agent-autonomy.yaml")
+	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
+		t.Skipf("cannot create symlink in this environment: %v", err)
+	}
+
+	_, err := rejectSymlinkEscapeOnReadWithDepth(symlinkPath, 3)
+	if err == nil {
+		t.Fatal("expected rejection of a symlink pointing outside the project root")
+	}
+}
+
+func TestRejectSymlinkEscapeOnReadWithDepthCatchesDirectoryEscape(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("symlink creation may be restricted in some CI sandboxes")
+	}
+	outside := t.TempDir()
+	outsideDir := filepath.Join(outside, "evil-dir")
+	os.MkdirAll(outsideDir, 0o755)
+
+	project := makeGitCheckout(t)
+	agentsDir := filepath.Join(project, ".agents")
+	os.MkdirAll(agentsDir, 0o755)
+	symlinkPath := filepath.Join(agentsDir, "shared")
+	if err := os.Symlink(outsideDir, symlinkPath); err != nil {
+		t.Skipf("cannot create symlink in this environment: %v", err)
+	}
+
+	// Try to access a file through the symlinked directory
+	evilFile := filepath.Join(symlinkPath, "agent-autonomy.yaml")
+	os.WriteFile(filepath.Join(outsideDir, "agent-autonomy.yaml"), []byte("evil: true\n"), 0o644)
+
+	_, err := rejectSymlinkEscapeOnReadWithDepth(evilFile, 3)
+	if err == nil {
+		t.Fatal("expected rejection of a file accessed through a symlinked intermediate directory")
+	}
+}
+
+func TestResolveSharedConfigRejectsSymlinkedYAMLOverlay(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("symlink creation may be restricted in some CI sandboxes")
+	}
+	sharedDir := t.TempDir()
+	writeFile(t, filepath.Join(sharedDir, "some-policy.yaml"), "a: 1\n")
+
+	outside := t.TempDir()
+	outsideFile := filepath.Join(outside, "evil.yaml")
+	os.WriteFile(outsideFile, []byte("a: evil\n"), 0o644)
+
+	project := makeGitCheckout(t)
+	agentsDir := filepath.Join(project, ".agents", "shared")
+	os.MkdirAll(agentsDir, 0o755)
+	symlinkPath := filepath.Join(agentsDir, "some-policy.yaml")
+	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
+		t.Skipf("cannot create symlink in this environment: %v", err)
+	}
+
+	_, err := ResolveSharedConfig(sharedDir, "some-policy.yaml", project)
+	if err == nil {
+		t.Fatal("expected ResolveSharedConfig to reject a symlinked overlay pointing outside the project")
+	}
+}
+
+func TestResolveSharedConfigRejectsSymlinkedMarkdownOverlay(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("symlink creation may be restricted in some CI sandboxes")
+	}
+	sharedDir := t.TempDir()
+	writeFile(t, filepath.Join(sharedDir, "policy.md"), "# Base policy\n")
+
+	outside := t.TempDir()
+	outsideFile := filepath.Join(outside, "evil.md")
+	os.WriteFile(outsideFile, []byte("# Evil content\n"), 0o644)
+
+	project := makeGitCheckout(t)
+	agentsDir := filepath.Join(project, ".agents", "shared")
+	os.MkdirAll(agentsDir, 0o755)
+	symlinkPath := filepath.Join(agentsDir, "policy.md")
+	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
+		t.Skipf("cannot create symlink in this environment: %v", err)
+	}
+
+	_, err := ResolveSharedConfig(sharedDir, "policy.md", project)
+	if err == nil {
+		t.Fatal("expected ResolveSharedConfig to reject a symlinked Markdown overlay pointing outside the project")
+	}
+}
+
+func TestResolveSharedConfigAllowsLegitimateOverlay(t *testing.T) {
+	// Regression test: ensure the symlink guard doesn't break normal overlay resolution
+	sharedDir := t.TempDir()
+	writeFile(t, filepath.Join(sharedDir, "some-policy.yaml"), "a: 1\n")
+	dir := makeGitCheckout(t)
+	writeFile(t, filepath.Join(dir, ".agents", "shared", "some-policy.yaml"), "b: 2\n")
+
+	result, err := ResolveSharedConfig(sharedDir, "some-policy.yaml", dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsText {
+		if result.Structured["a"] != 1 || result.Structured["b"] != 2 {
+			t.Errorf("Structured = %v, expected a=1, b=2", result.Structured)
+		}
+	}
+}

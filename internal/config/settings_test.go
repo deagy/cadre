@@ -545,6 +545,29 @@ func TestRejectSymlinkEscapeOnReadCatchesEscape(t *testing.T) {
 	}
 }
 
+func TestRejectSymlinkEscapeOnReadWithDepthCatchesEscape(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("symlink creation may be restricted in some CI sandboxes")
+	}
+	outside := t.TempDir()
+	outsideFile := filepath.Join(outside, "evil-policy.yaml")
+	os.WriteFile(outsideFile, []byte("evil: true\n"), 0o644)
+
+	project := makeGitCheckout(t)
+	agentsDir := filepath.Join(project, ".agents", "shared")
+	os.MkdirAll(agentsDir, 0o755)
+	symlinkPath := filepath.Join(agentsDir, "agent-autonomy.yaml")
+	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
+		t.Skipf("cannot create symlink in this environment: %v", err)
+	}
+
+	// Test with levelsUp=3 for .agents/shared/<filename> relative path
+	_, err := rejectSymlinkEscapeOnReadWithDepth(symlinkPath, 3)
+	if err == nil {
+		t.Fatal("expected rejection of a symlink pointing outside the project root (levelsUp=3)")
+	}
+}
+
 // --- helpers ---
 
 func writeYAML(t *testing.T, path, content string) {

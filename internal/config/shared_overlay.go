@@ -229,6 +229,18 @@ func ResolveSharedConfig(sharedDefaultsDir, filename, start string) (ResolveShar
 	}
 	overlayPath, overlayFound := FindProjectOverlay(filename, start)
 
+	if overlayFound {
+		// Guard against symlink escapes: .agents/shared/<filename> is 3 path
+		// components below the project root, so levelsUp=3. Discovery follows
+		// symlinks, so a malicious symlink or symlinked directory in the
+		// project can point outside the project entirely.
+		var err error
+		overlayPath, err = rejectSymlinkEscapeOnReadWithDepth(overlayPath, 3)
+		if err != nil {
+			return ResolveSharedConfigResult{}, err
+		}
+	}
+
 	if strings.EqualFold(filepath.Ext(defaultPath), ".md") {
 		baseText, err := os.ReadFile(defaultPath)
 		if err != nil {
