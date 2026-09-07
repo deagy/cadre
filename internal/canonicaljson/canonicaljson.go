@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf16"
-	"unicode/utf8"
 )
 
 // Marshal reproduces Python's
@@ -201,11 +200,6 @@ func WriteString(builder *strings.Builder, value string) {
 			fmt.Fprintf(builder, `\u%04x`, runeValue)
 		case runeValue < 0x7f:
 			builder.WriteRune(runeValue)
-		case runeValue == utf8.RuneError:
-			// An invalid byte decodes to RuneError; Python would have raised
-			// on undecodable input long before this point, so emitting the
-			// replacement character's escape is the closest faithful answer.
-			builder.WriteString(`�`)
 		case runeValue > 0xffff:
 			high, low := utf16.EncodeRune(runeValue)
 			fmt.Fprintf(builder, `\u%04x\u%04x`, high, low)
