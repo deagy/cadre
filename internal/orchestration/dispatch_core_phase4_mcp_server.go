@@ -362,27 +362,27 @@ func dispatchToolDefinitions() []MCPToolDefinition {
 				"properties": map[string]any{
 					"role_id": map[string]any{
 						"type":        "string",
-						"description": "The role ID to dispatch",
+						"description": "The role ID to dispatch; must match original request when replaying with confirmation_token",
 					},
 					"brief": map[string]any{
 						"type":        "string",
-						"description": "The task brief for the role",
+						"description": "The task brief for the role; must match original request when replaying with confirmation_token",
 					},
 					"mode": map[string]any{
 						"type":        "string",
-						"description": "Dispatch mode: planning-review-only or scoped-repository-edit",
+						"description": "Dispatch mode: planning-review-only or scoped-repository-edit; must match original request when replaying with confirmation_token",
 					},
 					"classification": map[string]any{
 						"type":        "string",
-						"description": "Data classification: public, internal, confidential, restricted",
+						"description": "Data classification: public, internal, confidential, restricted; must match original request when replaying with confirmation_token",
 					},
 					"confirmation_token": map[string]any{
 						"type":        "string",
-						"description": "Optional confirmation token for write-mode approval",
+						"description": "Optional confirmation token for write-mode approval; bound to the exact role_id, brief, mode, classification, and task_id of the original request",
 					},
 					"task_id": map[string]any{
 						"type":        "string",
-						"description": "Optional task ID for audit tracking",
+						"description": "Optional task ID for audit tracking; must match original request when replaying with confirmation_token",
 					},
 					"wait": map[string]any{
 						"type":        "boolean",
@@ -400,11 +400,11 @@ func dispatchToolDefinitions() []MCPToolDefinition {
 				"properties": map[string]any{
 					"members": map[string]any{
 						"type":        "array",
-						"description": "Team members, each with role_id and brief",
+						"description": "Team members, each with role_id and brief; must match original request (same roles, same order) when replaying with confirmation_token",
 					},
 					"mode": map[string]any{
 						"type":        "string",
-						"description": "Dispatch mode for all members",
+						"description": "Dispatch mode for all members; must match original request when replaying with confirmation_token",
 					},
 					"wait": map[string]any{
 						"type":        "boolean",
