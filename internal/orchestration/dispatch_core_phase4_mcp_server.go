@@ -384,6 +384,18 @@ func dispatchToolDefinitions() []MCPToolDefinition {
 						"type":        "string",
 						"description": "Optional task ID for audit tracking; must match original request when replaying with confirmation_token",
 					},
+					"session_id": map[string]any{
+						"type":        "string",
+						"description": "Optional session ID for multi-dispatch context tracking",
+					},
+					"parent_classification": map[string]any{
+						"type":        "string",
+						"description": "Optional parent classification context",
+					},
+					"runner": map[string]any{
+						"type":        "string",
+						"description": "Optional runner identifier",
+					},
 					"wait": map[string]any{
 						"type":        "boolean",
 						"description": "Wait for completion (sync) or return immediately (async)",
@@ -406,12 +418,36 @@ func dispatchToolDefinitions() []MCPToolDefinition {
 						"type":        "string",
 						"description": "Dispatch mode for all members; must match original request when replaying with confirmation_token",
 					},
+					"classification": map[string]any{
+						"type":        "string",
+						"description": "Data classification: public, internal, confidential, restricted; must match original request when replaying with confirmation_token",
+					},
+					"confirmation_token": map[string]any{
+						"type":        "string",
+						"description": "Optional confirmation token for write-mode approval; bound to the exact members, mode, classification, and task_id of the original request",
+					},
+					"task_id": map[string]any{
+						"type":        "string",
+						"description": "Optional task ID for audit tracking; must match original request when replaying with confirmation_token",
+					},
+					"session_id": map[string]any{
+						"type":        "string",
+						"description": "Optional session ID for multi-dispatch context tracking",
+					},
+					"parent_classification": map[string]any{
+						"type":        "string",
+						"description": "Optional parent classification context",
+					},
+					"runner": map[string]any{
+						"type":        "string",
+						"description": "Optional runner identifier",
+					},
 					"wait": map[string]any{
 						"type":        "boolean",
 						"description": "Wait for all members (sync) or return immediately (async)",
 					},
 				},
-				"required": []string{"members", "mode", "wait"},
+				"required": []string{"members", "mode", "classification", "wait"},
 			},
 		},
 		{

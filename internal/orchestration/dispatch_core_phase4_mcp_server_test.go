@@ -444,3 +444,98 @@ func TestMCPToolResponseJSON(t *testing.T) {
 		t.Errorf("marshaled response is empty")
 	}
 }
+
+func TestDispatchToolSchemasIncludeRequiredFields(t *testing.T) {
+	defs := dispatchToolDefinitions()
+
+	// Find dispatch_secure_cloud_role and dispatch_team
+	var roleDef, teamDef *MCPToolDefinition
+	for i := range defs {
+		switch defs[i].Name {
+		case "dispatch_secure_cloud_role":
+			roleDef = &defs[i]
+		case "dispatch_team":
+			teamDef = &defs[i]
+		}
+	}
+
+	if roleDef == nil {
+		t.Fatalf("dispatch_secure_cloud_role not found in tool definitions")
+	}
+	if teamDef == nil {
+		t.Fatalf("dispatch_team not found in tool definitions")
+	}
+
+	// Both schemas should have these properties as consistent across single-role
+	// and team dispatch contexts.
+	commonFields := []string{
+		"mode", "classification", "wait",
+	}
+
+	optionalFields := []string{
+		"confirmation_token", "task_id", "session_id", "parent_classification", "runner",
+	}
+
+	// Check dispatch_secure_cloud_role schema has all common and optional fields
+	roleProps := roleDef.Schema["properties"].(map[string]any)
+	for _, field := range commonFields {
+		if _, ok := roleProps[field]; !ok {
+			t.Errorf("dispatch_secure_cloud_role missing property: %s", field)
+		}
+	}
+
+	for _, field := range optionalFields {
+		if _, ok := roleProps[field]; !ok {
+			t.Errorf("dispatch_secure_cloud_role missing optional property: %s", field)
+		}
+	}
+
+	// Check dispatch_team schema has all common and optional fields
+	teamProps := teamDef.Schema["properties"].(map[string]any)
+	for _, field := range commonFields {
+		if _, ok := teamProps[field]; !ok {
+			t.Errorf("dispatch_team missing property: %s", field)
+		}
+	}
+
+	for _, field := range optionalFields {
+		if _, ok := teamProps[field]; !ok {
+			t.Errorf("dispatch_team missing optional property: %s", field)
+		}
+	}
+
+	// Check required lists
+	roleRequired := roleDef.Schema["required"].([]string)
+	teamRequired := teamDef.Schema["required"].([]string)
+
+	// Both should require classification (it has no omitempty in the struct)
+	checkRequired := func(name string, required []string) {
+		found := false
+		for _, r := range required {
+			if r == "classification" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("%s does not have classification in required", name)
+		}
+	}
+
+	checkRequired("dispatch_secure_cloud_role", roleRequired)
+	checkRequired("dispatch_team", teamRequired)
+
+	// Optional fields should NOT be in required lists (they have omitempty tags)
+	checkNotRequired := func(name string, required []string) {
+		for _, field := range optionalFields {
+			for _, r := range required {
+				if r == field {
+					t.Errorf("%s has optional field %s in required list", name, field)
+				}
+			}
+		}
+	}
+
+	checkNotRequired("dispatch_secure_cloud_role", roleRequired)
+	checkNotRequired("dispatch_team", teamRequired)
+}
