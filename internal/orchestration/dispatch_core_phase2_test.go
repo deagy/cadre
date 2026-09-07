@@ -1254,42 +1254,46 @@ func TestTeamConfirmationTokenClassificationBinding(t *testing.T) {
 }
 
 // TestDispatchSecureCloudRoleClassificationCeiling verifies that a dispatch with
-// classification exceeding the parent classification is denied.
+// classification exceeding the environment-inherited parent classification is denied.
+// This test verifies the OLD behavior for backward compatibility: tests that pass
+// parentClassification in the MCP request now have that field ignored for enforcement
+// purposes (it was never the authoritative source). Instead, the environment variable
+// is authoritative. This test updates to use the env var.
 func TestDispatchSecureCloudRoleClassificationCeiling(t *testing.T) {
 	stubRunner(t)
 
 	tests := []struct {
 		name                      string
 		classification            string
-		parentClassification      string
+		envParentClassification   string // Now uses the env var, not the request parameter
 		expectDenied              bool
 		expectClassificationError bool
 	}{
 		{
 			name:                      "equal classifications allowed",
 			classification:            "internal",
-			parentClassification:      "internal",
+			envParentClassification:   "internal",
 			expectDenied:              false,
 			expectClassificationError: false,
 		},
 		{
 			name:                      "lower classification allowed",
 			classification:            "public",
-			parentClassification:      "internal",
+			envParentClassification:   "internal",
 			expectDenied:              false,
 			expectClassificationError: false,
 		},
 		{
 			name:                      "exceeding classification denied",
 			classification:            "restricted",
-			parentClassification:      "internal",
+			envParentClassification:   "internal",
 			expectDenied:              true,
 			expectClassificationError: true,
 		},
 		{
 			name:                      "confidential exceeds internal",
 			classification:            "confidential",
-			parentClassification:      "internal",
+			envParentClassification:   "internal",
 			expectDenied:              true,
 			expectClassificationError: true,
 		},
@@ -1297,6 +1301,10 @@ func TestDispatchSecureCloudRoleClassificationCeiling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.envParentClassification != "" {
+				t.Setenv(ParentClassificationVar, tt.envParentClassification)
+			}
+
 			result := DispatchSecureCloudRole(
 				testRoots(t, "code-reviewer"),
 				"code-reviewer",
@@ -1306,7 +1314,7 @@ func TestDispatchSecureCloudRoleClassificationCeiling(t *testing.T) {
 				"",
 				"task123",
 				"session123",
-				tt.parentClassification,
+				"", // parentClassification request parameter is now ignored
 				DefaultRunner,
 				true,
 			)
@@ -1330,7 +1338,7 @@ func TestDispatchSecureCloudRoleClassificationCeiling(t *testing.T) {
 			} else if status == "denied" {
 				if reason, ok := result["reason"].(string); ok && strings.Contains(reason, "exceeds") {
 					t.Errorf("classification %s should not exceed parent %s, but was denied: %s",
-						tt.classification, tt.parentClassification, reason)
+						tt.classification, tt.envParentClassification, reason)
 				}
 			}
 		})
@@ -1338,7 +1346,10 @@ func TestDispatchSecureCloudRoleClassificationCeiling(t *testing.T) {
 }
 
 // TestDispatchTeamClassificationCeiling verifies that a team dispatch with
-// classification exceeding the parent classification is denied.
+// classification exceeding the environment-inherited parent classification is denied.
+// This test verifies the OLD behavior for backward compatibility: tests that pass
+// parentClassification in the MCP request now have that field ignored for enforcement
+// purposes. Instead, the environment variable is authoritative.
 func TestDispatchTeamClassificationCeiling(t *testing.T) {
 	members := []map[string]string{
 		{"role_id": "code-reviewer", "brief": "task 1"},
@@ -1347,28 +1358,28 @@ func TestDispatchTeamClassificationCeiling(t *testing.T) {
 	tests := []struct {
 		name                      string
 		classification            string
-		parentClassification      string
+		envParentClassification   string // Now uses the env var, not the request parameter
 		expectDenied              bool
 		expectClassificationError bool
 	}{
 		{
 			name:                      "equal classifications allowed",
 			classification:            "internal",
-			parentClassification:      "internal",
+			envParentClassification:   "internal",
 			expectDenied:              false,
 			expectClassificationError: false,
 		},
 		{
 			name:                      "lower classification allowed",
 			classification:            "public",
-			parentClassification:      "internal",
+			envParentClassification:   "internal",
 			expectDenied:              false,
 			expectClassificationError: false,
 		},
 		{
 			name:                      "exceeding classification denied",
 			classification:            "restricted",
-			parentClassification:      "internal",
+			envParentClassification:   "internal",
 			expectDenied:              true,
 			expectClassificationError: true,
 		},
@@ -1376,6 +1387,10 @@ func TestDispatchTeamClassificationCeiling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.envParentClassification != "" {
+				t.Setenv(ParentClassificationVar, tt.envParentClassification)
+			}
+
 			result := DispatchTeam(
 				testRoots(t, "code-reviewer"),
 				members,
@@ -1384,7 +1399,7 @@ func TestDispatchTeamClassificationCeiling(t *testing.T) {
 				"",
 				"task123",
 				"session123",
-				tt.parentClassification,
+				"", // parentClassification request parameter is now ignored
 				DefaultRunner,
 				true,
 			)
@@ -1408,7 +1423,243 @@ func TestDispatchTeamClassificationCeiling(t *testing.T) {
 			} else if status == "denied" {
 				if reason, ok := result["reason"].(string); ok && strings.Contains(reason, "exceeds") {
 					t.Errorf("classification %s should not exceed parent %s, but was denied: %s",
-						tt.classification, tt.parentClassification, reason)
+						tt.classification, tt.envParentClassification, reason)
+				}
+			}
+		})
+	}
+}
+
+// TestDispatchSecureCloudRoleEnvInheritedCeilingEnforcement verifies that the
+// classification ceiling is enforced based on the inherited SECURE_CLOUD_AGENTS_PARENT_CLASSIFICATION
+// environment variable, not on the caller-supplied parentClassification request field.
+// This is the core security fix: a child process inherits its parent's classification
+// in the env var, and no caller can lie about that ceiling to escape it.
+func TestDispatchSecureCloudRoleEnvInheritedCeilingEnforcement(t *testing.T) {
+	stubRunner(t)
+
+	tests := []struct {
+		name                        string
+		envParentClassification     string // SECURE_CLOUD_AGENTS_PARENT_CLASSIFICATION env var
+		requestParentClassification string // parent_classification in MCP request (caller-supplied)
+		dispatchClassification      string // classification being requested in dispatch
+		expectDenied                bool
+		expectClassificationError   bool
+	}{
+		{
+			name:                        "env ceiling internal, caller claims no ceiling, dispatch restricted - DENIED",
+			envParentClassification:     "internal",
+			requestParentClassification: "", // caller omits or claims no ceiling
+			dispatchClassification:      "restricted",
+			expectDenied:                true,
+			expectClassificationError:   true,
+		},
+		{
+			name:                        "env ceiling internal, caller claims permissive ceiling, dispatch restricted - DENIED",
+			envParentClassification:     "internal",
+			requestParentClassification: "restricted", // caller lies and claims permissive ceiling
+			dispatchClassification:      "restricted",
+			expectDenied:                true,
+			expectClassificationError:   true,
+		},
+		{
+			name:                        "env ceiling internal, dispatch internal - ALLOWED",
+			envParentClassification:     "internal",
+			requestParentClassification: "",
+			dispatchClassification:      "internal",
+			expectDenied:                false,
+			expectClassificationError:   false,
+		},
+		{
+			name:                        "env ceiling internal, dispatch public - ALLOWED",
+			envParentClassification:     "internal",
+			requestParentClassification: "",
+			dispatchClassification:      "public",
+			expectDenied:                false,
+			expectClassificationError:   false,
+		},
+		{
+			name:                        "no env ceiling (top-level), dispatch restricted - ALLOWED",
+			envParentClassification:     "", // unset = top-level, no ceiling
+			requestParentClassification: "",
+			dispatchClassification:      "restricted",
+			expectDenied:                false,
+			expectClassificationError:   false,
+		},
+		{
+			name:                        "no env ceiling (top-level), caller claims ceiling, dispatch exceeds claimed - ALLOWED (env is source of truth)",
+			envParentClassification:     "", // unset = top-level, no ceiling, caller's claim is ignored
+			requestParentClassification: "internal",
+			dispatchClassification:      "restricted",
+			expectDenied:                false,
+			expectClassificationError:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up environment: SECURE_CLOUD_AGENTS_PARENT_CLASSIFICATION comes from
+			// the parent process and is the authoritative ceiling. Use t.Setenv to
+			// automatically clean up after this subtest.
+			if tt.envParentClassification != "" {
+				t.Setenv(ParentClassificationVar, tt.envParentClassification)
+			}
+
+			result := DispatchSecureCloudRole(
+				testRoots(t, "code-reviewer"),
+				"code-reviewer",
+				"test brief",
+				ModePlanningOnly,
+				tt.dispatchClassification,
+				"",
+				"task123",
+				"session123",
+				tt.requestParentClassification, // This is the caller-supplied value that SHOULD be ignored for enforcement
+				DefaultRunner,
+				true,
+			)
+
+			status := result["status"].(string)
+			if tt.expectDenied {
+				if status != "denied" {
+					t.Errorf("expected denied status, got %q", status)
+					return
+				}
+				if tt.expectClassificationError {
+					reason, ok := result["reason"].(string)
+					if !ok {
+						t.Errorf("denied result missing reason field")
+						return
+					}
+					if !strings.Contains(reason, "exceeds") {
+						t.Errorf("expected classification ceiling error, got reason: %s", reason)
+					}
+				}
+			} else if status == "denied" {
+				if reason, ok := result["reason"].(string); ok && strings.Contains(reason, "exceeds") {
+					t.Errorf("dispatch should have been allowed but was denied: %s", reason)
+				}
+			}
+		})
+	}
+}
+
+// TestDispatchTeamEnvInheritedCeilingEnforcement verifies that team dispatch
+// also enforces the classification ceiling based on the inherited environment
+// variable, not the caller-supplied request field.
+func TestDispatchTeamEnvInheritedCeilingEnforcement(t *testing.T) {
+	members := []map[string]string{
+		{"role_id": "code-reviewer", "brief": "review code"},
+	}
+
+	tests := []struct {
+		name                        string
+		envParentClassification     string
+		requestParentClassification string
+		dispatchClassification      string
+		expectDenied                bool
+		expectClassificationError   bool
+	}{
+		{
+			name:                        "team: env ceiling internal, caller claims no ceiling, dispatch restricted - DENIED",
+			envParentClassification:     "internal",
+			requestParentClassification: "",
+			dispatchClassification:      "restricted",
+			expectDenied:                true,
+			expectClassificationError:   true,
+		},
+		{
+			name:                        "team: env ceiling internal, caller lies permissive, dispatch confidential - DENIED",
+			envParentClassification:     "internal",
+			requestParentClassification: "confidential", // caller lies
+			dispatchClassification:      "confidential",
+			expectDenied:                true,
+			expectClassificationError:   true,
+		},
+		{
+			name:                        "team: no env ceiling (top-level), dispatch restricted - ALLOWED",
+			envParentClassification:     "", // unset = top-level
+			requestParentClassification: "",
+			dispatchClassification:      "restricted",
+			expectDenied:                false,
+			expectClassificationError:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envParentClassification != "" {
+				t.Setenv(ParentClassificationVar, tt.envParentClassification)
+			}
+
+			result := DispatchTeam(
+				testRoots(t, "code-reviewer"),
+				members,
+				ModePlanningOnly,
+				tt.dispatchClassification,
+				"",
+				"task123",
+				"session123",
+				tt.requestParentClassification, // Should be ignored for enforcement
+				DefaultRunner,
+				true,
+			)
+
+			status := result["status"].(string)
+			if tt.expectDenied {
+				if status != "denied" {
+					t.Errorf("expected denied status, got %q", status)
+					return
+				}
+				if tt.expectClassificationError {
+					reason, ok := result["reason"].(string)
+					if !ok {
+						t.Errorf("denied result missing reason field")
+						return
+					}
+					if !strings.Contains(reason, "exceeds") {
+						t.Errorf("expected classification ceiling error, got reason: %s", reason)
+					}
+				}
+			} else if status == "denied" {
+				if reason, ok := result["reason"].(string); ok && strings.Contains(reason, "exceeds") {
+					t.Errorf("team dispatch should have been allowed but was denied: %s", reason)
+				}
+			}
+		})
+	}
+}
+
+// TestDispatchSecureCloudRoleTopLevelNoClassificationCeiling verifies that a
+// genuinely top-level dispatch (no parent process, env var unset) is not subject
+// to any classification ceiling and can dispatch at any valid classification.
+func TestDispatchSecureCloudRoleTopLevelNoClassificationCeiling(t *testing.T) {
+	stubRunner(t)
+	// Explicitly ensure the env var is unset (no parent).
+	for _, classification := range []string{"public", "internal", "confidential", "restricted"} {
+		t.Run(classification, func(t *testing.T) {
+			// This test is specifically about the top-level case.
+			// Verify that with no env var set, any classification is allowed.
+			result := DispatchSecureCloudRole(
+				testRoots(t, "code-reviewer"),
+				"code-reviewer",
+				"test brief",
+				ModePlanningOnly,
+				classification,
+				"",
+				"task123",
+				"session123",
+				"", // no parent classification from request
+				DefaultRunner,
+				true,
+			)
+
+			status := result["status"].(string)
+			// Any valid classification should be allowed when there's no env-inherited ceiling
+			if status == "denied" {
+				if reason, ok := result["reason"].(string); ok && strings.Contains(reason, "exceeds") {
+					t.Errorf("top-level dispatch of %q should not be subject to classification ceiling: %s",
+						classification, reason)
 				}
 			}
 		})

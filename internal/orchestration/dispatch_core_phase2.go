@@ -86,8 +86,15 @@ func DispatchSecureCloudRole(
 			})
 	}
 
-	// Validate classification and enforce ceiling against parent classification
-	if _, err := ValidateClassification(classification, parentClassification); err != nil {
+	// Validate classification and enforce ceiling against parent classification.
+	// The actual, trustworthy ceiling comes from the environment variable that
+	// was inherited from the parent process (if any). The caller-supplied
+	// parentClassification parameter is ignored for enforcement purposes to
+	// prevent callers in lower-privilege child processes from lying about their
+	// own ceiling. If the env var is unset, this is a top-level dispatch with
+	// no ceiling.
+	envParentClassification := os.Getenv(ParentClassificationVar)
+	if _, err := ValidateClassification(classification, envParentClassification); err != nil {
 		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
 			map[string]any{
 				"status": "denied",
@@ -479,8 +486,15 @@ func DispatchTeam(
 		}
 	}
 
-	// Validate classification and enforce ceiling against parent classification
-	if _, err := ValidateClassification(classification, parentClassification); err != nil {
+	// Validate classification and enforce ceiling against parent classification.
+	// The actual, trustworthy ceiling comes from the environment variable that
+	// was inherited from the parent process (if any). The caller-supplied
+	// parentClassification parameter is ignored for enforcement purposes to
+	// prevent callers in lower-privilege child processes from lying about their
+	// own ceiling. If the env var is unset, this is a top-level dispatch with
+	// no ceiling.
+	envParentClassification := os.Getenv(ParentClassificationVar)
+	if _, err := ValidateClassification(classification, envParentClassification); err != nil {
 		return map[string]any{
 			"status": "denied",
 			"reason": err.Error(),

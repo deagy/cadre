@@ -54,13 +54,18 @@ type MCPToolResponse struct {
 
 // DispatchSecureCloudRoleRequest is the MCP tool arguments for dispatch_secure_cloud_role
 type DispatchSecureCloudRoleRequest struct {
-	RoleID               string `json:"role_id"`
-	Brief                string `json:"brief"`
-	Mode                 string `json:"mode"`
-	Classification       string `json:"classification"`
-	ConfirmationToken    string `json:"confirmation_token,omitempty"`
-	TaskID               string `json:"task_id,omitempty"`
-	SessionID            string `json:"session_id,omitempty"`
+	RoleID            string `json:"role_id"`
+	Brief             string `json:"brief"`
+	Mode              string `json:"mode"`
+	Classification    string `json:"classification"`
+	ConfirmationToken string `json:"confirmation_token,omitempty"`
+	TaskID            string `json:"task_id,omitempty"`
+	SessionID         string `json:"session_id,omitempty"`
+	// ParentClassification is informational only and not used for enforcement.
+	// The actual classification ceiling is determined from the
+	// SECURE_CLOUD_AGENTS_PARENT_CLASSIFICATION environment variable, which is
+	// inherited from the parent process. This field is kept for audit/logging
+	// purposes only.
 	ParentClassification string `json:"parent_classification,omitempty"`
 	Runner               string `json:"runner,omitempty"`
 	Wait                 bool   `json:"wait"`
@@ -68,15 +73,20 @@ type DispatchSecureCloudRoleRequest struct {
 
 // DispatchTeamRequest is the MCP tool arguments for dispatch_team
 type DispatchTeamRequest struct {
-	Members              []map[string]string `json:"members"`
-	Mode                 string              `json:"mode"`
-	Classification       string              `json:"classification"`
-	ConfirmationToken    string              `json:"confirmation_token,omitempty"`
-	TaskID               string              `json:"task_id,omitempty"`
-	SessionID            string              `json:"session_id,omitempty"`
-	ParentClassification string              `json:"parent_classification,omitempty"`
-	Runner               string              `json:"runner,omitempty"`
-	Wait                 bool                `json:"wait"`
+	Members           []map[string]string `json:"members"`
+	Mode              string              `json:"mode"`
+	Classification    string              `json:"classification"`
+	ConfirmationToken string              `json:"confirmation_token,omitempty"`
+	TaskID            string              `json:"task_id,omitempty"`
+	SessionID         string              `json:"session_id,omitempty"`
+	// ParentClassification is informational only and not used for enforcement.
+	// The actual classification ceiling is determined from the
+	// SECURE_CLOUD_AGENTS_PARENT_CLASSIFICATION environment variable, which is
+	// inherited from the parent process. This field is kept for audit/logging
+	// purposes only.
+	ParentClassification string `json:"parent_classification,omitempty"`
+	Runner               string `json:"runner,omitempty"`
+	Wait                 bool   `json:"wait"`
 }
 
 // PollDispatchStatusRequest is the MCP tool arguments for poll_dispatch_status
@@ -390,7 +400,7 @@ func dispatchToolDefinitions() []MCPToolDefinition {
 					},
 					"parent_classification": map[string]any{
 						"type":        "string",
-						"description": "Optional parent classification context",
+						"description": "Informational only, recorded for audit -- not used to enforce a classification ceiling. The ceiling is derived solely from this process's own inherited SECURE_CLOUD_AGENTS_PARENT_CLASSIFICATION environment variable, which a caller cannot set or override through this field",
 					},
 					"runner": map[string]any{
 						"type":        "string",
@@ -436,7 +446,7 @@ func dispatchToolDefinitions() []MCPToolDefinition {
 					},
 					"parent_classification": map[string]any{
 						"type":        "string",
-						"description": "Optional parent classification context",
+						"description": "Informational only, recorded for audit -- not used to enforce a classification ceiling. The ceiling is derived solely from this process's own inherited SECURE_CLOUD_AGENTS_PARENT_CLASSIFICATION environment variable, which a caller cannot set or override through this field",
 					},
 					"runner": map[string]any{
 						"type":        "string",
