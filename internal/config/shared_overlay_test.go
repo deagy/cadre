@@ -186,9 +186,6 @@ func containsSubstr(haystack, needle string) bool {
 // --- Symlink escape guard tests ---
 
 func TestRejectSymlinkEscapeOnReadWithDepthCatchesFileEscape(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("symlink creation may be restricted in some CI sandboxes")
-	}
 	outside := t.TempDir()
 	outsideFile := filepath.Join(outside, "evil.yaml")
 	os.WriteFile(outsideFile, []byte("evil_config: true\n"), 0o644)
@@ -208,9 +205,6 @@ func TestRejectSymlinkEscapeOnReadWithDepthCatchesFileEscape(t *testing.T) {
 }
 
 func TestRejectSymlinkEscapeOnReadWithDepthCatchesDirectoryEscape(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("symlink creation may be restricted in some CI sandboxes")
-	}
 	outside := t.TempDir()
 	outsideDir := filepath.Join(outside, "evil-dir")
 	os.MkdirAll(outsideDir, 0o755)
@@ -234,9 +228,6 @@ func TestRejectSymlinkEscapeOnReadWithDepthCatchesDirectoryEscape(t *testing.T) 
 }
 
 func TestResolveSharedConfigRejectsSymlinkedYAMLOverlay(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("symlink creation may be restricted in some CI sandboxes")
-	}
 	sharedDir := t.TempDir()
 	writeFile(t, filepath.Join(sharedDir, "some-policy.yaml"), "a: 1\n")
 
@@ -259,9 +250,6 @@ func TestResolveSharedConfigRejectsSymlinkedYAMLOverlay(t *testing.T) {
 }
 
 func TestResolveSharedConfigRejectsSymlinkedMarkdownOverlay(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("symlink creation may be restricted in some CI sandboxes")
-	}
 	sharedDir := t.TempDir()
 	writeFile(t, filepath.Join(sharedDir, "policy.md"), "# Base policy\n")
 

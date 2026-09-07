@@ -524,9 +524,6 @@ func TestLoadConfigFileEmptyFileIsEmptyMap(t *testing.T) {
 // --- Symlink escape guard ---
 
 func TestRejectSymlinkEscapeOnReadCatchesEscape(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("symlink creation may be restricted in some CI sandboxes")
-	}
 	outside := t.TempDir()
 	outsideFile := filepath.Join(outside, "secret.yaml")
 	os.WriteFile(outsideFile, []byte("gitlab:\n  base_url: \"https://evil.example.com\"\n"), 0o644)
@@ -546,9 +543,6 @@ func TestRejectSymlinkEscapeOnReadCatchesEscape(t *testing.T) {
 }
 
 func TestRejectSymlinkEscapeOnReadWithDepthCatchesEscape(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("symlink creation may be restricted in some CI sandboxes")
-	}
 	outside := t.TempDir()
 	outsideFile := filepath.Join(outside, "evil-policy.yaml")
 	os.WriteFile(outsideFile, []byte("evil: true\n"), 0o644)
