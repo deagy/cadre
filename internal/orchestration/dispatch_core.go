@@ -195,10 +195,14 @@ func NewConfirmationGate() *ConfirmationGate {
 	}
 }
 
-// RequestConfirmation creates a pending confirmation that requires a token replay
+// RequestConfirmation creates a pending confirmation that requires a token replay.
+// It also performs a lazy sweep of expired entries to prevent unbounded growth.
 func (cg *ConfirmationGate) RequestConfirmation(data map[string]any) (string, error) {
 	cg.mu.Lock()
 	defer cg.mu.Unlock()
+
+	// Lazy sweep: remove expired entries before adding a new one
+	cg.sweepExpiredLocked()
 
 	token, err := generateConfirmationToken()
 	if err != nil {
@@ -216,8 +220,27 @@ func (cg *ConfirmationGate) RequestConfirmation(data map[string]any) (string, er
 	return token, nil
 }
 
-// ValidateConfirmation checks that the token is valid and current
-func (cg *ConfirmationGate) ValidateConfirmation(token string) (map[string]any, error) {
+// sweepExpiredLocked removes all expired entries from the pending map.
+// Must be called while holding cg.mu.
+func (cg *ConfirmationGate) sweepExpiredLocked() {
+	now := time.Now()
+	for token, pc := range cg.pending {
+		if now.Sub(pc.Timestamp) > ConfirmationTTLSeconds*time.Second {
+			delete(cg.pending, token)
+		}
+	}
+}
+
+// ValidateConfirmation checks that the token is valid, current, and bound to the
+// expected dispatch parameters. Tokens can be either:
+//   - Regular single-role tokens: bind to roleID, brief, mode, classification, taskID
+//   - Per-member tokens (from team dispatch): bind to roleID, mode, classification, taskID
+//
+// Any mismatch is treated as invalid/expired to avoid leaking which field differed.
+// Returns the stored data if validation succeeds.
+func (cg *ConfirmationGate) ValidateConfirmation(
+	token, expectedRoleID, expectedBrief, expectedMode, expectedClassification, expectedTaskID string,
+) (map[string]any, error) {
 	cg.mu.Lock()
 	defer cg.mu.Unlock()
 
@@ -229,7 +252,39 @@ func (cg *ConfirmationGate) ValidateConfirmation(token string) (map[string]any, 
 	// Check TTL
 	if time.Since(pc.Timestamp) > ConfirmationTTLSeconds*time.Second {
 		delete(cg.pending, token)
-		return nil, fmt.Errorf("confirmation token expired")
+		return nil, fmt.Errorf("invalid or expired confirmation token")
+	}
+
+	// Determine token type: per-member tokens have "source" == "team_dispatch"
+	isPerMemberToken := false
+	if source, ok := pc.Data["source"].(string); ok && source == "team_dispatch" {
+		isPerMemberToken = true
+	}
+
+	// Bind validation: token's stored data must match current dispatch exactly.
+	// On mismatch, return error but leave token untouched so legitimate retry can proceed.
+	// Only delete on successful match or TTL expiry (already handled above).
+	if storedRoleID, ok := pc.Data["role_id"].(string); !ok || storedRoleID != expectedRoleID {
+		return nil, fmt.Errorf("invalid or expired confirmation token")
+	}
+
+	// Per-member tokens skip brief validation (they don't contain brief)
+	if !isPerMemberToken {
+		if storedBrief, ok := pc.Data["brief"].(string); !ok || storedBrief != expectedBrief {
+			return nil, fmt.Errorf("invalid or expired confirmation token")
+		}
+	}
+
+	if storedMode, ok := pc.Data["mode"].(string); !ok || storedMode != expectedMode {
+		return nil, fmt.Errorf("invalid or expired confirmation token")
+	}
+
+	if storedClassification, ok := pc.Data["classification"].(string); !ok || storedClassification != expectedClassification {
+		return nil, fmt.Errorf("invalid or expired confirmation token")
+	}
+
+	if storedTaskID, ok := pc.Data["task_id"].(string); !ok || storedTaskID != expectedTaskID {
+		return nil, fmt.Errorf("invalid or expired confirmation token")
 	}
 
 	// Consume the token

@@ -265,8 +265,14 @@ func TestValidateClassificationExceedsParent(t *testing.T) {
 func TestConfirmationGateFlow(t *testing.T) {
 	gate := NewConfirmationGate()
 
-	// Request confirmation
-	data := map[string]any{"role_id": "test-role", "brief": "test brief"}
+	// Request confirmation with full dispatch parameters
+	data := map[string]any{
+		"role_id":        "test-role",
+		"brief":          "test brief",
+		"mode":           ModeRepositoryEdit,
+		"classification": "internal",
+		"task_id":        "task-123",
+	}
 	token, err := gate.RequestConfirmation(data)
 	if err != nil {
 		t.Fatalf("RequestConfirmation failed: %v", err)
@@ -275,8 +281,8 @@ func TestConfirmationGateFlow(t *testing.T) {
 		t.Errorf("token is empty, want non-empty")
 	}
 
-	// Validate token
-	retrieved, err := gate.ValidateConfirmation(token)
+	// Validate token with matching parameters
+	retrieved, err := gate.ValidateConfirmation(token, "test-role", "test brief", ModeRepositoryEdit, "internal", "task-123")
 	if err != nil {
 		t.Errorf("ValidateConfirmation failed: %v", err)
 	}
@@ -285,7 +291,7 @@ func TestConfirmationGateFlow(t *testing.T) {
 	}
 
 	// Token consumed - second validation should fail
-	_, err = gate.ValidateConfirmation(token)
+	_, err = gate.ValidateConfirmation(token, "test-role", "test brief", ModeRepositoryEdit, "internal", "task-123")
 	if err == nil {
 		t.Errorf("ValidateConfirmation should fail for consumed token")
 	}
@@ -294,8 +300,14 @@ func TestConfirmationGateFlow(t *testing.T) {
 func TestConfirmationGateTTL(t *testing.T) {
 	gate := NewConfirmationGate()
 
-	// Request confirmation
-	data := map[string]any{"test": "data"}
+	// Request confirmation with full dispatch parameters
+	data := map[string]any{
+		"role_id":        "test-role",
+		"brief":          "test brief",
+		"mode":           ModeRepositoryEdit,
+		"classification": "internal",
+		"task_id":        "task-123",
+	}
 	token, err := gate.RequestConfirmation(data)
 	if err != nil {
 		t.Fatalf("RequestConfirmation failed: %v", err)
@@ -309,7 +321,7 @@ func TestConfirmationGateTTL(t *testing.T) {
 	gate.mu.Unlock()
 
 	// Validation should fail - token expired
-	_, err = gate.ValidateConfirmation(token)
+	_, err = gate.ValidateConfirmation(token, "test-role", "test brief", ModeRepositoryEdit, "internal", "task-123")
 	if err == nil {
 		t.Errorf("ValidateConfirmation should fail for expired token")
 	}

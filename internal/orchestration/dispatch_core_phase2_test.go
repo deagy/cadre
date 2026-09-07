@@ -276,11 +276,14 @@ func TestDispatchTeamConcurrency(t *testing.T) {
 func TestTeamConfirmationGate(t *testing.T) {
 	gate := NewTeamConfirmationGate()
 
+	members := []map[string]string{
+		{"role_id": "code-reviewer", "brief": "brief1"},
+	}
+
 	data := map[string]any{
-		"members": []map[string]string{
-			{"role_id": "code-reviewer", "brief": "brief1"},
-		},
-		"mode": ModePlanningOnly,
+		"members": members,
+		"mode":    ModePlanningOnly,
+		"task_id": "task-123",
 	}
 
 	token, err := gate.RequestConfirmation(data)
@@ -291,14 +294,14 @@ func TestTeamConfirmationGate(t *testing.T) {
 		t.Errorf("token is empty")
 	}
 
-	// Validate token
-	err = gate.ValidateConfirmation(token)
+	// Validate token with matching parameters
+	err = gate.ValidateConfirmation(token, members, ModePlanningOnly, "task-123")
 	if err != nil {
 		t.Errorf("ValidateConfirmation failed: %v", err)
 	}
 
 	// Second validation should fail - token consumed
-	err = gate.ValidateConfirmation(token)
+	err = gate.ValidateConfirmation(token, members, ModePlanningOnly, "task-123")
 	if err == nil {
 		t.Errorf("ValidateConfirmation should fail for consumed token")
 	}
@@ -452,11 +455,14 @@ func TestDispatchAsyncNoWait(t *testing.T) {
 func TestTeamConfirmationGateTTL(t *testing.T) {
 	gate := NewTeamConfirmationGate()
 
+	members := []map[string]string{
+		{"role_id": "code-reviewer", "brief": "brief1"},
+	}
+
 	data := map[string]any{
-		"members": []map[string]string{
-			{"role_id": "code-reviewer", "brief": "brief1"},
-		},
-		"mode": ModePlanningOnly,
+		"members": members,
+		"mode":    ModePlanningOnly,
+		"task_id": "task-123",
 	}
 
 	token, err := gate.RequestConfirmation(data)
@@ -465,7 +471,7 @@ func TestTeamConfirmationGateTTL(t *testing.T) {
 	}
 
 	// Validate token - should succeed
-	err = gate.ValidateConfirmation(token)
+	err = gate.ValidateConfirmation(token, members, ModePlanningOnly, "task-123")
 	if err != nil {
 		t.Errorf("ValidateConfirmation failed on fresh token: %v", err)
 	}
@@ -485,12 +491,12 @@ func TestTeamConfirmationGateTTL(t *testing.T) {
 	gate.mu.Unlock()
 
 	// Try to validate the expired token - should fail
-	err = gate.ValidateConfirmation(token2)
+	err = gate.ValidateConfirmation(token2, members, ModePlanningOnly, "task-123")
 	if err == nil {
 		t.Errorf("ValidateConfirmation should reject expired token, but succeeded")
 	}
-	if err.Error() != "confirmation token expired" {
-		t.Errorf("expected 'confirmation token expired' error, got %q", err.Error())
+	if err.Error() != "invalid or expired confirmation token" {
+		t.Errorf("expected 'invalid or expired confirmation token' error, got %q", err.Error())
 	}
 }
 
@@ -499,6 +505,7 @@ func TestTeamConfirmationGateConcurrent(t *testing.T) {
 	const numRequests = 10
 
 	tokens := make([]string, numRequests)
+	membersList := make([][]map[string]string, numRequests)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
@@ -507,9 +514,11 @@ func TestTeamConfirmationGateConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
+			members := []map[string]string{{"role_id": "role" + string(rune(idx)), "brief": "brief"}}
 			token, err := gate.RequestConfirmation(map[string]any{
-				"members": []map[string]string{{"role_id": "role" + string(rune(idx)), "brief": "brief"}},
+				"members": members,
 				"mode":    ModePlanningOnly,
+				"task_id": "task-123",
 			})
 			if err != nil {
 				t.Errorf("RequestConfirmation %d failed: %v", idx, err)
@@ -517,6 +526,7 @@ func TestTeamConfirmationGateConcurrent(t *testing.T) {
 			}
 			mu.Lock()
 			tokens[idx] = token
+			membersList[idx] = members
 			mu.Unlock()
 		}(i)
 	}
@@ -537,9 +547,644 @@ func TestTeamConfirmationGateConcurrent(t *testing.T) {
 
 	// Verify each token can be validated independently
 	for i := 0; i < numRequests; i++ {
-		err := gate.ValidateConfirmation(tokens[i])
+		err := gate.ValidateConfirmation(tokens[i], membersList[i], ModePlanningOnly, "task-123")
 		if err != nil {
 			t.Errorf("ValidateConfirmation for token %d failed: %v", i, err)
 		}
+	}
+}
+
+func TestConfirmationGateLazySweep(t *testing.T) {
+	gate := NewConfirmationGate()
+
+	// Request several tokens and let them expire without validation
+	expiredTokens := make([]string, 5)
+	for i := 0; i < 5; i++ {
+		token, err := gate.RequestConfirmation(map[string]any{
+			"role_id":        "role-test",
+			"brief":          "test brief",
+			"mode":           ModeRepositoryEdit,
+			"classification": "internal",
+			"task_id":        "task-123",
+		})
+		if err != nil {
+			t.Fatalf("RequestConfirmation failed: %v", err)
+		}
+		expiredTokens[i] = token
+	}
+
+	// Verify pending map has 5 entries
+	gate.mu.Lock()
+	initialSize := len(gate.pending)
+	gate.mu.Unlock()
+	if initialSize != 5 {
+		t.Errorf("pending map should have 5 entries, got %d", initialSize)
+	}
+
+	// Manually expire all tokens by modifying their timestamps
+	gate.mu.Lock()
+	now := time.Now()
+	for _, token := range expiredTokens {
+		if pc, ok := gate.pending[token]; ok {
+			pc.Timestamp = now.Add(-(ConfirmationTTLSeconds + 1) * time.Second)
+		}
+	}
+	gate.mu.Unlock()
+
+	// Request a new token - this should trigger the lazy sweep
+	newToken, err := gate.RequestConfirmation(map[string]any{
+		"role_id":        "role-new",
+		"brief":          "new brief",
+		"mode":           ModeRepositoryEdit,
+		"classification": "internal",
+		"task_id":        "task-456",
+	})
+	if err != nil {
+		t.Fatalf("RequestConfirmation failed: %v", err)
+	}
+
+	// Verify that expired entries were swept away
+	gate.mu.Lock()
+	finalSize := len(gate.pending)
+	gate.mu.Unlock()
+	if finalSize != 1 {
+		t.Errorf("pending map should have 1 entry after sweep, got %d (should have removed 5 expired entries)", finalSize)
+	}
+
+	// Verify the new token is still there
+	_, err = gate.ValidateConfirmation(newToken, "role-new", "new brief", ModeRepositoryEdit, "internal", "task-456")
+	if err != nil {
+		t.Errorf("new token should be valid but got error: %v", err)
+	}
+
+	// Verify expired tokens cannot be validated
+	_, err = gate.ValidateConfirmation(expiredTokens[0], "role-test", "test brief", ModeRepositoryEdit, "internal", "task-123")
+	if err == nil {
+		t.Error("expired token should not validate")
+	}
+}
+
+func TestTeamConfirmationGateLazySweep(t *testing.T) {
+	gate := NewTeamConfirmationGate()
+
+	// Request several tokens and let them expire without validation
+	expiredTokens := make([]string, 5)
+	expiredMembers := make([][]map[string]string, 5)
+	for i := 0; i < 5; i++ {
+		members := []map[string]string{
+			{"role_id": "role-test", "brief": "brief"},
+		}
+		token, err := gate.RequestConfirmation(map[string]any{
+			"members": members,
+			"mode":    ModePlanningOnly,
+			"task_id": "task-123",
+		})
+		if err != nil {
+			t.Fatalf("RequestConfirmation failed: %v", err)
+		}
+		expiredTokens[i] = token
+		expiredMembers[i] = members
+	}
+
+	// Verify pending map has 5 entries
+	gate.mu.Lock()
+	initialSize := len(gate.pending)
+	gate.mu.Unlock()
+	if initialSize != 5 {
+		t.Errorf("pending map should have 5 entries, got %d", initialSize)
+	}
+
+	// Manually expire all tokens by modifying their timestamps
+	gate.mu.Lock()
+	now := time.Now()
+	for _, token := range expiredTokens {
+		if pc, ok := gate.pending[token]; ok {
+			pc.Timestamp = now.Add(-(ConfirmationTTLSeconds + 1) * time.Second)
+		}
+	}
+	gate.mu.Unlock()
+
+	// Request a new token - this should trigger the lazy sweep
+	newMembers := []map[string]string{
+		{"role_id": "role-new", "brief": "new brief"},
+	}
+	newToken, err := gate.RequestConfirmation(map[string]any{
+		"members": newMembers,
+		"mode":    ModeRepositoryEdit,
+		"task_id": "task-456",
+	})
+	if err != nil {
+		t.Fatalf("RequestConfirmation failed: %v", err)
+	}
+
+	// Verify that expired entries were swept away
+	gate.mu.Lock()
+	finalSize := len(gate.pending)
+	gate.mu.Unlock()
+	if finalSize != 1 {
+		t.Errorf("pending map should have 1 entry after sweep, got %d (should have removed 5 expired entries)", finalSize)
+	}
+
+	// Verify the new token is still there
+	err = gate.ValidateConfirmation(newToken, newMembers, ModeRepositoryEdit, "task-456")
+	if err != nil {
+		t.Errorf("new token should be valid but got error: %v", err)
+	}
+
+	// Verify expired tokens cannot be validated
+	err = gate.ValidateConfirmation(expiredTokens[0], expiredMembers[0], ModePlanningOnly, "task-123")
+	if err == nil {
+		t.Error("expired token should not validate")
+	}
+}
+
+func TestMemberNeedsConfirmationToken(t *testing.T) {
+	stubRunner(t)
+
+	// Test 1: Resolvable role that is write-capable should return needsToken=true, err=nil
+	t.Run("resolvable_write_capable_role", func(t *testing.T) {
+		roots := testRoots(t, "code-reviewer")
+		needsToken, err := memberNeedsConfirmationToken(roots, "code-reviewer", ModeRepositoryEdit, DefaultRunner)
+
+		if err != nil {
+			t.Errorf("memberNeedsConfirmationToken for resolvable role failed: %v", err)
+		}
+		if !needsToken {
+			t.Errorf("memberNeedsConfirmationToken for write-capable role returned false, want true")
+		}
+	})
+
+	// Test 2: Unresolvable role should return needsToken=false, err!=nil
+	t.Run("unresolvable_role", func(t *testing.T) {
+		roots := testRoots(t, "code-reviewer")
+		needsToken, err := memberNeedsConfirmationToken(roots, "nonexistent-role-xyz", ModeRepositoryEdit, DefaultRunner)
+
+		if err == nil {
+			t.Errorf("memberNeedsConfirmationToken for unresolvable role returned nil error, want error")
+		}
+		if needsToken {
+			t.Errorf("memberNeedsConfirmationToken for unresolvable role returned true, want false")
+		}
+	})
+
+	// Test 3: Resolvable role in read-only mode should return needsToken=false, err=nil
+	// (because read-only mode never requires confirmation)
+	t.Run("resolvable_role_planning_only_mode", func(t *testing.T) {
+		roots := testRoots(t, "code-reviewer")
+		needsToken, err := memberNeedsConfirmationToken(roots, "code-reviewer", ModePlanningOnly, DefaultRunner)
+
+		if err != nil {
+			t.Errorf("memberNeedsConfirmationToken for planning-only mode failed: %v", err)
+		}
+		if needsToken {
+			t.Errorf("memberNeedsConfirmationToken for planning-only mode returned true, want false")
+		}
+	})
+
+	// Test 4: Empty role_id should return needsToken=false, err!=nil
+	t.Run("empty_role_id", func(t *testing.T) {
+		roots := testRoots(t, "code-reviewer")
+		needsToken, err := memberNeedsConfirmationToken(roots, "", ModeRepositoryEdit, DefaultRunner)
+
+		if err == nil {
+			t.Errorf("memberNeedsConfirmationToken for empty role_id returned nil error, want error")
+		}
+		if needsToken {
+			t.Errorf("memberNeedsConfirmationToken for empty role_id returned true, want false")
+		}
+	})
+}
+
+func TestDispatchTeamWithUnresolvableRole(t *testing.T) {
+	stubRunner(t)
+
+	// This integration test verifies that a team dispatch with mixed resolvable
+	// and unresolvable roles completes. It does not test the token-minting behavior
+	// directly (that is covered by TestMemberNeedsConfirmationToken); instead it
+	// confirms that end-to-end dispatch succeeds and members are included in the
+	// results, whether they succeeded or failed.
+
+	members := []map[string]string{
+		{"role_id": "code-reviewer", "brief": "review code"},
+		{"role_id": "nonexistent-role-xyz", "brief": "this role cannot be resolved"},
+	}
+
+	roots := testRoots(t, "code-reviewer")
+
+	// First dispatch in write mode to see if confirmation is requested
+	result := DispatchTeam(
+		roots,
+		members, ModeRepositoryEdit, "public",
+		"", "task123", "session123", "public", DefaultRunner, true,
+	)
+
+	status := result["status"].(string)
+	if status == "confirmation_required" {
+		token, ok := result["confirmation_token"].(string)
+		if !ok || token == "" {
+			t.Errorf("confirmation_required response missing valid confirmation_token")
+			return
+		}
+
+		// Replay with the confirmation token
+		result = DispatchTeam(
+			roots,
+			members, ModeRepositoryEdit, "public",
+			token, "task123", "session123", "public", DefaultRunner, true,
+		)
+
+		status = result["status"].(string)
+		if status != "team_dispatched" {
+			t.Errorf("team dispatch with confirmation returned %q, want 'team_dispatched'", status)
+			return
+		}
+	} else if status != "team_dispatched" {
+		t.Errorf("team dispatch returned %q, want 'confirmation_required' or 'team_dispatched'", status)
+		return
+	}
+
+	// Verify both members are in the results
+	membersResult, ok := result["members"].([]map[string]any)
+	if !ok || len(membersResult) != 2 {
+		t.Errorf("team_dispatched response should have 2 members, got %v", result)
+		return
+	}
+
+	// Map results by role_id
+	resultsByRole := make(map[string]map[string]any)
+	for _, memberResult := range membersResult {
+		roleID, ok := memberResult["role_id"].(string)
+		if !ok {
+			t.Errorf("member result missing role_id: %v", memberResult)
+			continue
+		}
+		resultsByRole[roleID] = memberResult
+	}
+
+	// Resolvable member should be present and have a status
+	if _, hasCodeReviewer := resultsByRole["code-reviewer"]; !hasCodeReviewer {
+		t.Errorf("code-reviewer member result not found in team response")
+	}
+
+	// Unresolvable member should be present and have unavailable/denied status
+	nonexistentResult, hasNonexistent := resultsByRole["nonexistent-role-xyz"]
+	if !hasNonexistent {
+		t.Errorf("nonexistent-role-xyz member result not found in team response")
+	} else {
+		status, ok := nonexistentResult["status"].(string)
+		if !ok {
+			t.Errorf("nonexistent-role-xyz result missing status")
+		} else if status != "unavailable" && status != "denied" {
+			t.Errorf("nonexistent-role-xyz returned status %q, want 'unavailable' or 'denied' (cannot resolve)", status)
+		}
+	}
+}
+
+func TestDispatchTeamPlanningModeSkipsTokenMinting(t *testing.T) {
+	// This test verifies that in planning-review-only mode (read-only dispatch),
+	// no confirmation gate is involved at all -- neither for the team-level
+	// confirmation nor for per-member token minting. This is correct because
+	// read-only mode never requires confirmation.
+	//
+	// The member-token-minting logic at dispatch_core_phase2.go:488-535 is only
+	// entered when needsConfirmation is true, which only happens when the
+	// effective sandbox is write-capable. In planning-review-only mode,
+	// ComputeEffectiveSandbox forces all sandboxes to read-only, so the
+	// confirmation gate is skipped entirely for the team and no per-member
+	// tokens are minted.
+
+	members := []map[string]string{
+		{"role_id": "code-reviewer", "brief": "review code"},
+	}
+
+	result := DispatchTeam(
+		testRoots(t, "code-reviewer"),
+		members, ModePlanningOnly, "public",
+		"", "task123", "session123", "public", DefaultRunner, true,
+	)
+
+	status := result["status"].(string)
+	// In planning-review-only mode, no confirmation is required, so the dispatch
+	// should proceed directly to team_dispatched without asking for confirmation
+	if status != "team_dispatched" && status != "unavailable" {
+		// unavailable is acceptable if the role fixture can't be created
+		t.Errorf("team dispatch in planning-review-only mode returned %q, want 'team_dispatched' or 'unavailable'", status)
+		return
+	}
+
+	// Verify we never got asked for confirmation
+	if _, hasToken := result["confirmation_token"]; hasToken {
+		t.Errorf("planning-review-only mode should not request confirmation")
+	}
+}
+
+// TestConfirmationGateTokenSurvivesMismatch verifies that a token remains pending
+// after a failed validation with a mismatched field, allowing a retry with correct
+// parameters to succeed. This prevents denial-of-service where any incorrect
+// parameter (especially brief, which is free text) destroys the token permanently.
+func TestConfirmationGateTokenSurvivesMismatch(t *testing.T) {
+	gate := NewConfirmationGate()
+
+	expectedRoleID := "test-role"
+	expectedBrief := "correct brief"
+	expectedMode := ModeRepositoryEdit
+	expectedClassification := "internal"
+	expectedTaskID := "task-456"
+
+	// Test mismatch on each field
+	mismatchTests := []struct {
+		name           string
+		roleID         string
+		brief          string
+		mode           string
+		classification string
+		taskID         string
+	}{
+		{
+			name:           "wrong role_id",
+			roleID:         "wrong-role",
+			brief:          expectedBrief,
+			mode:           expectedMode,
+			classification: expectedClassification,
+			taskID:         expectedTaskID,
+		},
+		{
+			name:           "wrong brief",
+			roleID:         expectedRoleID,
+			brief:          "wrong brief",
+			mode:           expectedMode,
+			classification: expectedClassification,
+			taskID:         expectedTaskID,
+		},
+		{
+			name:           "wrong mode",
+			roleID:         expectedRoleID,
+			brief:          expectedBrief,
+			mode:           ModePlanningOnly,
+			classification: expectedClassification,
+			taskID:         expectedTaskID,
+		},
+		{
+			name:           "wrong classification",
+			roleID:         expectedRoleID,
+			brief:          expectedBrief,
+			mode:           expectedMode,
+			classification: "public",
+			taskID:         expectedTaskID,
+		},
+		{
+			name:           "wrong task_id",
+			roleID:         expectedRoleID,
+			brief:          expectedBrief,
+			mode:           expectedMode,
+			classification: expectedClassification,
+			taskID:         "wrong-task",
+		},
+	}
+
+	for _, tt := range mismatchTests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a fresh token for this subtest
+			token, err := gate.RequestConfirmation(map[string]any{
+				"role_id":        expectedRoleID,
+				"brief":          expectedBrief,
+				"mode":           expectedMode,
+				"classification": expectedClassification,
+				"task_id":        expectedTaskID,
+			})
+			if err != nil {
+				t.Fatalf("RequestConfirmation failed: %v", err)
+			}
+
+			// First, attempt validation with wrong parameter
+			_, err = gate.ValidateConfirmation(
+				token,
+				tt.roleID, tt.brief, tt.mode, tt.classification, tt.taskID,
+			)
+			if err == nil {
+				t.Errorf("ValidateConfirmation with %s should have failed but didn't", tt.name)
+			}
+
+			// Verify token still exists by attempting validation with correct parameters
+			_, err = gate.ValidateConfirmation(
+				token,
+				expectedRoleID, expectedBrief, expectedMode, expectedClassification, expectedTaskID,
+			)
+			if err != nil {
+				t.Errorf("ValidateConfirmation with correct parameters after %s failed: %v (token was destroyed on mismatch)", tt.name, err)
+			}
+		})
+	}
+}
+
+// TestTeamConfirmationGateTokenSurvivesMismatch verifies that a team confirmation
+// token remains pending after a failed validation with a mismatched field, allowing
+// a retry with correct parameters to succeed.
+func TestTeamConfirmationGateTokenSurvivesMismatch(t *testing.T) {
+	gate := NewTeamConfirmationGate()
+
+	expectedMembers := []map[string]string{
+		{"role_id": "role1", "brief": "brief1"},
+		{"role_id": "role2", "brief": "brief2"},
+	}
+	expectedMode := ModeRepositoryEdit
+	expectedTaskID := "team-task-123"
+
+	// Test mismatch on each field
+	mismatchTests := []struct {
+		name    string
+		members []map[string]string
+		mode    string
+		taskID  string
+	}{
+		{
+			name: "wrong members count",
+			members: []map[string]string{
+				{"role_id": "role1", "brief": "brief1"},
+			},
+			mode:   expectedMode,
+			taskID: expectedTaskID,
+		},
+		{
+			name: "wrong member role_id",
+			members: []map[string]string{
+				{"role_id": "wrong-role", "brief": "brief1"},
+				{"role_id": "role2", "brief": "brief2"},
+			},
+			mode:   expectedMode,
+			taskID: expectedTaskID,
+		},
+		{
+			name: "wrong member brief",
+			members: []map[string]string{
+				{"role_id": "role1", "brief": "wrong-brief"},
+				{"role_id": "role2", "brief": "brief2"},
+			},
+			mode:   expectedMode,
+			taskID: expectedTaskID,
+		},
+		{
+			name:    "wrong mode",
+			members: expectedMembers,
+			mode:    ModePlanningOnly,
+			taskID:  expectedTaskID,
+		},
+		{
+			name:    "wrong task_id",
+			members: expectedMembers,
+			mode:    expectedMode,
+			taskID:  "wrong-task",
+		},
+	}
+
+	for _, tt := range mismatchTests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a fresh token for this subtest
+			token, err := gate.RequestConfirmation(map[string]any{
+				"members": expectedMembers,
+				"mode":    expectedMode,
+				"task_id": expectedTaskID,
+			})
+			if err != nil {
+				t.Fatalf("RequestConfirmation failed: %v", err)
+			}
+
+			// First, attempt validation with wrong parameter
+			err = gate.ValidateConfirmation(token, tt.members, tt.mode, tt.taskID)
+			if err == nil {
+				t.Errorf("ValidateConfirmation with %s should have failed but didn't", tt.name)
+			}
+
+			// Verify token still exists by attempting validation with correct parameters
+			err = gate.ValidateConfirmation(token, expectedMembers, expectedMode, expectedTaskID)
+			if err != nil {
+				t.Errorf("ValidateConfirmation with correct parameters after %s failed: %v (token was destroyed on mismatch)", tt.name, err)
+			}
+		})
+	}
+}
+
+// TestDispatchSecureCloudRoleConfirmationEndToEnd tests a full round trip through
+// the public API: request confirmation, attempt replay with wrong parameter, verify
+// that retry with correct parameters succeeds.
+func TestDispatchSecureCloudRoleConfirmationEndToEnd(t *testing.T) {
+	stubRunner(t)
+	roots := testRoots(t, "code-reviewer")
+
+	roleID := "code-reviewer"
+	brief := "correct brief"
+	mode := ModeRepositoryEdit
+	classification := "internal"
+	taskID := "e2e-task-123"
+
+	// Step 1: Request confirmation
+	result := DispatchSecureCloudRole(
+		roots,
+		roleID, brief, mode, classification,
+		"", taskID, "session123", "public", DefaultRunner, true,
+	)
+
+	status := result["status"].(string)
+	if status != "confirmation_required" {
+		// If it doesn't require confirmation, it means the role is read-only,
+		// which is fine for this test structure
+		if status != "success" {
+			t.Fatalf("first dispatch returned unexpected status %q", status)
+		}
+		return // Skip the rest of the test if no confirmation was needed
+	}
+
+	token, ok := result["confirmation_token"].(string)
+	if !ok || token == "" {
+		t.Fatalf("confirmation_required response missing valid confirmation_token")
+	}
+
+	// Step 2: Attempt replay with WRONG brief
+	result = DispatchSecureCloudRole(
+		roots,
+		roleID, "wrong brief", mode, classification,
+		token, taskID, "session123", "public", DefaultRunner, true,
+	)
+
+	status = result["status"].(string)
+	if status != "denied" {
+		t.Errorf("replay with wrong brief should be denied, got status %q", status)
+	}
+
+	// Step 3: Verify token still works with CORRECT brief
+	result = DispatchSecureCloudRole(
+		roots,
+		roleID, brief, mode, classification,
+		token, taskID, "session123", "public", DefaultRunner, true,
+	)
+
+	status = result["status"].(string)
+	// Should succeed or at least not be "denied" due to token expiry
+	if status == "denied" && result["reason"] == "confirmation token invalid or expired" {
+		t.Errorf("token was destroyed after mismatch; retry with correct brief failed")
+	}
+}
+
+// TestDispatchTeamConfirmationEndToEnd tests a full round trip through the team
+// dispatch public API: request confirmation, attempt replay with wrong members,
+// verify that retry with correct parameters succeeds.
+func TestDispatchTeamConfirmationEndToEnd(t *testing.T) {
+	stubRunner(t)
+	roots := testRoots(t, "code-reviewer")
+
+	correctMembers := []map[string]string{
+		{"role_id": "code-reviewer", "brief": "team member 1"},
+	}
+	mode := ModeRepositoryEdit
+	taskID := "team-e2e-task-123"
+
+	// Step 1: Request team confirmation
+	result := DispatchTeam(
+		roots,
+		correctMembers, mode, "internal",
+		"", taskID, "session123", "public", DefaultRunner, true,
+	)
+
+	status := result["status"].(string)
+	if status != "confirmation_required" {
+		// If it doesn't require confirmation, the members are read-only
+		if status != "team_dispatched" {
+			t.Fatalf("first team dispatch returned unexpected status %q", status)
+		}
+		return // Skip the rest of the test if no confirmation was needed
+	}
+
+	token, ok := result["confirmation_token"].(string)
+	if !ok || token == "" {
+		t.Fatalf("confirmation_required response missing valid confirmation_token")
+	}
+
+	// Step 2: Attempt replay with WRONG members (different count)
+	wrongMembers := []map[string]string{
+		{"role_id": "code-reviewer", "brief": "team member 1"},
+		{"role_id": "code-reviewer", "brief": "team member 2"},
+	}
+	result = DispatchTeam(
+		roots,
+		wrongMembers, mode, "internal",
+		token, taskID, "session123", "public", DefaultRunner, true,
+	)
+
+	status = result["status"].(string)
+	if status != "denied" {
+		t.Errorf("replay with wrong members should be denied, got status %q", status)
+	}
+
+	// Step 3: Verify token still works with CORRECT members
+	result = DispatchTeam(
+		roots,
+		correctMembers, mode, "internal",
+		token, taskID, "session123", "public", DefaultRunner, true,
+	)
+
+	status = result["status"].(string)
+	// Should succeed or at least not be "denied" due to token expiry
+	if status == "denied" && result["reason"] == "confirmation token invalid or expired" {
+		t.Errorf("token was destroyed after mismatch; retry with correct members failed")
 	}
 }

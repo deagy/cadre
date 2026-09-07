@@ -158,11 +158,18 @@ func DispatchSecureCloudRole(
 
 	// If we have a write-capable sandbox, validate confirmation token
 	if WriteCarpableSandboxes[effectiveSandbox] && confirmationToken != "" {
-		_, err := globalConfirmationGate.ValidateConfirmation(confirmationToken)
+		_, err := globalConfirmationGate.ValidateConfirmation(
+			confirmationToken,
+			roleID,
+			brief,
+			mode,
+			classification,
+			taskID,
+		)
 		if err != nil {
 			return map[string]any{
 				"status": "denied",
-				"reason": fmt.Sprintf("confirmation token invalid or expired: %v", err),
+				"reason": "confirmation token invalid or expired",
 			}
 		}
 	}
@@ -412,6 +419,37 @@ func PollDispatchStatus(jobID string) map[string]any {
 	return result
 }
 
+// memberNeedsConfirmationToken determines whether a team member's role is
+// write-capable and therefore needs a confirmation token minted.
+//
+// It resolves the member's role, computes the effective sandbox, and returns
+// whether the member is write-capable. If role resolution fails, it returns
+// an error distinctly so the caller can tell resolution failure apart from
+// "resolved but not write-capable".
+func memberNeedsConfirmationToken(
+	roots DispatchRoots,
+	roleID, mode, runner string,
+) (needsToken bool, err error) {
+	if roleID == "" {
+		return false, fmt.Errorf("member role_id is required")
+	}
+
+	role, err := ResolveRoleForDispatch(roleID, runner, roots.ProjectRoot, roots.GlobalRoot, roots.PluginRoot, mode)
+	if err != nil {
+		// Resolution failed: propagate it distinctly
+		return false, err
+	}
+
+	effectiveSandbox, err := EffectiveSandboxForDispatch(role, mode)
+	if err != nil {
+		// Sandbox computation failed: propagate it distinctly
+		return false, err
+	}
+
+	// Member needs a token if and only if they are write-capable
+	return WriteCarpableSandboxes[effectiveSandbox], nil
+}
+
 // DispatchTeam dispatches multiple roles as a team
 func DispatchTeam(
 	roots DispatchRoots,
@@ -471,31 +509,58 @@ func DispatchTeam(
 	// so they can dispatch without requiring their own per-role confirmation
 	var memberTokens []string
 	if needsConfirmation && confirmationToken != "" {
-		err := globalTeamConfirmationGate.ValidateConfirmation(confirmationToken)
+		err := globalTeamConfirmationGate.ValidateConfirmation(confirmationToken, members, mode, taskID)
 		if err != nil {
 			return map[string]any{
 				"status": "denied",
-				"reason": fmt.Sprintf("confirmation token invalid or expired: %v", err),
+				"reason": "confirmation token invalid or expired",
 			}
 		}
 
-		// Team is confirmed. Generate tokens for each member so they can dispatch
-		// in write mode without hitting their own confirmation gate.
+		// Team is confirmed. Generate tokens for members who actually need them
+		// (those with write-capable effective sandbox).
+		// For each member, determine if they need a token via memberNeedsConfirmationToken.
+		// This prevents minting tokens for read-only members or members whose roles
+		// fail to resolve.
 		memberTokens = make([]string, 0, len(members))
-		for range members {
-			token, err := globalConfirmationGate.RequestConfirmation(map[string]any{
-				"source":         "team_dispatch",
-				"task_id":        taskID,
-				"session_id":     sessionID,
-				"classification": classification,
-			})
-			if err != nil {
+		for _, member := range members {
+			roleID := member["role_id"]
+			if roleID == "" {
 				return map[string]any{
 					"status": "error",
-					"reason": fmt.Sprintf("failed to generate member confirmation token: %v", err),
+					"reason": "member missing role_id",
 				}
 			}
-			memberTokens = append(memberTokens, token)
+
+			// Determine if this member needs a confirmation token
+			needsToken, err := memberNeedsConfirmationToken(roots, roleID, mode, runner)
+			if err != nil {
+				// If role resolution or sandbox computation fails, don't mint a token
+				// and let the member's own dispatch attempt fail with the resolution error.
+				memberTokens = append(memberTokens, "")
+				continue
+			}
+
+			// Only mint a token if the member is write-capable
+			if needsToken {
+				token, err := globalConfirmationGate.RequestConfirmation(map[string]any{
+					"source":         "team_dispatch",
+					"task_id":        taskID,
+					"session_id":     sessionID,
+					"classification": classification,
+					"role_id":        roleID,
+				})
+				if err != nil {
+					return map[string]any{
+						"status": "error",
+						"reason": fmt.Sprintf("failed to generate member confirmation token for %s: %v", roleID, err),
+					}
+				}
+				memberTokens = append(memberTokens, token)
+			} else {
+				// Member doesn't need confirmation; pass empty string
+				memberTokens = append(memberTokens, "")
+			}
 		}
 	}
 
@@ -625,10 +690,14 @@ func NewTeamConfirmationGate() *TeamConfirmationGate {
 	}
 }
 
-// RequestConfirmation creates a pending team confirmation that requires a token replay
+// RequestConfirmation creates a pending team confirmation that requires a token replay.
+// It also performs a lazy sweep of expired entries to prevent unbounded growth.
 func (tcg *TeamConfirmationGate) RequestConfirmation(data map[string]any) (string, error) {
 	tcg.mu.Lock()
 	defer tcg.mu.Unlock()
+
+	// Lazy sweep: remove expired entries before adding a new one
+	tcg.sweepExpiredLocked()
 
 	token, err := generateConfirmationToken()
 	if err != nil {
@@ -646,8 +715,26 @@ func (tcg *TeamConfirmationGate) RequestConfirmation(data map[string]any) (strin
 	return token, nil
 }
 
-// ValidateConfirmation checks that the token is valid and current, consuming it
-func (tcg *TeamConfirmationGate) ValidateConfirmation(token string) error {
+// sweepExpiredLocked removes all expired entries from the pending map.
+// Must be called while holding tcg.mu.
+func (tcg *TeamConfirmationGate) sweepExpiredLocked() {
+	now := time.Now()
+	for token, pc := range tcg.pending {
+		if now.Sub(pc.Timestamp) > ConfirmationTTLSeconds*time.Second {
+			delete(tcg.pending, token)
+		}
+	}
+}
+
+// ValidateConfirmation checks that the token is valid, current, and bound to the
+// expected team dispatch parameters (members, mode, taskID).
+// Any mismatch is treated as invalid/expired to avoid leaking which field differed.
+func (tcg *TeamConfirmationGate) ValidateConfirmation(
+	token string,
+	expectedMembers []map[string]string,
+	expectedMode string,
+	expectedTaskID string,
+) error {
 	tcg.mu.Lock()
 	defer tcg.mu.Unlock()
 
@@ -659,7 +746,73 @@ func (tcg *TeamConfirmationGate) ValidateConfirmation(token string) error {
 	// Check TTL
 	if time.Since(pc.Timestamp) > ConfirmationTTLSeconds*time.Second {
 		delete(tcg.pending, token)
-		return fmt.Errorf("confirmation token expired")
+		return fmt.Errorf("invalid or expired confirmation token")
+	}
+
+	// Bind validation: token's stored data must match current team dispatch exactly.
+	// On mismatch, return error but leave token untouched so legitimate retry can proceed.
+	// Only delete on successful match or TTL expiry (already handled above).
+
+	// Compare members array - handle both []any (from JSON) and []map[string]string (direct)
+	storedMembersRaw := pc.Data["members"]
+	if storedMembersRaw == nil {
+		return fmt.Errorf("invalid or expired confirmation token")
+	}
+
+	// Convert to []map[string]string for comparison
+	var storedMembers []map[string]string
+
+	// Try type assertion to []any (common after JSON unmarshaling)
+	if anySlice, ok := storedMembersRaw.([]any); ok {
+		storedMembers = make([]map[string]string, len(anySlice))
+		for i, item := range anySlice {
+			if mapItem, ok := item.(map[string]any); ok {
+				storedMembers[i] = make(map[string]string)
+				for k, v := range mapItem {
+					if strVal, ok := v.(string); ok {
+						storedMembers[i][k] = strVal
+					} else {
+						return fmt.Errorf("invalid or expired confirmation token")
+					}
+				}
+			} else {
+				return fmt.Errorf("invalid or expired confirmation token")
+			}
+		}
+	} else if directSlice, ok := storedMembersRaw.([]map[string]string); ok {
+		// Direct type - already []map[string]string
+		storedMembers = directSlice
+	} else {
+		return fmt.Errorf("invalid or expired confirmation token")
+	}
+
+	// Now compare arrays element by element
+	if len(storedMembers) != len(expectedMembers) {
+		return fmt.Errorf("invalid or expired confirmation token")
+	}
+
+	for i := range storedMembers {
+		// Compare each field
+		if len(storedMembers[i]) != len(expectedMembers[i]) {
+			return fmt.Errorf("invalid or expired confirmation token")
+		}
+
+		for key, expectedVal := range expectedMembers[i] {
+			storedVal, exists := storedMembers[i][key]
+			if !exists || storedVal != expectedVal {
+				return fmt.Errorf("invalid or expired confirmation token")
+			}
+		}
+	}
+
+	// Compare mode
+	if storedMode, ok := pc.Data["mode"].(string); !ok || storedMode != expectedMode {
+		return fmt.Errorf("invalid or expired confirmation token")
+	}
+
+	// Compare task_id
+	if storedTaskID, ok := pc.Data["task_id"].(string); !ok || storedTaskID != expectedTaskID {
+		return fmt.Errorf("invalid or expired confirmation token")
 	}
 
 	// Consume the token
