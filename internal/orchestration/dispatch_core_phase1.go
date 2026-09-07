@@ -410,21 +410,68 @@ func readRoleFileCapped(path string, maxBytes int) ([]byte, error) {
 }
 
 func extractTOMLFields(content, source string) (map[string]string, error) {
-	// Simple TOML field extraction for role files
+	// TOML field extraction for role files with proper escaped quote handling
 	// Looks for: key = "value" or key = 'value'
 	fields := make(map[string]string)
-	rx := regexp.MustCompile(`^\s*(\w+)\s*=\s*['"](.*?)['"]`)
+	rx := regexp.MustCompile(`^\s*(\w+)\s*=\s*(['"])`)
 
 	for _, line := range strings.Split(content, "\n") {
-		matches := rx.FindStringSubmatch(line)
-		if len(matches) == 3 {
-			key := matches[1]
-			value := matches[2]
+		matches := rx.FindStringSubmatchIndex(line)
+		if len(matches) == 0 {
+			continue
+		}
+
+		key := line[matches[2]:matches[3]]
+		// Position of the quote character (group 2 in the regex)
+		quoteStart := matches[4]
+
+		// Extract the quoted string, respecting backslash escapes
+		value, ok := extractQuotedString(line, quoteStart)
+		if ok {
 			fields[key] = value
 		}
 	}
 
 	return fields, nil
+}
+
+// extractQuotedString extracts a quoted string from position startIdx (the quote char itself),
+// handling backslash-escaped characters properly.
+func extractQuotedString(line string, startIdx int) (string, bool) {
+	if startIdx >= len(line) {
+		return "", false
+	}
+
+	quoteChar := line[startIdx]
+	if quoteChar != '"' && quoteChar != '\'' {
+		return "", false
+	}
+
+	var sb strings.Builder
+	i := startIdx + 1
+
+	for i < len(line) {
+		ch := line[i]
+
+		if ch == '\\' && i+1 < len(line) {
+			// Backslash escape sequence: include both the backslash and next character
+			sb.WriteByte(line[i])
+			sb.WriteByte(line[i+1])
+			i += 2
+			continue
+		}
+
+		if ch == quoteChar {
+			// Found unescaped matching quote
+			return sb.String(), true
+		}
+
+		sb.WriteByte(ch)
+		i++
+	}
+
+	// Reached end of line without finding closing quote
+	return "", false
 }
 
 func extractMarkdownFrontmatter(content, source string) (map[string]string, string, error) {

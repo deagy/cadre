@@ -12,6 +12,21 @@ import (
 
 // Phase 2: Main Dispatch Function, Confirmation Gating, Async Job Stores
 
+// globalConfirmationGate is the singleton confirmation gate for single-role
+// dispatches. It must be package-level (not recreated per call) so that:
+// 1. A confirmation token issued in one call can be validated in a replay
+// 2. TTL enforcement and token cleanup work as intended
+// 3. Concurrent calls don't clobber each other's pending tokens
+var globalConfirmationGate = NewConfirmationGate()
+
+// globalTeamConfirmationGate is the singleton confirmation gate for team
+// dispatches. It must be package-level for the same reasons as
+// globalConfirmationGate, and additionally to distinguish team-level
+// confirmation from per-role confirmation -- two separate gates keep the
+// two confirmation flows isolated, preventing a team confirmation token
+// from being misaccepted as a per-role token or vice versa.
+var globalTeamConfirmationGate = NewTeamConfirmationGate()
+
 var (
 	globalJobStore       = NewDispatchJobStore()
 	globalJobStoreMu     sync.Mutex
@@ -117,10 +132,9 @@ func DispatchSecureCloudRole(
 			})
 	}
 
-	gate := NewConfirmationGate()
 	if WriteCarpableSandboxes[effectiveSandbox] && confirmationToken == "" {
 		// First call - generate token and request confirmation
-		token, err := gate.RequestConfirmation(map[string]any{
+		token, err := globalConfirmationGate.RequestConfirmation(map[string]any{
 			"role_id":        roleID,
 			"brief":          brief,
 			"mode":           mode,
@@ -144,7 +158,7 @@ func DispatchSecureCloudRole(
 
 	// If we have a write-capable sandbox, validate confirmation token
 	if WriteCarpableSandboxes[effectiveSandbox] && confirmationToken != "" {
-		_, err := gate.ValidateConfirmation(confirmationToken)
+		_, err := globalConfirmationGate.ValidateConfirmation(confirmationToken)
 		if err != nil {
 			return map[string]any{
 				"status": "denied",
@@ -432,9 +446,8 @@ func DispatchTeam(
 	needsConfirmation := WriteCarpableSandboxes[effectiveSandbox]
 
 	// Confirmation gate for write-capable team dispatch
-	gate := NewTeamConfirmationGate()
 	if needsConfirmation && confirmationToken == "" {
-		token, err := gate.RequestConfirmation(map[string]any{
+		token, err := globalTeamConfirmationGate.RequestConfirmation(map[string]any{
 			"members": members,
 			"mode":    mode,
 			"task_id": taskID,
@@ -454,6 +467,38 @@ func DispatchTeam(
 		}
 	}
 
+	// Member tokens: after the team is confirmed, generate tokens for each member
+	// so they can dispatch without requiring their own per-role confirmation
+	var memberTokens []string
+	if needsConfirmation && confirmationToken != "" {
+		err := globalTeamConfirmationGate.ValidateConfirmation(confirmationToken)
+		if err != nil {
+			return map[string]any{
+				"status": "denied",
+				"reason": fmt.Sprintf("confirmation token invalid or expired: %v", err),
+			}
+		}
+
+		// Team is confirmed. Generate tokens for each member so they can dispatch
+		// in write mode without hitting their own confirmation gate.
+		memberTokens = make([]string, 0, len(members))
+		for range members {
+			token, err := globalConfirmationGate.RequestConfirmation(map[string]any{
+				"source":         "team_dispatch",
+				"task_id":        taskID,
+				"session_id":     sessionID,
+				"classification": classification,
+			})
+			if err != nil {
+				return map[string]any{
+					"status": "error",
+					"reason": fmt.Sprintf("failed to generate member confirmation token: %v", err),
+				}
+			}
+			memberTokens = append(memberTokens, token)
+		}
+	}
+
 	// Dispatch team members concurrently (up to MAX_CONCURRENT_CHILDREN)
 	teamID, err := generateJobID()
 	if err != nil {
@@ -465,7 +510,7 @@ func DispatchTeam(
 
 	if !wait {
 		// Async team dispatch
-		go dispatchTeamAsync(roots, teamID, members, mode, classification, taskID, sessionID, parentClassification, runner)
+		go dispatchTeamAsync(roots, teamID, members, mode, classification, taskID, sessionID, parentClassification, runner, memberTokens)
 		return map[string]any{
 			"status":  "team_dispatched_async",
 			"team_id": teamID,
@@ -474,11 +519,11 @@ func DispatchTeam(
 	}
 
 	// Sync team dispatch
-	results := dispatchTeamSync(roots, teamID, members, mode, classification, taskID, sessionID, parentClassification, runner)
+	results := dispatchTeamSync(roots, teamID, members, mode, classification, taskID, sessionID, parentClassification, runner, memberTokens)
 	return results
 }
 
-func dispatchTeamSync(roots DispatchRoots, teamID string, members []map[string]string, mode, classification, taskID, sessionID, parentClassification, runner string) map[string]any {
+func dispatchTeamSync(roots DispatchRoots, teamID string, members []map[string]string, mode, classification, taskID, sessionID, parentClassification, runner string, memberTokens []string) map[string]any {
 	memberResults := make([]map[string]any, 0, len(members))
 
 	// Dispatch members concurrently with limit
@@ -496,7 +541,14 @@ func dispatchTeamSync(roots DispatchRoots, teamID string, members []map[string]s
 				brief = "No brief provided"
 			}
 
-			result := DispatchSecureCloudRole(roots, roleID, brief, mode, classification, "", taskID, sessionID, parentClassification, runner, true)
+			// If memberTokens were provided (team dispatch with confirmation),
+			// use the token for this member. Otherwise, pass empty string.
+			memberToken := ""
+			if idx < len(memberTokens) {
+				memberToken = memberTokens[idx]
+			}
+
+			result := DispatchSecureCloudRole(roots, roleID, brief, mode, classification, memberToken, taskID, sessionID, parentClassification, runner, true)
 			result["member_index"] = idx
 			result["role_id"] = roleID
 			resultsChan <- result
@@ -524,8 +576,8 @@ func dispatchTeamSync(roots DispatchRoots, teamID string, members []map[string]s
 	}
 }
 
-func dispatchTeamAsync(roots DispatchRoots, teamID string, members []map[string]string, mode, classification, taskID, sessionID, parentClassification, runner string) {
-	result := dispatchTeamSync(roots, teamID, members, mode, classification, taskID, sessionID, parentClassification, runner)
+func dispatchTeamAsync(roots DispatchRoots, teamID string, members []map[string]string, mode, classification, taskID, sessionID, parentClassification, runner string, memberTokens []string) {
+	result := dispatchTeamSync(roots, teamID, members, mode, classification, taskID, sessionID, parentClassification, runner, memberTokens)
 	globalTeamJobStoreMu.Lock()
 	globalTeamJobStore.RecordTeamJob(teamID, result)
 	globalTeamJobStoreMu.Unlock()
@@ -547,42 +599,71 @@ func PollTeamStatus(teamID string) map[string]any {
 	return result
 }
 
-// TeamConfirmationGate manages confirmation for team dispatch
+// TeamConfirmationGate manages confirmation tokens for team dispatches.
+// It is structurally identical to ConfirmationGate except for the data payload
+// shape (map[string]any for team metadata vs individual role metadata).
+// It uses a token -> confirmation map like ConfirmationGate to support
+// concurrent team dispatch requests without clobbering each other's tokens,
+// and enforces ConfirmationTTLSeconds so issued tokens expire.
 type TeamConfirmationGate struct {
-	mu    sync.Mutex
-	token string
-	data  map[string]any
+	mu             sync.Mutex
+	pending        map[string]*PendingTeamConfirmation
+	confirmationID int64
 }
 
+type PendingTeamConfirmation struct {
+	ID        int64
+	Token     string
+	Timestamp time.Time
+	Data      map[string]any
+}
+
+// NewTeamConfirmationGate creates a new team confirmation gate
 func NewTeamConfirmationGate() *TeamConfirmationGate {
 	return &TeamConfirmationGate{
-		data: make(map[string]any),
+		pending: make(map[string]*PendingTeamConfirmation),
 	}
 }
 
+// RequestConfirmation creates a pending team confirmation that requires a token replay
 func (tcg *TeamConfirmationGate) RequestConfirmation(data map[string]any) (string, error) {
+	tcg.mu.Lock()
+	defer tcg.mu.Unlock()
+
 	token, err := generateConfirmationToken()
 	if err != nil {
 		return "", err
 	}
 
-	tcg.mu.Lock()
-	tcg.token = token
-	tcg.data = data
-	tcg.mu.Unlock()
-
+	tcg.confirmationID++
+	pc := &PendingTeamConfirmation{
+		ID:        tcg.confirmationID,
+		Token:     token,
+		Timestamp: time.Now(),
+		Data:      data,
+	}
+	tcg.pending[token] = pc
 	return token, nil
 }
 
+// ValidateConfirmation checks that the token is valid and current, consuming it
 func (tcg *TeamConfirmationGate) ValidateConfirmation(token string) error {
 	tcg.mu.Lock()
 	defer tcg.mu.Unlock()
 
-	if token != tcg.token {
-		return fmt.Errorf("invalid confirmation token")
+	pc, ok := tcg.pending[token]
+	if !ok {
+		return fmt.Errorf("invalid or expired confirmation token")
 	}
 
-	tcg.token = ""
+	// Check TTL
+	if time.Since(pc.Timestamp) > ConfirmationTTLSeconds*time.Second {
+		delete(tcg.pending, token)
+		return fmt.Errorf("confirmation token expired")
+	}
+
+	// Consume the token
+	delete(tcg.pending, token)
 	return nil
 }
 

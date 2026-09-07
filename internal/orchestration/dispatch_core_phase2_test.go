@@ -448,3 +448,98 @@ func TestDispatchAsyncNoWait(t *testing.T) {
 		t.Errorf("async dispatch (wait=false) returned status %q", status)
 	}
 }
+
+func TestTeamConfirmationGateTTL(t *testing.T) {
+	gate := NewTeamConfirmationGate()
+
+	data := map[string]any{
+		"members": []map[string]string{
+			{"role_id": "code-reviewer", "brief": "brief1"},
+		},
+		"mode": ModePlanningOnly,
+	}
+
+	token, err := gate.RequestConfirmation(data)
+	if err != nil {
+		t.Fatalf("RequestConfirmation failed: %v", err)
+	}
+
+	// Validate token - should succeed
+	err = gate.ValidateConfirmation(token)
+	if err != nil {
+		t.Errorf("ValidateConfirmation failed on fresh token: %v", err)
+	}
+
+	// Request another token and let it "expire"
+	token2, err := gate.RequestConfirmation(data)
+	if err != nil {
+		t.Fatalf("second RequestConfirmation failed: %v", err)
+	}
+
+	// Manually expire the token by modifying its timestamp
+	// This is a bit hacky but necessary for testing TTL
+	gate.mu.Lock()
+	if pc, ok := gate.pending[token2]; ok {
+		pc.Timestamp = time.Now().Add(-(ConfirmationTTLSeconds + 1) * time.Second)
+	}
+	gate.mu.Unlock()
+
+	// Try to validate the expired token - should fail
+	err = gate.ValidateConfirmation(token2)
+	if err == nil {
+		t.Errorf("ValidateConfirmation should reject expired token, but succeeded")
+	}
+	if err.Error() != "confirmation token expired" {
+		t.Errorf("expected 'confirmation token expired' error, got %q", err.Error())
+	}
+}
+
+func TestTeamConfirmationGateConcurrent(t *testing.T) {
+	gate := NewTeamConfirmationGate()
+	const numRequests = 10
+
+	tokens := make([]string, numRequests)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	// Concurrently request tokens - they should all be different
+	for i := 0; i < numRequests; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			token, err := gate.RequestConfirmation(map[string]any{
+				"members": []map[string]string{{"role_id": "role" + string(rune(idx)), "brief": "brief"}},
+				"mode":    ModePlanningOnly,
+			})
+			if err != nil {
+				t.Errorf("RequestConfirmation %d failed: %v", idx, err)
+				return
+			}
+			mu.Lock()
+			tokens[idx] = token
+			mu.Unlock()
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Verify all tokens are non-empty and unique
+	seenTokens := make(map[string]bool)
+	for i, token := range tokens {
+		if token == "" {
+			t.Errorf("token %d is empty", i)
+		}
+		if seenTokens[token] {
+			t.Errorf("token %d is duplicate: %q", i, token)
+		}
+		seenTokens[token] = true
+	}
+
+	// Verify each token can be validated independently
+	for i := 0; i < numRequests; i++ {
+		err := gate.ValidateConfirmation(tokens[i])
+		if err != nil {
+			t.Errorf("ValidateConfirmation for token %d failed: %v", i, err)
+		}
+	}
+}

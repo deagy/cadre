@@ -1,6 +1,7 @@
 package orchestration
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -109,6 +110,7 @@ func TestPhase3ConfirmationWorkflow(t *testing.T) {
 	// 2. Get confirmation token
 	// 3. Replay with token
 
+	// Step 1: Request confirmation
 	result := DispatchSecureCloudRole(
 		claudeRoleRoots(t, "code-reviewer"),
 		"code-reviewer",
@@ -136,6 +138,30 @@ func TestPhase3ConfirmationWorkflow(t *testing.T) {
 		token, ok := result["confirmation_token"].(string)
 		if !ok || token == "" {
 			t.Errorf("confirmation_required missing valid token")
+			return
+		}
+
+		// Step 3: Replay with token - this is the actual test of token validity
+		replayResult := DispatchSecureCloudRole(
+			claudeRoleRoots(t, "code-reviewer"),
+			"code-reviewer",
+			"test brief",
+			ModeRepositoryEdit,
+			"public",
+			token, // Use the token from the confirmation request
+			"task_123",
+			"session_123",
+			"public",
+			RunnerClaudeCode,
+			true, // sync
+		)
+
+		replayStatus := replayResult["status"].(string)
+		// Replay should succeed or error from runner not being available, but NOT deny due to bad token
+		if replayStatus == "denied" {
+			if reason, ok := replayResult["reason"].(string); ok && strings.Contains(reason, "confirmation token") {
+				t.Errorf("replay with valid token was denied: %v", replayResult)
+			}
 		}
 	}
 }
@@ -276,6 +302,105 @@ func TestPhase3TeamDispatchWorkflow(t *testing.T) {
 			t.Errorf("members field not a slice")
 		} else if len(memberResults) != len(members) {
 			t.Errorf("member count = %d, want %d", len(memberResults), len(members))
+		}
+	}
+}
+
+func TestPhase3TeamConfirmationWorkflow(t *testing.T) {
+	stubRunner(t)
+	// Test: Confirmation flow for write-capable team dispatch
+	// 1. Request team dispatch (write mode)
+	// 2. Get confirmation token
+	// 3. Replay with token
+	// 4. Verify each member actually executed (not waiting for confirmation)
+
+	members := []map[string]string{
+		{"role_id": "code-reviewer", "brief": "task 1"},
+		{"role_id": "security-reviewer", "brief": "task 2"},
+	}
+
+	// Step 1: Request confirmation
+	result := DispatchTeam(
+		testRoots(t, "code-reviewer"),
+		members,
+		ModeRepositoryEdit,
+		"public",
+		"",
+		"task_123",
+		"session_123",
+		"public",
+		RunnerClaudeCode,
+		true,
+	)
+
+	status := result["status"].(string)
+
+	if status == "confirmation_required" {
+		token, ok := result["confirmation_token"].(string)
+		if !ok || token == "" {
+			t.Errorf("confirmation_required missing valid token")
+			return
+		}
+
+		// Step 3: Replay with token
+		replayResult := DispatchTeam(
+			testRoots(t, "code-reviewer"),
+			members,
+			ModeRepositoryEdit,
+			"public",
+			token, // Use the token from the confirmation request
+			"task_123",
+			"session_123",
+			"public",
+			RunnerClaudeCode,
+			true,
+		)
+
+		replayStatus := replayResult["status"].(string)
+		// Replay should succeed in team dispatch or error from runner, but NOT deny due to bad token
+		if replayStatus == "denied" {
+			if reason, ok := replayResult["reason"].(string); ok && strings.Contains(reason, "confirmation token") {
+				t.Errorf("team replay with valid token was denied: %v", replayResult)
+			}
+		}
+
+		// CRITICAL: After successful team confirmation, each member should have
+		// been dispatched and executed, not left waiting for confirmation.
+		// This was the bug: members were dispatched with empty tokens, causing
+		// each to request its own confirmation rather than using the team's.
+		if replayStatus == "team_dispatched" {
+			memberResults, ok := replayResult["members"].([]map[string]any)
+			if !ok {
+				t.Errorf("team_dispatched missing members array")
+				return
+			}
+
+			if len(memberResults) != len(members) {
+				t.Errorf("expected %d members in result, got %d", len(members), len(memberResults))
+			}
+
+			for i, memberResult := range memberResults {
+				memberStatus, ok := memberResult["status"].(string)
+				if !ok {
+					t.Errorf("member %d missing status field", i)
+					continue
+				}
+
+				// Members should have executed, not requested their own confirmation
+				if memberStatus == "confirmation_required" {
+					t.Errorf("member %d (%v) still requesting confirmation after team was confirmed "+
+						"-- this means the team confirmation was not passed through to members",
+						i, memberResult["role_id"])
+				}
+
+				// Verify member has required fields
+				if _, hasRoleID := memberResult["role_id"]; !hasRoleID {
+					t.Errorf("member %d missing role_id field", i)
+				}
+				if _, hasMemberIndex := memberResult["member_index"]; !hasMemberIndex {
+					t.Errorf("member %d missing member_index field", i)
+				}
+			}
 		}
 	}
 }

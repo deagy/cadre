@@ -3,6 +3,7 @@ package orchestration
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -87,6 +88,45 @@ sandbox_mode = "read-only"
 	}
 	if fields["sandbox_mode"] != "read-only" {
 		t.Errorf("sandbox_mode = %q, want 'read-only'", fields["sandbox_mode"])
+	}
+}
+
+func TestExtractTOMLFieldsWithEscapedQuotes(t *testing.T) {
+	// Test with escaped quotes like those in real TOML files
+	// This mirrors the pattern in provider/codex-agents/agents-code-reviewer.toml
+	content := `
+# Role definition with escaped quotes
+name = "agents-code-reviewer"
+description = "Secure cloud agent suite role for the review phase (code-reviewer)."
+sandbox_mode = "read-only"
+model = "gpt-5.6-terra"
+developer_instructions = "# Role: code-reviewer\n\n## Role\n\nIndependently review changes for \"correctness\", \"security\", and \"maintainability\".\n\nKey points:\n- Review for \"quality\"\n- Check the \"design\""
+`
+
+	fields, err := extractTOMLFields(content, "test.toml")
+	if err != nil {
+		t.Fatalf("extractTOMLFields failed: %v", err)
+	}
+
+	if fields["name"] != "agents-code-reviewer" {
+		t.Errorf("name = %q, want 'agents-code-reviewer'", fields["name"])
+	}
+
+	// Verify the value with escaped quotes is extracted completely.
+	// The extraction function preserves the raw escape sequences from the TOML file.
+	expectedInstructions := "# Role: code-reviewer\\n\\n## Role\\n\\nIndependently review changes for \\\"correctness\\\", \\\"security\\\", and \\\"maintainability\\\".\\n\\nKey points:\\n- Review for \\\"quality\\\"\\n- Check the \\\"design\\\""
+	actualInstructions := fields["developer_instructions"]
+	if actualInstructions != expectedInstructions {
+		t.Errorf("developer_instructions mismatch.\nGot:  %q\nWant: %q", actualInstructions, expectedInstructions)
+	}
+
+	// Verify it's not truncated at the first escaped quote
+	// The function should extract the entire string including all escaped quotes
+	if !strings.Contains(actualInstructions, "\\\"correctness\\\"") {
+		t.Errorf("developer_instructions missing first escaped quote section")
+	}
+	if !strings.Contains(actualInstructions, "\\\"design\\\"") {
+		t.Errorf("developer_instructions missing last escaped quote section (value was truncated)")
 	}
 }
 
