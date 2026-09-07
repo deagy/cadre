@@ -393,6 +393,15 @@ func TestPhase3TeamConfirmationWorkflow(t *testing.T) {
 						i, memberResult["role_id"])
 				}
 
+				// CRITICAL: After team confirmation, members should have actually
+				// executed, meaning their status should NOT be "denied" or "error".
+				// They should show the runner's own success status (typically "success").
+				if memberStatus == "denied" || memberStatus == "error" {
+					t.Errorf("member %d (%v) has status %q after team confirmation "+
+						"-- members should have executed successfully, not been denied or errored",
+						i, memberResult["role_id"], memberStatus)
+				}
+
 				// Verify member has required fields
 				if _, hasRoleID := memberResult["role_id"]; !hasRoleID {
 					t.Errorf("member %d missing role_id field", i)

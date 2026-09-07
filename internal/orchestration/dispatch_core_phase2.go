@@ -86,12 +86,12 @@ func DispatchSecureCloudRole(
 			})
 	}
 
-	// Validate classification
-	if !Classifications[classification] {
+	// Validate classification and enforce ceiling against parent classification
+	if _, err := ValidateClassification(classification, parentClassification); err != nil {
 		return auditDecision(roleID, taskID, sessionID, classification, mode, runner,
 			map[string]any{
 				"status": "denied",
-				"reason": fmt.Sprintf("invalid classification: %q", classification),
+				"reason": err.Error(),
 			})
 	}
 
@@ -479,6 +479,14 @@ func DispatchTeam(
 		}
 	}
 
+	// Validate classification and enforce ceiling against parent classification
+	if _, err := ValidateClassification(classification, parentClassification); err != nil {
+		return map[string]any{
+			"status": "denied",
+			"reason": err.Error(),
+		}
+	}
+
 	// Check if any member will be write-capable
 	effectiveSandbox, _, _ := ComputeEffectiveSandbox(mode, "")
 	needsConfirmation := WriteCarpableSandboxes[effectiveSandbox]
@@ -486,9 +494,10 @@ func DispatchTeam(
 	// Confirmation gate for write-capable team dispatch
 	if needsConfirmation && confirmationToken == "" {
 		token, err := globalTeamConfirmationGate.RequestConfirmation(map[string]any{
-			"members": members,
-			"mode":    mode,
-			"task_id": taskID,
+			"members":        members,
+			"mode":           mode,
+			"classification": classification,
+			"task_id":        taskID,
 		})
 		if err != nil {
 			return map[string]any{
@@ -509,7 +518,7 @@ func DispatchTeam(
 	// so they can dispatch without requiring their own per-role confirmation
 	var memberTokens []string
 	if needsConfirmation && confirmationToken != "" {
-		err := globalTeamConfirmationGate.ValidateConfirmation(confirmationToken, members, mode, taskID)
+		err := globalTeamConfirmationGate.ValidateConfirmation(confirmationToken, members, mode, classification, taskID)
 		if err != nil {
 			return map[string]any{
 				"status": "denied",
@@ -545,6 +554,7 @@ func DispatchTeam(
 			if needsToken {
 				token, err := globalConfirmationGate.RequestConfirmation(map[string]any{
 					"source":         "team_dispatch",
+					"mode":           mode,
 					"task_id":        taskID,
 					"session_id":     sessionID,
 					"classification": classification,
@@ -727,12 +737,13 @@ func (tcg *TeamConfirmationGate) sweepExpiredLocked() {
 }
 
 // ValidateConfirmation checks that the token is valid, current, and bound to the
-// expected team dispatch parameters (members, mode, taskID).
+// expected team dispatch parameters (members, mode, classification, taskID).
 // Any mismatch is treated as invalid/expired to avoid leaking which field differed.
 func (tcg *TeamConfirmationGate) ValidateConfirmation(
 	token string,
 	expectedMembers []map[string]string,
 	expectedMode string,
+	expectedClassification string,
 	expectedTaskID string,
 ) error {
 	tcg.mu.Lock()
@@ -807,6 +818,11 @@ func (tcg *TeamConfirmationGate) ValidateConfirmation(
 
 	// Compare mode
 	if storedMode, ok := pc.Data["mode"].(string); !ok || storedMode != expectedMode {
+		return fmt.Errorf("invalid or expired confirmation token")
+	}
+
+	// Compare classification
+	if storedClassification, ok := pc.Data["classification"].(string); !ok || storedClassification != expectedClassification {
 		return fmt.Errorf("invalid or expired confirmation token")
 	}
 

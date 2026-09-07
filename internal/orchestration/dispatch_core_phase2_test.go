@@ -1,6 +1,7 @@
 package orchestration
 
 import (
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -281,9 +282,10 @@ func TestTeamConfirmationGate(t *testing.T) {
 	}
 
 	data := map[string]any{
-		"members": members,
-		"mode":    ModePlanningOnly,
-		"task_id": "task-123",
+		"members":        members,
+		"mode":           ModePlanningOnly,
+		"classification": "public",
+		"task_id":        "task-123",
 	}
 
 	token, err := gate.RequestConfirmation(data)
@@ -295,13 +297,13 @@ func TestTeamConfirmationGate(t *testing.T) {
 	}
 
 	// Validate token with matching parameters
-	err = gate.ValidateConfirmation(token, members, ModePlanningOnly, "task-123")
+	err = gate.ValidateConfirmation(token, members, ModePlanningOnly, "public", "task-123")
 	if err != nil {
 		t.Errorf("ValidateConfirmation failed: %v", err)
 	}
 
 	// Second validation should fail - token consumed
-	err = gate.ValidateConfirmation(token, members, ModePlanningOnly, "task-123")
+	err = gate.ValidateConfirmation(token, members, ModePlanningOnly, "public", "task-123")
 	if err == nil {
 		t.Errorf("ValidateConfirmation should fail for consumed token")
 	}
@@ -460,9 +462,10 @@ func TestTeamConfirmationGateTTL(t *testing.T) {
 	}
 
 	data := map[string]any{
-		"members": members,
-		"mode":    ModePlanningOnly,
-		"task_id": "task-123",
+		"members":        members,
+		"mode":           ModePlanningOnly,
+		"classification": "public",
+		"task_id":        "task-123",
 	}
 
 	token, err := gate.RequestConfirmation(data)
@@ -471,7 +474,7 @@ func TestTeamConfirmationGateTTL(t *testing.T) {
 	}
 
 	// Validate token - should succeed
-	err = gate.ValidateConfirmation(token, members, ModePlanningOnly, "task-123")
+	err = gate.ValidateConfirmation(token, members, ModePlanningOnly, "public", "task-123")
 	if err != nil {
 		t.Errorf("ValidateConfirmation failed on fresh token: %v", err)
 	}
@@ -491,7 +494,7 @@ func TestTeamConfirmationGateTTL(t *testing.T) {
 	gate.mu.Unlock()
 
 	// Try to validate the expired token - should fail
-	err = gate.ValidateConfirmation(token2, members, ModePlanningOnly, "task-123")
+	err = gate.ValidateConfirmation(token2, members, ModePlanningOnly, "public", "task-123")
 	if err == nil {
 		t.Errorf("ValidateConfirmation should reject expired token, but succeeded")
 	}
@@ -516,9 +519,10 @@ func TestTeamConfirmationGateConcurrent(t *testing.T) {
 			defer wg.Done()
 			members := []map[string]string{{"role_id": "role" + string(rune(idx)), "brief": "brief"}}
 			token, err := gate.RequestConfirmation(map[string]any{
-				"members": members,
-				"mode":    ModePlanningOnly,
-				"task_id": "task-123",
+				"members":        members,
+				"mode":           ModePlanningOnly,
+				"classification": "public",
+				"task_id":        "task-123",
 			})
 			if err != nil {
 				t.Errorf("RequestConfirmation %d failed: %v", idx, err)
@@ -547,7 +551,7 @@ func TestTeamConfirmationGateConcurrent(t *testing.T) {
 
 	// Verify each token can be validated independently
 	for i := 0; i < numRequests; i++ {
-		err := gate.ValidateConfirmation(tokens[i], membersList[i], ModePlanningOnly, "task-123")
+		err := gate.ValidateConfirmation(tokens[i], membersList[i], ModePlanningOnly, "public", "task-123")
 		if err != nil {
 			t.Errorf("ValidateConfirmation for token %d failed: %v", i, err)
 		}
@@ -635,9 +639,10 @@ func TestTeamConfirmationGateLazySweep(t *testing.T) {
 			{"role_id": "role-test", "brief": "brief"},
 		}
 		token, err := gate.RequestConfirmation(map[string]any{
-			"members": members,
-			"mode":    ModePlanningOnly,
-			"task_id": "task-123",
+			"members":        members,
+			"mode":           ModePlanningOnly,
+			"classification": "public",
+			"task_id":        "task-123",
 		})
 		if err != nil {
 			t.Fatalf("RequestConfirmation failed: %v", err)
@@ -669,9 +674,10 @@ func TestTeamConfirmationGateLazySweep(t *testing.T) {
 		{"role_id": "role-new", "brief": "new brief"},
 	}
 	newToken, err := gate.RequestConfirmation(map[string]any{
-		"members": newMembers,
-		"mode":    ModeRepositoryEdit,
-		"task_id": "task-456",
+		"members":        newMembers,
+		"mode":           ModeRepositoryEdit,
+		"classification": "internal",
+		"task_id":        "task-456",
 	})
 	if err != nil {
 		t.Fatalf("RequestConfirmation failed: %v", err)
@@ -686,13 +692,13 @@ func TestTeamConfirmationGateLazySweep(t *testing.T) {
 	}
 
 	// Verify the new token is still there
-	err = gate.ValidateConfirmation(newToken, newMembers, ModeRepositoryEdit, "task-456")
+	err = gate.ValidateConfirmation(newToken, newMembers, ModeRepositoryEdit, "internal", "task-456")
 	if err != nil {
 		t.Errorf("new token should be valid but got error: %v", err)
 	}
 
 	// Verify expired tokens cannot be validated
-	err = gate.ValidateConfirmation(expiredTokens[0], expiredMembers[0], ModePlanningOnly, "task-123")
+	err = gate.ValidateConfirmation(expiredTokens[0], expiredMembers[0], ModePlanningOnly, "public", "task-123")
 	if err == nil {
 		t.Error("expired token should not validate")
 	}
@@ -988,22 +994,25 @@ func TestTeamConfirmationGateTokenSurvivesMismatch(t *testing.T) {
 		{"role_id": "role2", "brief": "brief2"},
 	}
 	expectedMode := ModeRepositoryEdit
+	expectedClassification := "internal"
 	expectedTaskID := "team-task-123"
 
 	// Test mismatch on each field
 	mismatchTests := []struct {
-		name    string
-		members []map[string]string
-		mode    string
-		taskID  string
+		name           string
+		members        []map[string]string
+		mode           string
+		classification string
+		taskID         string
 	}{
 		{
 			name: "wrong members count",
 			members: []map[string]string{
 				{"role_id": "role1", "brief": "brief1"},
 			},
-			mode:   expectedMode,
-			taskID: expectedTaskID,
+			mode:           expectedMode,
+			classification: expectedClassification,
+			taskID:         expectedTaskID,
 		},
 		{
 			name: "wrong member role_id",
@@ -1011,8 +1020,9 @@ func TestTeamConfirmationGateTokenSurvivesMismatch(t *testing.T) {
 				{"role_id": "wrong-role", "brief": "brief1"},
 				{"role_id": "role2", "brief": "brief2"},
 			},
-			mode:   expectedMode,
-			taskID: expectedTaskID,
+			mode:           expectedMode,
+			classification: expectedClassification,
+			taskID:         expectedTaskID,
 		},
 		{
 			name: "wrong member brief",
@@ -1020,20 +1030,23 @@ func TestTeamConfirmationGateTokenSurvivesMismatch(t *testing.T) {
 				{"role_id": "role1", "brief": "wrong-brief"},
 				{"role_id": "role2", "brief": "brief2"},
 			},
-			mode:   expectedMode,
-			taskID: expectedTaskID,
+			mode:           expectedMode,
+			classification: expectedClassification,
+			taskID:         expectedTaskID,
 		},
 		{
-			name:    "wrong mode",
-			members: expectedMembers,
-			mode:    ModePlanningOnly,
-			taskID:  expectedTaskID,
+			name:           "wrong mode",
+			members:        expectedMembers,
+			mode:           ModePlanningOnly,
+			classification: expectedClassification,
+			taskID:         expectedTaskID,
 		},
 		{
-			name:    "wrong task_id",
-			members: expectedMembers,
-			mode:    expectedMode,
-			taskID:  "wrong-task",
+			name:           "wrong task_id",
+			members:        expectedMembers,
+			mode:           expectedMode,
+			classification: expectedClassification,
+			taskID:         "wrong-task",
 		},
 	}
 
@@ -1041,22 +1054,23 @@ func TestTeamConfirmationGateTokenSurvivesMismatch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a fresh token for this subtest
 			token, err := gate.RequestConfirmation(map[string]any{
-				"members": expectedMembers,
-				"mode":    expectedMode,
-				"task_id": expectedTaskID,
+				"members":        expectedMembers,
+				"mode":           expectedMode,
+				"classification": expectedClassification,
+				"task_id":        expectedTaskID,
 			})
 			if err != nil {
 				t.Fatalf("RequestConfirmation failed: %v", err)
 			}
 
 			// First, attempt validation with wrong parameter
-			err = gate.ValidateConfirmation(token, tt.members, tt.mode, tt.taskID)
+			err = gate.ValidateConfirmation(token, tt.members, tt.mode, tt.classification, tt.taskID)
 			if err == nil {
 				t.Errorf("ValidateConfirmation with %s should have failed but didn't", tt.name)
 			}
 
 			// Verify token still exists by attempting validation with correct parameters
-			err = gate.ValidateConfirmation(token, expectedMembers, expectedMode, expectedTaskID)
+			err = gate.ValidateConfirmation(token, expectedMembers, expectedMode, expectedClassification, expectedTaskID)
 			if err != nil {
 				t.Errorf("ValidateConfirmation with correct parameters after %s failed: %v (token was destroyed on mismatch)", tt.name, err)
 			}
@@ -1081,7 +1095,7 @@ func TestDispatchSecureCloudRoleConfirmationEndToEnd(t *testing.T) {
 	result := DispatchSecureCloudRole(
 		roots,
 		roleID, brief, mode, classification,
-		"", taskID, "session123", "public", DefaultRunner, true,
+		"", taskID, "session123", "internal", DefaultRunner, true,
 	)
 
 	status := result["status"].(string)
@@ -1115,7 +1129,7 @@ func TestDispatchSecureCloudRoleConfirmationEndToEnd(t *testing.T) {
 	result = DispatchSecureCloudRole(
 		roots,
 		roleID, brief, mode, classification,
-		token, taskID, "session123", "public", DefaultRunner, true,
+		token, taskID, "session123", "internal", DefaultRunner, true,
 	)
 
 	status = result["status"].(string)
@@ -1142,7 +1156,7 @@ func TestDispatchTeamConfirmationEndToEnd(t *testing.T) {
 	result := DispatchTeam(
 		roots,
 		correctMembers, mode, "internal",
-		"", taskID, "session123", "public", DefaultRunner, true,
+		"", taskID, "session123", "internal", DefaultRunner, true,
 	)
 
 	status := result["status"].(string)
@@ -1167,7 +1181,7 @@ func TestDispatchTeamConfirmationEndToEnd(t *testing.T) {
 	result = DispatchTeam(
 		roots,
 		wrongMembers, mode, "internal",
-		token, taskID, "session123", "public", DefaultRunner, true,
+		token, taskID, "session123", "internal", DefaultRunner, true,
 	)
 
 	status = result["status"].(string)
@@ -1179,12 +1193,224 @@ func TestDispatchTeamConfirmationEndToEnd(t *testing.T) {
 	result = DispatchTeam(
 		roots,
 		correctMembers, mode, "internal",
-		token, taskID, "session123", "public", DefaultRunner, true,
+		token, taskID, "session123", "internal", DefaultRunner, true,
 	)
 
 	status = result["status"].(string)
 	// Should succeed or at least not be "denied" due to token expiry
 	if status == "denied" && result["reason"] == "confirmation token invalid or expired" {
 		t.Errorf("token was destroyed after mismatch; retry with correct members failed")
+	}
+}
+
+// TestTeamConfirmationTokenClassificationBinding verifies that a team confirmation
+// token minted at one classification cannot be replayed with a different classification.
+// This mirrors the existing TestTeamConfirmationGateTokenSurvivesMismatch but
+// tests the classification field specifically.
+func TestTeamConfirmationTokenClassificationBinding(t *testing.T) {
+	gate := NewTeamConfirmationGate()
+
+	members := []map[string]string{
+		{"role_id": "role1", "brief": "brief1"},
+	}
+	correctMode := ModeRepositoryEdit
+	correctClassification := "internal"
+	correctTaskID := "task-123"
+
+	// Create token at one classification
+	token, err := gate.RequestConfirmation(map[string]any{
+		"members":        members,
+		"mode":           correctMode,
+		"classification": correctClassification,
+		"task_id":        correctTaskID,
+	})
+	if err != nil {
+		t.Fatalf("RequestConfirmation failed: %v", err)
+	}
+
+	// Attempt validation with wrong classification
+	err = gate.ValidateConfirmation(
+		token,
+		members,
+		correctMode,
+		"public", // Wrong classification
+		correctTaskID,
+	)
+	if err == nil {
+		t.Errorf("ValidateConfirmation with wrong classification should have failed but didn't")
+	}
+
+	// Verify token still exists by validating with correct classification
+	err = gate.ValidateConfirmation(
+		token,
+		members,
+		correctMode,
+		correctClassification,
+		correctTaskID,
+	)
+	if err != nil {
+		t.Errorf("ValidateConfirmation with correct classification after mismatch failed: %v (token was destroyed on mismatch)", err)
+	}
+}
+
+// TestDispatchSecureCloudRoleClassificationCeiling verifies that a dispatch with
+// classification exceeding the parent classification is denied.
+func TestDispatchSecureCloudRoleClassificationCeiling(t *testing.T) {
+	stubRunner(t)
+
+	tests := []struct {
+		name                      string
+		classification            string
+		parentClassification      string
+		expectDenied              bool
+		expectClassificationError bool
+	}{
+		{
+			name:                      "equal classifications allowed",
+			classification:            "internal",
+			parentClassification:      "internal",
+			expectDenied:              false,
+			expectClassificationError: false,
+		},
+		{
+			name:                      "lower classification allowed",
+			classification:            "public",
+			parentClassification:      "internal",
+			expectDenied:              false,
+			expectClassificationError: false,
+		},
+		{
+			name:                      "exceeding classification denied",
+			classification:            "restricted",
+			parentClassification:      "internal",
+			expectDenied:              true,
+			expectClassificationError: true,
+		},
+		{
+			name:                      "confidential exceeds internal",
+			classification:            "confidential",
+			parentClassification:      "internal",
+			expectDenied:              true,
+			expectClassificationError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := DispatchSecureCloudRole(
+				testRoots(t, "code-reviewer"),
+				"code-reviewer",
+				"test brief",
+				ModePlanningOnly,
+				tt.classification,
+				"",
+				"task123",
+				"session123",
+				tt.parentClassification,
+				DefaultRunner,
+				true,
+			)
+
+			status := result["status"].(string)
+			if tt.expectDenied {
+				if status != "denied" {
+					t.Errorf("expected denied status for %s, got %q", tt.name, status)
+					return
+				}
+				if tt.expectClassificationError {
+					reason, ok := result["reason"].(string)
+					if !ok {
+						t.Errorf("denied result missing reason field")
+						return
+					}
+					if !strings.Contains(reason, "exceeds") {
+						t.Errorf("expected classification ceiling error, got reason: %s", reason)
+					}
+				}
+			} else if status == "denied" {
+				if reason, ok := result["reason"].(string); ok && strings.Contains(reason, "exceeds") {
+					t.Errorf("classification %s should not exceed parent %s, but was denied: %s",
+						tt.classification, tt.parentClassification, reason)
+				}
+			}
+		})
+	}
+}
+
+// TestDispatchTeamClassificationCeiling verifies that a team dispatch with
+// classification exceeding the parent classification is denied.
+func TestDispatchTeamClassificationCeiling(t *testing.T) {
+	members := []map[string]string{
+		{"role_id": "code-reviewer", "brief": "task 1"},
+	}
+
+	tests := []struct {
+		name                      string
+		classification            string
+		parentClassification      string
+		expectDenied              bool
+		expectClassificationError bool
+	}{
+		{
+			name:                      "equal classifications allowed",
+			classification:            "internal",
+			parentClassification:      "internal",
+			expectDenied:              false,
+			expectClassificationError: false,
+		},
+		{
+			name:                      "lower classification allowed",
+			classification:            "public",
+			parentClassification:      "internal",
+			expectDenied:              false,
+			expectClassificationError: false,
+		},
+		{
+			name:                      "exceeding classification denied",
+			classification:            "restricted",
+			parentClassification:      "internal",
+			expectDenied:              true,
+			expectClassificationError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := DispatchTeam(
+				testRoots(t, "code-reviewer"),
+				members,
+				ModePlanningOnly,
+				tt.classification,
+				"",
+				"task123",
+				"session123",
+				tt.parentClassification,
+				DefaultRunner,
+				true,
+			)
+
+			status := result["status"].(string)
+			if tt.expectDenied {
+				if status != "denied" {
+					t.Errorf("expected denied status for %s, got %q", tt.name, status)
+					return
+				}
+				if tt.expectClassificationError {
+					reason, ok := result["reason"].(string)
+					if !ok {
+						t.Errorf("denied result missing reason field")
+						return
+					}
+					if !strings.Contains(reason, "exceeds") {
+						t.Errorf("expected classification ceiling error, got reason: %s", reason)
+					}
+				}
+			} else if status == "denied" {
+				if reason, ok := result["reason"].(string); ok && strings.Contains(reason, "exceeds") {
+					t.Errorf("classification %s should not exceed parent %s, but was denied: %s",
+						tt.classification, tt.parentClassification, reason)
+				}
+			}
+		})
 	}
 }

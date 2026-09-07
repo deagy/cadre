@@ -132,6 +132,12 @@ func ValidateClassification(classification, parentClassification string) (string
 	if !Classifications[classification] {
 		return "", fmt.Errorf("invalid classification: %q", classification)
 	}
+
+	// If parentClassification is empty, there is no ceiling
+	if parentClassification == "" {
+		return classification, nil
+	}
+
 	if !Classifications[parentClassification] {
 		return "", fmt.Errorf("invalid parent classification: %q", parentClassification)
 	}
