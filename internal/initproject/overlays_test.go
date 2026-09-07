@@ -148,3 +148,174 @@ func indexOfSub(haystack, needle string) int {
 	}
 	return -1
 }
+
+// Test 1: Symlinked overlay file pointing outside project is rejected.
+func TestReadExistingOverlayTextRejectsSymlinkedFile(t *testing.T) {
+	outside := t.TempDir()
+	target := makeGitProject(t)
+
+	// Create a file outside the project
+	outsideFile := filepath.Join(outside, "external.yaml")
+	if err := os.WriteFile(outsideFile, []byte("outside: true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to create a symlink from .agents/shared/team-profile.yaml to the outside file
+	if err := os.MkdirAll(filepath.Join(target, ".agents", "shared"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideFile, filepath.Join(target, ".agents", "shared", TeamProfileFilename)); err != nil {
+		t.Skipf("cannot create symlink in this environment: %v", err)
+	}
+
+	// readExistingOverlayText should reject the symlinked overlay pointing outside
+	// the project root by returning hasExisting=false (treating it as "no file").
+	content, hasExisting := readExistingOverlayText(target, TeamProfileFilename)
+	if hasExisting {
+		t.Errorf("expected symlinked overlay to be rejected (hasExisting=false), got hasExisting=true with content %q", content)
+	}
+}
+
+// Test 2: Symlinked .agents/shared directory pointing outside is rejected.
+func TestBuildStructuredOverlayRejectsSymlinkedSharedDirectory(t *testing.T) {
+	outside := t.TempDir()
+	target := makeGitProject(t)
+
+	// Create the .agents parent directory first (before creating the .agents/shared symlink)
+	if err := os.MkdirAll(filepath.Join(target, ".agents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(target, ".agents", "shared")); err != nil {
+		t.Skipf("cannot create symlink in this environment: %v", err)
+	}
+
+	// WriteOverlay should reject this via the symlink escape check
+	_, err := WriteOverlay(target, TeamProfileFilename, "test: content\n")
+	if err == nil {
+		t.Fatal("expected rejection of symlinked .agents/shared directory")
+	}
+}
+
+// Test 3: Non-symlinked existing overlay reads and merges correctly (regression).
+func TestBuildStructuredOverlayNonSymlinkedExistingStillWorks(t *testing.T) {
+	dir := makeGitProject(t)
+	existingYAML := "keep_me: true\nfield1: original\n"
+	writeFile(t, filepath.Join(dir, ".agents", "shared", TeamProfileFilename), existingYAML)
+
+	// Merge with a fragment
+	fragment := map[string]any{
+		"field1":    "updated",
+		"new_field": "added",
+	}
+	content, merged, ok, err := BuildStructuredOverlay(dir, TeamProfileFilename, fragment)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected a write")
+	}
+	if merged["keep_me"] != true {
+		t.Errorf("expected existing untouched field to survive, got %+v", merged)
+	}
+	if merged["field1"] != "updated" {
+		t.Errorf("expected fragment to override existing, field1=%v", merged["field1"])
+	}
+	if merged["new_field"] != "added" {
+		t.Errorf("expected new field from fragment, new_field=%v", merged["new_field"])
+	}
+	if content == "" {
+		t.Error("expected non-empty merged content")
+	}
+}
+
+// Test 4: Integration-level test at BuildStructuredOverlay for symlink rejection.
+func TestBuildStructuredOverlayRejectsSymlinkEscapeInExisting(t *testing.T) {
+	outside := t.TempDir()
+	target := makeGitProject(t)
+	if err := os.MkdirAll(filepath.Join(target, ".agents", "shared"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an outside file
+	outsideFile := filepath.Join(outside, "external.yaml")
+	if err := os.WriteFile(outsideFile, []byte("outside: true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a symlink from .agents/shared/team-profile.yaml to outside
+	if err := os.Symlink(outsideFile, filepath.Join(target, ".agents", "shared", TeamProfileFilename)); err != nil {
+		t.Skipf("cannot create symlink in this environment: %v", err)
+	}
+
+	// BuildStructuredOverlay should reject the symlink escape when trying to
+	// read the existing overlay. However, readExistingOverlayText at this level
+	// doesn't do the escape check (that's done in InspectRepairState). The check
+	// at WriteOverlay level would catch it. For BuildStructuredOverlay to reject
+	// it at read time, we verify through InspectRepairState's error reporting.
+	sharedDir := realSharedDefaultsDirForTest(t)
+	_, errs := InspectRepairState(target, sharedDir)
+	if len(errs) == 0 {
+		t.Fatal("expected InspectRepairState to report an error for symlink escape")
+	}
+	found := false
+	for _, err := range errs {
+		if containsSub(err, "symlink escape") || containsSub(err, "symlink") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected symlink escape error, got errors: %v", errs)
+	}
+}
+
+// Test 5: BuildStructuredOverlay explicitly rejects symlink-escaped existing
+// overlay and treats it as "no existing file" when building.
+func TestBuildStructuredOverlayRejectsSymlinkEscapeInExistingWhenBuilding(t *testing.T) {
+	outside := t.TempDir()
+	target := makeGitProject(t)
+	if err := os.MkdirAll(filepath.Join(target, ".agents", "shared"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an outside file with content that should NOT appear in the result
+	outsideFile := filepath.Join(outside, "external.yaml")
+	if err := os.WriteFile(outsideFile, []byte("escaped_content: true\nkeep_from_outside: yes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a symlink from .agents/shared/team-profile.yaml to outside
+	if err := os.Symlink(outsideFile, filepath.Join(target, ".agents", "shared", TeamProfileFilename)); err != nil {
+		t.Skipf("cannot create symlink in this environment: %v", err)
+	}
+
+	// BuildStructuredOverlay with a simple fragment should NOT merge the escaped
+	// content. The symlinked file should be rejected, so it's treated as "no
+	// existing overlay," and the result contains only the fragment (not a merge).
+	fragment := map[string]any{"new_field": "from_fragment"}
+	content, merged, ok, err := BuildStructuredOverlay(target, TeamProfileFilename, fragment)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected a write (fragment is present)")
+	}
+
+	// The escaped content should NOT appear in the result
+	if containsSub(content, "escaped_content") || containsSub(content, "keep_from_outside") {
+		t.Errorf("escaped content leaked into result: %q", content)
+	}
+
+	// The fragment content should be there
+	if !containsSub(content, "new_field") {
+		t.Errorf("expected fragment field in result: %q", content)
+	}
+
+	// The merged map should not contain fields from the escaped file
+	if _, found := merged["keep_from_outside"]; found {
+		t.Errorf("escaped field should not appear in merged: %+v", merged)
+	}
+	if merged["new_field"] != "from_fragment" {
+		t.Errorf("expected fragment field in merged, got %+v", merged)
+	}
+}

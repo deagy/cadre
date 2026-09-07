@@ -101,3 +101,19 @@ func TestApplySetOverridesRejectsMappingValue(t *testing.T) {
 		t.Fatal("expected rejection of a mapping-shaped --set value")
 	}
 }
+
+// Test 5: Malformed field_decisions (not a map) returns error instead of panicking.
+func TestApplySetOverridesMalformedFieldDecisionsReturnsError(t *testing.T) {
+	sharedDir := realSharedDefaultsDirForTest(t)
+	answers := map[string]any{
+		"field_decisions": "not_a_map", // Malformed: should be a map, not a string
+	}
+	sections := []string{"rg-a-stack", "rg-b-governance", "rg-c-platform"}
+	_, err := ApplySetOverrides(sharedDir, answers, []string{"platform.hosting_model=cloud"}, sections)
+	if err == nil {
+		t.Fatal("expected error when field_decisions is not a mapping")
+	}
+	if !containsSub(err.Error(), "field_decisions") {
+		t.Errorf("expected error message to mention field_decisions, got: %v", err)
+	}
+}

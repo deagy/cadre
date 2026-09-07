@@ -212,7 +212,10 @@ func ApplySetOverrides(sharedDefaultsDir string, answers map[string]any, rawOver
 			decisions = map[string]any{}
 			answers["field_decisions"] = decisions
 		} else {
-			decisions, _ = decisionsRaw.(map[string]any)
+			decisions, ok = decisionsRaw.(map[string]any)
+			if !ok {
+				return nil, initErrorf("field_decisions in answers is not a mapping")
+			}
 		}
 		decisionPath := setDecisionPath(region, path)
 		if region == "platform" {

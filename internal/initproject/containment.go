@@ -163,12 +163,13 @@ func ResolveTargetRoot(opts ResolveTargetRootOptions) (string, error) {
 // filename, requires it stays under targetRoot's resolved path (rejecting
 // symlink escapes), and refuses self-checkout targets (A-002).
 //
-// Finding B (TOCTOU): targetRoot is resolved exactly ONCE, into
+// Finding B (TOCTOU mitigation): targetRoot is resolved exactly ONCE, into
 // resolvedRoot, and that same resolved value is what both the destination
 // path is built from AND what the self-checkout check runs against,
-// immediately before the write. There is no separate, independent resolve
-// of targetRoot anywhere else in this function whose result could diverge
-// from the one actually used for the write.
+// immediately before the write. This closes the coarser original bug (check
+// vs. write using different unresolved/resolved values) but not a true
+// syscall-level TOCTOU race, which would require O_NOFOLLOW or a held file
+// descriptor.
 func WriteOverlay(targetRoot, filename, content string) (string, error) {
 	resolvedRoot, err := filepath.Abs(targetRoot)
 	if err != nil {
@@ -213,6 +214,20 @@ func existingOverlayPath(targetRoot, filename string) string {
 
 func readExistingOverlayText(targetRoot, filename string) (string, bool) {
 	path := existingOverlayPath(targetRoot, filename)
+	resolvedRoot, err := filepath.Abs(targetRoot)
+	if err != nil {
+		return "", false
+	}
+	if r, err := filepath.EvalSymlinks(resolvedRoot); err == nil {
+		resolvedRoot = r
+	}
+	resolvedPath := path
+	if r, err := filepath.EvalSymlinks(path); err == nil {
+		resolvedPath = r
+	}
+	if !config.IsSameOrDescendant(resolvedPath, resolvedRoot) {
+		return "", false
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", false
