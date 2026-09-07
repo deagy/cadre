@@ -2,6 +2,8 @@ package selector
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -298,5 +300,98 @@ func TestResolveEffectiveRoutingReturnsTheBaseUntouchedWithNoOverlay(t *testing.
 	}
 	if len(objectList(resolved["routes"])) != 1 {
 		t.Errorf("routes = %v, want the base returned as-is", resolved["routes"])
+	}
+}
+
+// --- Symlink escape guard tests ---
+
+func makeTestGitCheckout(t *testing.T) string {
+	dir := t.TempDir()
+	gitDir := filepath.Join(dir, ".git")
+	if err := os.Mkdir(gitDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestResolveEffectiveRoutingRejectsSymlinkedOverlayFile(t *testing.T) {
+	outside := t.TempDir()
+	outsideFile := filepath.Join(outside, "evil.json")
+	if err := os.WriteFile(outsideFile, []byte("{\"version\": 1}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	project := makeTestGitCheckout(t)
+	agentsDir := filepath.Join(project, ".agents", "orchestration")
+	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	symlinkPath := filepath.Join(agentsDir, "routing-overlay.json")
+	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
+		t.Skipf("cannot create symlink in this environment: %v", err)
+	}
+
+	base := baseFrom(t, minimalBase)
+	_, err := ResolveEffectiveRouting(base, symlinkPath)
+	if err == nil {
+		t.Fatal("expected rejection of a symlink pointing outside the project root")
+	}
+}
+
+func TestResolveEffectiveRoutingRejectsSymlinkedOverlayDirectory(t *testing.T) {
+	outside := t.TempDir()
+	outsideDir := filepath.Join(outside, "evil-dir")
+	if err := os.MkdirAll(outsideDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outsideDir, "routing-overlay.json"), []byte("{\"version\": 1}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	project := makeTestGitCheckout(t)
+	agentsDir := filepath.Join(project, ".agents")
+	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	symlinkPath := filepath.Join(agentsDir, "orchestration")
+	if err := os.Symlink(outsideDir, symlinkPath); err != nil {
+		t.Skipf("cannot create symlink in this environment: %v", err)
+	}
+
+	// Try to access a file through the symlinked directory
+	evilFile := filepath.Join(symlinkPath, "routing-overlay.json")
+	base := baseFrom(t, minimalBase)
+	_, err := ResolveEffectiveRouting(base, evilFile)
+	if err == nil {
+		t.Fatal("expected rejection of a file accessed through a symlinked intermediate directory")
+	}
+}
+
+func TestResolveEffectiveRoutingAllowsLegitimateOverlay(t *testing.T) {
+	// Regression test: ensure the symlink guard doesn't break normal overlay resolution
+	project := makeTestGitCheckout(t)
+	agentsDir := filepath.Join(project, ".agents", "orchestration")
+	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	overlayFile := filepath.Join(agentsDir, "routing-overlay.json")
+	overlayContent := `{
+	  "version": 1,
+	  "routes": [
+	    {"id": "new-route", "keywords": ["test"], "paths": ["test/**"], "primary": ["test-role"]}
+	  ]
+	}`
+	if err := os.WriteFile(overlayFile, []byte(overlayContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	base := baseFrom(t, minimalBase)
+	resolved, err := ResolveEffectiveRouting(base, overlayFile)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	routes := objectList(resolved["routes"])
+	if len(routes) != 2 {
+		t.Errorf("routes count = %d, want 2 (base + overlay)", len(routes))
 	}
 }

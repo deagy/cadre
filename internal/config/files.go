@@ -210,37 +210,19 @@ func defaultComputeRosterRoot() (any, bool) {
 // Symlink-escape guard on read.
 // ---------------------------------------------------------------------
 
-// rejectSymlinkEscapeOnReadWithDepth guards against symlink escapes for a
-// file discovered at a specific relative depth under the project root.
-// levelsUp is the number of directory levels from the candidate file to the
-// project root (e.g., 2 for .agents/cadre.yaml, 3 for .agents/shared/<filename>).
-// Discovery's file-exists check follows symlinks, so a malicious file or
-// symlinked directory shipped in an untrusted, clonable project can point
-// outside the project entirely. Reject that before the file is ever opened/parsed.
+// rejectSymlinkEscapeOnReadWithDepth guards against symlink escapes by wrapping
+// platform.RejectSymlinkEscapeOnReadWithDepth and converting the error type to
+// a settings error for backward compatibility with this package's error handling.
 func rejectSymlinkEscapeOnReadWithDepth(candidate string, levelsUp int) (string, error) {
-	root := candidate
-	for i := 0; i < levelsUp; i++ {
-		root = filepath.Dir(root)
-	}
-	rootAbs, err := filepath.Abs(root)
+	path, err := platform.RejectSymlinkEscapeOnReadWithDepth(candidate, levelsUp)
 	if err != nil {
-		return "", err
+		return "", settingsErrorf("%s", err)
 	}
-	resolvedCandidate, err := filepath.EvalSymlinks(candidate)
-	if err != nil {
-		resolvedCandidate = candidate
-	}
-	if !isSameOrDescendant(resolvedCandidate, rootAbs) {
-		return "", settingsErrorf(
-			"%s resolves outside of %s (via a symlink); a project-local configuration "+
-				"file/directory may not point outside the project it was found in", candidate, rootAbs)
-	}
-	return candidate, nil
+	return path, nil
 }
 
-// rejectSymlinkEscapeOnRead guards the read path for .agents/cadre.yaml files.
-// It delegates to rejectSymlinkEscapeOnReadWithDepth with levelsUp=2 since
-// .agents/cadre.yaml is exactly two directory levels below the project root.
+// rejectSymlinkEscapeOnRead guards the read path for .agents/cadre.yaml files
+// by delegating to rejectSymlinkEscapeOnReadWithDepth with levelsUp=2.
 func rejectSymlinkEscapeOnRead(candidate string) (string, error) {
 	return rejectSymlinkEscapeOnReadWithDepth(candidate, 2)
 }

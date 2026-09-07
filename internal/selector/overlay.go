@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/deagy/cadre/cli/internal/platform"
 )
 
 // Project-local routing overlays: the merge half of routing_overlay.py.
@@ -712,9 +714,21 @@ func jsonInteger(value any) (int64, bool) {
 // matching Python: the base file is this repository's own, already guarded,
 // and revalidating it here would make a selection run fail on a problem no
 // overlay introduced.
+//
+// Before reading the overlay, this function guards against symlink escapes:
+// the overlay at .agents/orchestration/routing-overlay.json lives 3 levels
+// below the project root, so a symlink in a checked-in project-local directory
+// could point outside the project.
 func ResolveEffectiveRouting(base map[string]any, overlayPath string) (map[string]any, error) {
 	if overlayPath == "" {
 		return base, nil
+	}
+	// Guard against symlink escapes: .agents/orchestration/routing-overlay.json
+	// is 3 levels below the project root.
+	var err error
+	overlayPath, err = platform.RejectSymlinkEscapeOnReadWithDepth(overlayPath, 3)
+	if err != nil {
+		return nil, overlayErrorf("project-local routing overlay rejected: %s", err)
 	}
 	overlay, err := LoadOverlay(overlayPath)
 	if err != nil {

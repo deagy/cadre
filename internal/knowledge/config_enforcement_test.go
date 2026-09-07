@@ -468,3 +468,73 @@ func TestResolveRetentionUntilRestrictedFallsThroughOnlyWhenRefusalIsDisabled(t 
 		t.Errorf("expected indefinite, got %q", *until)
 	}
 }
+
+// --- Symlink escape guard tests ---
+
+func TestLoadConfigRejectsSymlinkedProjectLocalFile(t *testing.T) {
+	outside := t.TempDir()
+	outsideFile := filepath.Join(outside, "evil.json")
+	os.WriteFile(outsideFile, []byte(`{"embedding": {"provider": "local-hashing"}}`), 0o644)
+
+	project := t.TempDir()
+	gitDir := filepath.Join(project, ".git")
+	os.Mkdir(gitDir, 0o755)
+	agentsDir := filepath.Join(project, ".agents", "knowledge-store")
+	os.MkdirAll(agentsDir, 0o755)
+	symlinkPath := filepath.Join(agentsDir, "config.json")
+	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
+		t.Skipf("cannot create symlink in this environment: %v", err)
+	}
+
+	chdir(t, project)
+	_, _, err := LoadConfig("")
+	if err == nil {
+		t.Fatal("expected rejection of a symlinked project-local config pointing outside the project root")
+	}
+}
+
+func TestLoadConfigRejectsSymlinkedProjectLocalDirectory(t *testing.T) {
+	outside := t.TempDir()
+	outsideDir := filepath.Join(outside, "evil-dir")
+	os.MkdirAll(outsideDir, 0o755)
+	os.WriteFile(filepath.Join(outsideDir, "config.json"), []byte(`{"embedding": {"provider": "local-hashing"}}`), 0o644)
+
+	project := t.TempDir()
+	gitDir := filepath.Join(project, ".git")
+	os.Mkdir(gitDir, 0o755)
+	agentsDir := filepath.Join(project, ".agents")
+	os.MkdirAll(agentsDir, 0o755)
+	symlinkPath := filepath.Join(agentsDir, "knowledge-store")
+	if err := os.Symlink(outsideDir, symlinkPath); err != nil {
+		t.Skipf("cannot create symlink in this environment: %v", err)
+	}
+
+	chdir(t, project)
+	_, _, err := LoadConfig("")
+	if err == nil {
+		t.Fatal("expected rejection of a project-local config directory symlink pointing outside the project root")
+	}
+}
+
+func TestLoadConfigAllowsLegitimateProjectLocalConfig(t *testing.T) {
+	// Regression test: ensure the symlink guard doesn't break normal config resolution
+	project := t.TempDir()
+	gitDir := filepath.Join(project, ".git")
+	os.Mkdir(gitDir, 0o755)
+	agentsDir := filepath.Join(project, ".agents", "knowledge-store")
+	os.MkdirAll(agentsDir, 0o755)
+	configFile := filepath.Join(agentsDir, "config.json")
+	os.WriteFile(configFile, []byte(`{"embedding": {"provider": "local-hashing"}}`), 0o644)
+
+	chdir(t, project)
+	cfg, tier, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tier != TierProjectLocal {
+		t.Errorf("tier = %q, want project-local", tier)
+	}
+	if cfg.Embedding.Provider != "local-hashing" {
+		t.Errorf("provider = %q, want local-hashing", cfg.Embedding.Provider)
+	}
+}

@@ -206,6 +206,11 @@ func asInt(value any) (int, bool) {
 // LoadConfig loads and validates configuration, failing closed when an
 // explicit path does not exist. Returns the resolved config and the tier
 // it was resolved from.
+//
+// For project-local configurations, this function guards against symlink
+// escapes before reading the file, since .agents/context-store/config.json
+// is 3 levels below the project root and could be a malicious symlink in a
+// checked-in project-local directory.
 func LoadConfig(configPath string) (*Config, string, error) {
 	var selected string
 	var tier string
@@ -233,6 +238,16 @@ func LoadConfig(configPath string) (*Config, string, error) {
 			tier = TierProjectLocal
 		} else {
 			tier = TierGlobalFallback
+		}
+	}
+
+	// Guard against symlink escapes for project-local configs:
+	// .agents/context-store/config.json is 3 levels below the project root.
+	if implicitProjectConfig {
+		var err error
+		selected, err = platform.RejectSymlinkEscapeOnReadWithDepth(selected, 3)
+		if err != nil {
+			return nil, "", fmt.Errorf("project-local context-store config rejected: %w", err)
 		}
 	}
 

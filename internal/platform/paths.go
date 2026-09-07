@@ -101,6 +101,13 @@ func FindProjectRoot(from string) (string, error) {
 // A project cannot be $HOME, so refusing to look there costs nothing and
 // removes the aliasing entirely.
 //
+// IMPORTANT: This function's file-existence check uses os.Stat, not os.Lstat,
+// so it follows symlinks. The returned path may be a symlink pointing outside
+// the project root. Callers that are about to read the discovered file's
+// content must guard against symlink escapes using RejectSymlinkEscapeOnRead
+// or RejectSymlinkEscapeOnReadWithDepth, depending on the discovered file's
+// depth under the project root (see those functions' documentation).
+//
 // This is the single implementation of the walk-up-to-.git discovery
 // convention shared across this repository's project-local override
 // mechanisms -- mirrors roster/shared/src/resolve.py's
@@ -282,4 +289,111 @@ func findAncestorWith(start, markerPath string, maxDepth int) (string, bool) {
 	}
 
 	return "", false
+}
+
+// SameOrDescendantError is returned by RejectSymlinkEscapeOnRead when a
+// discovered file's resolved path escapes the project root.
+type SameOrDescendantError struct{ msg string }
+
+func (e *SameOrDescendantError) Error() string { return e.msg }
+
+// resolveExistingAncestor returns the nearest existing ancestor of path (or
+// path itself, if it already exists). Used so filesystem-identity comparisons
+// still work against a path that does not exist yet, by anchoring the
+// comparison at whatever prefix of it is already real on disk.
+func resolveExistingAncestor(path string) string {
+	current, err := filepath.Abs(path)
+	if err != nil {
+		current = path
+	}
+	for {
+		if _, err := os.Lstat(current); err == nil {
+			resolved, err := filepath.EvalSymlinks(current)
+			if err == nil {
+				return resolved
+			}
+			return current
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return current
+		}
+		current = parent
+	}
+}
+
+// isSameOrDescendant is a filesystem-identity containment check: true if
+// path IS ancestor, or is located under it. Uses device/inode identity
+// (os.SameFile) rather than string/resolved-path equality, so it isn't
+// fooled by a case-insensitive filesystem where two differently-cased
+// paths are actually the same on-disk directory. ancestor is required to
+// already exist; path may not exist yet (its nearest existing ancestor is
+// used as the anchor for the walk up).
+func isSameOrDescendant(path, ancestor string) bool {
+	ancestorAbs, err := filepath.Abs(ancestor)
+	if err != nil {
+		return false
+	}
+	ancestorResolved, err := filepath.EvalSymlinks(ancestorAbs)
+	if err != nil {
+		ancestorResolved = ancestorAbs
+	}
+	ancestorInfo, err := os.Stat(ancestorResolved)
+	if err != nil {
+		return false
+	}
+
+	probe := resolveExistingAncestor(path)
+	for {
+		probeInfo, err := os.Stat(probe)
+		if err == nil && os.SameFile(probeInfo, ancestorInfo) {
+			return true
+		}
+		parent := filepath.Dir(probe)
+		if parent == probe {
+			return false
+		}
+		probe = parent
+	}
+}
+
+// RejectSymlinkEscapeOnReadWithDepth guards against symlink escapes for a
+// file discovered at a specific relative depth under the project root.
+// levelsUp is the number of directory levels from the candidate file to the
+// project root (e.g., 2 for .agents/cadre.yaml, 3 for .agents/shared/<filename>).
+//
+// Discovery's file-exists check follows symlinks (os.Stat, not os.Lstat), so a
+// malicious file or symlinked directory shipped in an untrusted, clonable project
+// can point outside the project entirely. This function rejects that before the
+// file is ever opened/parsed, by verifying that the symlink-resolved path is
+// within the project root.
+//
+// If the candidate resolves outside the project root, returns an error.
+// Otherwise returns the candidate path unchanged.
+func RejectSymlinkEscapeOnReadWithDepth(candidate string, levelsUp int) (string, error) {
+	root := candidate
+	for i := 0; i < levelsUp; i++ {
+		root = filepath.Dir(root)
+	}
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return "", err
+	}
+	resolvedCandidate, err := filepath.EvalSymlinks(candidate)
+	if err != nil {
+		resolvedCandidate = candidate
+	}
+	if !isSameOrDescendant(resolvedCandidate, rootAbs) {
+		return "", &SameOrDescendantError{msg: fmt.Sprintf(
+			"%s resolves outside of %s (via a symlink); a project-local configuration "+
+				"file/directory may not point outside the project it was found in", candidate, rootAbs)}
+	}
+	return candidate, nil
+}
+
+// RejectSymlinkEscapeOnRead guards the read path for .agents/cadre.yaml files.
+// It delegates to RejectSymlinkEscapeOnReadWithDepth with levelsUp=2 since
+// .agents/cadre.yaml is exactly two directory levels below the project root.
+func RejectSymlinkEscapeOnRead(candidate string) (string, error) {
+	return RejectSymlinkEscapeOnReadWithDepth(candidate, 2)
 }
