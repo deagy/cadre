@@ -40,8 +40,11 @@ var SecretPatterns = []secretPattern{
 	{"generic-secret", regexp.MustCompile(`(?i)\b(api[_-]?key|secret|password|token)\s*[:=]\s*["']?[^\s,"']{8,}["']?`)},
 }
 
-// InjectionPatterns flag likely prompt-injection content in ProtectContent's
-// InjectionRisk field.
+// InjectionPatterns flag some literal, case-insensitive phrasings commonly
+// found in obvious prompt-injection attempts. These patterns are narrow,
+// best-effort detection only and are trivially bypassed by rephrasing,
+// whitespace variation, zero-width Unicode characters, homoglyphs, or
+// encoding (e.g., base64, hex). See ProtectContent comment below.
 var InjectionPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)ignore (?:all |any )?(?:previous|prior|above) instructions`),
 	regexp.MustCompile(`(?i)reveal (?:the )?(?:system|developer) prompt`),
@@ -54,12 +57,30 @@ var InjectionPatterns = []*regexp.Regexp{
 type ProtectedContent struct {
 	Content       string
 	Redactions    []string
-	InjectionRisk bool
+	InjectionRisk bool // See ProtectContent comment for accuracy/reliability caveats
 }
 
 // ProtectContent redacts secret-shaped substrings from content (when
 // enabled) and reports whether the (possibly redacted) result still
 // matches a likely prompt-injection pattern.
+//
+// IMPORTANT: The InjectionRisk signal is narrow, best-effort detection only.
+// It catches some obvious literal phrasings but is NOT robust against:
+//   - Rephrasing (e.g., "disregard" instead of "ignore")
+//   - Whitespace variation (extra spaces, tabs, newlines between words)
+//   - Zero-width Unicode characters or homoglyphs (confusable lookalike characters)
+//   - Encoding (base64, hex, ROT13, or other simple transformations)
+//   - An adaptive adversary who knows these patterns
+//
+// A false result (no pattern matched) MUST NEVER be treated as proof that
+// content is safe or trustworthy. The absence of a match simply means no
+// known obvious phrasing was found.
+//
+// A true result (pattern matched) should be treated as one weak signal among
+// several, not as sufficient justification on its own for any security-relevant
+// automated decision. A conservative fail-closed default (refusing on any
+// positive signal) remains the correct posture even while acknowledging the
+// signal's limited reliability.
 func ProtectContent(content string, enabled bool) ProtectedContent {
 	protected := content
 	var redactions []string

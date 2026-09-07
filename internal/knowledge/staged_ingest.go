@@ -320,10 +320,17 @@ func (s *Store) ingestOneStagedRecord(
 	// other, and "an agent wrote it" is not provenance.
 	protected := textutil.ProtectContent(content, true)
 	if protected.InjectionRisk {
+		// Refuse based on best-effort heuristic that catches some obvious cases.
+		// This is a conservative fail-closed default: any positive signal triggers
+		// refusal, even though the signal itself (pattern matching for known jailbreak
+		// phrasings) is narrow and easily bypassed by rephrasing, encoding, or
+		// zero-width Unicode. The refusal is still correct; only the reliability
+		// of the signal underlying it is limited.
 		return StagedIngestOutcome{
 			ID: recordID,
-			Reason: "content screening flagged injection risk; ingesting it would put unvetted " +
-				"instruction-shaped text into the retrievable corpus",
+			Reason: "content screening detected potential prompt-injection phrasing; " +
+				"refusing ingestion as a conservative default. (Note: this detection is " +
+				"best-effort and can be bypassed; the refusal is still appropriate policy.)",
 		}, nil
 	}
 
