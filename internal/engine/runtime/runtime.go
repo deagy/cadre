@@ -192,6 +192,32 @@ type Contracts struct {
 	ProviderRoot  string
 }
 
+// validateReviewerKinds checks that all reviewer IDs in routes are present in
+// the catalog with Kind == "reviewer".
+//
+// Route-supplied reviewers whose kind is not "reviewer" are silently skipped
+// at runtime (agentsFor filters them). This validation catches the error at
+// load time with a clear message, rather than silently dropping reviewers
+// from the list and producing a confusing run record.
+func validateReviewerKinds(profile contracts.Profile, catalog map[string]contracts.AgentCatalogEntry) error {
+	for _, route := range profile.Routing {
+		for _, reviewerID := range route.Reviewers {
+			entry, known := catalog[reviewerID]
+			if !known {
+				// IDs not in catalog are a different validation concern (e.g. typos
+				// in routing that reference nonexistent agents). Skip them here.
+				continue
+			}
+			if entry.Kind != "reviewer" {
+				return configErrorf(
+					"route %q lists %q as a reviewer, but %q is catalogued as kind %q, not reviewer",
+					route.ID, reviewerID, reviewerID, entry.Kind)
+			}
+		}
+	}
+	return nil
+}
+
 // LoadContracts resolves the kernel contracts and a provider's profile.
 //
 // The lifecycle and mutation gates always come from the kernel's own
@@ -238,6 +264,14 @@ func LoadContracts(kernelRoot, providerManifest, profileID string) (Contracts, e
 	if err != nil {
 		return resolved, configErrorf("cannot load profile %q: %v", profileID, err)
 	}
+
+	// Validate that all reviewer IDs in routes are catalogued with kind "reviewer".
+	// This catches configuration errors at load time rather than silently dropping
+	// reviewers at runtime.
+	if err := validateReviewerKinds(profile, resolved.AgentCatalog); err != nil {
+		return resolved, err
+	}
+
 	resolved.Profile = profile
 	resolved.ProviderRoot = providerRoot
 	return resolved, nil

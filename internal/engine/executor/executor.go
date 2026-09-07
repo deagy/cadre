@@ -359,8 +359,12 @@ func (e *Executor) agentsFor(current state.SDLCState, gate contracts.Gate) (auth
 		}
 		for _, reviewerID := range route.Reviewers {
 			if !seen[reviewerID] {
-				seen[reviewerID] = true
-				reviewers = append(reviewers, reviewerID)
+				// Filter route-supplied reviewers by catalog kind, same as direct-binding path.
+				// Silently skip any agent whose kind is not "reviewer".
+				if entry, known := e.AgentCatalog[reviewerID]; known && entry.Kind == "reviewer" {
+					seen[reviewerID] = true
+					reviewers = append(reviewers, reviewerID)
+				}
 			}
 		}
 	}

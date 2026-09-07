@@ -101,6 +101,9 @@ func (e *Executor) decideGate(current state.SDLCState, gate contracts.Gate) stat
 	}
 
 	// One verifier is modelled, matching the schema's single field.
+	// Record the first reviewer as the independent verifier for display purposes,
+	// but check ALL reviewers for overlap with preparers. Any overlap is a
+	// violation that blocks the gate.
 	var verifier *state.Identity
 	if len(reviewerIdentities) > 0 {
 		first := reviewerIdentities[0]
@@ -111,7 +114,15 @@ func (e *Executor) decideGate(current state.SDLCState, gate contracts.Gate) stat
 	for _, preparer := range preparers {
 		preparerIDs[preparer.ID] = true
 	}
-	violation := verifier != nil && preparerIDs[verifier.ID]
+
+	// Check if any reviewer (not just the first) overlaps with preparers.
+	violation := false
+	for _, reviewer := range reviewerIdentities {
+		if preparerIDs[reviewer.ID] {
+			violation = true
+			break
+		}
+	}
 
 	updated, present := current.LifecycleGates[gate.ID]
 	if !present {

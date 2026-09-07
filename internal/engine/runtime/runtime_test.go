@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/deagy/cadre/cli/internal/engine/agents"
+	"github.com/deagy/cadre/cli/internal/engine/contracts"
 	"github.com/deagy/cadre/cli/internal/engine/executor"
 	"github.com/deagy/cadre/cli/internal/engine/kernelfixture"
 )
@@ -211,5 +212,92 @@ func TestInitialStateLeavesAuthoritiesUnassigned(t *testing.T) {
 	}
 	if withSource.Classification != "confidential" {
 		t.Errorf("classification = %q", withSource.Classification)
+	}
+}
+
+// A profile with a route naming an agent of wrong kind as a reviewer fails validation.
+//
+// This validation catches the configuration error at load time, preventing the
+// runtime silent drop of the reviewer from agentsFor. The error message names
+// the offending route, reviewer, and the correct kind.
+func TestValidateReviewerKindsRejectsAuthorAsReviewer(t *testing.T) {
+	catalog := map[string]contracts.AgentCatalogEntry{
+		"correct-reviewer":  {Kind: "reviewer"},
+		"wrong-kind-author": {Kind: "author"},
+	}
+
+	profile := contracts.Profile{
+		Routing: []contracts.Route{
+			{
+				ID:        "test-route",
+				Reviewers: []string{"correct-reviewer", "wrong-kind-author"},
+			},
+		},
+	}
+
+	// Direct call to validateReviewerKinds to test the validation logic.
+	// This imports contracts, so we need to import it in the test.
+	err := validateReviewerKinds(profile, catalog)
+	if err == nil {
+		t.Fatal("validation passed when it should have rejected an author as a reviewer")
+	}
+	if !strings.Contains(err.Error(), "test-route") {
+		t.Errorf("error should name the route: %v", err)
+	}
+	if !strings.Contains(err.Error(), "wrong-kind-author") {
+		t.Errorf("error should name the offending agent: %v", err)
+	}
+	if !strings.Contains(err.Error(), "author") {
+		t.Errorf("error should name the wrong kind: %v", err)
+	}
+}
+
+// A profile with all reviewers of the correct kind passes validation.
+func TestValidateReviewerKindsAcceptsCorrectKinds(t *testing.T) {
+	catalog := map[string]contracts.AgentCatalogEntry{
+		"reviewer-1": {Kind: "reviewer"},
+		"reviewer-2": {Kind: "reviewer"},
+	}
+
+	profile := contracts.Profile{
+		Routing: []contracts.Route{
+			{
+				ID:        "route-1",
+				Reviewers: []string{"reviewer-1"},
+			},
+			{
+				ID:        "route-2",
+				Reviewers: []string{"reviewer-2", "reviewer-1"},
+			},
+		},
+	}
+
+	err := validateReviewerKinds(profile, catalog)
+	if err != nil {
+		t.Errorf("validation failed unexpectedly: %v", err)
+	}
+}
+
+// A profile with a route naming an agent not in catalog skips that agent.
+//
+// IDs not in the catalog are a different validation concern (typos in routing).
+// This test proves the reviewer-kind validation doesn't reject missing agents.
+func TestValidateReviewerKindsSkipsMissingAgents(t *testing.T) {
+	catalog := map[string]contracts.AgentCatalogEntry{
+		"reviewer-1": {Kind: "reviewer"},
+	}
+
+	profile := contracts.Profile{
+		Routing: []contracts.Route{
+			{
+				ID:        "route-1",
+				Reviewers: []string{"reviewer-1", "nonexistent-agent"},
+			},
+		},
+	}
+
+	err := validateReviewerKinds(profile, catalog)
+	if err != nil {
+		t.Errorf("validation should skip missing agents, but failed: %v", err)
 	}
 }

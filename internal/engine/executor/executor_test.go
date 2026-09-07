@@ -203,45 +203,110 @@ func TestOnlyAnExplicitTrueAuthorisesAMutationGate(t *testing.T) {
 // This is the failure the whole model exists to prevent, so it is enforced at
 // the gate decision -- before any human is asked -- and the gate cannot then
 // be approved by any decision at all.
+//
+// This is the simplest, most fundamental case: a single reviewer who is also
+// a preparer (or the first reviewer in a multi-reviewer list being the preparer).
+// After defect 2 is fixed, the binding system filters by kind, so this scenario
+// cannot occur naturally. We test it by directly injecting agent outputs via
+// the same technique as TestNonFirstReviewerThatIsAlsoPreparerBlocksTheGate.
 func TestAnAgentThatReviewsItsOwnWorkBlocksTheGate(t *testing.T) {
 	executor := harness(t)
-	// One agent bound to the gate, catalogued as both kinds is impossible, so
-	// bind the same id twice by making the reviewer the author.
-	executor.AgentCatalog = map[string]contracts.AgentCatalogEntry{
-		"solo": {Kind: "author"},
-	}
-	executor.Profile.GateBindings["G1"] = contracts.GateBinding{
-		Contributions: map[string]contracts.Contribution{"intent": {Agents: []string{"solo"}}},
-	}
-	// A route supplies the same agent as a reviewer for G1.
-	executor.Profile.Routing = []contracts.Route{
-		{ID: "r", Phrases: []string{"feature"}, Gates: []string{"G1"}, Reviewers: []string{"solo"}},
+
+	// Manually create a scenario where the single (or first) reviewer is also a preparer.
+	initial := state.SDLCState{TaskID: "task-1", Scope: "add a feature"}
+	initial.LifecycleGates = map[string]state.GateState{}
+	initial.AgentOutputs = map[string]map[string]any{
+		// Single reviewer who is also a preparer (the violation)
+		"G1/reviewer/solo-agent": {
+			"gate_id": "G1", "kind": "reviewer",
+			"identity": map[string]any{"id": "solo-agent", "role": "Reviewer"},
+		},
+		// Author - same as the reviewer above
+		"G1/author/solo-agent": {
+			"gate_id": "G1", "kind": "author",
+			"identity": map[string]any{"id": "solo-agent", "role": "Author"},
+		},
 	}
 
-	result, err := executor.Start("task-1", state.SDLCState{Scope: "add a feature"})
-	if err != nil {
-		t.Fatalf("Start: %v", err)
-	}
+	// Manually call decideGate to test its logic
+	gate := contracts.Gate{ID: "G1", Name: "Intent", AuthorityRequirements: []string{"product_owner"}}
 
-	gate := result.State.LifecycleGates["G1"]
-	if gate.Status != "blocked" {
-		t.Fatalf("G1 status = %q, want blocked when the verifier is also a preparer", gate.Status)
+	gateState := executor.decideGate(initial, gate)
+
+	// The gate should be blocked because solo-agent is both author and reviewer
+	if gateState.Status != "blocked" {
+		t.Fatalf("G1 status = %q, want blocked when the (only) reviewer is also a preparer", gateState.Status)
 	}
-	if gate.IndependenceDeclaration.VerifierConfirmedNotPreparer {
+	if gateState.IndependenceDeclaration.VerifierConfirmedNotPreparer {
 		t.Error("the independence declaration claims separation that did not hold")
 	}
-
-	// No decision can approve it.
-	decided, err := executor.Resume("task-1", approvalDecision("product_owner"))
-	if err != nil {
-		t.Fatalf("Resume: %v", err)
+	if len(gateState.Preparers) != 1 || gateState.Preparers[0].ID != "solo-agent" {
+		t.Errorf("preparers = %v, want [solo-agent]", gateState.Preparers)
 	}
-	blocked := decided.State.LifecycleGates["G1"]
+
+	// No decision can approve a blocked gate.
+	initial.LifecycleGates = map[string]state.GateState{
+		"G1": gateState,
+	}
+	decided := executor.applyApproval(initial, "G1", approvalDecision("product_owner"))
+	blocked := decided.LifecycleGates["G1"]
 	if blocked.Status == "approved" {
-		t.Error("a blocked gate was approved")
+		t.Error("a blocked gate was approved despite the separation-of-duties violation")
 	}
 	if len(blocked.HumanApprovals) != 1 || blocked.HumanApprovals[0].Status != "rejected" {
 		t.Errorf("approval recorded as %+v, want rejected", blocked.HumanApprovals)
+	}
+}
+
+// An agent that is one of multiple reviewers and also a preparer blocks the gate.
+//
+// This is the gap in the fix: if a gate has multiple reviewers and a
+// non-first reviewer is also a preparer, only checking the first reviewer
+// would miss the violation. This test proves the violation is caught
+// regardless of reviewer position.
+//
+// This test directly constructs the scenario by manually setting agent outputs,
+// since the binding/routing system filters by kind and prevents this scenario
+// from occurring naturally after defect 2 is fixed.
+func TestNonFirstReviewerThatIsAlsoPreparerBlocksTheGate(t *testing.T) {
+	executor := harness(t)
+
+	// Manually create a scenario where agent-2 appears as both author and reviewer.
+	// Start the run to initialize it, then manually inject outputs.
+	initial := state.SDLCState{TaskID: "task-1", Scope: "add a feature"}
+	initial.LifecycleGates = map[string]state.GateState{}
+	initial.AgentOutputs = map[string]map[string]any{
+		// First reviewer - not a preparer
+		"G1/reviewer/reviewer-1": {
+			"gate_id": "G1", "kind": "reviewer",
+			"identity": map[string]any{"id": "reviewer-1", "role": "Reviewer 1"},
+		},
+		// Second reviewer - also a preparer (the violation)
+		"G1/reviewer/agent-2": {
+			"gate_id": "G1", "kind": "reviewer",
+			"identity": map[string]any{"id": "agent-2", "role": "Reviewer 2"},
+		},
+		// Author - also appears as second reviewer above
+		"G1/author/agent-2": {
+			"gate_id": "G1", "kind": "author",
+			"identity": map[string]any{"id": "agent-2", "role": "Author"},
+		},
+	}
+
+	// Manually call decideGate to test its logic
+	gate := contracts.Gate{ID: "G1", Name: "Intent", AuthorityRequirements: []string{"product_owner"}}
+
+	gateState := executor.decideGate(initial, gate)
+
+	// The gate should be blocked because agent-2 is both author and reviewer
+	if gateState.Status != "blocked" {
+		t.Fatalf("G1 status = %q, want blocked when a non-first reviewer is also a preparer", gateState.Status)
+	}
+	if gateState.IndependenceDeclaration.VerifierConfirmedNotPreparer {
+		t.Error("the independence declaration claims separation that did not hold")
+	}
+	if len(gateState.Preparers) != 1 || gateState.Preparers[0].ID != "agent-2" {
+		t.Errorf("preparers = %v, want [agent-2]", gateState.Preparers)
 	}
 }
 
@@ -316,6 +381,49 @@ func TestApprovalFailsClosed(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A route-supplied reviewer whose catalog kind is "author" is not treated as a reviewer.
+//
+// This is the defect in route handling: direct-binding paths filter agents by
+// kind, but route-supplied reviewers were not. This test proves that a
+// route-supplied agent with kind "author" is silently dropped from the
+// reviewer list, matching the direct-binding behavior.
+func TestRouteSuppliedReviewerWithWrongKindIsSkipped(t *testing.T) {
+	executor := harness(t)
+	executor.AgentCatalog = map[string]contracts.AgentCatalogEntry{
+		"intent-author":   {Kind: "author"},
+		"intent-reviewer": {Kind: "reviewer"},
+		"wrong-kind":      {Kind: "author"}, // kind is author, not reviewer
+	}
+	// A route tries to supply wrong-kind as a reviewer.
+	executor.Profile.Routing = []contracts.Route{
+		{ID: "r", Phrases: []string{"feature"}, Gates: []string{"G1"}, Reviewers: []string{"wrong-kind"}},
+	}
+
+	result, err := executor.Start("task-1", state.SDLCState{Scope: "add a feature"})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	gate := result.State.LifecycleGates["G1"]
+	// The gate should have exactly one reviewer: intent-reviewer from the binding.
+	// wrong-kind from the route should have been silently skipped.
+	foundWrongKind := false
+	for _, reviewer := range gate.Preparers {
+		if reviewer.ID == "wrong-kind" {
+			foundWrongKind = true
+		}
+	}
+	if foundWrongKind {
+		t.Error("wrong-kind was treated as a preparer when it should have been skipped")
+	}
+
+	// Check the agent outputs to see what was actually run.
+	slot := "G1/reviewer/wrong-kind"
+	if _, exists := result.State.AgentOutputs[slot]; exists {
+		t.Errorf("wrong-kind was dispatched as a reviewer when it should have been skipped")
 	}
 }
 
