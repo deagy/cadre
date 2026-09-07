@@ -1032,7 +1032,7 @@ func (g *pluginGenerator) codexWrapperContents() (map[string]string, error) {
 	return contents, nil
 }
 
-func deriveKind(definition string) string {
+func deriveKind(definition, capability string) string {
 	if strings.HasPrefix(definition, "review/") || definition == "engineering/test-engineer/AGENT.md" {
 		return "reviewer"
 	}
@@ -1041,6 +1041,14 @@ func deriveKind(definition string) string {
 	}
 	if definition == "documentation/evidence-curator/AGENT.md" || definition == "knowledge-store/AGENT.md" {
 		return "specialist"
+	}
+	// Read-only roles are classified as reviewers: they can review and advise
+	// within lifecycle gates but cannot author artifacts. This prevents
+	// misclassification of advisory read-only roles (e.g., scope-boundary,
+	// product-owner-aide) as authors, which would incorrectly permit them in
+	// the author pool during gate authoring.
+	if capability == "read_only" {
+		return "reviewer"
 	}
 	return "author"
 }
@@ -1057,7 +1065,7 @@ func (g *pluginGenerator) agentCatalogExportContent() string {
 		if phase == "" {
 			phase = "unknown"
 		}
-		kind := deriveKind(metadata["definition"])
+		kind := deriveKind(metadata["definition"], metadata["capability"])
 		capabilities := []string{"author", "dispatch"}
 		if kind == "reviewer" {
 			capabilities = []string{"reviewer"}

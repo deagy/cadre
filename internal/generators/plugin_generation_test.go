@@ -193,17 +193,34 @@ func TestExcerptUniversalSectionsOnRealPolicy(t *testing.T) {
 }
 
 func TestDeriveKind(t *testing.T) {
-	cases := map[string]string{
-		"review/code-reviewer/AGENT.md":           "reviewer",
-		"engineering/test-engineer/AGENT.md":      "reviewer",
-		"support/escalation-manager/AGENT.md":     "specialist",
-		"documentation/evidence-curator/AGENT.md": "specialist",
-		"knowledge-store/AGENT.md":                "specialist",
-		"engineering/backend-engineer/AGENT.md":   "author",
+	cases := []struct {
+		definition string
+		capability string
+		want       string
+	}{
+		// Reviewer roles (explicit review/ prefix)
+		{"review/code-reviewer/AGENT.md", "read_only", "reviewer"},
+		{"engineering/test-engineer/AGENT.md", "document_author", "reviewer"},
+
+		// Specialist roles
+		{"support/escalation-manager/AGENT.md", "read_only", "specialist"},
+		{"documentation/evidence-curator/AGENT.md", "document_author", "specialist"},
+		{"knowledge-store/AGENT.md", "document_author", "specialist"},
+
+		// Author roles (default for non-read-only)
+		{"engineering/backend-engineer/AGENT.md", "test_author", "author"},
+
+		// Read-only advisory roles (formerly misclassified as authors)
+		{"planning/scope-boundary/AGENT.md", "read_only", "reviewer"},
+		{"authority/product-owner-aide/AGENT.md", "read_only", "reviewer"},
+		{"governance/approval-router/AGENT.md", "read_only", "reviewer"},
+		{"architecture/first-principles-challenger/AGENT.md", "read_only", "reviewer"},
+		{"testing/falsification-agent/AGENT.md", "read_only", "reviewer"},
+		{"operations/deployment-realist/AGENT.md", "read_only", "reviewer"},
 	}
-	for definition, want := range cases {
-		if got := deriveKind(definition); got != want {
-			t.Errorf("deriveKind(%q) = %q, want %q", definition, got, want)
+	for _, tc := range cases {
+		if got := deriveKind(tc.definition, tc.capability); got != tc.want {
+			t.Errorf("deriveKind(%q, %q) = %q, want %q", tc.definition, tc.capability, got, tc.want)
 		}
 	}
 }

@@ -20,10 +20,9 @@
     },
     "agent-performance-evaluator": {
       "phase": "operations",
-      "kind": "author",
+      "kind": "reviewer",
       "capabilities": [
-        "author",
-        "dispatch"
+        "reviewer"
       ],
       "definition": "suite/roster/operations/agent-performance-evaluator/AGENT.md"
     },
@@ -92,10 +91,9 @@
     },
     "approval-router": {
       "phase": "review",
-      "kind": "author",
+      "kind": "reviewer",
       "capabilities": [
-        "author",
-        "dispatch"
+        "reviewer"
       ],
       "definition": "suite/roster/governance/approval-router/AGENT.md"
     },
@@ -366,10 +364,9 @@
     },
     "deployment-realist": {
       "phase": "operations",
-      "kind": "author",
+      "kind": "reviewer",
       "capabilities": [
-        "author",
-        "dispatch"
+        "reviewer"
       ],
       "definition": "suite/roster/operations/deployment-realist/AGENT.md"
     },
@@ -455,10 +452,9 @@
     },
     "engineering-lead-aide": {
       "phase": "authority",
-      "kind": "author",
+      "kind": "reviewer",
       "capabilities": [
-        "author",
-        "dispatch"
+        "reviewer"
       ],
       "definition": "suite/roster/authority/engineering-lead-aide/AGENT.md"
     },
@@ -509,10 +505,9 @@
     },
     "falsification-agent": {
       "phase": "verify",
-      "kind": "author",
+      "kind": "reviewer",
       "capabilities": [
-        "author",
-        "dispatch"
+        "reviewer"
       ],
       "definition": "suite/roster/testing/falsification-agent/AGENT.md"
     },
@@ -536,10 +531,9 @@
     },
     "first-principles-challenger": {
       "phase": "design",
-      "kind": "author",
+      "kind": "reviewer",
       "capabilities": [
-        "author",
-        "dispatch"
+        "reviewer"
       ],
       "definition": "suite/roster/architecture/first-principles-challenger/AGENT.md"
     },
@@ -626,10 +620,9 @@
     },
     "governance-lead-aide": {
       "phase": "authority",
-      "kind": "author",
+      "kind": "reviewer",
       "capabilities": [
-        "author",
-        "dispatch"
+        "reviewer"
       ],
       "definition": "suite/roster/authority/governance-lead-aide/AGENT.md"
     },
@@ -1000,10 +993,9 @@
     },
     "product-owner-aide": {
       "phase": "authority",
-      "kind": "author",
+      "kind": "reviewer",
       "capabilities": [
-        "author",
-        "dispatch"
+        "reviewer"
       ],
       "definition": "suite/roster/authority/product-owner-aide/AGENT.md"
     },
@@ -1117,10 +1109,9 @@
     },
     "release-authority-aide": {
       "phase": "authority",
-      "kind": "author",
+      "kind": "reviewer",
       "capabilities": [
-        "author",
-        "dispatch"
+        "reviewer"
       ],
       "definition": "suite/roster/authority/release-authority-aide/AGENT.md"
     },
@@ -1144,10 +1135,9 @@
     },
     "release-owner-aide": {
       "phase": "authority",
-      "kind": "author",
+      "kind": "reviewer",
       "capabilities": [
-        "author",
-        "dispatch"
+        "reviewer"
       ],
       "definition": "suite/roster/authority/release-owner-aide/AGENT.md"
     },
@@ -1189,10 +1179,9 @@
     },
     "scope-boundary": {
       "phase": "planning",
-      "kind": "author",
+      "kind": "reviewer",
       "capabilities": [
-        "author",
-        "dispatch"
+        "reviewer"
       ],
       "definition": "suite/roster/planning/scope-boundary/AGENT.md"
     },
@@ -1234,10 +1223,9 @@
     },
     "security-lead-aide": {
       "phase": "authority",
-      "kind": "author",
+      "kind": "reviewer",
       "capabilities": [
-        "author",
-        "dispatch"
+        "reviewer"
       ],
       "definition": "suite/roster/authority/security-lead-aide/AGENT.md"
     },
@@ -1260,10 +1248,9 @@
     },
     "service-owner-aide": {
       "phase": "authority",
-      "kind": "author",
+      "kind": "reviewer",
       "capabilities": [
-        "author",
-        "dispatch"
+        "reviewer"
       ],
       "definition": "suite/roster/authority/service-owner-aide/AGENT.md"
     },
@@ -1339,10 +1326,9 @@
     },
     "system-architect-aide": {
       "phase": "authority",
-      "kind": "author",
+      "kind": "reviewer",
       "capabilities": [
-        "author",
-        "dispatch"
+        "reviewer"
       ],
       "definition": "suite/roster/authority/system-architect-aide/AGENT.md"
     },
