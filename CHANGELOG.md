@@ -9,6 +9,58 @@ that. New adopters should start with the
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.7.14
+
+### Fixed
+
+- **Cline `agents_select` runs again on cline 3.0.55.** The tool forwarded
+  the host's `AgentToolContext.signal` straight into `execFile`; the host now
+  hands over a plain object rather than an `AbortSignal`, and Node rejected
+  every call before `cadre select` was spawned. The signal is forwarded only
+  when it is one Node will accept (an object with `aborted`), and omitted
+  otherwise. `cline-plugins/*` pin `@cline/sdk` and `@cline/shared` at 0.0.75,
+  the versions cline 3.0.55 injects. `install.sh --runner=cline` installs the
+  checkout root, so it registers all three plugins the way the documented
+  Git-URL install does, instead of `cline-plugins/cline` alone. The 3.0.46
+  "cyclic structures" note in `docs/INSTALL.md` is replaced with what was
+  observed on 3.0.55.
+- **A stale checkout above the cwd no longer takes every subcommand down.**
+  The packaged plugin shipped no `bin/subcommands.tsv`, so the binary's
+  search fell through `CADRE_REPO_ROOT` to the cwd's ancestors and took any
+  older checkout's three-column table as its own; `cadre help` and `cadre
+  doctor` then exited 1 with "malformed row" from any directory under it.
+  The table now ships at `suite/bin/subcommands.tsv`, and a table the
+  dispatcher found on its own but cannot parse is reported on stderr and
+  ignored rather than fatal (one the caller named explicitly still is).
+- **`cadre doctor` classifies the plugin-launcher install.** The launcher
+  execs the release binary it caches under `~/.cache/cadre/`, which matched
+  none of doctor's path shapes, so the install every Claude Code user has
+  reported `install kind: unknown`. It is now `plugin-launcher`, recognised
+  from the `CADRE_REPO_ROOT` the launcher exports when a plugin manifest
+  sits beside it.
+- **`cadre --version` names both versions.** The launcher printed the plugin
+  version alone while `cadre upgrade --check` printed the CLI's; it now
+  prints `cadre <plugin> (cli <pin>)`.
+
+### Added
+
+- **Hermes is a runner.** `cadre port-hermes-skills` renders the roster into
+  the skill tree Nous Research's Hermes agent loads, committed under
+  `hermes-plugins/skills/cadre/` (172 skills: one per role, one per
+  workflow playbook, and `cadre-orchestrator` with a `references/` copy of
+  the shared-policy corpus) and drift-guarded by
+  `internal/generators/hermes_port_test.go`. `install.sh --runner=hermes`
+  copies it into `~/.hermes/skills/cadre/`; `--uninstall` removes only a
+  tree this installer wrote. The orchestrator skill takes the working
+  directory from `pwd` and puts it in every child's goal, and selects roles
+  with `cadre select` when the CLI is on PATH -- a live run without both
+  rules sent a child into the user's home directory and chose a different
+  role set than the CLI would. `roster/runner-capabilities.json`,
+  `docs/which-runner-am-i-in.md` and `runner-adapters.md` gain the Hermes
+  row, column and section. The generator was a Python script that existed
+  on one machine; it is Go now, reads `roster/` in the checkout, and a
+  teammate can reproduce the tree from a clone.
+
 ## 0.7.13
 
 **Dependency bump: recall 0.4.0 to 0.5.0.** No behaviour in cadre changes. It
@@ -161,56 +213,6 @@ check and reporting "nothing to do". See
 [`docs/migration/monorepo-migration.md`](docs/migration/monorepo-migration.md).
 
 ## [Unreleased]
-
-### Fixed
-
-- **Cline `agents_select` runs again on cline 3.0.55.** The tool forwarded
-  the host's `AgentToolContext.signal` straight into `execFile`; the host now
-  hands over a plain object rather than an `AbortSignal`, and Node rejected
-  every call before `cadre select` was spawned. The signal is forwarded only
-  when it is one Node will accept (an object with `aborted`), and omitted
-  otherwise. `cline-plugins/*` pin `@cline/sdk` and `@cline/shared` at 0.0.75,
-  the versions cline 3.0.55 injects. `install.sh --runner=cline` installs the
-  checkout root, so it registers all three plugins the way the documented
-  Git-URL install does, instead of `cline-plugins/cline` alone. The 3.0.46
-  "cyclic structures" note in `docs/INSTALL.md` is replaced with what was
-  observed on 3.0.55.
-- **A stale checkout above the cwd no longer takes every subcommand down.**
-  The packaged plugin shipped no `bin/subcommands.tsv`, so the binary's
-  search fell through `CADRE_REPO_ROOT` to the cwd's ancestors and took any
-  older checkout's three-column table as its own; `cadre help` and `cadre
-  doctor` then exited 1 with "malformed row" from any directory under it.
-  The table now ships at `suite/bin/subcommands.tsv`, and a table the
-  dispatcher found on its own but cannot parse is reported on stderr and
-  ignored rather than fatal (one the caller named explicitly still is).
-- **`cadre doctor` classifies the plugin-launcher install.** The launcher
-  execs the release binary it caches under `~/.cache/cadre/`, which matched
-  none of doctor's path shapes, so the install every Claude Code user has
-  reported `install kind: unknown`. It is now `plugin-launcher`, recognised
-  from the `CADRE_REPO_ROOT` the launcher exports when a plugin manifest
-  sits beside it.
-- **`cadre --version` names both versions.** The launcher printed the plugin
-  version alone while `cadre upgrade --check` printed the CLI's; it now
-  prints `cadre <plugin> (cli <pin>)`.
-
-### Added
-
-- **Hermes is a runner.** `cadre port-hermes-skills` renders the roster into
-  the skill tree Nous Research's Hermes agent loads, committed under
-  `hermes-plugins/skills/cadre/` (172 skills: one per role, one per
-  workflow playbook, and `cadre-orchestrator` with a `references/` copy of
-  the shared-policy corpus) and drift-guarded by
-  `internal/generators/hermes_port_test.go`. `install.sh --runner=hermes`
-  copies it into `~/.hermes/skills/cadre/`; `--uninstall` removes only a
-  tree this installer wrote. The orchestrator skill takes the working
-  directory from `pwd` and puts it in every child's goal, and selects roles
-  with `cadre select` when the CLI is on PATH -- a live run without both
-  rules sent a child into the user's home directory and chose a different
-  role set than the CLI would. `roster/runner-capabilities.json`,
-  `docs/which-runner-am-i-in.md` and `runner-adapters.md` gain the Hermes
-  row, column and section. The generator was a Python script that existed
-  on one machine; it is Go now, reads `roster/` in the checkout, and a
-  teammate can reproduce the tree from a clone.
 
 **`cadre init` is defaults-first.** It no longer requires `--answers` or `--interactive`; running with neither keeps every shipped default and writes nothing, which is a complete run rather than a skipped one (overlays are sparse, so keeping a default means writing no overlay for that field). See [`roster/shared/README.md`](roster/shared/README.md)'s "Generating overlays with `cadre init`" for the three levels of effort.
 
