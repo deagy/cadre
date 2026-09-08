@@ -46,7 +46,7 @@ The suite selects, coordinates, tests, reviews, documents, supports, and escalat
 
 Key areas:
 
-- [bin/cadre](bin/cadre) dispatches the suite tools (`cadre select`, `cadre selection-telemetry`, `cadre knowledge`, `cadre sdlc`, `cadre generate-plugin`, `cadre generate-authority-aides`, `cadre generate-role-metadata`, `cadre bootstrap-codex`, `cadre resolve-shared`, `cadre mcp-dispatch-server`, `cadre mcp-gitlab-server`, `cadre profile`, `cadre init`, `cadre gitlab-evidence`, `cadre config`, and `cadre doctor`). `cadre select` works standalone by default and optionally enriches its plan when the standalone `agentic-sdlc` CLI is also available — see [RUNBOOK.md §2 "Select agents locally"](roster/RUNBOOK.md#select-agents-locally) for the standalone-vs-integrated behavior and `--require-sdlc`. That separate `agentic-sdlc` CLI always provides lifecycle *validation*; this suite never does. `cadre doctor` reports which `cadre` binary actually ran (checkout, pip/pipx install, or Claude Code plugin-cache copy) and warns when the cwd sits inside a checkout but a different install answered the command.
+- [bin/cadre](bin/cadre) dispatches the suite tools (`cadre select`, `cadre selection-telemetry`, `cadre knowledge`, `cadre sdlc`, `cadre generate-plugin`, `cadre generate-authority-aides`, `cadre generate-role-metadata`, `cadre bootstrap-codex`, `cadre resolve-shared`, `cadre mcp-dispatch-server`, `cadre mcp-gitlab-server`, `cadre profile`, `cadre init`, `cadre gitlab-evidence`, `cadre config`, `cadre doctor`, `cadre context`, `cadre changed-components`, `cadre changelog-entry`, `cadre plugin-version`, `cadre port-cline-agents`, `cadre release-assets`, `cadre role-fidelity`, `cadre sbom-check`, `cadre schema-validate`, and `cadre upgrade`). `cadre select` works standalone by default and optionally enriches its plan when the standalone `agentic-sdlc` CLI is also available — see [RUNBOOK.md §2 "Select agents locally"](roster/RUNBOOK.md#select-agents-locally) for the standalone-vs-integrated behavior and `--require-sdlc`. That separate `agentic-sdlc` CLI always provides lifecycle *validation*; this suite never does. `cadre doctor` reports which `cadre` binary actually ran (checkout, pip/pipx install, or Claude Code plugin-cache copy) and warns when the cwd sits inside a checkout but a different install answered the command.
 - [roster/catalog.yaml](roster/catalog.yaml) is the machine-readable role inventory.
 - [roster/RUNBOOK.md](roster/RUNBOOK.md) explains how to select, dispatch, review, and escalate agent work.
 - [roster/orchestration/](roster/orchestration/) contains routing rules, lifecycle applicability mappings, handoff contracts, escalation policy, selectors, and tests.
@@ -204,7 +204,7 @@ Most projects want the per-project `--profile secure-cloud` path above instead
 of this section — it avoids forcing this repository's cloud-specific roles
 onto projects with a different stack, and each project's generated wrappers
 are static files it owns, not a live link back to this checkout. This section
-is for the narrower case of genuinely wanting all 159 roles, the 13 skills, and
+is for the narrower case of genuinely wanting all 159 roles, the 12 skills, and
 the knowledge and context stores reachable from *every* project on the machine
 unconditionally.
 
