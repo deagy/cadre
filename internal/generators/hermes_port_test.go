@@ -258,3 +258,38 @@ func hermesSkillFiles(t *testing.T, tree string) []string {
 	}
 	return skills
 }
+
+func TestTheOrchestratorScopesChildrenAndUsesTheSelector(t *testing.T) {
+	// The defect that motivated this: a live run's orchestrator told a
+	// delegated child "The working directory is /home/<user>" while the
+	// session's recorded cwd was a project two levels below it, because
+	// nothing in the skill said where a working directory comes from, and
+	// it selected roles by reading the catalog while `cadre select` was on
+	// PATH. Both rules live in the generated text, so they are asserted on
+	// the generated text; the run that proves them is in the PR.
+	_, tree := hermesPortIntoScratch(t)
+	raw, err := os.ReadFile(filepath.Join(tree, "cadre-orchestrator", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	orchestrator := string(raw)
+	for _, want := range []string{
+		"Run `pwd` in the terminal before anything else",
+		"Never write a working directory from memory",
+		"cadre select --task",
+		"--root <working directory>",
+		`skill_view(name="cadre-orchestrator", file_path="references/shared/operating-principles.md")`,
+		"Children are scoped to the working directory",
+	} {
+		if !strings.Contains(orchestrator, want) {
+			t.Errorf("the orchestrator skill no longer says %q", want)
+		}
+	}
+	role, err := os.ReadFile(filepath.Join(tree, "review", "code-reviewer", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(role), "- **Working directory:** the dispatching context names it. `cd` there") {
+		t.Error("a role skill no longer tells the child to cd to the working directory it was given")
+	}
+}

@@ -499,6 +499,9 @@ func buildHermesRoleSkill(domain, roleID string, entry hermesCatalogEntry, path 
 	parts = append(parts, "- **How to run:** spawn via `delegate_task` with `goal` = the concrete task and `context` = "+
 		"this contract's Role/Inputs/Outputs/Required checks/Authority verbatim, plus the task brief. "+
 		"The child cannot see this conversation — pass everything it needs.\n")
+	parts = append(parts, "- **Working directory:** the dispatching context names it. `cd` there before reading or writing "+
+		"anything; if it does not exist or is not the project the brief describes, stop and report rather than "+
+		"working from wherever the shell started.\n")
 	parts = append(parts, "- **Capability ("+capability+"):** "+tools+".\n")
 	parts = append(parts, "- **Model tier:** "+tier+".\n")
 	if focus != "" {
@@ -679,15 +682,28 @@ Don't use for: single-role tasks — dispatch that role's skill directly.
 
 ## Dispatch Protocol
 
+0. **Working directory.** Run ` + "`pwd`" + ` in the terminal before anything else and keep the absolute
+   path it prints; that directory is the task's scope. Never write a working directory from memory:
+   a child once received ` + "`/home/<user>`" + ` while the session was in a project two levels below it, and
+   explored the home directory instead. Every ` + "`goal`" + ` you delegate starts with
+   ` + "`Working directory: <that path>. Run `cd <that path>` first; if it does not exist or is not the project described, stop and report.`" + `
 1. **Intake.** Write a task brief: goal, in-scope paths, out-of-scope, constraints, evidence available,
-   revision/branch. Template: ` + "`references/task-brief-template.md`" + `.
-2. **Select roles.** Match the brief against the catalog table below (full data: ` + "`references/catalog.yaml`" + `)
-   and the route table. Prefer the smallest role set that covers every deliverable; every build output
-   needs a review role that did not author it.
+   revision/branch. Template: ` + "`references/task-brief-template.md`" + ` (load it with
+   ` + "`skill_view(name=\"cadre-orchestrator\", file_path=\"references/task-brief-template.md\")`" + `).
+2. **Select roles.** If the ` + "`cadre`" + ` CLI is on PATH (` + "`install.sh --runner=hermes`" + ` installs it), run
+   ` + "`cadre select --task \"<goal>\" --files <changed paths> --root <working directory> --format text`" + `
+   in the terminal and dispatch its primary and reviewer roles; the plan is deterministic and is the
+   same one every other runner gets. Only when the CLI is absent, match the brief against the catalog
+   table below (full data: ` + "`references/catalog.yaml`" + `) and the route table, and say in the audit trail
+   that selection was by hand. Prefer the smallest role set that covers every deliverable; every build
+   output needs a review role that did not author it.
 3. **Dispatch.** Batch independent roles in one ` + "`delegate_task`" + ` call (parallel children). Pass each child:
-   its skill's role contract verbatim, the task brief, cited prior-step outputs, and the shared-policy
-   pointer (` + "`$HERMES_HOME/skills/cadre/cadre-orchestrator/references/shared/operating-principles.md`" + `).
-   Keep file ownership exclusive per child.
+   the working directory (step 0), its skill's role contract verbatim, the task brief, cited prior-step
+   outputs, and the shared-policy pointer (load it yourself with
+   ` + "`skill_view(name=\"cadre-orchestrator\", file_path=\"references/shared/operating-principles.md\")`" + `;
+   the same file is ` + "`$HERMES_HOME/skills/cadre/cadre-orchestrator/references/shared/operating-principles.md`" + `
+   for a shell). Keep file ownership exclusive per child. Children are scoped to the working directory:
+   one that reports files from anywhere else has left scope, and its result is not evidence.
 4. **Gate.** Verify each child's result against its Completion criteria before consuming it; child
    summaries are self-reports, not verified facts — re-check side effects (paths, URLs, CI state) yourself.
 5. **Escalate, never improvise authority.** Halt conditions: production impact, persistent data, secrets
