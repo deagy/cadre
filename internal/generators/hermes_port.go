@@ -685,7 +685,14 @@ Don't use for: single-role tasks — dispatch that role's skill directly.
 0. **Working directory.** Run ` + "`pwd`" + ` in the terminal before anything else and keep the absolute
    path it prints; that directory is the task's scope. Never write a working directory from memory:
    a child once received ` + "`/home/<user>`" + ` while the session was in a project two levels below it, and
-   explored the home directory instead. Every ` + "`goal`" + ` you delegate starts with
+   explored the home directory instead. Hermes's terminal starts where ` + "`TERMINAL_CWD`" + ` points, and
+   without it in the home directory, whatever directory the user launched from. If ` + "`pwd`" + ` prints the
+   home directory, or the paths the task names are not under it, **stop and ask** for the project
+   directory (the user relaunches with ` + "`TERMINAL_CWD=\"$PWD\" hermes ...`" + `, or names the path and you
+   ` + "`cd`" + ` there and re-run ` + "`pwd`" + `); a home directory is never a task's scope. Until this check passes,
+   do not call ` + "`cadre select`" + ` or ` + "`delegate_task`" + ` at all, whatever the request says about dispatching
+   immediately: a child sent into the home directory has already read what it should not, and no
+   read-only contract undoes that. Every ` + "`goal`" + ` you delegate starts with
    ` + "`Working directory: <that path>. Run `cd <that path>` first; if it does not exist or is not the project described, stop and report.`" + `
 1. **Intake.** Write a task brief: goal, in-scope paths, out-of-scope, constraints, evidence available,
    revision/branch. Template: ` + "`references/task-brief-template.md`" + ` (load it with

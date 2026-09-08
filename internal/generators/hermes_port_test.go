@@ -276,6 +276,9 @@ func TestTheOrchestratorScopesChildrenAndUsesTheSelector(t *testing.T) {
 	for _, want := range []string{
 		"Run `pwd` in the terminal before anything else",
 		"Never write a working directory from memory",
+		"a home directory is never a task's scope",
+		`TERMINAL_CWD="$PWD" hermes`,
+		"do not call `cadre select` or `delegate_task` at all",
 		"cadre select --task",
 		"--root <working directory>",
 		`skill_view(name="cadre-orchestrator", file_path="references/shared/operating-principles.md")`,
