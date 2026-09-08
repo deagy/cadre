@@ -1,0 +1,1189 @@
+version: 1
+# `model` is an optional per-role tier, propagated into the generated Claude
+# Code wrapper's `model:` frontmatter by internal/generators/plugin_generation.go. Assigned
+# by a fixed heuristic, not per-role discretion — keep new roles consistent
+# with it:
+#   opus:   design/architecture/governance/crypto-assurance roles making
+#           high-blast-radius or hard-to-reverse judgment calls.
+#   sonnet: default tier — accountable engineering build/debug, security
+#           engineering, review, testing, operations, incident coordination,
+#           planning.
+#   haiku:  narrow, single-purpose, low-ambiguity roles — cataloging,
+#           stewardship, triage/escalation routing, and bounded execution
+#           specialists. An authoring role (code, test, or document) qualifies
+#           as an execution specialist when its scope is bounded to a
+#           pre-approved slice, it works under a named accountable role that
+#           retains design and scope ownership, and it holds no approval,
+#           deployment, or risk-acceptance authority.
+#
+#           Blast radius overrides that: an execution specialist is sonnet,
+#           not haiku, when it is the *sole* author of artifacts that once
+#           merged (a) execute with kernel or elevated privilege, (b) change
+#           network reachability or security posture, (c) mutate persistent
+#           infrastructure or data durability, (d) handle cryptographic
+#           material, or (e) perform destructive or history-rewriting
+#           operations. Execution routes select the specialist as sole
+#           primary with the accountable role in `support`, so on those routes
+#           no higher-tier agent co-authors — the tier of the specialist is
+#           the tier of the work. UI/styling, tests and fixtures, build
+#           configuration, and application-level code in memory-safe
+#           languages stay haiku.
+#
+# `codex_model` is the OpenAI/Codex CLI equivalent, propagated into the
+# generated `.toml` wrapper's `model` key. Codex does not share Claude's
+# haiku/sonnet/opus naming, so this is a separate field, not a reused value —
+# same tier mapping, OpenAI model identifiers:
+#   opus -> gpt-5.6-sol    sonnet -> gpt-5.6-terra    haiku -> gpt-5.6-luna
+# User-supplied mapping (not independently verified from inside this repo —
+# see below); previously gpt-5 / gpt-5-codex / gpt-5-mini. Re-verify these
+# identifiers against current Codex CLI docs before relying on them in
+# automation; OpenAI model names change over time and this repo has no live
+# check against Codex's accepted model list. Field-confirmed: a
+# ChatGPT-authenticated (not API-key) Codex session rejected both of the
+# previous gpt-5-codex and gpt-5 identifiers as "not supported" when passed
+# as an explicit `--model`/spawn_agent override — two different tiers
+# failing identically points more at that auth mode restricting any
+# explicit model override than at those specific identifiers having been
+# wrong, so switching to the identifiers above may not by itself resolve a
+# ChatGPT-authenticated session's rejection; this repo cannot confirm that
+# distinction without a live codex binary. See the "Codex CLI" section of
+# .agents/skills/run-agent-orchestration/references/runner-adapters.md for
+# the current dispatch-time workaround.
+#
+# `reasoning_effort` is a shared per-role value (not split per runner like
+# model/codex_model above) propagated to both generated wrappers: Claude
+# Code's `effort:` frontmatter field and Codex's `model_reasoning_effort`
+# TOML field. Both runners accept the same low/medium/high/xhigh vocabulary
+# (Claude Code additionally accepts `max`; Codex additionally accepts
+# `minimal`, `ultra`, and a model-dependent `max` — none of those four are
+# used here, keeping every value valid on both runners), so one field is
+# sufficient. Verified 2026-07-28 against Claude Code's live docs
+# (code.claude.com/docs/en/sub-agents) and Codex CLI's live docs
+# (developers.openai.com/codex/agent-configuration/subagents,
+# .../codex/config-file/config-reference) plus a real installed
+# `@openai/codex` npm package's `codex exec --help` output — see
+# internal/orchestration/dispatch_core.go's BuildChildArgv for how the MCP dispatch
+# path passes this (Codex has no dedicated exec-time flag for it, only a
+# generic `-c key=value` config override). Same tier mapping as model/
+# codex_model above:
+#   opus -> high    sonnet -> medium    haiku -> low
+agents:
+  product-intent-agent:
+    definition: planning/product-intent-agent/AGENT.md
+    phase: planning
+    capability: document_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  requirements-agent:
+    definition: planning/requirements-agent/AGENT.md
+    phase: planning
+    capability: document_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  delivery-sequencer:
+    definition: planning/delivery-sequencer/AGENT.md
+    phase: planning
+    capability: document_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  premortem:
+    definition: planning/premortem/AGENT.md
+    phase: planning
+    capability: document_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  assumption-register:
+    definition: planning/assumption-register/AGENT.md
+    phase: planning
+    capability: document_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  scope-boundary:
+    definition: planning/scope-boundary/AGENT.md
+    phase: planning
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  governance-planner:
+    definition: governance/governance-planner/AGENT.md
+    phase: design
+    capability: document_author
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  approval-router:
+    definition: governance/approval-router/AGENT.md
+    phase: review
+    capability: read_only
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  data-governance-engineer:
+    definition: data/data-governance-engineer/AGENT.md
+    phase: design
+    capability: document_author
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  cryptographic-assurance-engineer:
+    definition: security/cryptographic-assurance-engineer/AGENT.md
+    phase: security
+    capability: document_author
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  quantum-timing-assurance-engineer:
+    definition: security/quantum-timing-assurance-engineer/AGENT.md
+    phase: security
+    capability: document_author
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  cloud-architect:
+    definition: architecture/cloud-architect/AGENT.md
+    phase: design
+    capability: document_author
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  threat-modeler:
+    definition: architecture/threat-modeler/AGENT.md
+    phase: design
+    capability: document_author
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  first-principles-challenger:
+    definition: architecture/first-principles-challenger/AGENT.md
+    phase: design
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  api-contract-engineer:
+    definition: architecture/api-contract-engineer/AGENT.md
+    phase: design
+    capability: document_author
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  interaction-designer:
+    definition: architecture/interaction-designer/AGENT.md
+    phase: design
+    capability: document_author
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  visual-designer:
+    definition: architecture/visual-designer/AGENT.md
+    phase: design
+    capability: document_author
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  architecture-diagram-author:
+    definition: documentation/architecture-diagram-author/AGENT.md
+    phase: document
+    capability: document_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  application-engineer:
+    definition: engineering/application-engineer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  architecture-authority:
+    definition: review/architecture-authority/AGENT.md
+    phase: review
+    capability: read_only
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  frontend-engineer:
+    definition: engineering/frontend-engineer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  react-component-implementer:
+    definition: engineering/react-component-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  node-typescript-implementer:
+    definition: engineering/node-typescript-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  backend-engineer:
+    definition: engineering/backend-engineer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  go-service-implementer:
+    definition: engineering/go-service-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  python-automation-implementer:
+    definition: engineering/python-automation-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  postgres-query-implementer:
+    definition: engineering/postgres-query-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  ai-engineer:
+    definition: engineering/ai-engineer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  infrastructure-provisioner:
+    definition: engineering/infrastructure-provisioner/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  opentofu-module-implementer:
+    definition: engineering/opentofu-module-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  helm-chart-implementer:
+    definition: engineering/helm-chart-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  kubernetes-manifest-implementer:
+    definition: engineering/kubernetes-manifest-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  cicd-engineer:
+    definition: engineering/cicd-engineer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  github-actions-implementer:
+    definition: engineering/github-actions-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  gitlab-ci-implementer:
+    definition: engineering/gitlab-ci-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  debugging-engineer:
+    definition: engineering/debugging-engineer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  test-engineer:
+    definition: engineering/test-engineer/AGENT.md
+    phase: verify
+    capability: test_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  selector-test-implementer:
+    definition: testing/selector-test-implementer/AGENT.md
+    phase: verify
+    capability: test_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  black-box-tester:
+    definition: testing/black-box-tester/AGENT.md
+    phase: verify
+    capability: test_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  end-user-tester:
+    definition: testing/end-user-tester/AGENT.md
+    phase: verify
+    capability: test_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  performance-testing-engineer:
+    definition: testing/performance-testing-engineer/AGENT.md
+    phase: verify
+    capability: test_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  red-team:
+    definition: testing/red-team/AGENT.md
+    phase: verify
+    capability: test_author
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  falsification-agent:
+    definition: testing/falsification-agent/AGENT.md
+    phase: verify
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  chaos-resilience-engineer:
+    definition: testing/chaos-resilience-engineer/AGENT.md
+    phase: verify
+    capability: environment_operator
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  deployment-realist:
+    definition: operations/deployment-realist/AGENT.md
+    phase: operations
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  support-triage-agent:
+    definition: support/support-triage-agent/AGENT.md
+    phase: support
+    capability: document_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  escalation-manager:
+    definition: support/escalation-manager/AGENT.md
+    phase: support
+    capability: document_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  incident-commander:
+    definition: support/incident-commander/AGENT.md
+    phase: support
+    capability: environment_operator
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  halt-authority:
+    definition: review/halt-authority/AGENT.md
+    phase: review
+    capability: read_only
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  observability-sre:
+    definition: operations/observability-sre/AGENT.md
+    phase: operations
+    capability: environment_operator
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  cost-capacity-planner:
+    definition: operations/cost-capacity-planner/AGENT.md
+    phase: planning
+    capability: document_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  finops-engineer:
+    definition: operations/finops-engineer/AGENT.md
+    phase: operations
+    capability: environment_operator
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  vendor-register-steward:
+    definition: operations/vendor-register-steward/AGENT.md
+    phase: operations
+    capability: document_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  retention-and-deletion-executor:
+    definition: operations/retention-and-deletion-executor/AGENT.md
+    phase: operations
+    capability: environment_operator
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  secrets-identity-engineer:
+    definition: security/secrets-identity-engineer/AGENT.md
+    phase: security
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  policy-as-code-engineer:
+    definition: security/policy-as-code-engineer/AGENT.md
+    phase: security
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  database-reliability-engineer:
+    definition: data/database-reliability-engineer/AGENT.md
+    phase: operations
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  decommission-engineer:
+    definition: operations/decommission-engineer/AGENT.md
+    phase: operations
+    capability: environment_operator
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  phase-gate:
+    definition: review/phase-gate/AGENT.md
+    phase: release
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  release-engineer:
+    definition: engineering/release-engineer/AGENT.md
+    phase: release
+    capability: environment_operator
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  code-reviewer:
+    definition: review/code-reviewer/AGENT.md
+    phase: review
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  accessibility-reviewer:
+    definition: review/accessibility-reviewer/AGENT.md
+    phase: review
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  infrastructure-reviewer:
+    definition: review/infrastructure-reviewer/AGENT.md
+    phase: review
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  pipeline-security-reviewer:
+    definition: review/pipeline-security-reviewer/AGENT.md
+    phase: review
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  supply-chain-security-reviewer:
+    definition: review/supply-chain-security-reviewer/AGENT.md
+    phase: review
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  security-reviewer:
+    definition: review/security-reviewer/AGENT.md
+    phase: review
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  compliance-reviewer:
+    definition: review/compliance-reviewer/AGENT.md
+    phase: review
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  doctrine-conformance:
+    definition: review/doctrine-conformance/AGENT.md
+    phase: review
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  subtraction-agent:
+    definition: review/subtraction-agent/AGENT.md
+    phase: review
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  claim-conformance:
+    definition: review/claim-conformance/AGENT.md
+    phase: release
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  classification-and-marking-gate:
+    definition: review/classification-and-marking-gate/AGENT.md
+    phase: release
+    capability: read_only
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  technical-writer:
+    definition: documentation/technical-writer/AGENT.md
+    phase: document
+    capability: document_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  decision-record:
+    definition: documentation/decision-record/AGENT.md
+    phase: document
+    capability: document_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  evidence-curator:
+    definition: documentation/evidence-curator/AGENT.md
+    phase: evidence
+    capability: document_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  ip-provenance-agent:
+    definition: documentation/ip-provenance-agent/AGENT.md
+    phase: evidence
+    capability: document_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  knowledge-store-steward:
+    definition: knowledge-store/AGENT.md
+    phase: knowledge
+    capability: environment_operator
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  agent-performance-evaluator:
+    definition: operations/agent-performance-evaluator/AGENT.md
+    phase: operations
+    capability: read_only
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  agent-version-control:
+    definition: operations/agent-version-control/AGENT.md
+    phase: operations
+    capability: document_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  # `phase: authority` roles below prepare the decision package a human
+  # lifecycle authority needs for their assigned gate(s); they never approve,
+  # recommend a disposition, or hold delegated authority themselves (see
+  # docs/proposals/human-authority-role-agents.md). All read_only/opus per the
+  # design doc's rationale: these support high-blast-radius, hard-to-reverse
+  # human judgment calls even though the aide itself only assembles evidence.
+  product-owner-aide:
+    definition: authority/product-owner-aide/AGENT.md
+    phase: authority
+    capability: read_only
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  engineering-lead-aide:
+    definition: authority/engineering-lead-aide/AGENT.md
+    phase: authority
+    capability: read_only
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  system-architect-aide:
+    definition: authority/system-architect-aide/AGENT.md
+    phase: authority
+    capability: read_only
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  governance-lead-aide:
+    definition: authority/governance-lead-aide/AGENT.md
+    phase: authority
+    capability: read_only
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  security-lead-aide:
+    definition: authority/security-lead-aide/AGENT.md
+    phase: authority
+    capability: read_only
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  release-owner-aide:
+    definition: authority/release-owner-aide/AGENT.md
+    phase: authority
+    capability: read_only
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  release-authority-aide:
+    definition: authority/release-authority-aide/AGENT.md
+    phase: authority
+    capability: read_only
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  service-owner-aide:
+    definition: authority/service-owner-aide/AGENT.md
+    phase: authority
+    capability: read_only
+    model: opus
+    codex_model: gpt-5.6-sol
+    reasoning_effort: high
+  go-test-implementer:
+    definition: testing/go-test-implementer/AGENT.md
+    phase: verify
+    capability: test_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  python-test-implementer:
+    definition: testing/python-test-implementer/AGENT.md
+    phase: verify
+    capability: test_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  typescript-test-implementer:
+    definition: testing/typescript-test-implementer/AGENT.md
+    phase: verify
+    capability: test_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  migration-test-implementer:
+    definition: testing/migration-test-implementer/AGENT.md
+    phase: verify
+    capability: test_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  hardware-test-implementer:
+    definition: testing/hardware-test-implementer/AGENT.md
+    phase: verify
+    capability: test_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  protocol-fuzzing-implementer:
+    definition: testing/protocol-fuzzing-implementer/AGENT.md
+    phase: verify
+    capability: test_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  interoperability-test-implementer:
+    definition: testing/interoperability-test-implementer/AGENT.md
+    phase: verify
+    capability: test_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  secret-hygiene-implementer:
+    definition: security/secret-hygiene-implementer/AGENT.md
+    phase: security
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  rbac-manifest-implementer:
+    definition: security/rbac-manifest-implementer/AGENT.md
+    phase: security
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  supply-chain-remediation-implementer:
+    definition: security/supply-chain-remediation-implementer/AGENT.md
+    phase: security
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  c-systems-implementer:
+    definition: engineering/c-systems-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  cpp-systems-implementer:
+    definition: engineering/cpp-systems-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  cmake-build-implementer:
+    definition: engineering/cmake-build-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  starlingx-config-implementer:
+    definition: engineering/starlingx-config-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  edge-cloud-integration-implementer:
+    definition: engineering/edge-cloud-integration-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  quantum-network-integration-implementer:
+    definition: engineering/quantum-network-integration-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  qkd-qkms-integration-implementer:
+    definition: engineering/qkd-qkms-integration-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  mcp-server-implementer:
+    definition: engineering/mcp-server-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  agent-workflow-implementer:
+    definition: engineering/agent-workflow-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  model-routing-implementer:
+    definition: engineering/model-routing-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  inference-gateway-implementer:
+    definition: engineering/inference-gateway-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  ai-observability-implementer:
+    definition: engineering/ai-observability-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  eval-dataset-implementer:
+    definition: engineering/eval-dataset-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  guardrail-policy-implementer:
+    definition: engineering/guardrail-policy-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  embedding-index-implementer:
+    definition: engineering/embedding-index-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  linux-systems-implementer:
+    definition: engineering/linux-systems-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  kernel-module-implementer:
+    definition: engineering/kernel-module-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  ebpf-implementer:
+    definition: engineering/ebpf-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  device-driver-implementer:
+    definition: engineering/device-driver-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  firmware-implementer:
+    definition: engineering/firmware-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  embedded-c-implementer:
+    definition: engineering/embedded-c-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  rtos-integration-implementer:
+    definition: engineering/rtos-integration-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  secure-boot-implementer:
+    definition: security/secure-boot-implementer/AGENT.md
+    phase: security
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  network-config-implementer:
+    definition: engineering/network-config-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  kubernetes-networking-implementer:
+    definition: engineering/kubernetes-networking-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  bgp-routing-implementer:
+    definition: engineering/bgp-routing-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  network-observability-implementer:
+    definition: engineering/network-observability-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  network-security-policy-implementer:
+    definition: engineering/network-security-policy-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  protocol-integration-implementer:
+    definition: engineering/protocol-integration-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  sonicos-config-implementer:
+    definition: engineering/sonicos-config-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  embedded-linux-platform-implementer:
+    definition: engineering/embedded-linux-platform-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  precision-timing-implementer:
+    definition: engineering/precision-timing-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  pkcs11-hsm-integration-implementer:
+    definition: security/pkcs11-hsm-integration-implementer/AGENT.md
+    phase: security
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  pqc-integration-implementer:
+    definition: security/pqc-integration-implementer/AGENT.md
+    phase: security
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  network-management-automation-implementer:
+    definition: engineering/network-management-automation-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  ansible-automation-implementer:
+    definition: engineering/ansible-automation-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  bare-metal-provisioning-implementer:
+    definition: engineering/bare-metal-provisioning-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  kubernetes-operator-implementer:
+    definition: engineering/kubernetes-operator-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  distributed-storage-implementer:
+    definition: engineering/distributed-storage-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  gitops-delivery-implementer:
+    definition: engineering/gitops-delivery-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  pki-certificate-lifecycle-implementer:
+    definition: security/pki-certificate-lifecycle-implementer/AGENT.md
+    phase: security
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  secure-channel-integration-implementer:
+    definition: security/secure-channel-integration-implementer/AGENT.md
+    phase: security
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  javascript-maintenance-implementer:
+    definition: engineering/javascript-maintenance-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  sql-query-implementer:
+    definition: engineering/sql-query-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  shell-automation-implementer:
+    definition: engineering/shell-automation-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  css-layout-implementer:
+    definition: engineering/css-layout-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  browser-test-implementer:
+    definition: testing/browser-test-implementer/AGENT.md
+    phase: verify
+    capability: test_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  frontend-accessibility-remediator:
+    definition: engineering/frontend-accessibility-remediator/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  data-transformation-implementer:
+    definition: engineering/data-transformation-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  retrieval-pipeline-implementer:
+    definition: engineering/retrieval-pipeline-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  prompt-artifact-implementer:
+    definition: engineering/prompt-artifact-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  eval-harness-implementer:
+    definition: testing/eval-harness-implementer/AGENT.md
+    phase: verify
+    capability: test_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  talos-config-implementer:
+    definition: engineering/talos-config-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  compose-stack-implementer:
+    definition: engineering/compose-stack-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  proxmox-opentofu-implementer:
+    definition: engineering/proxmox-opentofu-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  kyverno-policy-implementer:
+    definition: engineering/kyverno-policy-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  git-operations-implementer:
+    definition: engineering/git-operations-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  release-automation-implementer:
+    definition: engineering/release-automation-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: sonnet
+    codex_model: gpt-5.6-terra
+    reasoning_effort: medium
+  dependency-remediation-implementer:
+    definition: engineering/dependency-remediation-implementer/AGENT.md
+    phase: build
+    capability: code_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  technical-documentation-implementer:
+    definition: documentation/technical-documentation-implementer/AGENT.md
+    phase: document
+    capability: document_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  adr-writer:
+    definition: documentation/adr-writer/AGENT.md
+    phase: document
+    capability: document_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  gherkin-test-implementer:
+    definition: testing/gherkin-test-implementer/AGENT.md
+    phase: verify
+    capability: test_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low
+  example-fixture-implementer:
+    definition: testing/example-fixture-implementer/AGENT.md
+    phase: verify
+    capability: test_author
+    model: haiku
+    codex_model: gpt-5.6-luna
+    reasoning_effort: low

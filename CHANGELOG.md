@@ -193,6 +193,25 @@ check and reporting "nothing to do". See
   version alone while `cadre upgrade --check` printed the CLI's; it now
   prints `cadre <plugin> (cli <pin>)`.
 
+### Added
+
+- **Hermes is a runner.** `cadre port-hermes-skills` renders the roster into
+  the skill tree Nous Research's Hermes agent loads, committed under
+  `hermes-plugins/skills/cadre/` (172 skills: one per role, one per
+  workflow playbook, and `cadre-orchestrator` with a `references/` copy of
+  the shared-policy corpus) and drift-guarded by
+  `internal/generators/hermes_port_test.go`. `install.sh --runner=hermes`
+  copies it into `~/.hermes/skills/cadre/`; `--uninstall` removes only a
+  tree this installer wrote. The orchestrator skill takes the working
+  directory from `pwd` and puts it in every child's goal, and selects roles
+  with `cadre select` when the CLI is on PATH -- a live run without both
+  rules sent a child into the user's home directory and chose a different
+  role set than the CLI would. `roster/runner-capabilities.json`,
+  `docs/which-runner-am-i-in.md` and `runner-adapters.md` gain the Hermes
+  row, column and section. The generator was a Python script that existed
+  on one machine; it is Go now, reads `roster/` in the checkout, and a
+  teammate can reproduce the tree from a clone.
+
 **`cadre init` is defaults-first.** It no longer requires `--answers` or `--interactive`; running with neither keeps every shipped default and writes nothing, which is a complete run rather than a skipped one (overlays are sparse, so keeping a default means writing no overlay for that field). See [`roster/shared/README.md`](roster/shared/README.md)'s "Generating overlays with `cadre init`" for the three levels of effort.
 
 **`cadre init` now infers its target worktree.** Use `cadre init` from any

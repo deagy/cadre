@@ -1,0 +1,14 @@
+control_mapping:
+  framework: replace-with-framework-and-version
+  scope: replace-with-system-scope
+  controls:
+    - control_id: replace-with-control-id
+      requirement: replace-with-control-requirement
+      applicability: applicable
+      implementation: replace-with-technical-or-procedural-control
+      owner: replace-with-control-owner
+      evidence:
+        - replace-with-immutable-evidence-reference
+      test_procedure: replace-with-validation-method
+      status: not-assessed
+      exceptions: []

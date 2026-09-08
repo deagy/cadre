@@ -433,7 +433,7 @@ jobs:
       - name: Confirm the installed launcher actually works
         run: "${CADRE_BIN_DIR}/cadre help | grep -q 'Usage: cadre'"
       - name: Exercise --dry-run across every runner branch (no side effects)
-        run: ./install.sh --dry-run --runner=claude,codex,cline --with-lifecycle
+        run: ./install.sh --dry-run --runner=claude,codex,cline,hermes --with-lifecycle
       - name: Run install.sh --uninstall end to end
         run: ./install.sh --uninstall --runner=claude
 

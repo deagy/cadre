@@ -85,6 +85,7 @@ func Usage(subcommands []Subcommand) string {
 		{Name: "generate-role-metadata", Description: "Regenerate roster/catalog.yaml and routing.json from role metadata"},
 		{Name: "generate-authority-aides", Description: "Regenerate roster/authority/*-aide AGENT.md files"},
 		{Name: "port-cline-agents", Description: "Render the packaged plugin's agents and skills into the Cline preset/skill formats"},
+		{Name: "port-hermes-skills", Description: "Render the roster into the Hermes agent's skill tree under hermes-plugins/skills/cadre/"},
 		{Name: "plugin-version", Description: "Read, check, or set the release version shared by all eight plugin manifests"},
 		{Name: "changelog-entry", Description: "Print one version's release notes from the packaged CHANGELOG.md"},
 		{Name: "changed-components", Description: "Report which releasable components had their version bumped"},
@@ -225,6 +226,9 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 	}
 	if command == "port-cline-agents" {
 		return PortClineAgentsCmd(rest)
+	}
+	if command == "port-hermes-skills" {
+		return PortHermesSkillsCmd(rest)
 	}
 	if command == "plugin-version" {
 		return PluginVersionCmd(rest)

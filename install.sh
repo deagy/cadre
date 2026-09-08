@@ -11,7 +11,8 @@
 # machine nobody has prepared.
 #
 # What it touches, and nothing else:
-#   ~/.cadre/dist          a checkout, used by Cline and for the `cadre` CLI
+#   ~/.cadre/dist          a checkout, used by Cline, Hermes and for the `cadre` CLI
+#   ~/.hermes/skills/cadre the Hermes skill tree, copied from that checkout
 #   ~/.local/bin/cadre     a symlink to that checkout's launcher
 #   ~/.codex/config.toml   an MCP entry, inside a marked block, backed up first
 #   each runner's own plugin store, via that runner's own CLI
@@ -54,7 +55,7 @@ usage() {
   cat <<EOF
 Usage: install.sh [options]
 
-  --runner=LIST      Comma-separated: claude,codex,cline. Default: whichever
+  --runner=LIST      Comma-separated: claude,codex,cline,hermes. Default: whichever
                      are found on PATH.
   --with-lifecycle   Also install the G1-G10 lifecycle plugin and its kernel.
                      Most projects do not need this.
@@ -102,7 +103,7 @@ preflight() {
 
 detect_runners() {
   found=""
-  for runner in claude codex cline; do
+  for runner in claude codex cline hermes; do
     command -v "$runner" >/dev/null 2>&1 && found="$found $runner"
   done
   printf '%s' "${found# }"
@@ -229,6 +230,46 @@ install_cline() {
   fi
 }
 
+# Hermes loads skills from $HERMES_HOME/skills/ and installs them one at a
+# time, so the 172-skill tree is copied in whole from the checkout. The
+# marker file is what makes the removal safe: this script never deletes a
+# directory under the operator's home unless it is one this script wrote.
+HERMES_SKILLS="${HERMES_HOME:-$HOME/.hermes}/skills/cadre"
+HERMES_MARKER="cadre-orchestrator/SKILL.md"
+
+remove_hermes_tree() {
+  if [ ! -d "$HERMES_SKILLS" ]; then
+    return 0
+  fi
+  if [ ! -f "$HERMES_SKILLS/$HERMES_MARKER" ]; then
+    warn "  $HERMES_SKILLS exists but is not a cadre skill tree (no $HERMES_MARKER); leaving it alone"
+    return 0
+  fi
+  run rm -rf "$HERMES_SKILLS"
+}
+
+install_hermes() {
+  say "hermes:"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    say "  would replace $HERMES_SKILLS with $CHECKOUT/hermes-plugins/skills/cadre"
+    return 0
+  fi
+  if [ ! -f "$CHECKOUT/hermes-plugins/skills/cadre/$HERMES_MARKER" ]; then
+    warn "  the checkout carries no Hermes skill tree; skipping"
+    return 0
+  fi
+  # Replace rather than overlay: a regenerated tree can drop a skill, and an
+  # overlay would leave the dropped one installed forever.
+  remove_hermes_tree
+  run mkdir -p "$(dirname "$HERMES_SKILLS")"
+  run cp -R "$CHECKOUT/hermes-plugins/skills/cadre" "$HERMES_SKILLS"
+  say "  installed $HERMES_SKILLS"
+  if command -v hermes >/dev/null 2>&1; then
+    count=$(hermes skills list 2>/dev/null | grep -c cadre || true)
+    say "  hermes skills list shows $count cadre skills"
+  fi
+}
+
 install_kernel() {
   # Pre-warm the kernel the lifecycle shim resolves, by asking it its version.
   # The shim downloads and verifies the release it was generated against and
@@ -269,6 +310,9 @@ do_uninstall() {
       cline)
         run cline plugin uninstall cadre || true
         ;;
+      hermes)
+        remove_hermes_tree
+        ;;
     esac
   done
 
@@ -308,7 +352,7 @@ fi
 RUNNERS="$(printf '%s' "$RUNNERS" | tr ',' ' ')"
 
 if [ -z "$RUNNERS" ]; then
-  die "no supported runner found (claude, codex, or cline). Install one first, or pass --runner=."
+  die "no supported runner found (claude, codex, cline, or hermes). Install one first, or pass --runner=."
 fi
 
 [ "$DRY_RUN" -eq 1 ] && say "(dry run: nothing will be changed)"
@@ -325,6 +369,7 @@ for runner in $RUNNERS; do
     claude) install_claude ;;
     codex)  install_codex ;;
     cline)  install_cline ;;
+    hermes) install_hermes ;;
     *)      die "unknown runner: $runner" ;;
   esac
   say ""

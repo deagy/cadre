@@ -13,6 +13,7 @@ mcp-dispatch-server	Run the MCP dispatch server (stdio)
 mcp-gitlab-server	Run the GitLab evidence MCP server (stdio; three create-only tools)
 plugin-version	Read, check, or set the release version shared by all eight plugin manifests
 port-cline-agents	Render the packaged plugin's agents and skills into the Cline preset/skill formats
+port-hermes-skills	Render the roster into the Hermes agent's skill tree under hermes-plugins/skills/cadre/
 profile	Read-only provider/profile drift report against a consuming project's copy
 release-assets	List the archives a program publishes at a version, from the platform contract
 resolve-shared	Resolve effective shared config for the current project
