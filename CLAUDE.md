@@ -24,7 +24,7 @@ Read `AGENTS.md` (repo-wide rules) and `roster/RUNBOOK.md` (the complete operati
 
 ## Commands
 
-All Python tooling requires Python 3.10+, resolved automatically by `bin/cadre` (`bin/cadre.ps1` on PowerShell) via `python3`/`python`/`py -3` — this does not pin an org-wide Python version. Run commands from the repository root unless noted.
+The CLI requires Go (`go.mod` pins `go 1.26.5`); `bin/cadre` (`bin/cadre.ps1` on PowerShell) builds and execs `cmd/cadre` with it, so no separate install step is needed beyond having `go` on `PATH`. Run commands from the repository root unless noted.
 
 ```sh
 # Core test suites (run standalone; no external services needed).
@@ -87,7 +87,7 @@ Use `./bin/cadre`, not bare `cadre` — bare `cadre` may resolve to a globally i
 
 **`roster/RUNBOOK.md` §17, "Regenerating derived output", is the canonical version** — why each step exists, why the order matters, what each guard catches, and the `git add` gotcha in both of its directions. Extend it there rather than restating it here.
 
-`bin/cadre` dispatches every subcommand: `select`, `selection-telemetry`, `knowledge`, `sdlc`, `generate-plugin`, `generate-authority-aides`, `generate-role-metadata`, `bootstrap-codex`, `resolve-shared`, `mcp-dispatch-server`, `mcp-gitlab-server`, `init`, `profile`, `gitlab-evidence`, `config`, `doctor`. `subcommands.tsv` in `bin/` is the dispatch table (`sdlc` is the one exception — it delegates to the external kernel and has no row there). A leading `cadre --interactive <subcommand>` opts that subcommand into prompting for a missing operator setting; it is distinct from `cadre init --interactive`, which starts the shared-policy overlay questionnaire.
+`bin/cadre` dispatches every subcommand: `select`, `selection-telemetry`, `knowledge`, `sdlc`, `generate-plugin`, `generate-authority-aides`, `generate-role-metadata`, `bootstrap-codex`, `resolve-shared`, `mcp-dispatch-server`, `mcp-gitlab-server`, `init`, `profile`, `gitlab-evidence`, `config`, `doctor`, `context`, `changed-components`, `changelog-entry`, `plugin-version`, `port-cline-agents`, `release-assets`, `role-fidelity`, `sbom-check`, `schema-validate`, `upgrade`. `subcommands.tsv` in `bin/` is the dispatch table (`sdlc` is the one exception — it delegates to the external kernel and has no row there). A leading `cadre --interactive <subcommand>` opts that subcommand into prompting for a missing operator setting; it is distinct from `cadre init --interactive`, which starts the shared-policy overlay questionnaire.
 
 This repository now has one Go module of its own (`cmd/`, `internal/`, repository-root `go.mod`/`go.sum`/`Makefile`/`.golangci.yml` — the CLI, per the directory table above; see also `.github/workflows/validate.yml`'s `go` job). React components referenced in worked examples (e.g. sample services under agent briefs) still belong to *consumer* projects, not this repository — there is no frontend build here to lint/test.
 

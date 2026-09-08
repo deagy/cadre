@@ -10,7 +10,7 @@ Read `roster/RUNBOOK.md` for orchestration and any project-local `AGENTS.md` bef
 
 ## Build, Test, and Development Commands
 
-Resolve Python 3.10+ as documented in the runbook. From each internal-tool component, run:
+Resolve Go (`go.mod` pins `go 1.26.5`) as documented in the runbook. From each internal-tool component, run:
 
 ```sh
 go test ./...                                                    # the CLI, kernel, stores, generators
@@ -40,7 +40,7 @@ Use four-space indentation and snake_case for Python. Format Go with `gofmt` and
 
 ## Testing Guidelines
 
-Use `unittest` for internal Python tools, Go `testing` plus Testify for services, and Vitest/Testing Library for React. Express integration and regression behavior in Gherkin/Godog. Cover authorization, negative paths, state transitions, accessibility, failure recovery, migrations, and sensitive-data exclusion. Use synthetic fixtures only.
+Use Go `testing` plus Testify for services, and Vitest/Testing Library for React. Express integration and regression behavior in Gherkin/Godog. Cover authorization, negative paths, state transitions, accessibility, failure recovery, migrations, and sensitive-data exclusion. Use synthetic fixtures only.
 
 ## Commit & Merge Request Guidelines
 

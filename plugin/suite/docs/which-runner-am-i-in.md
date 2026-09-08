@@ -25,19 +25,19 @@ documentation or automation reasoning about a session from the outside).
 
 | Signal | Claude Code | Codex CLI | Cline |
 | --- | --- | --- | --- |
-| Generated per-role wrapper present | the plugin package's `agents/*.md` (or a project-local `.claude/agents/<role-id>.md` override) | `provider/codex-agents/agents-*.toml`, synced to `~/.codex/agents/` | None — no generated wrapper exists for Cline yet |
+| Generated per-role wrapper present | the plugin package's `agents/*.md` (or a project-local `.claude/agents/<role-id>.md` override) | `provider/codex-agents/agents-*.toml`, synced to `~/.codex/agents/` | [`cline-plugins/cline-agents/agents/<role-id>.md`](https://github.com/deagy/cadre/tree/main/cline-plugins/cline-agents/agents) — 159 generated Cline SDK agent presets, one per catalog role |
 | Project config directory | `.claude/` (`.claude/agents/`, `.claude/skills/`) | `.codex/` (`.codex/agents/`, `.codex/config.toml`) | `.clinerules/` (one general pointer file, not per-role) |
-| Subagent-dispatch tool name in the session | `Agent`/`Task` tool referencing a named subagent type | `spawn_agent` tool with a generic `agent_type` argument | Host-registered tools only; the Cline plugin in [`cline-plugins/cline/`](https://github.com/deagy/cadre/tree/main/cline-plugins/cline) (`index.ts`) registers exactly one tool, `agents_select`, which plans only and never dispatches |
+| Subagent-dispatch tool name in the session | `Agent`/`Task` tool referencing a named subagent type | `spawn_agent` tool with a generic `agent_type` argument | `start_subagent` (its `preset` argument names a role directly, e.g. `preset: "security-reviewer"`) and `dispatch_selected_roles` (runs `cadre select`, then `start_subagent`s every selected primary/reviewer role), both registered by [`cline-plugins/cline-agents/`](https://github.com/deagy/cadre/tree/main/cline-plugins/cline-agents) (`index.ts`); the sibling [`cline-plugins/cline/`](https://github.com/deagy/cadre/tree/main/cline-plugins/cline) plugin registers only `agents_select`, which plans and never dispatches |
 | Distinguishing environment/config signal | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` env var gates Agent Teams | `config.toml` `[mcp_servers.*]` / `[agents]` blocks | `~/.cline/data/teams/[team-name]/` if team mode has run |
 
 ## What that implies
 
 | Property | Claude Code | Codex CLI | Cline |
 | --- | --- | --- | --- |
-| Generated wrapper exists for this repo's roles | Yes | Yes | No |
-| How a role is named for dispatch | `agents:<role-id>` (plugin-installed) or bare `<role-id>` (project-local override) | `.codex/agents/<role-id>.toml` (project) or `~/.codex/agents/agents-<role-id>.toml` (global) | Not applicable — no per-role naming mechanism exists |
-| Can the model-visible dispatch tool select a *named* custom role directly? | Yes | **No** — `spawn_agent` only accepts a generic `agent_type`; there is no parameter for a named `.codex/agents/` entry (tracked upstream as openai/codex#15250 and related issues) | No — no plugin-facing spawn/team-dispatch API exists (confirmed gap, not an oversight) |
-| Workaround when named dispatch isn't supported | Not applicable (natively supported) | Preferred: register this repo's MCP dispatch server (`cadre mcp-dispatch-server`) and call `dispatch_secure_cloud_role`. Fallback: read the target `.toml` file's `developer_instructions`/`model` and inject them manually into `spawn_agent` | Manual per-file injection only — read the role's `AGENT.md` (or its Codex `.toml` wrapper if already synced) and inject its content as the task/system framing for a fresh turn or spawned subagent; no MCP-equivalent documented |
+| Generated wrapper exists for this repo's roles | Yes | Yes | Yes — `cline-plugins/cline-agents/agents/<role-id>.md`, drift-guarded byte-for-byte in CI |
+| How a role is named for dispatch | `agents:<role-id>` (plugin-installed) or bare `<role-id>` (project-local override) | `.codex/agents/<role-id>.toml` (project) or `~/.codex/agents/agents-<role-id>.toml` (global) | `start_subagent`'s `preset` argument = the role id (each preset's frontmatter `name:` matches its `agents/<role-id>.md` filename) |
+| Can the model-visible dispatch tool select a *named* custom role directly? | Yes | **No** — `spawn_agent` only accepts a generic `agent_type`; there is no parameter for a named `.codex/agents/` entry (tracked upstream as openai/codex#15250 and related issues) | Yes — `start_subagent(preset: "<role-id>")` in the `cline-agents` plugin; the sibling `cline` plugin's `agents_select` plans only and cannot dispatch |
+| Workaround when named dispatch isn't supported | Not applicable (natively supported) | Preferred: register this repo's MCP dispatch server (`cadre mcp-dispatch-server`) and call `dispatch_secure_cloud_role`. Fallback: read the target `.toml` file's `developer_instructions`/`model` and inject them manually into `spawn_agent` | Not applicable (natively supported via `start_subagent`/`dispatch_selected_roles`). Presets take their provider/model from `CLINE_AGENTS_PROVIDER_ID` and `CLINE_AGENTS_MODEL_<TIER>`/`_DEFAULT` when set, and otherwise inherit the dispatching session's own provider/model as a pair; only when neither resolves does dispatch fail closed |
 | Peer-to-peer teammate messaging (`communication_mode: "peer"`) | Supported, but gated: requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`; falls back to `orchestrator-relayed` if unset | Not supported — no peer messaging or shared task list; coordination is entirely orchestrator-centric | Best-effort only — team mode exists (`/team`, `cline --team-name`) but the *coordinator's own model* decides teammate composition and messaging; not guaranteed the way Claude Code's gated Agent Teams are |
 | Nested teams (a teammate spawning its own teammates) | Not supported — runner limitation | Not applicable (no team primitive at all) | Not applicable in the same sense; team state persists under `~/.cline/data/teams/[team-name]/` but there is no per-role teammate naming to nest |
 | Team size guidance | 3–5 teammates, disjoint file ownership per teammate | Not applicable | Not applicable |
@@ -66,12 +66,12 @@ runner does for you*:
   all synthesis and reconciliation itself — never report that agents
   "discussed" or "challenged" each other's findings when this fallback
   actually ran.
-- **Cline** additionally has no generated per-role wrapper and no
-  plugin-facing dispatch API yet; any role dispatch beyond `agents_select`'s
-  plan-only output requires manually injecting the role's `AGENT.md` content
-  into a fresh turn or the host's own subagent primitive, and any team
-  coordination is delegated to the team coordinator's own judgment rather
-  than following `cadre select`'s `teams` field mechanically.
+- **Cline** dispatches named roles through the `cline-agents` plugin's
+  `start_subagent`/`dispatch_selected_roles` tools, but any team
+  coordination beyond that single dispatch is delegated to the team
+  coordinator's own judgment rather than following `cadre select`'s `teams`
+  field mechanically; the sibling `cline` plugin's `agents_select` remains
+  plan-only and never dispatches.
 
 See [runner-adapters.md](../../skills/run-agent-orchestration/references/runner-adapters.md)
 for the full detail behind every row above, including the exact upstream

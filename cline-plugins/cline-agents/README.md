@@ -17,12 +17,12 @@ template"](#hardening-vs-upstream-template) below.
 
 ## `agents/` and `skills/` are regenerated content, not hand-authored
 
-The 159 files under `agents/` and the 8 files under `skills/` are produced by
-[`tools/port_cline_agents.py`](../tools/port_cline_agents.py) (run from the
-repository root), which this repository's release-triggered regeneration
-workflow (`regenerate.yml`) now runs automatically alongside the rest of the
-Claude Code / Codex regeneration -- see root `README.md`'s "Regenerating
-Assets". It reads this repository's own `agents/*.md`/`skills/*/SKILL.md`
+The 159 files under `agents/` and the 9 files under `skills/` are produced by
+`cadre port-cline-agents --root cline-plugins --source plugin` (run from the
+repository root, after `generate-plugin`; the Go implementation is
+`internal/generators/cline_port.go`), the last step of the regeneration
+sequence `roster/RUNBOOK.md` §17 documents and `validate.yml`'s
+`generated-content` job guards. It reads this repository's own `agents/*.md`/`skills/*/SKILL.md`
 and rewrites source-repo-relative path references (e.g.
 `` `../../shared/team-profile.yaml` ``) into consumer-neutral prose via a
 fixed lookup table, plus one-off handling for 4 roles that needed a closer
@@ -40,8 +40,8 @@ substitution table when that happens, not this README.
 
 `cline-agents/index.ts`, its `package.json`, `test/`, and this README remain
 hand-authored; only `agents/*.md` and `skills/*.md` are generated. To
-regenerate locally: `python3 tools/port_cline_agents.py --root .` from the
-repository root.
+regenerate locally: `./bin/cadre port-cline-agents --root cline-plugins --source plugin`
+from the repository root.
 
 ## Quick start
 
@@ -103,9 +103,9 @@ discovery tools (`list_agent_presets`/`list_skills`).
 | `message_subagent` | Send a follow-up message to a running subagent. |
 | `get_subagent` | Poll status, output, or error for a subagent session. |
 | `list_agent_presets` | List the 159 bundled Cadre role presets plus any accepted global/project overrides. |
-| `list_skills` / `get_skill` | Discover and load skill instructions: this repository's own 7 bundled skills (a static port of `skills/*/SKILL.md`, with any `references/*.md` inlined -- see `skills/*.md` in this plugin), plus any accepted global/project overlays. Like agent presets, a bundled skill name cannot be silently shadowed by a same-named global/project skill. |
+| `list_skills` / `get_skill` | Discover and load skill instructions: this repository's own 9 bundled skills (a static port of `skills/*/SKILL.md`, with any `references/*.md` inlined -- see `skills/*.md` in this plugin), plus any accepted global/project overlays. Like agent presets, a bundled skill name cannot be silently shadowed by a same-named global/project skill. |
 | `save_handoff` / `read_handoff` | Share text between subagents in the same conversation. |
-| `create_review_subtask` / `write_wiki_page` / `write_evidence_comment` | GitLab evidence tools, reached via `cadre gitlab-evidence` (this plugin has no MCP client, so it cannot attach `suite/roster/orchestration/mcp/gitlab_server.py` directly -- see `suite/roster/orchestration/mcp/GITLAB-EVIDENCE.md`). All three require `GITLAB_SVC_TOKEN`/`GITLAB_BASE_URL`/`GITLAB_DOCS_PROJECT_ID` in this process's environment and return `status="unavailable"` if unset. `create_review_subtask`/`write_evidence_comment` are create-only, single-call. `write_wiki_page` is the `human_approval`-tier tool: its first call never writes -- it returns `status="confirmation_required"` plus a token that must be shown to a human and replayed unchanged on a second call before anything is written. |
+| `create_review_subtask` / `write_wiki_page` / `write_evidence_comment` | GitLab evidence tools, reached via `cadre gitlab-evidence` (this plugin has no MCP client, so it cannot attach `cadre mcp-gitlab-server` -- the Go GitLab evidence MCP server -- directly -- see `suite/roster/orchestration/GITLAB-EVIDENCE.md`). All three require `GITLAB_SVC_TOKEN`/`GITLAB_BASE_URL`/`GITLAB_DOCS_PROJECT_ID` in this process's environment and return `status="unavailable"` if unset. `create_review_subtask`/`write_evidence_comment` are create-only, single-call. `write_wiki_page` is the `human_approval`-tier tool: its first call never writes -- it returns `status="confirmation_required"` plus a token that must be shown to a human and replayed unchanged on a second call before anything is written. |
 
 Unlike the upstream `agents-squad` template, `start_subagent` has **no
 default preset**. Every call must name a known preset; there is no
@@ -524,14 +524,14 @@ configuration, not this plugin's — see "Where credentials go" above.
 
 ## Path-reference rewrites
 
-Each source role body ends with an identical appended shared-policy block containing source-repo-relative path references (e.g. `` `../../shared/team-profile.yaml` ``, `roster/shared/README.md`) that resolve inside the *source* Cadre register/catalog layout but would 404 in an arbitrary consumer project. `tools/port_cline_agents.py`'s `PATH_SUBSTITUTIONS` table is the authoritative, current list of every such rewrite -- read that, not this paragraph, for the exact current mapping; duplicating it here would just go stale.
+Each source role body ends with an identical appended shared-policy block containing source-repo-relative path references (e.g. `` `../../shared/team-profile.yaml` ``, `roster/shared/README.md`) that resolve inside the *source* Cadre register/catalog layout but would 404 in an arbitrary consumer project. `internal/generators/cline_tables.go`'s `PATH_SUBSTITUTIONS` table is the authoritative, current list of every such rewrite -- read that, not this paragraph, for the exact current mapping; duplicating it here would just go stale.
 
 Four roles (`application-engineer`, `debugging-engineer`, `threat-modeler`,
 `knowledge-store-steward`) need a closer look rather than a purely mechanical
-rewrite; `tools/port_cline_agents.py`'s `ROLE_OVERRIDES` table and its
+rewrite; `internal/generators/cline_tables.go`'s `ROLE_OVERRIDES` table and its
 surrounding comments are the authoritative, current list of exactly what and
 why -- read that, not this paragraph, for the per-role detail. The
-regeneration's own regression test (`tools/test_port_cline_agents.py`) fails
+regeneration's own regression test (`internal/generators/cline_port_test.go`) fails
 if any of them silently reverts to the old committed behavior.
 
 `skills/*.md` get the equivalent treatment via `SKILL_PATH_SUBSTITUTIONS` (a separate table, since skills reference this suite's CLI/data files rather than the shared-policy doc set agents reference) -- including replacing the "Packaged suite note" callout every `SKILL.md` carries (which points at a `suite/` directory this plugin doesn't ship) with an accurate Cline-specific note, and rewriting dangling internal `[references/X.md](references/X.md)`-style links into prose pointers at the now-inlined `# Reference: X.md` sections.

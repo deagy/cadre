@@ -10,7 +10,7 @@ operations guide](lifecycle-and-plugin-operations.md).
 
 ## Prerequisites
 
-- Python 3.10 or newer.
+- Go (`go.mod` pins `go 1.26.5`).
 - A checkout of this repository.
 
 The lifecycle kernel is **not in this repository** — it lives at
@@ -21,8 +21,8 @@ sets this up. Set `AGENTIC_SDLC_BIN` to pin a *particular* kernel
 deliberately; see the [lifecycle guide](lifecycle-and-plugin-operations.md)
 for that case.
 
-The `bin/cadre` launcher probes for `python3` or `python`; PowerShell users
-can use `bin/cadre.ps1`.
+The `bin/cadre` launcher builds and execs the Go CLI under `cmd/cadre`;
+PowerShell users can use `bin/cadre.ps1`.
 
 ## Five-minute path
 
@@ -43,28 +43,28 @@ push changes.
 Run the suite-only check with:
 
 ```sh
-python3 -m unittest discover -b -s roster/knowledge-store/test -p "test_*.py"
+make test
 ```
 
-The orchestration tests need no install and run as-is:
+which runs `go test -tags sqlite_fts5 ./...` — the CLI, kernel-facing stores,
+and generators, needing no external services. Validate the role catalog and
+generated output directly with:
 
 ```sh
-python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
+./bin/cadre schema-validate
+./bin/cadre generate-role-metadata --check
 ```
 
-Run that way they exercise the selector in **standalone** mode, because the
-lifecycle contract is resolved by looking for an `agentic-sdlc` executable on
-`PATH` — being in-tree is not enough on its own. To exercise the
-lifecycle-*integrated* assertions as CI does, point `AGENTIC_SDLC_BIN` at the
-launcher this repository already ships; there is still nothing to install:
+If you're also touching the Cline plugins, each has its own Vitest suite:
 
 ```sh
-AGENTIC_SDLC_BIN="$PWD/bin/agentic-sdlc" \
-  python3 -m unittest discover -b -s roster/orchestration/test -p "test_*.py"
+cd cline-plugins/cline-agents && npm test
 ```
+
+(and likewise for `cline-plugins/cline` and `cline-plugins/cline-lifecycle`).
 
 The kernel's own tests live in its own repository now (deleted here): they import the
-package in-process and need neither the variable nor anything on `PATH`. See
+package in-process and need neither `AGENTIC_SDLC_BIN` nor anything on `PATH`. See
 the [lifecycle guide](lifecycle-and-plugin-operations.md) to point at a
 separately installed kernel instead.
 
