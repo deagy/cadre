@@ -95,48 +95,6 @@ func LoadAides(aidesPath string) ([]AideData, error) {
 	return aides, nil
 }
 
-// parseGates parses a YAML flow-style list like "[1, 2, 3]".
-func parseGates(raw string) ([]int, error) {
-	raw = strings.TrimSpace(raw)
-	if !strings.HasPrefix(raw, "[") || !strings.HasSuffix(raw, "]") {
-		return nil, fmt.Errorf("gates must be a flow-style list like '[1, 2]', got %q", raw)
-	}
-
-	inner := strings.TrimPrefix(strings.TrimSuffix(raw, "]"), "[")
-	inner = strings.TrimSpace(inner)
-	if inner == "" {
-		return nil, fmt.Errorf("gates list is empty")
-	}
-
-	parts := strings.Split(inner, ",")
-	var gates []int
-	seen := make(map[int]bool)
-
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		var gate int
-		if _, err := fmt.Sscanf(part, "%d", &gate); err != nil {
-			return nil, fmt.Errorf("non-integer gate in %q", raw)
-		}
-		if seen[gate] {
-			return nil, fmt.Errorf("duplicate gate in %q: %d", raw, gate)
-		}
-		seen[gate] = true
-		gates = append(gates, gate)
-	}
-
-	if len(gates) == 0 {
-		return nil, fmt.Errorf("no valid gates in %q", raw)
-	}
-
-	// Sort for consistent output
-	sort.Ints(gates)
-	return gates, nil
-}
-
 // stripInlineComment removes YAML inline comments (# preceded by whitespace).
 func stripInlineComment(value string) string {
 	// Match whitespace followed by # and everything after
@@ -255,7 +213,7 @@ func WriteAideFiles(files map[string]string) error {
 // aides.yaml against the lifecycle-gates contract.
 //
 // aides.yaml hardcodes each aide's gate numbers, and the kernel owns gate
-// numbering permanently. Nothing else constrains them: parseGates checks they
+// numbering permanently. Nothing else constrains them: LoadAides checks they
 // are integers and not duplicated, not that they exist. So a typo, or a
 // kernel-side renumber, ships an authority aide telling a human to prepare a
 // decision package for a gate that is not there.
@@ -366,10 +324,14 @@ func RemoveOrphanedAides(authorityRoot string, generated map[string]string) ([]s
 func CheckAides(authorityRoot string, generated map[string]string) (bool, []string, error) {
 	var stale []string
 
+	// Compute repoRoot from authorityRoot.
+	// authorityRoot is <repoRoot>/roster/authority, so two Dir() calls recover repoRoot.
+	repoRoot := filepath.Dir(filepath.Dir(authorityRoot))
+
 	// Check if each generated file is current
 	for path, expectedContent := range generated {
 		if existing, err := os.ReadFile(path); err != nil || string(existing) != expectedContent {
-			relPath, _ := filepath.Rel(filepath.Dir(filepath.Dir(filepath.Dir(authorityRoot))), path)
+			relPath, _ := filepath.Rel(repoRoot, path)
 			stale = append(stale, relPath)
 		}
 	}
@@ -380,7 +342,7 @@ func CheckAides(authorityRoot string, generated map[string]string) (bool, []stri
 		if entry.IsDir() {
 			agentMdPath := filepath.Join(authorityRoot, entry.Name(), "AGENT.md")
 			if _, exists := generated[agentMdPath]; !exists {
-				relPath, _ := filepath.Rel(filepath.Dir(filepath.Dir(filepath.Dir(authorityRoot))), agentMdPath)
+				relPath, _ := filepath.Rel(repoRoot, agentMdPath)
 				stale = append(stale, relPath)
 			}
 		}

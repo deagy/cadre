@@ -16,6 +16,7 @@ import (
 // `--output plugin`.
 func GeneratePlugin(args []string) int {
 	fs := flag.NewFlagSet("cadre generate-plugin", flag.ContinueOnError)
+	setUsage(fs, "generate-plugin", usageGeneratePlugin)
 	checkMode := fs.Bool("check", false, "Validate without writing (exit 1 if stale)")
 	outputFlag := fs.String("output", "", "Output directory for plugin package (required)")
 	forceReadme := fs.Bool("force-readme", false,
