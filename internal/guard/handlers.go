@@ -116,41 +116,46 @@ func checkClean(args []string, cwd string, _ map[string]string) *Decision {
 			"the specific paths you actually intend to delete by name.", len(files), example)}
 }
 
-func checkBranch(args []string, _ string, _ map[string]string) *Decision {
+func checkBranch(args []string, cwd string, _ map[string]string) *Decision {
 	shortChars, longOpts, positional := splitFlagSets(args)
 	forceDelete := shortChars['D'] ||
 		((shortChars['d'] || longOpts["--delete"]) && (shortChars['f'] || longOpts["--force"]))
-	if !forceDelete {
-		return nil
+	if forceDelete {
+		target := "<branch>"
+		if len(positional) > 0 {
+			target = positional[0]
+		}
+		return &Decision{Reason: fmt.Sprintf(
+			"Blocked: `git branch -D`/`--delete --force` on '%s' bypasses git's own "+
+				"unmerged-work safety check and can discard commits that no other ref points at. "+
+				"Use `git branch -d %s` instead -- it refuses when the branch has unmerged "+
+				"work -- or ask the operator to force-delete it themselves if that's really intended.",
+			target, target)}
 	}
-	target := "<branch>"
-	if len(positional) > 0 {
-		target = positional[0]
+
+	// Check for git branch -f (force-move without delete)
+	hasForce := shortChars['f'] || longOpts["--force"]
+	hasDelete := shortChars['d'] || longOpts["--delete"]
+	if hasForce && !hasDelete && len(positional) > 0 {
+		forced := positional[0]
+		return checkForceCreatedBranch(cwd, args, forced, branchFlagsWithValue, "branch -f", 1)
 	}
-	return &Decision{Reason: fmt.Sprintf(
-		"Blocked: `git branch -D`/`--delete --force` on '%s' bypasses git's own "+
-			"unmerged-work safety check and can discard commits that no other ref points at. "+
-			"Use `git branch -d %s` instead -- it refuses when the branch has unmerged "+
-			"work -- or ask the operator to force-delete it themselves if that's really intended.",
-		target, target)}
+
+	return nil
 }
 
 var colonRefspec = regexp.MustCompile(`^:\S+$`)
 
 func checkPush(args []string, _ string, _ map[string]string) *Decision {
-	hasForce, hasLease, hasDeleteFlag, hasColonRefspec := false, false, false, false
+	shortChars, longOpts, _ := splitFlagSets(args)
+	hasForce := shortChars['f'] || longOpts["--force"]
+	hasLease := longOpts["--force-with-lease"]
+	hasDeleteFlag := shortChars['d'] || longOpts["--delete"]
+	hasColonRefspec := false
 	for _, argument := range args {
-		if argument == "-f" || argument == "--force" {
-			hasForce = true
-		}
-		if argument == "--force-with-lease" || strings.HasPrefix(argument, "--force-with-lease=") {
-			hasLease = true
-		}
-		if argument == "--delete" || argument == "-d" {
-			hasDeleteFlag = true
-		}
 		if colonRefspec.MatchString(argument) {
 			hasColonRefspec = true
+			break
 		}
 	}
 	if hasDeleteFlag || hasColonRefspec {
@@ -470,6 +475,11 @@ func reportEntries(stdout, stderr string) []string {
 // worktreeAddFlagsWithValue consume the following token, so it is not mistaken
 // for the new worktree's path or its start point.
 var worktreeAddFlagsWithValue = setOf("-b", "-B", "--reason")
+
+// branchFlagsWithValue are `git branch` flags that consume the following token,
+// so the branch name is not confused with one of their values.
+var branchFlagsWithValue = setOf("-m", "--move", "-c", "--copy", "-t", "--track",
+	"-u", "--set-upstream")
 
 func checkWorktree(args []string, cwd string, _ map[string]string) *Decision {
 	verbIndex := -1

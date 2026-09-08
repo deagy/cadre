@@ -1938,7 +1938,7 @@ async function checkClean(subArgs: string[], cwd: string): Promise<GitGuardDecis
   };
 }
 
-function checkBranch(subArgs: string[]): GitGuardDecision | null {
+async function checkBranch(subArgs: string[], cwd: string): Promise<GitGuardDecision | null> {
   const shortChars = new Set<string>();
   const longOpts = new Set<string>();
   const positional: string[] = [];
@@ -1950,22 +1950,37 @@ function checkBranch(subArgs: string[]): GitGuardDecision | null {
   const forceDelete =
     shortChars.has("D") ||
     ((shortChars.has("d") || longOpts.has("--delete")) && (shortChars.has("f") || longOpts.has("--force")));
-  if (!forceDelete) return null;
+  if (forceDelete) {
+    const target = positional[0] ?? "<branch>";
+    return {
+      reason:
+        `Blocked: \`git branch -D\`/\`--delete --force\` on '${target}' bypasses git's own ` +
+        "unmerged-work safety check and can discard commits that no other ref points at. " +
+        `Use \`git branch -d ${target}\` instead -- it refuses when the branch has unmerged ` +
+        "work -- or ask the operator to force-delete it themselves if that's really intended.",
+    };
+  }
 
-  const target = positional[0] ?? "<branch>";
-  return {
-    reason:
-      `Blocked: \`git branch -D\`/\`--delete --force\` on '${target}' bypasses git's own ` +
-      "unmerged-work safety check and can discard commits that no other ref points at. " +
-      `Use \`git branch -d ${target}\` instead -- it refuses when the branch has unmerged ` +
-      "work -- or ask the operator to force-delete it themselves if that's really intended.",
-  };
+  // Check for git branch -f (force-move without delete)
+  const hasForce = shortChars.has("f") || longOpts.has("--force");
+  const hasDelete = shortChars.has("d") || longOpts.has("--delete");
+  if (hasForce && !hasDelete && positional.length > 0) {
+    return checkForceCreatedBranch(cwd, subArgs, positional[0], BRANCH_FLAGS_WITH_VALUE, "branch -f", 1);
+  }
+
+  return null;
 }
 
 function checkPush(subArgs: string[]): GitGuardDecision | null {
-  const hasForce = subArgs.some((a) => a === "-f" || a === "--force");
-  const hasLease = subArgs.some((a) => a === "--force-with-lease" || a.startsWith("--force-with-lease="));
-  const hasDeleteFlag = subArgs.some((a) => a === "--delete" || a === "-d");
+  const shortChars = new Set<string>();
+  const longOpts = new Set<string>();
+  for (const a of subArgs) {
+    if (a.startsWith("--")) longOpts.add(a.split("=", 1)[0]);
+    else if (a.startsWith("-") && a.length > 1) for (const c of a.slice(1)) shortChars.add(c);
+  }
+  const hasForce = shortChars.has("f") || longOpts.has("--force");
+  const hasLease = longOpts.has("--force-with-lease");
+  const hasDeleteFlag = shortChars.has("d") || longOpts.has("--delete");
   const hasColonRefspec = subArgs.some((a) => /^:\S+$/.test(a));
 
   if (hasDeleteFlag || hasColonRefspec) {
@@ -2041,6 +2056,12 @@ const CHECKOUT_FLAGS_WITH_VALUE = new Set([
 ]);
 const SWITCH_FLAGS_WITH_VALUE = new Set([
   "-c", "--create", "-C", "--force-create", "--conflict", "--orphan",
+]);
+
+// `git branch` flags that consume the following token, so the branch name is not
+// confused with one of their values.
+const BRANCH_FLAGS_WITH_VALUE = new Set([
+  "-m", "--move", "-c", "--copy", "-t", "--track", "-u", "--set-upstream",
 ]);
 
 /**
@@ -2397,7 +2418,7 @@ const GIT_GUARD_HANDLERS: Record<string, GitGuardHandler> = {
   switch: checkSwitch,
   restore: checkRestore,
   clean: checkClean,
-  branch: (subArgs) => checkBranch(subArgs),
+  branch: checkBranch,
   push: (subArgs) => checkPush(subArgs),
   worktree: checkWorktree,
   gc: checkGc,

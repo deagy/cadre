@@ -1209,6 +1209,150 @@
       ],
       "command": "bash - -c \"git reset --hard\"",
       "expected": "allowed"
+    },
+    {
+      "id": "push-bundled-force-blocked",
+      "issue": "codebase-review5",
+      "why": "Bundled short flags like `-uf` must be detected the same as `-u -f`, not bypassed by exact-string matching.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        }
+      ],
+      "command": "git push -uf origin main",
+      "expected": "blocked",
+      "reason_contains": "force-with-lease"
+    },
+    {
+      "id": "push-bundled-delete-blocked",
+      "issue": "codebase-review5",
+      "why": "Bundled short flags like `-vd` must be detected the same as `-v -d`, not bypassed by exact-string matching.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "branch",
+          "name": "feature"
+        }
+      ],
+      "command": "git push -vd origin feature",
+      "expected": "blocked",
+      "reason_contains": "deletes a remote branch"
+    },
+    {
+      "id": "push-plain-no-bundling-allowed",
+      "issue": "codebase-review5",
+      "why": "Unbundled, non-destructive push must not be newly blocked.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        }
+      ],
+      "command": "git push -u origin main",
+      "expected": "allowed"
+    },
+    {
+      "id": "branch-force-move-existing-blocked",
+      "issue": "codebase-review5",
+      "why": "`git branch -f existing <start>` resets an existing branch to a new start point, which is semantically identical to `checkout -B` and must be guarded the same way.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "two"
+        },
+        {
+          "op": "branch-at",
+          "name": "existing",
+          "ref": "HEAD~1"
+        }
+      ],
+      "command": "git branch -f existing HEAD",
+      "expected": "blocked",
+      "reason_contains": "force-resets the existing branch"
+    },
+    {
+      "id": "branch-force-move-existing-with-implicit-head-blocked",
+      "issue": "codebase-review5",
+      "why": "`git branch -f existing` (implicit HEAD) also resets an existing branch and must be blocked.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "two"
+        },
+        {
+          "op": "branch-at",
+          "name": "existing",
+          "ref": "HEAD~1"
+        }
+      ],
+      "command": "git branch -f existing",
+      "expected": "blocked",
+      "reason_contains": "force-resets the existing branch"
+    },
+    {
+      "id": "branch-force-new-name-allowed",
+      "issue": "codebase-review5",
+      "why": "`git branch -f` on a name that does not exist yet behaves like `-b` and creates a new branch, which is safe.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        }
+      ],
+      "command": "git branch -f brand-new-name",
+      "expected": "allowed"
+    },
+    {
+      "id": "branch-force-same-commit-allowed",
+      "issue": "codebase-review5",
+      "why": "A branch already at the start point moves nothing, so refusing would be pure friction.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        },
+        {
+          "op": "branch",
+          "name": "same"
+        }
+      ],
+      "command": "git branch -f same HEAD",
+      "expected": "allowed"
+    },
+    {
+      "id": "branch-plain-create-allowed",
+      "issue": "codebase-review5",
+      "why": "Plain `git branch new-name` without force must not be newly blocked.",
+      "setup": [
+        {
+          "op": "commit",
+          "path": "a.txt",
+          "content": "one"
+        }
+      ],
+      "command": "git branch new-branch",
+      "expected": "allowed"
     }
   ]
 }
