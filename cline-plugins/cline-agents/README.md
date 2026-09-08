@@ -17,7 +17,7 @@ template"](#hardening-vs-upstream-template) below.
 
 ## `agents/` and `skills/` are regenerated content, not hand-authored
 
-The 159 files under `agents/` and the 8 files under `skills/` are produced by
+The 159 files under `agents/` and the 9 files under `skills/` are produced by
 [`tools/port_cline_agents.py`](../tools/port_cline_agents.py) (run from the
 repository root), which this repository's release-triggered regeneration
 workflow (`regenerate.yml`) now runs automatically alongside the rest of the
@@ -103,9 +103,9 @@ discovery tools (`list_agent_presets`/`list_skills`).
 | `message_subagent` | Send a follow-up message to a running subagent. |
 | `get_subagent` | Poll status, output, or error for a subagent session. |
 | `list_agent_presets` | List the 159 bundled Cadre role presets plus any accepted global/project overrides. |
-| `list_skills` / `get_skill` | Discover and load skill instructions: this repository's own 7 bundled skills (a static port of `skills/*/SKILL.md`, with any `references/*.md` inlined -- see `skills/*.md` in this plugin), plus any accepted global/project overlays. Like agent presets, a bundled skill name cannot be silently shadowed by a same-named global/project skill. |
+| `list_skills` / `get_skill` | Discover and load skill instructions: this repository's own 9 bundled skills (a static port of `skills/*/SKILL.md`, with any `references/*.md` inlined -- see `skills/*.md` in this plugin), plus any accepted global/project overlays. Like agent presets, a bundled skill name cannot be silently shadowed by a same-named global/project skill. |
 | `save_handoff` / `read_handoff` | Share text between subagents in the same conversation. |
-| `create_review_subtask` / `write_wiki_page` / `write_evidence_comment` | GitLab evidence tools, reached via `cadre gitlab-evidence` (this plugin has no MCP client, so it cannot attach `suite/roster/orchestration/mcp/gitlab_server.py` directly -- see `suite/roster/orchestration/mcp/GITLAB-EVIDENCE.md`). All three require `GITLAB_SVC_TOKEN`/`GITLAB_BASE_URL`/`GITLAB_DOCS_PROJECT_ID` in this process's environment and return `status="unavailable"` if unset. `create_review_subtask`/`write_evidence_comment` are create-only, single-call. `write_wiki_page` is the `human_approval`-tier tool: its first call never writes -- it returns `status="confirmation_required"` plus a token that must be shown to a human and replayed unchanged on a second call before anything is written. |
+| `create_review_subtask` / `write_wiki_page` / `write_evidence_comment` | GitLab evidence tools, reached via `cadre gitlab-evidence` (this plugin has no MCP client, so it cannot attach `cadre mcp-gitlab-server` -- the Go GitLab evidence MCP server -- directly -- see `suite/roster/orchestration/GITLAB-EVIDENCE.md`). All three require `GITLAB_SVC_TOKEN`/`GITLAB_BASE_URL`/`GITLAB_DOCS_PROJECT_ID` in this process's environment and return `status="unavailable"` if unset. `create_review_subtask`/`write_evidence_comment` are create-only, single-call. `write_wiki_page` is the `human_approval`-tier tool: its first call never writes -- it returns `status="confirmation_required"` plus a token that must be shown to a human and replayed unchanged on a second call before anything is written. |
 
 Unlike the upstream `agents-squad` template, `start_subagent` has **no
 default preset**. Every call must name a known preset; there is no

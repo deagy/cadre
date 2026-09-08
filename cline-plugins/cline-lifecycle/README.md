@@ -82,11 +82,13 @@ supports.
 `agentic-sdlc` kernel binary — gate state and transitions live entirely in
 that kernel, a separate repository (`deagy/cadre-kernel`), independently
 versioned and installed and invoked as a standalone binary; see root
-`CLAUDE.md`'s kernel ownership boundary. Install
-it first via one of the lifecycle plugins' bundled bootstrap scripts, e.g.:
+`CLAUDE.md`'s kernel ownership boundary. Once the kernel is resolvable
+(`AGENTIC_SDLC_BIN`, `PATH`, or the shim `./install.sh --with-lifecycle`
+packages), initialize a project's lifecycle tracking against it with:
 
 ```sh
-python3 plugins/lifecycle/tools/bootstrap_sdlc.py --root /path/to/project --profile secure-cloud
+cadre sdlc init --root /path/to/your-project --profile secure-cloud \
+  --project-id your-project --classification internal --runner claude
 ```
 
 Every tool below fails with a structured error (not a throw) if the kernel
