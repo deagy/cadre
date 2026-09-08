@@ -784,7 +784,16 @@ type pendingGitLabConfirmation struct {
 }
 
 var (
-	gitlabConfirmationMu      sync.Mutex
+	gitlabConfirmationMu sync.Mutex
+	// gitlabConfirmationPending stores pending confirmation tokens for wiki writes.
+	// This map persists only for the lifetime of the current process. When used via
+	// cadre mcp-gitlab-server (a long-lived stdio process), a user can issue a token
+	// on the first request and replay it on the second within the same process.
+	// However, cadre gitlab-evidence write-wiki-page is a plain CLI subcommand where
+	// each invocation is a fresh process with an empty map -- a first call will issue
+	// a token that the second invocation cannot consume, causing a "confirmation_token
+	// is unknown or already used" error. For wiki writes requiring confirmation, use
+	// cadre mcp-gitlab-server instead, where the same process can handle both steps.
 	gitlabConfirmationPending = map[string]pendingGitLabConfirmation{}
 )
 
@@ -852,6 +861,17 @@ var validWikiFormats = map[string]bool{"markdown": true, "rdoc": true, "asciidoc
 // status="confirmation_required" plus a token bound to the exact (slug,
 // title, format, content hash) tuple, and a second call replaying that
 // token is required before any GitLab write happens.
+//
+// PROCESS-LIFETIME CONSTRAINT: confirmation tokens are stored in a package-level
+// in-memory map that persists only for the lifetime of the current process.
+// When called via cadre mcp-gitlab-server (a long-lived stdio process), the user
+// can issue a token on the first request and replay it on the second within the
+// same process. When called via cadre gitlab-evidence write-wiki-page (a plain CLI
+// subcommand), each invocation is a fresh process with an empty token map -- a
+// first call will issue a token that the second invocation cannot consume. For
+// wiki writes requiring confirmation, use cadre mcp-gitlab-server if you need to
+// complete a two-step confirmation flow; the CLI form will always deny a replayed
+// token with "confirmation_token is unknown or already used".
 //
 // Quick-action scope note: unlike CreateGitLabReviewSubtask's description
 // and WriteGitLabEvidenceComment's content, content here is NOT run

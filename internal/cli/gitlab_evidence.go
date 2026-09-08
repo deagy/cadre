@@ -15,6 +15,13 @@ import (
 // gitlab.go's package doc for the hard invariant this integration
 // maintains (never closes/reopens/resolves/relabels-away-from-open-review
 // an issue) and the scope boundary it documents.
+//
+// NOTE: write-wiki-page's confirmation flow (if the wiki write requires
+// human confirmation) only works within the same process. Since each CLI
+// invocation is a separate process, a token issued on the first call cannot
+// be replayed on the second. For wiki writes requiring confirmation, use
+// cadre mcp-gitlab-server instead, where the same process can handle both
+// the initial confirmation request and the confirmation replay.
 func GitLabEvidenceCmd(args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "usage: cadre gitlab-evidence <create-review-subtask|write-wiki-page|write-evidence-comment> [args...]")
@@ -88,7 +95,7 @@ func gitlabWriteWikiPageCmd(args []string) int {
 	title := fs.String("title", "", "Wiki page title (required)")
 	content := fs.String("content", "", "Wiki page content (required)")
 	format := fs.String("format", "markdown", "markdown, rdoc, asciidoc, or org")
-	confirmationToken := fs.String("confirmation-token", "", "Confirmation token from a prior confirmation_required response")
+	confirmationToken := fs.String("confirmation-token", "", "Confirmation token from a prior confirmation_required response (see usage note below)")
 	auditPath := fs.String("audit-path", "", "Override the audit log path")
 	if err := fs.Parse(args); err != nil {
 		return parseExitCode(err)
@@ -98,7 +105,30 @@ func gitlabWriteWikiPageCmd(args []string) int {
 		return 2
 	}
 	result := orchestration.WriteGitLabWikiPage(nil, *slug, *title, *content, *format, *confirmationToken, *auditPath)
+	printWikiPageCLIProcessLifetimeNoteIfNeeded(result, *confirmationToken)
 	return printGitLabResult(result)
+}
+
+// printWikiPageCLIProcessLifetimeNoteIfNeeded prints a clarifying message to
+// stderr when result is a confirmation_required response and no token was
+// supplied on this call. cadre gitlab-evidence write-wiki-page's confirmation
+// flow requires the same process to handle both the initial request and the
+// token replay (see gitlabConfirmationPending's doc comment in gitlab.go);
+// each CLI invocation is a separate process, so a token issued by one
+// invocation can never be replayed by another. This note tells the operator
+// why, and points at cadre mcp-gitlab-server as the form that can complete
+// the two-step flow.
+func printWikiPageCLIProcessLifetimeNoteIfNeeded(result map[string]any, confirmationToken string) {
+	status, ok := result["status"].(string)
+	if !ok || status != "confirmation_required" || confirmationToken != "" {
+		return
+	}
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Note: cadre gitlab-evidence write-wiki-page's confirmation flow requires the same process to handle both steps.")
+	fmt.Fprintln(os.Stderr, "Each CLI invocation is a separate process, so a token issued on the first call cannot be used on the second.")
+	fmt.Fprintln(os.Stderr, "To complete a wiki write that requires human confirmation, use cadre mcp-gitlab-server instead,")
+	fmt.Fprintln(os.Stderr, "where the same process can issue and replay the confirmation token.")
+	fmt.Fprintln(os.Stderr, "")
 }
 
 func gitlabWriteEvidenceCommentCmd(args []string) int {
