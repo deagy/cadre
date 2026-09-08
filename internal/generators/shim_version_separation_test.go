@@ -103,3 +103,25 @@ func TestTheVersionFlagStillReadsThePluginManifestAtRuntime(t *testing.T) {
 		}
 	}
 }
+
+func TestTheVersionFlagNamesTheCliPinBesideThePluginVersion(t *testing.T) {
+	// `cadre --version` answered with the plugin's version alone, and
+	// `cadre upgrade --check` with the CLI's; a reader with both in front of
+	// them saw a mismatch that was not one. The fast path prints both, and
+	// the CLI half must be the pinned value, not something read at runtime
+	// (see the test above for why the pin stays a pin).
+	shim := generatedShim(t)
+	match := cliVersionAssignment.FindStringSubmatch(shim)
+	if match == nil {
+		t.Fatal("CADRE_CLI_VERSION is not assigned a quoted value")
+	}
+	start := strings.Index(shim, `if [ "$command_name" = "--version"`)
+	if start < 0 {
+		t.Fatal("the shim has no --version fast path")
+	}
+	end := strings.Index(shim[start:], "fi")
+	section := shim[start : start+end+2]
+	if !strings.Contains(section, "(cli "+match[1]+")") {
+		t.Errorf("the --version fast path does not print the CLI pin %q beside the plugin version:\n%s", match[1], section)
+	}
+}

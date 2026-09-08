@@ -1618,7 +1618,12 @@ func (g *pluginGenerator) generateBinWrapper(pluginRoot string) (string, error) 
 		`if [ "$command_name" = "--version" ] && [ "$#" -eq 0 ]; then`,
 		`  plugin_version=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_ROOT/.claude-plugin/plugin.json")`,
 		`  [ -n "$plugin_version" ] || { echo "cadre: could not read plugin version from .claude-plugin/plugin.json" >&2; exit 1; }`,
-		`  printf 'cadre %s\n' "$plugin_version"`,
+		// The plugin and the CLI binary are versioned separately, and a reader
+		// of `cadre 0.24.5` beside `cadre upgrade --check` saying 0.7.13 had
+		// no way to know that. Print both; the CLI pin is the one the
+		// launcher downloads, so it is embedded here at generation time like
+		// CADRE_CLI_VERSION below.
+		fmt.Sprintf(`  printf 'cadre %%s (cli %s)\n' "$plugin_version"`, cliVersion),
 		`  exit 0`,
 		`fi`,
 		"",
@@ -1963,6 +1968,17 @@ func (g *pluginGenerator) generateSuiteCopy(pluginRoot string, writeReadme bool)
 		}
 		written = append(written, target)
 	}
+
+	// The subcommand table travels with the suite. The launcher exports
+	// CADRE_REPO_ROOT=suite/, and the binary looks for bin/subcommands.tsv
+	// there first; without it the search fell through to the cwd's
+	// ancestors, where any older checkout's table was taken as this
+	// install's own.
+	tableTarget := filepath.Join(pluginRoot, "suite", "bin", "subcommands.tsv")
+	if err := copyFile(filepath.Join(g.repoRoot, "bin", "subcommands.tsv"), tableTarget); err != nil {
+		return nil, err
+	}
+	written = append(written, tableTarget)
 	return written, nil
 }
 

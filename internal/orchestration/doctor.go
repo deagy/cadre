@@ -24,7 +24,12 @@ const (
 	InstallKindGoInstall   = "go-install"
 	InstallKindPipInstall  = "pip-install"
 	InstallKindPluginCache = "plugin-cache"
-	InstallKindUnknown     = "unknown"
+	// InstallKindPluginLauncher is the packaged plugin's bin/cadre execing
+	// the release binary it cached under ~/.cache/cadre/: the binary sits in
+	// no plugins/cache/... path, so only the launcher's environment reveals
+	// where it was launched from.
+	InstallKindPluginLauncher = "plugin-launcher"
+	InstallKindUnknown        = "unknown"
 )
 
 // MinGoVersion tracks go.mod's `go` directive. Kept as a plain constant
@@ -204,6 +209,33 @@ func ClassifyRunningBinary(runningFile string) (string, string, string) {
 			"than guessing"
 }
 
+// ClassifyInstall is ClassifyRunningBinary with one more source of evidence:
+// cadreRepoRoot, the CADRE_REPO_ROOT the packaged launcher exports before it
+// execs the cached release binary. That binary lives under ~/.cache/cadre/,
+// outside every path shape ClassifyRunningBinary knows, so the install every
+// Claude Code user has classified as unknown. The launcher points
+// CADRE_REPO_ROOT at the package's suite/, and suite/'s parent carries the
+// plugin manifest; both have to hold before the environment is believed,
+// because bin/cadre in a checkout exports the same variable.
+func ClassifyInstall(runningFile, cadreRepoRoot string) (string, string, string) {
+	kind, root, detail := ClassifyRunningBinary(runningFile)
+	if kind != InstallKindUnknown || cadreRepoRoot == "" {
+		return kind, root, detail
+	}
+	suite, err := filepath.Abs(cadreRepoRoot)
+	if err != nil || filepath.Base(suite) != "suite" {
+		return kind, root, detail
+	}
+	pluginRoot := filepath.Dir(suite)
+	manifest := filepath.Join(pluginRoot, ".claude-plugin", "plugin.json")
+	if info, err := os.Stat(manifest); err != nil || !info.Mode().IsRegular() {
+		return kind, root, detail
+	}
+	return InstallKindPluginLauncher, pluginRoot,
+		"running " + runningFile + " for the packaged plugin at " + pluginRoot +
+			" (its bin/cadre launcher exported CADRE_REPO_ROOT=" + suite + ")"
+}
+
 // pipInstallRoot reports the install root when runningFile sits inside a
 // pip or pipx installation, or "" when it does not.
 //
@@ -291,7 +323,7 @@ func GatherDoctorReport(cwd, runningFile string) DoctorReport {
 		}
 	}
 
-	kind, installRoot, detail := ClassifyRunningBinary(runningFile)
+	kind, installRoot, detail := ClassifyInstall(runningFile, os.Getenv("CADRE_REPO_ROOT"))
 	goVersion := runtime.Version()
 
 	report := DoctorReport{

@@ -342,6 +342,7 @@ func TestGeneratePluginPackage(t *testing.T) {
 		"agents/backend-engineer.md",
 		"codex-agents/agents-backend-engineer.toml",
 		"suite/README.md",
+		"suite/bin/subcommands.tsv",
 		"suite/roster/catalog.yaml",
 		"suite/roster/orchestration/routing.json",
 		"skills/run-agent-orchestration/SKILL.md",

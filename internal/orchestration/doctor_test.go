@@ -363,3 +363,52 @@ func TestAMismatchIsReportedForADifferentCheckout(t *testing.T) {
 		t.Error("a binary from a different checkout was not reported as a mismatch")
 	}
 }
+
+func TestClassifyInstallPluginLauncher(t *testing.T) {
+	// The packaged plugin's bin/cadre launcher execs a release binary it
+	// cached under ~/.cache/cadre/, so the running file sits in no
+	// plugins/cache/... path and ClassifyRunningBinary can only answer
+	// "unknown" -- for the install every Claude Code user has. The launcher
+	// does leave a trace: it exports CADRE_REPO_ROOT pointing at the
+	// package's suite/, and suite/'s parent carries the plugin manifest.
+	dir := t.TempDir()
+	pluginRoot := filepath.Join(dir, "plugins", "cache", "cadre-team", "cadre", "0.24.5")
+	suite := filepath.Join(pluginRoot, "suite")
+	if err := os.MkdirAll(filepath.Join(pluginRoot, ".claude-plugin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(suite, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginRoot, ".claude-plugin", "plugin.json"), []byte(`{"version":"0.24.5"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cache := filepath.Join(dir, "cache", "cadre")
+	if err := os.MkdirAll(cache, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	binary := filepath.Join(cache, "cadre-v0.7.13-linux-amd64")
+
+	kind, installRoot, detail := ClassifyInstall(binary, suite)
+	if kind != InstallKindPluginLauncher {
+		t.Fatalf("kind = %q, want %q (detail: %s)", kind, InstallKindPluginLauncher, detail)
+	}
+	if installRoot != pluginRoot {
+		t.Fatalf("installRoot = %q, want %q", installRoot, pluginRoot)
+	}
+	if !strings.Contains(detail, binary) || !strings.Contains(detail, pluginRoot) {
+		t.Fatalf("detail should name both the binary and the plugin root, got %q", detail)
+	}
+
+	// Without the launcher's environment the same binary stays unknown: the
+	// manifest alone is not evidence that this process was launched by it.
+	if kind, _, _ := ClassifyInstall(binary, ""); kind != InstallKindUnknown {
+		t.Fatalf("kind without CADRE_REPO_ROOT = %q, want %q", kind, InstallKindUnknown)
+	}
+
+	// A CADRE_REPO_ROOT that is a checkout (bin/cadre exports it too) must
+	// not be mistaken for a package: no manifest beside it, no launcher.
+	if kind, _, _ := ClassifyInstall(binary, dir); kind != InstallKindUnknown {
+		t.Fatalf("kind with a non-package CADRE_REPO_ROOT = %q, want %q", kind, InstallKindUnknown)
+	}
+}

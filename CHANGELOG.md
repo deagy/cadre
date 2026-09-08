@@ -175,6 +175,23 @@ check and reporting "nothing to do". See
   Git-URL install does, instead of `cline-plugins/cline` alone. The 3.0.46
   "cyclic structures" note in `docs/INSTALL.md` is replaced with what was
   observed on 3.0.55.
+- **A stale checkout above the cwd no longer takes every subcommand down.**
+  The packaged plugin shipped no `bin/subcommands.tsv`, so the binary's
+  search fell through `CADRE_REPO_ROOT` to the cwd's ancestors and took any
+  older checkout's three-column table as its own; `cadre help` and `cadre
+  doctor` then exited 1 with "malformed row" from any directory under it.
+  The table now ships at `suite/bin/subcommands.tsv`, and a table the
+  dispatcher found on its own but cannot parse is reported on stderr and
+  ignored rather than fatal (one the caller named explicitly still is).
+- **`cadre doctor` classifies the plugin-launcher install.** The launcher
+  execs the release binary it caches under `~/.cache/cadre/`, which matched
+  none of doctor's path shapes, so the install every Claude Code user has
+  reported `install kind: unknown`. It is now `plugin-launcher`, recognised
+  from the `CADRE_REPO_ROOT` the launcher exports when a plugin manifest
+  sits beside it.
+- **`cadre --version` names both versions.** The launcher printed the plugin
+  version alone while `cadre upgrade --check` printed the CLI's; it now
+  prints `cadre <plugin> (cli <pin>)`.
 
 **`cadre init` is defaults-first.** It no longer requires `--answers` or `--interactive`; running with neither keeps every shipped default and writes nothing, which is a complete run rather than a skipped one (overlays are sparse, so keeping a default means writing no overlay for that field). See [`roster/shared/README.md`](roster/shared/README.md)'s "Generating overlays with `cadre init`" for the three levels of effort.
 

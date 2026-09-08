@@ -306,3 +306,39 @@ func TestRun_SelectRouting(t *testing.T) {
 		t.Errorf("Run() for select code = %d, want 2", code)
 	}
 }
+
+func TestRun_DerivedMalformedTableIsSurvivable(t *testing.T) {
+	// A table the dispatcher went looking for itself and found in the
+	// wrong place must not take every subcommand down with it. The packaged
+	// plugin shipped no bin/subcommands.tsv, so FindCadreFile fell through
+	// to the cwd ancestor walk and found a pre-Go checkout's three-column
+	// table; `cadre help` and `cadre doctor` then exited 1 with "malformed
+	// row" from inside any directory under that checkout. Only a table the
+	// caller named explicitly is a configuration error worth stopping for.
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(dir, "bin", "subcommands.tsv")
+	if err := os.WriteFile(stale, []byte("select\tagents/orchestration/src/select_agents.py\tDeterministic agent/gate selection\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CADRE_REPO_ROOT", "")
+	t.Chdir(dir)
+
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"help"}, Deps{
+		Stdout:   &stdout,
+		Stderr:   &stderr,
+		RepoRoot: dir,
+	})
+	if code != 0 {
+		t.Fatalf("Run(help) code = %d, want 0; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Usage: cadre <subcommand>") {
+		t.Errorf("stdout missing usage text: %s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "subcommands.tsv") {
+		t.Errorf("stderr should name the table it ignored, got: %q", stderr.String())
+	}
+}

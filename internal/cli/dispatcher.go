@@ -184,14 +184,21 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 	}
 	subcommands, err := LoadSubcommands(subcommandsPath)
 	if err != nil {
-		// A table this dispatcher went looking for and could not find is
-		// survivable: every subcommand it serves is built in, and the table
-		// only supplies usage text plus the Python-script fallback. A table
-		// the *caller* named explicitly is not -- that is a configuration
+		// A table this dispatcher went looking for itself is survivable
+		// whether it is missing or unreadable: every subcommand it serves is
+		// built in, and the table only supplies usage text. An unreadable
+		// one is worth a line on stderr, because the usual cause is the cwd
+		// ancestor walk landing on a pre-Go checkout's three-column table --
+		// which used to fail `help` and `doctor` alike from any directory
+		// under that checkout, with nothing saying where the table came
+		// from. A table the *caller* named explicitly is a configuration
 		// error, and silently continuing without it would hide a typo.
-		if !derived || !errors.Is(err, fs.ErrNotExist) {
+		if !derived {
 			writef(deps.Stderr, "cadre: %s\n", err)
 			return 1
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			writef(deps.Stderr, "cadre: ignoring %s: %s\n", subcommandsPath, err)
 		}
 		subcommands = nil
 	}
