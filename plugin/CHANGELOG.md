@@ -15,6 +15,28 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.24.6](https://github.com/deagy/cadre/releases/tag/plugin-v0.24.6) - 2026-09-08
+
+### Fixed
+
+- **The launcher runs CLI 0.7.14.** `bin/cadre` pins the CLI version it
+  downloads, and 0.24.5 still pinned 0.7.13 after `cli-v0.7.14` shipped, so
+  `cadre upgrade --check` advertised a version the launcher would not run
+  (#428). This release moves the pin; a CLI release is now followed by a
+  plugin release so the two stay paired.
+- **A stale checkout above the cwd no longer takes every subcommand down.**
+  The package ships `suite/bin/subcommands.tsv`, so the binary's dispatch
+  table search stops at the package instead of falling through to whatever
+  older cadre checkout sits above the working directory, which made `cadre
+  help` and `cadre doctor` exit 1 with "malformed row" from any directory
+  under one.
+- **`cadre doctor` classifies this install.** The launcher's cached release
+  binary under `~/.cache/cadre/` matched none of doctor's path shapes and was
+  reported as `install kind: unknown`; it is now `plugin-launcher`.
+- **`cadre --version` names both versions.** The launcher printed the plugin
+  version alone while `cadre upgrade --check` printed the CLI's; it now
+  prints `cadre <plugin> (cli <pin>)`.
+
 ## [0.24.5](https://github.com/deagy/cadre/releases/tag/plugin-v0.24.5) - 2026-09-02
 
 ### Fixed
