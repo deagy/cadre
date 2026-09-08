@@ -55,4 +55,4 @@ repos:
         entry: ./bin/cadre generate-role-metadata --check
         language: system
         pass_filenames: false
-        files: "roster/.*AGENT\\.md$|roster/catalog\\.yaml$|roster/catalog-order\\.txt$"
+        files: "roster/.*AGENT\\.md$|roster/catalog\\.yaml$|roster/catalog-order\\.txt$|roster/shared/.*"

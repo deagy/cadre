@@ -642,6 +642,14 @@ jobs:
       # hardcoded list of top-level directories, which silently stopped
       # covering anything newly generated -- it missed the per-plugin
       # tools/, bin/, and hooks/ fan-out entirely.
+      #
+      # generate-role-metadata --check runs first: it validates that
+      # catalog.yaml is current against the role definitions. generate-plugin's
+      # correctness assumption depends on catalog.yaml already being current,
+      # so the order matters here as it does in the documented regeneration
+      # sequence (generate-role-metadata -> generate-plugin -> port-cline-agents).
+      - name: Verify role metadata is current
+        run: ./bin/cadre generate-role-metadata --check
       - name: Fail on any difference from the committed distribution
         run: ./bin/cadre generate-plugin --check --output plugin
 
