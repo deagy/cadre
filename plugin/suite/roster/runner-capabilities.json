@@ -3,32 +3,81 @@
   "version": 1,
   "capability_tiers": {
     "read_only": {
-      "tools": ["Read", "Grep", "Glob"],
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob"
+      ],
       "sandbox_mode": "read-only"
     },
     "document_author": {
-      "tools": ["Read", "Grep", "Glob", "Bash", "Edit", "Write"],
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Edit",
+        "Write"
+      ],
       "sandbox_mode": "workspace-write"
     },
     "code_author": {
-      "tools": ["Read", "Grep", "Glob", "Bash", "Edit", "Write"],
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Edit",
+        "Write"
+      ],
       "sandbox_mode": "workspace-write"
     },
     "test_author": {
-      "tools": ["Read", "Grep", "Glob", "Bash", "Edit", "Write"],
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Edit",
+        "Write"
+      ],
       "sandbox_mode": "workspace-write"
     },
     "environment_operator": {
-      "tools": ["Read", "Grep", "Glob", "Bash", "Edit", "Write"],
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Edit",
+        "Write"
+      ],
       "sandbox_mode": "workspace-write"
     }
   },
   "model_tiers": {
-    "opus": { "codex_model": "gpt-5.6-sol", "reasoning_effort": "high", "cline_tier": "high" },
-    "sonnet": { "codex_model": "gpt-5.6-terra", "reasoning_effort": "medium", "cline_tier": "mid" },
-    "haiku": { "codex_model": "gpt-5.6-luna", "reasoning_effort": "low", "cline_tier": "low" }
+    "opus": {
+      "codex_model": "gpt-5.6-sol",
+      "reasoning_effort": "high",
+      "cline_tier": "high"
+    },
+    "sonnet": {
+      "codex_model": "gpt-5.6-terra",
+      "reasoning_effort": "medium",
+      "cline_tier": "mid"
+    },
+    "haiku": {
+      "codex_model": "gpt-5.6-luna",
+      "reasoning_effort": "low",
+      "cline_tier": "low"
+    }
   },
-  "allowed_reasoning_efforts": ["low", "medium", "high", "xhigh"],
+  "allowed_reasoning_efforts": [
+    "low",
+    "medium",
+    "high",
+    "xhigh"
+  ],
   "runners": {
     "claude-code": {
       "has_generated_wrapper": true,
@@ -36,7 +85,11 @@
       "communication_mode_peer_support": "gated",
       "peer_support_gate": "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1",
       "nested_teams_supported": false,
-      "team_size_guidance": { "minimum": 3, "maximum": 5, "note": "disjoint file ownership per teammate" },
+      "team_size_guidance": {
+        "minimum": 3,
+        "maximum": 5,
+        "note": "disjoint file ownership per teammate"
+      },
       "named_agent_dispatch_supported": true,
       "named_agent_dispatch_workaround": null,
       "concurrency_bound_config_key": null,
@@ -93,6 +146,22 @@
       "prompt_hook_mechanism": null,
       "tool_gate_support": "none",
       "tool_gate_mechanism": null
+    },
+    "hermes": {
+      "has_generated_wrapper": true,
+      "dispatch_naming": "delegate_task(goal, context) with the role skill's contract as context; the skill name is the role id (hermes-plugins/skills/cadre/<domain>/<role-id>/SKILL.md, loaded with skill_view)",
+      "communication_mode_peer_support": "no",
+      "peer_support_gate": null,
+      "nested_teams_supported": false,
+      "team_size_guidance": null,
+      "named_agent_dispatch_supported": false,
+      "named_agent_dispatch_workaround": "skill_view the role skill and pass its contract verbatim as delegate_task context, with the working directory from pwd; the cadre-orchestrator skill's Dispatch Protocol is that procedure",
+      "concurrency_bound_config_key": "delegation.max_concurrent_children",
+      "native_workspace_isolation": null,
+      "prompt_hook_support": "none",
+      "prompt_hook_mechanism": null,
+      "tool_gate_support": "blocking",
+      "tool_gate_mechanism": "pre_tool_call hook: a shell hook under hooks: in cli-config.yaml or a plugin hook; stdout {\"action\": \"block\", \"message\": ...} (or the Claude-Code-style {\"decision\": \"block\"}) refuses the call before it runs. delegation.worktree_isolation (default false) gives each child its own worktree when enabled; off by default, so native_workspace_isolation stays null"
     }
   }
 }

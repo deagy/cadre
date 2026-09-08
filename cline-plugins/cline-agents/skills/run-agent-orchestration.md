@@ -658,18 +658,19 @@ authoritative for the *why*.
   tool and not a use of the host session's own multi-agent primitives — see
   "Why a plugin can't reach the host session's own multi-agent primitives"
   below for how it gets around that limitation instead.
-  - **Dispatch fails closed without operator provider configuration.**
-    `cline-agents` ships no default provider or model — an earlier version
-    silently defaulted to Anthropic and required `ANTHROPIC_API_KEY`
-    regardless of how Cline itself was configured (issue #142). A dispatch
-    needs `CLINE_AGENTS_PROVIDER_ID` plus at least one of
-    `CLINE_AGENTS_MODEL_HIGH`/`_MID`/`_LOW` or
-    `CLINE_AGENTS_MODEL_DEFAULT` set in the process environment before
-    calling `start_subagent`/`dispatch_selected_roles`; if nothing resolves
-    for a role's tier, the call fails before any session starts, naming the
-    missing variable, rather than falling back to a vendor. See that
-    plugin's `README.md` ("Model tiers and provider selection") for the full
-    resolution order and per-tier variables.
+  - **Dispatch never defaults to a vendor.** `cline-agents` ships no
+    default provider or model — an earlier version silently defaulted to
+    Anthropic and required `ANTHROPIC_API_KEY` regardless of how Cline itself
+    was configured (issue #142). A preset resolves its provider and model
+    from, in order: the per-call arguments, a global preset's frontmatter,
+    `CLINE_AGENTS_PROVIDER_ID` with `CLINE_AGENTS_MODEL_HIGH`/`_MID`/`_LOW` or
+    `CLINE_AGENTS_MODEL_DEFAULT`, and then the dispatching session's own
+    currently active provider and model as a pair; only when none of those
+    resolves does the call fail before any session starts, naming what is
+    missing. A dispatch with no `CLINE_AGENTS_*` set therefore runs on
+    whatever the session runs on (observed 2026-09-08 against a local
+    OpenAI-compatible endpoint). See that plugin's `README.md` ("Model tiers
+    and provider selection") for the full resolution order.
   - **Configure a model with at least a 32k context window.** Role briefs
     carry their shared-policy block embedded verbatim, because a dispatched
     subagent is an isolated session with no other channel to receive it. That
@@ -973,6 +974,65 @@ working mechanism:
   profiles stack above was found — omitting a specific issue number here
   rather than inventing one, per this suite's policy on unverifiable
   citations.
+
+## Hermes
+
+[Nous Research's Hermes agent](https://hermes-agent.nousresearch.com/docs/)
+loads this repository's roles as skills, not as agents: `hermes-plugins/skills/cadre/`
+holds 172 generated `SKILL.md` files (159 roles under `<domain>/<role-id>/`,
+12 `workflow-<name>/` playbooks, and `cadre-orchestrator/` with a
+`references/` copy of the shared-policy corpus), produced by
+`cadre port-hermes-skills` from `roster/` and drift-guarded by
+`internal/generators/hermes_port_test.go`. `install.sh --runner=hermes`
+copies the tree to `$HERMES_HOME/skills/cadre/` (`~/.hermes/skills/cadre/`).
+
+- **Dispatch is `delegate_task`, and it carries no role name.** Hermes
+  spawns a child with a `goal` and a `context`; there is no preset, agent
+  type, or wrapper file. A role is dispatched by loading its skill
+  (`skill_view(name="<role-id>")`) and passing the contract sections
+  verbatim as `context`. The `cadre-orchestrator` skill's Dispatch Protocol
+  is that procedure, and every role skill's "Hermes Dispatch" section says
+  which Hermes tools its cadre capability tier permits. The tier is
+  advisory: Hermes has no per-child tool policy, so a read-only role is
+  read-only because its contract says so and the orchestrator checks the
+  result, not because the runner refused a write.
+- **The working directory is passed, never assumed, and never the home
+  directory.** Hermes's local terminal starts in `TERMINAL_CWD` or, unset,
+  in the process cwd, which the `hermes` launcher makes the home directory;
+  launch with `TERMINAL_CWD="$PWD"`. The orchestrator runs `pwd` first,
+  stops and asks if it prints the home directory or the task's paths are
+  not under it, and otherwise puts the path in every child's `goal` with a
+  `cd`-first, stop-if-wrong instruction. A live run on 2026-09-08 showed why: an
+  orchestrator without that rule told a child the working directory was the
+  user's home while the session sat two levels below it, and the child
+  explored the home directory. Children are scoped to that directory; a
+  result naming files elsewhere is out of scope. The rule is advisory: in a
+  probe launched without `TERMINAL_CWD`, the orchestrator named the
+  mismatch, offered the relaunch, and still dispatched a read-only child
+  into the home directory because the prompt said to dispatch.
+  `TERMINAL_CWD` at launch is the control that held; a `pre_tool_call` hook
+  refusing `delegate_task` while the terminal sits in the home directory
+  would be the enforceable one, and is not shipped.
+- **Selection uses the CLI when it is present.** With `cadre` on PATH the
+  orchestrator runs `cadre select --task ... --files ... --root <cwd>` and
+  dispatches the plan; only without the CLI does it fall back to the
+  catalog and route tables it carries, and it says so in the audit trail.
+  Two selectors disagreed for the same task before this rule.
+- **No peer messaging, no nesting.** Children report to the parent only,
+  and `delegate_task` is removed from a child's tool set, so every
+  `team_recipes` entry runs `orchestrator-relayed`. Concurrency is
+  `delegation.max_concurrent_children` in `~/.hermes/config.yaml`
+  (default 10). `delegation.worktree_isolation` (default false) gives each
+  child its own git worktree when enabled.
+- **A tool call can be refused; a prompt cannot be pre-processed.** A
+  `pre_tool_call` hook (`hooks:` in `cli-config.yaml`, or a plugin) returning
+  `{"action": "block", "message": ...}` stops the call before it runs, so a
+  policy is enforceable. Hermes has no hook that runs on the user's prompt
+  before the model sees it.
+- **Any OpenAI-compatible model.** `model.provider: custom` with
+  `model.base_url` in `~/.hermes/config.yaml`; the run that validated this
+  tree used a local vLLM. The 32k-context floor above applies: a role skill
+  plus the shared-policy pointer is the same brief size.
 
 ## Team communication contract
 

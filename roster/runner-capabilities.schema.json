@@ -40,12 +40,13 @@
     "runners": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["claude-code", "codex", "cline", "api"],
+      "required": ["claude-code", "codex", "cline", "api", "hermes"],
       "properties": {
         "claude-code": { "$ref": "#/$defs/runner" },
         "codex": { "$ref": "#/$defs/runner" },
         "cline": { "$ref": "#/$defs/runner" },
-        "api": { "$ref": "#/$defs/runner" }
+        "api": { "$ref": "#/$defs/runner" },
+        "hermes": { "$ref": "#/$defs/runner" }
       }
     }
   },

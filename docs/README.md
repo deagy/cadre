@@ -25,7 +25,7 @@ Use this index to choose the shortest useful path.
 | See what changed recently | [Changelog](../CHANGELOG.md) |
 | Browse roles by capability tier or lifecycle phase | [Capability index](capability-index.md) |
 | Browse this repository's skills | [Skills catalog](skills-catalog.md) |
-| Determine which runner (Claude Code / Codex CLI / Cline) is hosting a session | [Which runner am I in?](which-runner-am-i-in.md) |
+| Determine which runner (Claude Code / Codex CLI / Cline / Hermes) is hosting a session | [Which runner am I in?](which-runner-am-i-in.md) |
 | Contribute to this GitHub repository | [Contributing](../CONTRIBUTING.md) |
 | Follow the complete operating model | [Runbook](../roster/RUNBOOK.md) |
 | Read a historical record of a containerized-service direction cadre did not take | [Production Readiness Status](PRODUCTION_READINESS_STATUS.md), [Deployment Guide](DEPLOYMENT_GUIDE.md), [Operations Manual](OPERATIONS_MANUAL.md), [Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md), [Week 1-5 Infrastructure](WEEK1-5_INFRASTRUCTURE.md), [Phases 13-14 Roadmap](PHASES_13_14_ROADMAP.md) |

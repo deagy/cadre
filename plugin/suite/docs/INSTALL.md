@@ -65,7 +65,7 @@ commit SHA, so the pin is only as immutable as the tag.
 curl -fsSL https://raw.githubusercontent.com/deagy/cadre/main/install.sh | sh
 ```
 
-Installs for whichever of `claude`, `codex`, and `cline` it finds on `PATH`.
+Installs for whichever of `claude`, `codex`, `cline`, and `hermes` it finds on `PATH`.
 On Windows use [`install.ps1`](https://github.com/deagy/cadre/blob/main/install.ps1):
 
 ```powershell
@@ -88,7 +88,8 @@ through. What it touches, and nothing else:
 
 | Path | Why |
 | --- | --- |
-| `~/.cadre/dist` | a shallow checkout, used by Cline and for the `cadre` CLI |
+| `~/.cadre/dist` | a shallow checkout, used by Cline, Hermes and for the `cadre` CLI |
+| `~/.hermes/skills/cadre` | the Hermes skill tree, copied from that checkout (only when `hermes` is a target) |
 | `~/.local/bin/cadre` | symlink to that checkout's launcher |
 | `~/.codex/config.toml` | an MCP entry, in a fenced block, backed up first |
 | each runner's plugin store | via that runner's own CLI |
@@ -183,6 +184,45 @@ pins, so the plugins are built against the SDK the current cline ships
 (0.0.75). A cline much newer than that can change the shape of what the tool
 receives; `agents_select` in particular guards the `signal` it forwards to
 the child process for exactly that reason.
+
+## Hermes
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/deagy/cadre/main/install.sh | sh -s -- --runner=hermes
+```
+
+Hermes loads skills from `$HERMES_HOME/skills/` (`~/.hermes/skills/`) and
+`hermes skills install` takes one skill at a time, so the installer copies
+the whole tree: `hermes-plugins/skills/cadre/` from the checkout becomes
+`~/.hermes/skills/cadre/` (172 skills: 159 roles, 12 workflows, and
+`cadre-orchestrator`). Re-running replaces the tree, so a role the roster
+dropped does not linger; `--uninstall --runner=hermes` removes it, and only
+it, and only when it is a tree this installer wrote. By hand, from any
+checkout:
+
+```sh
+rm -rf ~/.hermes/skills/cadre && cp -R hermes-plugins/skills/cadre ~/.hermes/skills/cadre
+hermes skills list | grep -c cadre    # 172
+```
+
+Launch Hermes from the project with its terminal pointed there:
+
+```sh
+cd /path/to/your-project && TERMINAL_CWD="$PWD" hermes
+```
+
+Hermes's local terminal starts in the process's working directory, which the
+`hermes` launcher makes the home directory; without `TERMINAL_CWD` a `pwd`
+inside the session prints `~`. The orchestrator skill is told to stop and
+ask for the project directory rather than treat your home as a task's
+scope, but that is advisory: a probe without the variable still listed the
+home directory through a read-only child. Set the variable. The
+`cadre` CLI the installer links is what the orchestrator skill calls for
+role selection; without it the skill falls back to its own catalog copy.
+See [Which runner am I in?](which-runner-am-i-in.md) for what Hermes can
+and cannot do with a dispatched role, and
+[`hermes-plugins/README.md`](https://github.com/deagy/cadre/blob/main/hermes-plugins/README.md)
+for how the tree is generated (the tree is not part of the packaged plugin).
 
 ## From a checkout
 

@@ -965,6 +965,17 @@ written `plugin/` tree:
 ./bin/cadre port-cline-agents --root cline-plugins --source plugin
 ```
 
+The Hermes skill tree is the third derived output:
+
+```sh
+./bin/cadre port-hermes-skills
+```
+
+It reads `roster/` directly rather than `plugin/`, so it has no place in the
+ordering above beyond running after `generate-role-metadata`; its guard is
+`internal/generators/hermes_port_test.go`, which diffs the committed
+`hermes-plugins/skills/cadre/` against a fresh port.
+
 Its guard is separate too: `internal/generators/cline_port_test.go` compares
 the committed mirror byte-for-byte against a fresh port. It is a Go test, so
 it runs in CI's `cmd/, internal/` job rather than `generated-content` -- and
