@@ -11,6 +11,7 @@ Use this index to choose the shortest useful path.
 
 | Goal | Start here |
 | --- | --- |
+| **New here** | **[cadre, the kernel, and recall](the-three-repositories.md)** — what the three are, how they connect, and in what order to adopt them |
 | **Install it** | **[Installing Cadre](INSTALL.md)** — the canonical guide for every runner |
 | Roll it out to a fleet | [Enterprise deployment](enterprise.md) |
 | Understand how this repository got its shape | [Monorepo migration](migration/monorepo-migration.md) |
@@ -29,6 +30,7 @@ Use this index to choose the shortest useful path.
 | Determine which runner (Claude Code / Codex CLI / Cline) is hosting a session | [Which runner am I in?](which-runner-am-i-in.md) |
 | Contribute to this GitHub repository | [Contributing](../CONTRIBUTING.md) |
 | Follow the complete operating model | [Runbook](../roster/RUNBOOK.md) |
+| Read a historical record of a containerized-service direction cadre did not take | [Production Readiness Status](PRODUCTION_READINESS_STATUS.md), [Deployment Guide](DEPLOYMENT_GUIDE.md), [Operations Manual](OPERATIONS_MANUAL.md), [Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md), [Week 1-5 Infrastructure](WEEK1-5_INFRASTRUCTURE.md), [Phases 13-14 Roadmap](PHASES_13_14_ROADMAP.md) |
 
 ## Source of truth
 
