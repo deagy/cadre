@@ -25,7 +25,7 @@
   "devDependencies": {
     "@cline/core": "0.0.75",
     "typescript": "5.9.3",
-    "vitest": "4.1.10"
+    "vitest": "5.0.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
