@@ -24,7 +24,7 @@ Read `AGENTS.md` (repo-wide rules) and `roster/RUNBOOK.md` (the complete operati
 
 ## Commands
 
-All Python tooling requires Python 3.10+, resolved automatically by `bin/cadre` (`bin/cadre.ps1` on PowerShell) via `python3`/`python`/`py -3` — this does not pin an org-wide Python version. Run commands from the repository root unless noted.
+The CLI requires Go (`go.mod` pins `go 1.26.5`); `bin/cadre` (`bin/cadre.ps1` on PowerShell) builds and execs `cmd/cadre` with it, so no separate install step is needed beyond having `go` on `PATH`. Run commands from the repository root unless noted.
 
 ```sh
 # Core test suites (run standalone; no external services needed).
