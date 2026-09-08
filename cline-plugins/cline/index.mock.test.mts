@@ -72,6 +72,48 @@ async function registerTool() {
   return tools[0];
 }
 
+describe("agents_select execFile options (mocked child_process)", () => {
+  // Node validates `options.signal` itself: anything that is not a real
+  // AbortSignal makes execFile throw ERR_INVALID_ARG_TYPE before the child
+  // is spawned. The host that injects `AgentToolContext` is not obliged to
+  // hand over a real one -- cline 3.0.55 (@cline/sdk 0.0.75) passed a plain
+  // object, and agents_select failed on every call with "The
+  // \"options.signal\" property must be an instance of AbortSignal". The
+  // tool must forward only a usable signal and otherwise omit the option.
+  it("omits options.signal when the host context's signal is not an AbortSignal", async () => {
+    let seenOptions: Record<string, unknown> | undefined;
+    execFileMock.mockImplementation((_file, _args, options, callback) => {
+      seenOptions = options as Record<string, unknown>;
+      callback(null, JSON.stringify({ status: "ready" }), "");
+    });
+
+    const tool = await registerTool();
+    const result = (await tool.execute({ task: "test" }, { signal: { fake: true } })) as Record<
+      string,
+      unknown
+    >;
+
+    expect(seenOptions).toBeDefined();
+    expect("signal" in (seenOptions as Record<string, unknown>)).toBe(false);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe("ready");
+  });
+
+  it("forwards a real AbortSignal unchanged", async () => {
+    let seenOptions: Record<string, unknown> | undefined;
+    execFileMock.mockImplementation((_file, _args, options, callback) => {
+      seenOptions = options as Record<string, unknown>;
+      callback(null, JSON.stringify({ status: "ready" }), "");
+    });
+
+    const controller = new AbortController();
+    const tool = await registerTool();
+    await tool.execute({ task: "test" }, { signal: controller.signal });
+
+    expect((seenOptions as Record<string, unknown>).signal).toBe(controller.signal);
+  });
+});
+
 describe("agents_select catch path (mocked child_process)", () => {
   it("sanitizes a circular-reference error into a well-formed, JSON-serializable result instead of throwing", async () => {
     // Mirrors how a real Error's `cause` chain (or a library that attaches

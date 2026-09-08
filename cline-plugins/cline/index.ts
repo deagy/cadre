@@ -8,6 +8,26 @@ import { safeJsonStringify, truncateStr } from "@cline/shared";
 
 const execFileAsync = promisify(execFile);
 
+// execFileOptions builds the options for the `cadre select` child. The
+// host's AgentToolContext types `signal` as an optional AbortSignal, but the
+// value that actually arrives is the host's to choose: cline 3.0.55 handed
+// over a plain object, and Node's own argument validation then rejected
+// every call ("The \"options.signal\" property must be an instance of
+// AbortSignal") before the binary was spawned. The check here is the one
+// Node applies -- an object with an `aborted` property -- rather than
+// `instanceof`, which fails for a signal created in another realm that Node
+// would accept. Anything else is left out of the options entirely, so the
+// child simply runs without cancellation instead of never running at all.
+function execFileOptions(
+  cwd: string,
+  signal: unknown,
+): { cwd: string; signal?: AbortSignal } {
+  if (typeof signal === "object" && signal !== null && "aborted" in signal) {
+    return { cwd, signal: signal as AbortSignal };
+  }
+  return { cwd };
+}
+
 // Bounds the catch path's error/stderr text (see below). sanitizeToolResult
 // only guarantees JSON-serialization safety, not content redaction -- it
 // would happily pass through an arbitrarily large or path-laden blob
@@ -194,7 +214,7 @@ const setup = (api: SetupApi, ctx: SetupContext) => {
           const { stdout } = await execFileAsync(
             CADRE_BIN,
             buildSelectArgs(input, rootPath),
-            { cwd: rootPath, signal: context.signal },
+            execFileOptions(rootPath, context.signal),
           );
           return sanitizeToolResult(JSON.parse(stdout));
         } catch (caught) {
