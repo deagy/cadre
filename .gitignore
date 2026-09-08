@@ -136,6 +136,11 @@ cadre
 # because the ignore hides the replacement. That happened once.
 # internal/generators/packaged_tracking_test.go is what notices now.
 !plugin/bin/cadre
+# Same trap, second victim: the generated Hermes skill tree lives under
+# hermes-plugins/skills/cadre/ and the unanchored rule swallowed the whole
+# directory, so the first push of the port carried only its README while the
+# reproduce-the-committed-tree test passed locally against an untracked copy.
+!hermes-plugins/skills/cadre/
 /.cadre-build-cache/
 
 # `make wheel` staging: the per-platform binary and the unpacked wheel it is

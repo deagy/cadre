@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/denial.schema.json",
+  "title": "Agent Denial",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "denial_id",
+    "task_id",
+    "revision",
+    "denier",
+    "author_within_authority",
+    "findings",
+    "invalidates"
+  ],
+  "properties": {
+    "denial_id": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_-]+-[0-9]+$"
+    },
+    "task_id": { "type": "string", "minLength": 1 },
+    "revision": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The exact revision denied. A denial is void for any other revision."
+    },
+    "denier": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Role and instance, so independence on re-review can be evaluated."
+    },
+    "author_within_authority": {
+      "type": "boolean",
+      "description": "Whether the denied artifact's author is inside the issuer's authority. False for an objection against a decision held by a human gate authority, which is advisory: it voids nothing, consumes no amend budget, and carries no disposition."
+    },
+    "disposition": {
+      "enum": ["amend", "escalate", "halt"],
+      "description": "What happens to the work next. Absent when author_within_authority is false."
+    },
+    "findings": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Entries conform to finding.schema.json. A denial citing no finding is an opinion.",
+      "items": { "type": "object" }
+    },
+    "input_revisions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Revisions this task's inputs were bound to at dispatch. A live task holding a superseded input revision is void."
+    },
+    "reentry_step": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The earliest affected step, not the step that produced the denied artifact."
+    },
+    "invalidates": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Completed steps or outputs voided by this denial. May be empty, but must be stated; silence is not the same as nothing."
+    },
+    "amend_attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Which attempt of the amend budget this denial consumes."
+    },
+    "lift_condition": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What must be true for this denial to be satisfied, in terms the re-reviewer can observe."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "author_within_authority": { "const": false } }, "required": ["author_within_authority"] },
+      "then": { "not": { "required": ["disposition"] } },
+      "else": { "required": ["disposition"] }
+    },
+    {
+      "if": { "properties": { "disposition": { "const": "amend" } }, "required": ["disposition"] },
+      "then": { "required": ["reentry_step", "amend_attempt"] }
+    },
+    {
+      "if": { "properties": { "disposition": { "const": "halt" } }, "required": ["disposition"] },
+      "then": { "required": ["lift_condition"] }
+    }
+  ]
+}

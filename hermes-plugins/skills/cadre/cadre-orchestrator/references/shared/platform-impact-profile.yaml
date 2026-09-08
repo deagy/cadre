@@ -1,0 +1,127 @@
+profile_id: <stable-profile-id>
+status: draft
+
+# Applicability is applicable | not-applicable | unknown.
+# An applicable item must cite an authorized definition and evidence obligations.
+# Unknown applicability or undefined semantics blocks G3/G4/G5/G7 as relevant.
+# This template intentionally does not define platform terms.
+impact_categories:
+  - id: platform-phase
+    applicability: unknown
+    definition_reference: null
+    rationale: null
+    owner: null
+    evidence_refs: []
+  - id: platform-component
+    applicability: unknown
+    definition_reference: null
+    rationale: null
+    owner: null
+    evidence_refs: []
+  - id: participant-digital-ecosystem-relevance
+    applicability: unknown
+    definition_reference: null
+    rationale: null
+    owner: null
+    evidence_refs: []
+  - id: digital-domain-impact
+    applicability: unknown
+    definition_reference: null
+    rationale: null
+    owner: null
+    evidence_refs: []
+  - id: governance-policy-impact
+    applicability: unknown
+    definition_reference: null
+    rationale: null
+    owner: null
+    evidence_refs: []
+  - id: trust-impact
+    applicability: unknown
+    definition_reference: null
+    rationale: null
+    owner: null
+    evidence_refs: []
+  - id: time-impact
+    applicability: unknown
+    definition_reference: null
+    rationale: null
+    owner: null
+    evidence_refs: []
+  - id: qkms-crypto-impact
+    applicability: unknown
+    definition_reference: null
+    rationale: null
+    owner: null
+    evidence_refs: []
+  - id: data-jurisdiction-impact
+    applicability: unknown
+    definition_reference: null
+    rationale: null
+    owner: null
+    evidence_refs: []
+  - id: meridian-impact
+    applicability: unknown
+    definition_reference: null
+    rationale: null
+    owner: null
+    evidence_refs: []
+  - id: ron-persistence-impact
+    applicability: unknown
+    definition_reference: null
+    rationale: null
+    owner: null
+    evidence_refs: []
+  - id: layer-0-impact
+    applicability: unknown
+    definition_reference: null
+    rationale: null
+    owner: null
+    evidence_refs: []
+  - id: evidence-requirement
+    applicability: unknown
+    definition_reference: null
+    rationale: null
+    owner: null
+    evidence_refs: []
+  - id: accreditation-relevance
+    applicability: unknown
+    definition_reference: null
+    rationale: null
+    owner: null
+    evidence_refs: []
+
+specialized_boms:
+  - type: SBOM
+    applicability: unknown
+    definition_reference: null
+    owner: null
+    evidence_refs: []
+  - type: CBOM
+    applicability: unknown
+    definition_reference: null
+    owner: null
+    evidence_refs: []
+  - type: QBOM
+    applicability: unknown
+    definition_reference: null
+    owner: null
+    evidence_refs: []
+  - type: AI-BOM
+    applicability: unknown
+    definition_reference: null
+    owner: null
+    evidence_refs: []
+  - type: Trust-BOM
+    applicability: unknown
+    definition_reference: null
+    owner: null
+    evidence_refs: []
+  - type: Time-BOM
+    applicability: unknown
+    definition_reference: null
+    owner: null
+    evidence_refs: []
+
+blocking_unknowns:
+  - applicability and authorized definitions have not been supplied

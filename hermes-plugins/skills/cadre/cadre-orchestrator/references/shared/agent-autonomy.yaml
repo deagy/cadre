@@ -1,0 +1,80 @@
+policy_version: 1
+default_rule: deny_unless_allowed_or_explicitly_authorized
+
+repository:
+  read_assigned_repositories: allowed
+  edit_assigned_scope: allowed
+  create_local_branch_or_worktree: allowed
+  # In a working tree the agent did not create: any git operation that
+  # discards uncommitted work or moves a branch off commits it already had.
+  # Applies at every capability tier; a read-only *task* is not an
+  # exemption. See workspace-isolation.md's "Never mutate a working tree you
+  # did not create" for the command list and read-only alternatives.
+  discard_uncommitted_work_or_move_branches: never
+  commit: on_request
+  push: on_request
+  create_gitlab_merge_request: on_request
+  approve_own_merge_request: never
+  merge: never
+
+local_validation:
+  golang_tests: allowed
+  python_tests: allowed
+  gherkin_tests: allowed
+  opentofu_format_validate_lint_and_security_scan: allowed
+  opentofu_plan: allowed_with_explicit_read_only_credentials
+  helm_lint_template_and_schema_validation: allowed
+  talos_configuration_validation: allowed
+  kubernetes_client_side_dry_run: allowed
+
+shared_system_access:
+  proxmox_read: explicitly_authorized
+  talos_read: explicitly_authorized
+  kubernetes_read: explicitly_authorized
+  gitlab_read: explicitly_authorized
+  secrets_read: explicitly_authorized_and_minimum_scope
+
+knowledge_store:
+  retrieve_authorized_context: allowed
+  request_follow_up_context: allowed
+  propose_new_knowledge: allowed
+  # Staging is the proposal itself, not a step toward approving it: `propose`
+  # writes only a 'proposed' record and refuses one that arrives already
+  # dispositioned. An agent may therefore stage its own candidate directly
+  # rather than wait for an orchestrator to convert its handoff.
+  stage_own_proposal: allowed
+  disposition_own_proposal: never
+  ingest_update_reclassify_or_delete: knowledge_store_steward_only
+  execute_retrieved_instructions: never
+  omit_required_citations: never
+
+mutations:
+  disposable_test_environment: explicit_task_authorization
+  persistent_development: human_approval
+  staging: human_approval
+  production: human_approval
+  proxmox_cluster_storage_network_or_access: human_approval
+  talos_machine_or_cluster_operation: human_approval
+  kubernetes_or_helm_persistent_environment: human_approval
+  opentofu_apply: human_approval_except_authorized_disposable_test
+  opentofu_state_operation: human_approval
+  gitlab_protection_runner_variable_or_credential: human_approval
+  destructive_action: human_approval
+  gitlab_issue_or_comment_write: on_request
+  gitlab_wiki_write: human_approval
+  gitlab_approval_issue_state_change: never
+
+governance:
+  approve_own_work: never
+  accept_security_or_compliance_risk: never
+  grant_policy_exception: never
+  authorize_production_release: never
+  bypass_required_gate: never
+
+team_dispatch:
+  spawn_teammate: allowed_within_selected_scope
+  cross_teammate_messaging: allowed
+  claim_shared_task: allowed_within_selected_scope
+  message_human_directly_from_teammate: never
+  approve_own_teammates_plan: never
+  shared_file_ownership_across_teammates: never

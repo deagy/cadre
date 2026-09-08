@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/finding.schema.json",
+  "title": "Agent Finding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "severity", "status", "summary", "evidence", "recommendation", "owner"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[A-Z][A-Z0-9_-]+-[0-9]+$" },
+    "title": { "type": "string", "minLength": 1 },
+    "severity": { "enum": ["critical", "high", "medium", "low", "informational"] },
+    "status": { "enum": ["open", "accepted", "resolved", "false-positive"] },
+    "summary": { "type": "string", "minLength": 1 },
+    "affected_assets": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "evidence": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "recommendation": { "type": "string", "minLength": 1 },
+    "control_mappings": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "owner": { "type": ["string", "null"], "minLength": 1 },
+    "due_date": { "type": ["string", "null"], "format": "date" },
+    "exception_reference": { "type": ["string", "null"] }
+  }
+}

@@ -1,0 +1,162 @@
+policy_version: 1
+
+selection_rules:
+  prefer_standard_library_when_sufficient: true
+  preferred_is_not_mandatory_when_unneeded: true
+  require_justification_for_nonpreferred_dependency: true
+  require_justification_for_new_dependency: true
+  preserve_established_project_library_unless_change_is_approved: true
+  require_pinned_versions_in_go_mod_or_tool_definition: true
+  require_license_review: true
+  require_vulnerability_and_supply_chain_review: true
+  require_maintenance_health_review: true
+  require_transitive_dependency_review: true
+
+golang:
+  tools:
+    formatting:
+      - name: gofmt
+        status: required
+        source: go_toolchain
+        command: gofmt
+        version_policy: use_project_pinned_go_toolchain
+        usage: canonical Go source formatting
+        constraints:
+          - run_before_review_and_ci
+          - fail_ci_when_formatting_diff_exists
+
+      - name: goimports
+        status: required
+        module: golang.org/x/tools
+        tool_path: golang.org/x/tools/cmd/goimports
+        version_policy: pin_exact_reviewed_tool_version
+        usage: canonical Go import grouping and unused import cleanup
+        constraints:
+          - run_after_gofmt_or_as_the_final_formatting_pass
+          - fail_ci_when_import_formatting_diff_exists
+
+    linting:
+      - name: golangci_lint
+        status: required
+        module: github.com/golangci/golangci-lint/v2
+        tool_path: github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+        version_policy: pin_exact_reviewed_tool_version
+        usage: consolidated Go static analysis, style, security, and bug-risk linting
+        constraints:
+          - keep_project_configuration_reviewed_and_committed
+          - run_after_gofmt_goimports_go_vet_and_go_test_when_practical
+          - document_temporary_exclusions_with_owner_and_expiry
+
+  libraries:
+    http_routing:
+      - name: gorilla_multiplexer
+        status: preferred
+        module: github.com/gorilla/mux
+        import_path: github.com/gorilla/mux
+        version_policy: pin_project_approved_version
+        usage: HTTP request routing and URL matching
+
+    configuration:
+      - name: viper
+        status: preferred
+        module: github.com/spf13/viper
+        import_path: github.com/spf13/viper
+        version_policy: pin_project_approved_version
+        usage: application configuration from explicit approved sources
+        constraints:
+          - avoid package_global_configuration_state
+          - bind_and_validate_required_configuration_explicitly
+          - remote_configuration_providers_require_security_review
+
+    postgresql:
+      - name: pgx
+        status: preferred
+        module: github.com/jackc/pgx/v5
+        import_path: github.com/jackc/pgx/v5
+        pool_import_path: github.com/jackc/pgx/v5/pgxpool
+        version_policy: remain_within_reviewed_v5_releases
+        usage: PostgreSQL driver, connection pooling, and PostgreSQL-specific features
+        constraints:
+          - use_context_deadlines
+          - use_parameterized_queries
+          - bound_and_observe_connection_pools
+          - integration_test_transactions_migrations_and_failure_behavior
+
+    retry:
+      - name: cenkalti_backoff
+        status: preferred
+        module: github.com/cenkalti/backoff/v7
+        import_path: github.com/cenkalti/backoff/v7
+        version_policy: remain_within_reviewed_v7_releases
+        usage: bounded exponential retry for transient failures
+        constraints:
+          - require_context_cancellation_or_deadline
+          - set_attempt_or_elapsed_time_limit
+          - classify_permanent_errors
+          - do_not_retry_non_idempotent_operations_without_a_safety_design
+          - emit_retry_exhaustion_telemetry
+
+    gherkin:
+      - name: godog
+        status: preferred
+        module: github.com/cucumber/godog
+        import_path: github.com/cucumber/godog
+        version_policy: pin_project_approved_version
+        usage: execute Gherkin integration and regression specifications
+        constraints:
+          - integrate_with_go_test
+          - keep_scenarios_isolated_and_deterministic
+          - avoid_deprecated_cli_first_workflows
+
+    mocking:
+      - name: mockery
+        requested_alias: testify/mockery
+        status: preferred
+        type: code_generator
+        module: github.com/vektra/mockery/v2
+        tool_path: github.com/vektra/mockery/v2
+        generated_runtime_import: github.com/stretchr/testify/mock
+        version_policy: pin_exact_reviewed_tool_version
+        usage: generate Testify-compatible mocks from Go interfaces
+        constraints:
+          - commit_or_reproducibly_generate_mocks_according_to_project_policy
+          - identify_generated_files
+          - verify_generation_is_clean_in_gitlab_ci
+          - review_major_version_and_template_changes_before_upgrade
+
+    migrations:
+      - name: golang_migrate
+        status: preferred
+        module: github.com/golang-migrate/migrate/v4
+        import_path: github.com/golang-migrate/migrate/v4
+        version_policy: pin_project_approved_version
+        usage: PostgreSQL schema migrations (team-profile.yaml backend.migration_tool)
+        constraints:
+          - forward_only_migrations_preferred
+          - review_paired_up_and_down_migration_files
+          - test_up_then_down_then_up_in_ci_against_a_disposable_instance
+          - no_manual_production_schema_edits
+
+    assertions:
+      - name: testify_require
+        status: preferred
+        module: github.com/stretchr/testify
+        import_path: github.com/stretchr/testify/require
+        version_policy: pin_project_approved_v1_release
+        usage: fatal assertions for test prerequisites and unsafe continuation
+        constraints:
+          - call_from_the_test_goroutine
+
+      - name: testify_assert
+        status: preferred
+        module: github.com/stretchr/testify
+        import_path: github.com/stretchr/testify/assert
+        version_policy: pin_project_approved_v1_release
+        usage: nonfatal assertions when subsequent checks remain meaningful
+
+exceptions:
+  require_documented_technical_rationale: true
+  require_code_review: true
+  require_security_review_for_high_risk_dependency: true
+  require_owner: true
+  require_review_date: true

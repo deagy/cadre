@@ -1,0 +1,223 @@
+# NOTE: files under roster/shared/ are embedded verbatim into every generated
+# role wrapper (Claude Code + Codex, 71+ files) by internal/generators/plugin_generation.go,
+# including into a separately published public repository. Never add personal
+# names, emails, or other individual-identifying data here. Named human
+# approval/escalation authority belongs in a consuming project's own
+# local/untracked config or its agentic-sdlc lifecycle records, never here.
+# This file is optional: a project may have no team-profile.yaml at all (or an
+# emptied one), and roles should proceed on task-brief judgment when it's
+# absent rather than treating that as a defect.
+profile_version: 1
+status: active
+
+platform:
+  hosting_model: self-hosted
+  virtualization: proxmox
+  node_operating_system: talos
+  orchestration: kubernetes
+  package_deployment: helm
+
+infrastructure:
+  infrastructure_as_code: opentofu
+  infrastructure_as_code_note: OpenTofu chosen over Terraform CLI to avoid BUSL license terms; bpg/proxmox provider is drop-in compatible
+  desired_state_required: true
+  manual_configuration: exception_only
+  terraform_provider: bpg/proxmox, pinned ~> 0.66
+  state_backend: self-hosted MinIO, Terraform/OpenTofu s3 backend with native state locking, versioned bucket + scheduled replication/snapshot backup
+  policy_as_code: kyverno
+
+engineering:
+  primary_language: golang
+  secondary_languages:
+    - python
+  python_usage: when_necessary
+  dependency_versions: project_defined_and_pinned
+  library_policy: library-standards.yaml
+
+frontend:
+  ui_library: react
+  primary_language: typescript
+  secondary_language: javascript
+  javascript_usage: when_typescript_is_impractical
+  build_runtime: nodejs
+  react_framework: vite + react-router v7 (library mode)
+  node_version: "22 (LTS)"
+  package_manager: pnpm
+  build_tool: vite
+  styling_and_component_system: css-modules + headless component primitives (e.g. radix primitives)
+  unit_component_test_stack: vitest + react-testing-library
+  browser_end_to_end_test_stack: playwright
+  supported_browsers: latest 2 stable versions of Chrome, Firefox, Safari, Edge (evergreen)
+  accessibility_conformance_target: "WCAG 2.1 AA"
+
+backend:
+  primary_language: golang
+  secondary_language: python
+  database: postgresql
+  postgresql_version: "17"
+  postgresql_topology: single-primary + streaming replicas via CloudNativePG operator, 3-node minimum across distinct failure domains
+  postgresql_backup: pgBackRest or CNPG Barman Cloud plugin to S3-compatible object storage, continuous WAL archiving; target RPO <= 5 min, RTO <= 30 min (failover) / <= 4 hr (full restore)
+  golang_database_driver: github.com/jackc/pgx/v5
+  migration_tool: golang-migrate (forward-only preferred, reviewed paired up/down migrations, tested up->down->up in CI against disposable instance)
+  api_protocols: project_defined
+
+# Applies to AI/ML behavior a consuming project ships as product functionality.
+# It does not describe the models this suite's own agents run on -- those are
+# the per-role `model`/`codex_model` tiers recorded in the role catalog -- nor
+# the knowledge_store block below, which is this suite's own retrieval layer.
+ai:
+  model_provider: not_yet_selected
+  eval_framework: not_yet_selected
+  vector_store: not_yet_selected
+  prompt_versioning: required
+  eval_baseline_before_change: required
+  model_output_trust: untrusted_reference
+  privileged_action_from_model_output: prohibited_without_human_authorization
+  inference_cost_and_latency_budget: project_defined
+
+knowledge_store:
+  purpose: agent_retrieval_and_reference
+  ordinary_agent_access: read_only
+  pre_dispatch_retrieval: required_when_authorized_store_is_available
+  follow_up_retrieval: allowed
+  write_approval_role: knowledge-store-steward
+  citations_required: true
+  retrieved_content_trust: untrusted_reference
+
+testing:
+  integration_specification: gherkin
+  regression_specification: gherkin
+  gherkin_step_implementation: project_defined
+  load_generation_tool: k6 (dedicated disposable per-run Kubernetes namespace, never shared with staging/production traffic)
+  chaos_engineering_tool: chaos mesh (namespace-scoped, explicit opt-in labels, time-boxed via experiment CRD duration)
+
+source_control:
+  platform: github
+  change_model: pull_request
+  protected_default_branch: required
+
+cicd:
+  platform: gitlab_ci
+  runner_hosting: kubernetes executor on the existing self-hosted Talos/Kubernetes cluster
+  runner_trust_model: three tiers (untrusted lint/test, isolated build/package, protected deploy), separated by namespace/node-pool and GitLab protected-runner/protected-environment controls
+  protected_production_environment: required
+  container_registry: gitlab container registry
+  artifact_signing: >
+    cosign keyless (Sigstore OIDC), sign once at build tier, verify before every
+    promotion. This repository publishes two artifacts, on separate tags: the
+    CLI (cli-v*), which attaches per-platform archives, Python wheels and an
+    SPDX SBOM, and the plugin distribution (plugin-v*), which attaches only an
+    SBOM because a marketplace installs from the repository tree rather than a
+    downloaded archive. The lifecycle kernel is not published here at all -- it
+    releases from deagy/cadre-kernel under v* tags, attaching one archive per
+    platform plus SHA256SUMS, and each lifecycle plugin's bin/agentic-sdlc shim
+    verifies that checksum before running what it downloaded, refusing on a
+    mismatch rather than falling back. The kernel-v* tags in this repository are
+    history and carry no releases.
+    The CLI release carries an SPDX SBOM of its dependency tree and a SLSA
+    build-provenance attestation minted from the workflow's OIDC identity via
+    GitHub's hosted Sigstore -- this is the keyless cosign posture above, with
+    no signing key to manage. Verify with
+    `gh attestation verify <file> --repo deagy/cadre`. Still open: the plugin
+    distribution attaches only an SBOM and no archive to attest, since a
+    marketplace installs from the repository tree, so it has provenance only
+    through its git tag; and the kernel's own releases, being in another
+    repository, are outside this posture and carry SHA256SUMS rather than an
+    attestation.
+
+observability:
+  platform: prometheus + grafana + loki + tempo, opentelemetry for instrumentation
+  rollout: phased (metrics/alerting first, then logs, then traces)
+
+secrets_management:
+  platform: openbao (Vault-API-compatible, MPL-licensed), Kubernetes auth + JWT/OIDC auth for GitLab CI, External Secrets Operator for workload sync/rotation
+  bootstrap_only: sops + age for pre-bootstrap/break-glass material
+
+version_policy:
+  approved: 2026-07-26
+  policy: >
+    Track N-1 minor for platform/operator components (Kubernetes, Talos, Helm,
+    CNPG, Kyverno, Chaos Mesh) to allow ecosystem compatibility catch-up; always
+    take the latest patch within the pinned minor. Exact versions are pinned in
+    a single machine-readable version manifest (e.g. versions.yaml/.tool-versions),
+    kept current via automated dependency updates (e.g. Renovate) with human
+    review, and re-verified quarterly. Kubernetes/Talos/CNPG/Kyverno must be
+    validated together as one compatibility set, not upgraded independently.
+  note: >
+    Specific version numbers are deliberately not hardcoded here: they go stale
+    quickly and any number recorded by an LLM-based recommendation reflects its
+    training data, not a live check of what's current or CVE-affected. The
+    Engineering Lead must resolve exact pinned versions for the components below
+    into the version manifest at adoption time, verifying current-stable status
+    and known CVEs before pinning.
+  components_needing_pins:
+    - go (primary backend language; team-profile.yaml does not yet state a version)
+    - python (secondary language)
+    - opentofu (CLI version, distinct from the bpg/proxmox provider version already pinned)
+    - kubernetes
+    - talos (selects the compatible kubernetes version; upgrade talos first)
+    - helm (stay on 3.x; defer helm 4 until chart/plugin ecosystem is validated)
+    - golangci-lint
+    - kyverno
+    - cloudnativepg
+    - golang-migrate
+    - cosign
+    - k6
+    - chaos-mesh
+    - typescript, pnpm, vite, vitest, playwright (frontend toolchain, matched to node 22 lts)
+
+out_of_scope_standards:
+  - description: compliance frameworks and evidence retention
+    decision: no compliance framework currently applies to this internal tooling; explicitly declared out of scope by Product Owner (2026-07-26) rather than resolved
+    owner: Product Owner
+    review_by: 2027-01-26
+    scope_note: >
+      This exception covers named regulatory/accreditation frameworks only
+      (e.g. SOC 2, ISO 27001, GDPR-specific evidence-retention obligations).
+      It does not exempt secrets_management, observability, or cicd.artifact_signing
+      above from baseline secret-hygiene and telemetry-scrubbing practice: no
+      secret values in logs/traces, least-privilege credential issuance, and
+      short-lived credentials remain expected regardless of framework applicability.
+    compensating_control: >
+      OpenBao issues only short-lived, scoped credentials (no long-lived static
+      secrets in CI variables or Kubernetes manifests); observability collectors
+      must not be configured to capture request/response bodies or credential
+      material by default.
+    revisit_when: a consuming project or accreditation requirement makes this material; owner re-evaluates at review_by regardless
+
+resolved_standards_2026_07_26:
+  note: >
+    Resolved via REQ-SC-PLAT-0001 (RG-2) G3 architecture recommendations, approved by
+    Product Owner. See infrastructure, frontend, backend, testing, and cicd/observability/
+    secrets_management sections above for the recorded decisions. Sizing, node-pool/taint
+    detail, HA topology depth, retention windows, and trust-root choices remain open
+    follow-up decisions for the Engineering Lead during implementation.
+  gate_rigor_note: >
+    An independent compliance review of this resolution noted that roster/orchestration/
+    routing.json's own routing rules (governance-planning, compliance, sensitive-data,
+    secrets-identity, supply-chain) would ordinarily route decisions touching compliance
+    scope, secrets platforms, and artifact signing/registry through independent
+    compliance-reviewer/security-reviewer sign-off and a G4/G5/G7 gate record, separate
+    from G1-G3 intent/requirements/architecture approval. Product Owner explicitly
+    accepted G1-G3 approval alone as sufficient for this internal-tooling technology-
+    standards baseline (2026-07-26) rather than retroactively simulating G4/G5/G7. This
+    is a conscious, recorded scope decision, not an oversight; a future decision with
+    real regulatory, customer-data, or production-security stakes should not treat this
+    as precedent for skipping those gates.
+  items:
+    - Proxmox Terraform provider and version policy
+    - Terraform state backend and recovery process
+    - Kubernetes policy-as-code engine
+    - GitLab runner placement, isolation, and trust tiers
+    - container registry and artifact-signing implementation
+    - observability platform
+    - secrets-management platform
+    - React framework or application architecture
+    - Node.js version, package manager, and frontend build tool
+    - frontend styling, component, unit, and browser test stacks
+    - supported browsers and accessibility conformance target
+    - PostgreSQL version, topology, high availability, backup, and recovery design
+    - database migration tool and schema change policy
+    - load/performance-testing tool and target environment ownership
+    - chaos-engineering tool and blast-radius isolation guarantees for fault-injection exercises
+    - supported tool and language versions (policy resolved; exact pins deferred to version manifest, see version_policy above)
