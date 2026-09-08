@@ -171,11 +171,18 @@ syncs all three entrypoints. For local development, the equivalent command is
 `cline plugin install ./cadre --force` from a checkout; run `npm ci` in
 `cline-plugins/` before running that workspace's tests or typechecks.
 
-**Known upstream defect:** as of cline CLI 3.0.46, invoking *any*
-locally-installed plugin's tool fails with `JSON.stringify cannot serialize
-cyclic structures`. This affects Cline's own example plugin too. Install and
-uninstall work; tool invocation is expected to start working when Cline ships
-a fix.
+Verified on cline CLI 3.0.55 (2026-09-08): install, `agents_select`,
+`list_agent_presets`, and `start_subagent` all work. The `JSON.stringify
+cannot serialize cyclic structures` failure that 3.0.46 raised on every
+locally-installed plugin tool no longer reproduces; if you see it, you are on
+an older cline.
+
+One thing to confirm after installing: the host injects its own `@cline/sdk`
+into the plugin regardless of the version `cline-plugins/*/package.json`
+pins, so the plugins are built against the SDK the current cline ships
+(0.0.75). A cline much newer than that can change the shape of what the tool
+receives; `agents_select` in particular guards the `signal` it forwards to
+the child process for exactly that reason.
 
 ## From a checkout
 

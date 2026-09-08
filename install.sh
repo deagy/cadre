@@ -208,22 +208,24 @@ $BLOCK_END"
 
 install_cline() {
   say "cline:"
-  # The Cline plugin lives in a subdirectory, so this one does need the
-  # checkout that the other runners do not.
+  # The Cline plugins are loaded from the checkout, so this one does need
+  # it where the other runners do not. The checkout root is the install
+  # source, not cline-plugins/cline: root package.json declares all three
+  # entrypoints (cline, cline-agents, cline-lifecycle), which is what the
+  # documented Git-URL install produces. Installing the one subdirectory
+  # gave a planning tool and no role presets.
   if [ "$DRY_RUN" -eq 1 ]; then
-    say "  would run: cline plugin install $CHECKOUT/cline-plugins/cline --force"
+    say "  would run: cline plugin install $CHECKOUT --force"
     return 0
   fi
-  if cline plugin install "$CHECKOUT/cline-plugins/cline" --force; then
+  if cline plugin install "$CHECKOUT" --force; then
     say "  installed"
   else
-    # Known upstream defect, not something this script can fix: as of cline
-    # CLI 3.0.46 invoking any locally-installed plugin's tool fails with
-    # "JSON.stringify cannot serialize cyclic structures". Install and
-    # uninstall work. Report it and carry on rather than aborting the whole
-    # run over one runner.
-    warn "  cline install failed. If the error mentions cyclic structures, that is a"
-    warn "  known cline CLI defect (3.0.46), not a problem with this plugin."
+    # Report and carry on rather than aborting the whole run over one
+    # runner. cline 3.0.46 failed every locally-installed plugin tool with
+    # "JSON.stringify cannot serialize cyclic structures"; 3.0.55 does not.
+    warn "  cline install failed. If the error mentions cyclic structures, upgrade"
+    warn "  cline: 3.0.46 had that defect and 3.0.55 does not."
   fi
 }
 

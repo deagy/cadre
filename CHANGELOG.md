@@ -162,6 +162,20 @@ check and reporting "nothing to do". See
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cline `agents_select` runs again on cline 3.0.55.** The tool forwarded
+  the host's `AgentToolContext.signal` straight into `execFile`; the host now
+  hands over a plain object rather than an `AbortSignal`, and Node rejected
+  every call before `cadre select` was spawned. The signal is forwarded only
+  when it is one Node will accept (an object with `aborted`), and omitted
+  otherwise. `cline-plugins/*` pin `@cline/sdk` and `@cline/shared` at 0.0.75,
+  the versions cline 3.0.55 injects. `install.sh --runner=cline` installs the
+  checkout root, so it registers all three plugins the way the documented
+  Git-URL install does, instead of `cline-plugins/cline` alone. The 3.0.46
+  "cyclic structures" note in `docs/INSTALL.md` is replaced with what was
+  observed on 3.0.55.
+
 **`cadre init` is defaults-first.** It no longer requires `--answers` or `--interactive`; running with neither keeps every shipped default and writes nothing, which is a complete run rather than a skipped one (overlays are sparse, so keeping a default means writing no overlay for that field). See [`roster/shared/README.md`](roster/shared/README.md)'s "Generating overlays with `cadre init`" for the three levels of effort.
 
 **`cadre init` now infers its target worktree.** Use `cadre init` from any
