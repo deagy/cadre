@@ -22,6 +22,7 @@ const (
 	usageGenerateRoleMetadata  = "[--check]"
 	usageInit                  = "[TARGET] [--target DIR] [--answers FILE] [--set [REGION:]PATH=VALUE ...] [--stack ID] [--sections LIST] [--dry-run] [--force] [--repair [--apply]] [--print-answers] [--interactive]"
 	usagePortClineAgents       = "--source DIR [--root DIR]"
+	usagePortHermesSkills      = "[--root DIR]"
 	usageResolveShared         = "<filename> [--project <dir>]"
 	usageRoleFidelity          = "[--mode static|probe] [options]"
 	usageSelectionTelemetry    = "--summarize FILE"
