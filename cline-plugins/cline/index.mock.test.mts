@@ -99,6 +99,31 @@ describe("agents_select execFile options (mocked child_process)", () => {
     expect(result.status).toBe("ready");
   });
 
+  // Node's own `validateAbortSignal` only requires an `aborted` property, so
+  // an object carrying `aborted` and nothing else passes validation and then
+  // fails later, inside execFile's subscription step, with "TypeError:
+  // signal.addEventListener is not a function". That is a different failure
+  // from the one above and just as fatal to the call, so the guard has to be
+  // one step stricter than Node: `aborted` alone is not a usable signal.
+  it("omits options.signal for an object with `aborted` but no addEventListener", async () => {
+    let seenOptions: Record<string, unknown> | undefined;
+    execFileMock.mockImplementation((_file, _args, options, callback) => {
+      seenOptions = options as Record<string, unknown>;
+      callback(null, JSON.stringify({ status: "ready" }), "");
+    });
+
+    const tool = await registerTool();
+    const result = (await tool.execute(
+      { task: "test" },
+      { signal: { aborted: false } },
+    )) as Record<string, unknown>;
+
+    expect(seenOptions).toBeDefined();
+    expect("signal" in (seenOptions as Record<string, unknown>)).toBe(false);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe("ready");
+  });
+
   it("forwards a real AbortSignal unchanged", async () => {
     let seenOptions: Record<string, unknown> | undefined;
     execFileMock.mockImplementation((_file, _args, options, callback) => {

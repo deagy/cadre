@@ -13,16 +13,28 @@ const execFileAsync = promisify(execFile);
 // value that actually arrives is the host's to choose: cline 3.0.55 handed
 // over a plain object, and Node's own argument validation then rejected
 // every call ("The \"options.signal\" property must be an instance of
-// AbortSignal") before the binary was spawned. The check here is the one
-// Node applies -- an object with an `aborted` property -- rather than
-// `instanceof`, which fails for a signal created in another realm that Node
-// would accept. Anything else is left out of the options entirely, so the
-// child simply runs without cancellation instead of never running at all.
+// AbortSignal") before the binary was spawned.
+//
+// The check is structural rather than `instanceof`, which fails for a real
+// signal created in another realm that Node would accept. It is deliberately
+// one step stricter than Node's own validator: `validateAbortSignal` requires
+// only an `aborted` property, but execFile then subscribes through
+// `signal.addEventListener`, so an object carrying `aborted` alone clears
+// validation and throws "TypeError: signal.addEventListener is not a
+// function" instead -- a different failure, equally fatal to the call.
+// Requiring both is what makes the fallback below true: anything unusable is
+// left out of the options entirely, so the child simply runs without
+// cancellation instead of never running at all.
 function execFileOptions(
   cwd: string,
   signal: unknown,
 ): { cwd: string; signal?: AbortSignal } {
-  if (typeof signal === "object" && signal !== null && "aborted" in signal) {
+  if (
+    typeof signal === "object" &&
+    signal !== null &&
+    "aborted" in signal &&
+    typeof (signal as { addEventListener?: unknown }).addEventListener === "function"
+  ) {
     return { cwd, signal: signal as AbortSignal };
   }
   return { cwd };
