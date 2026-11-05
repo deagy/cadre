@@ -1,0 +1,56 @@
+{
+  "rules_version": 1,
+  "counted_limit": 3,
+  "units": [
+    {
+      "file": "mixed.md",
+      "surface": "markdown",
+      "hits": [
+        {
+          "file": "mixed.md",
+          "line": 3,
+          "column": 6,
+          "rule": "em-dash",
+          "class": "hard",
+          "span": "—",
+          "context": "Fast — and small. We leverage it.",
+          "rationale": "Em dashes are the most recognizable machine punctuation and have no job in plain prose that a comma, colon or full stop cannot do."
+        },
+        {
+          "file": "mixed.md",
+          "line": 5,
+          "column": 1,
+          "rule": "contrast-it-is-not-x-it-is-y",
+          "class": "hard",
+          "span": "It is not a cache, it is",
+          "context": "It is not a cache, it is a ledger.",
+          "rationale": "The \"it was not X, it was Y\" reversal is a stock rhetorical frame."
+        }
+      ],
+      "counted_hits": [
+        {
+          "file": "mixed.md",
+          "line": 3,
+          "column": 24,
+          "rule": "filler-buzzwords",
+          "class": "counted",
+          "span": "leverage",
+          "context": "Fast — and small. We leverage it.",
+          "rationale": "Vocabulary that is fine once and decoration when it piles up."
+        }
+      ],
+      "counted_total": 1,
+      "counted_exceeded": false
+    }
+  ],
+  "disabled_rules": [
+    {
+      "id": "recap-ending",
+      "reason": "release notes recap on purpose"
+    }
+  ],
+  "failed": true,
+  "total_hits": 2,
+  "limitation": "This scan flags tells with fixed patterns. It cannot see structural slop (invented frameworks, restatement, uniform rhythm) and is not evidence of authorship.",
+  "skipped": []
+}

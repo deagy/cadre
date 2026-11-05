@@ -9,6 +9,29 @@ that. New adopters should start with the
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+
+- **`cadre slop scan` finds AI-slop tells in prose and commit messages.** It is
+  deterministic and offline: no model calls, no network. Inputs are files,
+  directories, globs, stdin (`-`), or `--git-range A..B`, which scans each
+  commit message in the range and reports hits with the commit SHA. Fenced
+  code, inline code, link targets and quoted spans are never scanned, so a
+  document can quote a tell as an exhibit. Hard tells (em dash, "not X, it is Y"
+  reversals, rhetorical headings, recap endings, sycophancy and others) fail a
+  piece on one hit; counted tells (filler vocabulary) fail it at three. Output
+  is text by default or `--format json`; exit codes are 0 clear, 1 tells found,
+  2 usage, I/O or rules-file error. The rules are data in
+  `roster/shared/slop-rules.yaml`, each with a rationale and a worked example,
+  and a malformed file fails closed. A repository can disable a rule by id,
+  with a mandatory reason, in `.agents/shared/slop-rules.yaml`; disabled rules
+  and `slop-ok: <reason>` exemptions are listed in every report. This is the
+  first phase of
+  [`docs/proposals/ai-slop-detection-and-cleanup-2026-11.md`](docs/proposals/ai-slop-detection-and-cleanup-2026-11.md);
+  code-comment extraction, hook mode, the voice baseline and `fix` come later.
+  The scan flags tells and says nothing about who wrote the text.
+
 ## 0.7.14
 
 ### Fixed

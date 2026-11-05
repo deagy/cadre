@@ -22,4 +22,5 @@ sbom-check	Refuse an SBOM that inventoried the wrong thing
 schema-validate	Strict JSON Schema validation for roster/catalog.yaml and routing.json
 select	Deterministic agent/gate selection
 selection-telemetry	Summarize opt-in, local cadre select telemetry
+slop	Find AI-slop tells in prose and commit messages (`scan`; deterministic, offline)
 upgrade	Check for Cadre updates and upgrade the CLI (--check, --force, --help)

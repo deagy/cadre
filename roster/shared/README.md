@@ -27,6 +27,19 @@ information (who is a project's Product Owner, on-call contact, etc.) belongs
 in a consuming project's own local/untracked config or its `agentic-sdlc`
 lifecycle records -- never here.
 
+## `slop-rules.yaml`: read by `cadre slop scan`, not embedded
+
+`slop-rules.yaml` is the default rule list for `cadre slop scan`. Unlike the
+files above it is not in `SHARED_POLICIES` and is never embedded into role
+wrappers; the scanner reads it at run time from the same place it finds any
+`roster/shared/` file, and the packaged plugin ships it under
+`suite/roster/shared/`. There is no second copy in the Go source, so editing
+this file changes the verdict. A malformed file makes the scanner exit 2.
+
+A project overlay at `.agents/shared/slop-rules.yaml` takes one key, `disabled`,
+a list of `id` and `reason` pairs. Any other key, a missing reason or an
+unknown rule id is an error: custom rule lists are not supported.
+
 ## Precedence
 
 ```mermaid

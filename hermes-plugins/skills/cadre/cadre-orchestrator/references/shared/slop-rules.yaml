@@ -1,0 +1,153 @@
+# Default rule list for `cadre slop scan`.
+#
+# This file is the single source of truth for the AI-slop tells cadre detects.
+# The scanner loads it at run time (it ships in the packaged plugin under
+# suite/roster/shared/) and fails closed with exit 2 if it is malformed.
+#
+# A repository may switch a rule off by id, with a mandatory reason, in
+# .agents/shared/slop-rules.yaml:
+#
+#   disabled:
+#     - id: em-dash
+#       reason: house style for the legal appendix uses them
+#
+# Disabled rules and their reasons are listed in every report. Custom rule
+# lists are not supported: an overlay that changes anything but `disabled`
+# is rejected.
+#
+# Fields per rule:
+#   id         unique kebab-case name, used in reports and in `disabled`
+#   class      hard    one hit fails the piece
+#              counted legitimate once; the piece fails when the hits of all
+#                      counted rules together reach `counted_limit`
+#   pattern    Go (RE2) regular expression; inline flags such as (?i) and (?m)
+#              are part of the pattern. No lookaround, no backreferences.
+#   rationale  why this is a tell, shown with the hit
+#   example    a text the rule must match (checked by the test suite)
+#   clean      a near-miss the rule must not match (checked by the test suite)
+#
+# Limit: regular expressions cannot see structural slop such as invented
+# frameworks, restatement or uniform rhythm. That is a reviewer's job.
+
+version: 1
+counted_limit: 3
+
+rules:
+  - id: em-dash
+    class: hard
+    pattern: "—"
+    rationale: Em dashes are the most recognizable machine punctuation and have no job in plain prose that a comma, colon or full stop cannot do.
+    example: "The tool is fast — and small."
+    clean: "The tool is fast, and small."
+
+  - id: honesty-framing
+    class: hard
+    pattern: '(?i)\b(honestly|to be honest|if I''m being honest|the honest (part|truth|answer|reason)|I''ll be honest)\b'
+    rationale: Announcing honesty implies the surrounding text might not be.
+    example: "Honestly, the migration was easy."
+    clean: "The migration was easy."
+
+  - id: contrast-not-x-its-y
+    class: hard
+    pattern: '(?i)\b(it''?s|this is|that''?s|the (question|point|problem|issue)) (is )?not (just |only |about )?[^.\n]{2,60}[.,;] ?(it''?s|but|it is) '
+    rationale: The "it is not X, it is Y" reversal manufactures a false opponent to sound insightful.
+    example: "This is not a cache, it is a ledger."
+    clean: "This is a ledger that also caches."
+
+  - id: contrast-not-just-x-but-y
+    class: hard
+    pattern: '(?i)\bnot just [^.\n]{2,40}, (it''?s|but) '
+    rationale: The "not just X, but Y" frame inflates a plain claim into a two-step reveal.
+    example: "It is not just a linter, but a docs checker."
+    clean: "It is a linter and a docs checker."
+
+  - id: contrast-it-is-not-x-it-is-y
+    class: hard
+    pattern: '(?i)\b(it|this|that) (is|was) not (about |just |only )?[^.,;\n]{2,50}, (it|this|that) (is|was) '
+    rationale: The "it was not X, it was Y" reversal is a stock rhetorical frame.
+    example: "That was not a bug, that was a design choice."
+    clean: "That was a design choice."
+
+  - id: contrast-x-not-y
+    class: hard
+    pattern: '\b[a-z][a-z-]+, not (a |an |the |just |only )?[a-z][a-z -]{1,30}[.;:]'
+    rationale: A trailing ", not Y" sets up and knocks down a position nobody held. Case-sensitive on purpose, to stay near sentence-final use.
+    example: "Ship the fix, not a rewrite."
+    clean: "Ship the fix and skip the rewrite."
+
+  - id: contrast-rather-than
+    class: hard
+    pattern: '(?i)\b(rather than|instead of) [a-z][a-z -]{1,30}[.;]'
+    rationale: A closing "rather than Y" clause is the same knocked-down opponent as a trailing "not Y".
+    example: "We chose files instead of a database."
+    clean: "We chose files because the data is small."
+
+  - id: heading-rhetorical
+    class: hard
+    pattern: '(?im)^\s*(#{1,6}|<h[1-6][^>]*>)\s*(why (this|it) matters|the (key|real) (insight|point|opportunity|truth)|what this is not|the bottom line|the deeper point|the uncomfortable truth|here''?s the thing|the takeaway|so what|what comes next|what''?s next|where (it|this|we) go(es)? (from here|next))\b'
+    rationale: Stock rhetorical headings announce significance instead of naming the content.
+    example: "## Why this matters"
+    clean: "## Retry behavior"
+
+  - id: heading-the-noun
+    class: hard
+    pattern: '(?m)^\s*(#{1,6}|<h[1-6][^>]*>)\s*The [A-Z][a-z]+\s*(</h[1-6]>)?\s*$'
+    rationale: A one-word "The <Noun>" heading is a template slot, not a title.
+    example: "## The Problem"
+    clean: "## Problem statement and scope"
+
+  - id: verdict-kicker
+    class: hard
+    pattern: '(?i)\bThat (is|was|''s) (the (point|lie|whole (point|thing)|part [a-z ]{3,30})|all [a-z ]{2,30} is for)\.'
+    rationale: A closing verdict line repeats the paragraph as if it were a punchline.
+    example: "The cache hid the error. That was the point."
+    clean: "The cache hid the error, which we fixed."
+
+  - id: fake-profound-closer
+    class: hard
+    pattern: '(?i)\b(let that sink in|this changes everything|what nobody (tells|talks about)|the part (everyone|most people) miss(es)?|and that''?s not nothing)\b'
+    rationale: Claims of profundity stand in for a concrete finding.
+    example: "Zero downtime. Let that sink in."
+    clean: "Zero downtime over the 30-day window."
+
+  - id: throat-clearing
+    class: hard
+    pattern: '(?i)\b(here''?s the thing|let me be clear|it''?s worth noting|it is worth noting|it''?s important to note|at the end of the day|in today''?s (fast-paced|ever-evolving|digital))\b'
+    rationale: Openers that delay the point and add no content.
+    example: "It's worth noting that the cache is cold."
+    clean: "The cache is cold."
+
+  - id: sycophancy
+    class: hard
+    pattern: '(?i)\b(great question|you''?re (absolutely )?right to push back|that''?s on me|you were right to)\b'
+    rationale: Flattering or self-abasing openers belong to a chat reply, not to shipped text.
+    example: "Great question, here is the answer."
+    clean: "Here is the answer."
+
+  - id: recap-ending
+    class: hard
+    pattern: '(?im)^\s*(in conclusion|ultimately|overall|to sum up|in summary)\b'
+    rationale: A paragraph that opens by announcing it is a summary repeats what the reader just read.
+    example: "In conclusion, the plan holds."
+    clean: "The plan holds."
+
+  - id: heading-emoji
+    class: hard
+    pattern: '(?m)^\s*#{1,6}\s*[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]'
+    rationale: Emoji in headings are decoration that reads as generated.
+    example: "## 🚀 Launch"
+    clean: "## Launch"
+
+  - id: filler-buzzwords
+    class: counted
+    pattern: '(?i)\b(delve|delves|delving|leverag(e|es|ing)|utiliz(e|es|ing)|seamless(ly)?|robust(ly)?|tapestry|game[- ]changer|paradigm shift|cutting-edge|empower(s|ing)?|streamlin(e|es|ing)|load-bearing|unlock the (potential|power)|genuinely|quietly|deep dive|dive in(to)?)\b'
+    rationale: Vocabulary that is fine once and decoration when it piles up.
+    example: "We leverage a robust, seamless pipeline."
+    clean: "We use a reliable pipeline."
+
+  - id: filler-plain-adjectives
+    class: counted
+    pattern: '(?i)\b(plain|simple|elegant|powerful|lightweight)\b'
+    rationale: Praise adjectives that assert quality instead of showing it.
+    example: "A simple, elegant, powerful design."
+    clean: "A design with two moving parts."

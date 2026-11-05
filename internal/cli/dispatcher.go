@@ -107,6 +107,7 @@ func Usage(subcommands []Subcommand) string {
 		{Name: "bootstrap-codex", Description: "Safely install namespaced Codex role wrappers (sync_codex_agents.py)"},
 		{Name: "profile", Description: "Read-only provider/profile drift report against a consuming project's copy (profile_diff.py)"},
 		{Name: "select", Description: "Deterministic agent/gate selection"},
+		{Name: "slop", Description: "Find AI-slop tells in prose and commit messages (`scan`; deterministic, offline)"},
 	} {
 		if listed[row.Name] {
 			continue
@@ -304,6 +305,10 @@ func Run(ctx context.Context, argv []string, deps Deps) int {
 
 	if command == "upgrade" {
 		return UpgradeCmd(rest)
+	}
+
+	if command == "slop" {
+		return SlopCmd(rest)
 	}
 
 	if command == "mcp-dispatch-server" {
