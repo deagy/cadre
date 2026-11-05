@@ -15,6 +15,21 @@ release convention (see `README.md`'s "Releasing" section) ties git tags
 `python3 tools/plugin_version.py --check`/`--set`. Each version heading
 below links to its [GitHub Release](https://github.com/deagy/cadre/releases).
 
+## [0.24.7](https://github.com/deagy/cadre/releases/tag/plugin-v0.24.7) - 2026-11-05
+
+### Added
+
+- **`cadre slop scan` ships in the package.** The launcher now runs CLI 0.7.15,
+  which adds a deterministic, offline scan for AI-slop tells in markdown and
+  commit messages. The package carries its rules file at
+  `suite/roster/shared/slop-rules.yaml`.
+
+### Fixed
+
+- **The launcher runs CLI 0.7.15.** `bin/cadre` pins the CLI version it
+  downloads, so a plugin install could not reach `cli-v0.7.15` until this
+  release moved the pin.
+
 ## [0.24.6](https://github.com/deagy/cadre/releases/tag/plugin-v0.24.6) - 2026-09-08
 
 ### Fixed
